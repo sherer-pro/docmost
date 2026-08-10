@@ -466,6 +466,7 @@ export class AiConversationService {
           .where('conversationId', '=', conversation.id)
           .where('userId', '=', user.id)
           .where('workspaceId', '=', workspace.id)
+          .where('status', '=', 'ready')
           .where('deletedAt', 'is', null)
           .execute()
       : [];

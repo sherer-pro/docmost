@@ -36,6 +36,7 @@ import { AiConversationService } from './ai-conversation.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
+import { AiSourceAccessChangedError } from './ai-source-access.service';
 
 export interface AiResolvedRunContextSource {
   sourceType: AiContextSourceType;
@@ -671,15 +672,19 @@ export class AiContextService {
       .selectAll()
       .where('runId', '=', sourceRun.id)
       .execute();
-    const excludedContextSourceIds = new Set(
-      dependencies
-        .filter((dependency: any) => excluded.has(dependency.pageId))
-        .map((dependency: any) => dependency.contextSourceId)
-        .filter(Boolean),
-    );
     const readable = await this.pageAccessService.getSidebarAccessSnapshot(
       user,
       sourceRun.spaceId,
+    );
+    const blockedContextSourceIds = new Set(
+      dependencies
+        .filter(
+          (dependency: any) =>
+            excluded.has(dependency.pageId) ||
+            !readable.readablePageIds.has(dependency.pageId),
+        )
+        .map((dependency: any) => dependency.contextSourceId)
+        .filter(Boolean),
     );
     const sources = (
       await this.db
@@ -692,7 +697,7 @@ export class AiContextService {
       (source: any) =>
         !excluded.has(source.pageId) &&
         readable.readablePageIds.has(source.pageId) &&
-        !excludedContextSourceIds.has(source.id),
+        !blockedContextSourceIds.has(source.id),
     );
     const sourceIds = new Set(sources.map((source) => source.id));
     return {
@@ -773,10 +778,12 @@ export class AiContextService {
     const allowedPageIds = new Set(
       [...readable.readablePageIds].filter((pageId) => !excluded.has(pageId)),
     );
+    if (rows.some((row) => !allowedPageIds.has(row.pageId))) {
+      throw new AiSourceAccessChangedError();
+    }
     const resolved: AiResolvedRunContextSource[] = [];
     let remaining = maxChars;
     for (const row of rows) {
-      if (!allowedPageIds.has(row.pageId)) continue;
       let markdown = row.markdownSnapshot;
       let title = row.sourceTitle;
       let dependencies = [row.pageId];

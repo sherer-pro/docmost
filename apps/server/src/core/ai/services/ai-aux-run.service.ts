@@ -148,9 +148,9 @@ export class AiAuxRunService {
     user: User,
     workspace: Workspace,
   ): Promise<AiEditorActionRun> {
-    return this.toEditorAction(
-      await this.getOwnedEditorAction(id, user, workspace),
-    );
+    const owned = await this.getOwnedEditorAction(id, user, workspace);
+    await this.assertEditorActionAccess(owned, user);
+    return this.toEditorAction(owned);
   }
 
   async cancelEditorAction(
@@ -159,6 +159,7 @@ export class AiAuxRunService {
     workspace: Workspace,
   ): Promise<AiEditorActionRun> {
     const owned = await this.getOwnedEditorAction(id, user, workspace);
+    await this.assertEditorActionAccess(owned, user);
     let terminal = false;
     const updated = await this.db.transaction().execute(async (trx) => {
       const run = await trx
@@ -410,6 +411,33 @@ export class AiAuxRunService {
       });
     }
     return run;
+  }
+
+  private async assertEditorActionAccess(
+    run: AiAuxRun,
+    user: User,
+  ): Promise<void> {
+    try {
+      await this.conversations.assertWritablePage(
+        run.pageId,
+        user,
+        run.workspaceId,
+      );
+      if (
+        await this.contentPolicy.isPageExcluded(
+          run.pageId,
+          run.spaceId,
+          run.workspaceId,
+        )
+      ) {
+        throw new Error('page excluded');
+      }
+    } catch {
+      throw new ForbiddenException({
+        code: 'source_access_changed',
+        message: 'Source access changed after the editor action was created',
+      });
+    }
   }
 
   private async findEditorAction(

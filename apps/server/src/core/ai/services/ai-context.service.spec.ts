@@ -256,6 +256,115 @@ describe('AiContextService run capture', () => {
       ]),
     );
   });
+
+  it('does not reuse a snapshot when one of its page dependencies is no longer readable', async () => {
+    const dependencyQuery: any = {
+      selectAll: jest.fn(() => dependencyQuery),
+      where: jest.fn(() => dependencyQuery),
+      execute: jest.fn(async () => [
+        {
+          runId: 'source-run',
+          contextSourceId: 'source-context',
+          pageId: 'database-page',
+        },
+        {
+          runId: 'source-run',
+          contextSourceId: 'source-context',
+          pageId: 'revoked-row-page',
+        },
+      ]),
+    };
+    const sourceQuery: any = {
+      selectAll: jest.fn(() => sourceQuery),
+      where: jest.fn(() => sourceQuery),
+      orderBy: jest.fn(() => sourceQuery),
+      execute: jest.fn(async () => [
+        {
+          id: 'source-context',
+          runId: 'source-run',
+          pageId: 'database-page',
+          markdownSnapshot: 'database snapshot contains revoked row canary',
+        },
+      ]),
+    };
+    const service = new AiContextService(
+      {
+        selectFrom: jest.fn((table: string) =>
+          table === 'aiRunSourceDependencies'
+            ? dependencyQuery
+            : sourceQuery,
+        ),
+      } as any,
+      {} as any,
+      {
+        getSidebarAccessSnapshot: jest.fn(async () => ({
+          readablePageIds: new Set(['database-page']),
+        })),
+      } as any,
+      {} as any,
+      {} as any,
+      { getExcludedPageIds: jest.fn(async () => new Set()) } as any,
+    );
+
+    await expect(
+      service.prepareCopiedRunContext(
+        {
+          id: 'source-run',
+          spaceId: 'space',
+          workspaceId: 'workspace',
+        },
+        { id: 'user' } as any,
+      ),
+    ).resolves.toEqual({ sources: [], dependencies: [] });
+  });
+
+  it('fails instead of silently dropping a captured source after access changes', async () => {
+    const sourceQuery: any = {
+      selectAll: jest.fn(() => sourceQuery),
+      where: jest.fn(() => sourceQuery),
+      orderBy: jest.fn(() => sourceQuery),
+      execute: jest.fn(async () => [
+        {
+          id: 'source-context',
+          runId: 'run-id',
+          pageId: 'revoked-page',
+          origin: 'current_document',
+          sourceType: 'page',
+          sourceId: 'revoked-page',
+          sourceTitle: 'Revoked page',
+          sourceUrl: null,
+          markdownSnapshot: 'selection canary',
+          citationHeadings: [],
+          contentSha256: 'hash',
+          position: 0,
+        },
+      ]),
+    };
+    const service = new AiContextService(
+      { selectFrom: jest.fn(() => sourceQuery) } as any,
+      {} as any,
+      {
+        getSidebarAccessSnapshot: jest.fn(async () => ({
+          readablePageIds: new Set<string>(),
+        })),
+      } as any,
+      {} as any,
+      {} as any,
+      { getExcludedPageIds: jest.fn(async () => new Set()) } as any,
+    );
+
+    await expect(
+      service.resolveRunContext(
+        {
+          id: 'run-id',
+          spaceId: 'space',
+          workspaceId: 'workspace',
+        } as any,
+        { id: 'user' } as any,
+        10_000,
+      ),
+    ).rejects.toMatchObject({ aiErrorCode: 'source_access_changed' });
+  });
 });
 
 describe('AiContextService search', () => {

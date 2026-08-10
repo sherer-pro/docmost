@@ -31,6 +31,8 @@ const mockImage =
 const mockPort = Number(process.env.DOCMOST_AI_MOCK_PORT ?? 1080);
 const providerBaseUrl =
   process.env.DOCMOST_AI_PROVIDER_BASE_URL ?? `http://127.0.0.1:${mockPort}/v1`;
+const auditEmailDomain =
+  process.env.DOCMOST_AI_AUDIT_EMAIL_DOMAIN?.trim() || "audit.invalid";
 const runId = new Date()
   .toISOString()
   .replace(/[-:.TZ]/g, "")
@@ -81,7 +83,7 @@ async function createApi() {
 }
 
 async function provisionAuditMember(api, spaceId, index) {
-  const email = `g02-member-${index}-${runId}@audit.invalid`;
+  const email = `g02-member-${index}-${runId}@${auditEmailDomain}`;
   const password = `G02-Member-${index}-${runId}!`;
   await responseJson(
     await api.post("/api/workspace/invites/create", {
