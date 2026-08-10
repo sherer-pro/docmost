@@ -35,6 +35,16 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     });
     await page.goto(pageUrl(state, seeded.page));
     await expect(mainEditor(page)).toContainText("Editor regression audit");
+    await expect(page.locator(".editor-container")).toBeVisible({
+      timeout: 20_000,
+    });
+    const viewportContent = await page
+      .locator('meta[name="viewport"]')
+      .getAttribute("content");
+    expect(viewportContent).not.toMatch(/user-scalable\s*=\s*no/i);
+    expect(viewportContent).not.toMatch(
+      /maximum-scale\s*=\s*1(?:\.0)?(?:\D|$)/i,
+    );
     const viewport = page.viewportSize();
     expect(viewport?.width).toBeLessThanOrEqual(500);
     const overflow = await page.evaluate(() => ({
@@ -47,8 +57,8 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     await expect(page.locator(".tableWrapper")).toBeVisible();
     await page.getByAltText("Editor audit image alt text").tap();
     await expect(
-      page.getByRole("dialog", {
-        name: /Image preview|Предпросмотр изображения/,
+      page.getByRole("dialog").filter({
+        has: page.getByAltText("Editor audit image alt text"),
       }),
     ).toBeVisible();
     await page.keyboard.press("Escape");

@@ -28,6 +28,20 @@ const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
 );
 const apiHost = new URL(apiOrigin).host;
 process.env.DOCMOST_WEBKIT_BASE_URL ??= baseURL;
+const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const sharedMemberSpecs = [
+  "collaboration-share-offline.spec.ts",
+  "synced-blocks.spec.ts",
+  "templates-transclusion.spec.ts",
+];
+const requiresSharedAuditMember =
+  selectedFiles.length === 0 ||
+  selectedFiles.some((file) =>
+    sharedMemberSpecs.some((spec) => file.endsWith(spec)),
+  );
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -191,10 +205,6 @@ async function ensureRuntimeAuth() {
 
 async function runPlaywright() {
   const cli = require.resolve("@playwright/test/cli");
-  const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
@@ -289,21 +299,23 @@ try {
       },
     }),
   );
-  try {
-    sharedAuditMemberUserId = await provisionSharedAuditMember(api, space.id);
-  } catch (error) {
-    await responseJson(await api.delete(`/api/spaces/${space.id}`)).catch(
-      () => undefined,
-    );
-    state.retained = false;
-    state.deletedAt = new Date().toISOString();
-    state.setupFailure = true;
-    await fs.writeFile(
-      statePath,
-      `${JSON.stringify(state, null, 2)}\n`,
-      "utf8",
-    );
-    throw error;
+  if (requiresSharedAuditMember) {
+    try {
+      sharedAuditMemberUserId = await provisionSharedAuditMember(api, space.id);
+    } catch (error) {
+      await responseJson(await api.delete(`/api/spaces/${space.id}`)).catch(
+        () => undefined,
+      );
+      state.retained = false;
+      state.deletedAt = new Date().toISOString();
+      state.setupFailure = true;
+      await fs.writeFile(
+        statePath,
+        `${JSON.stringify(state, null, 2)}\n`,
+        "utf8",
+      );
+      throw error;
+    }
   }
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 

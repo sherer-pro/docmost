@@ -150,9 +150,7 @@ export async function captureStep(
 
 export function mainEditor(page: Page) {
   return page
-    .locator(
-      '.ProseMirror[aria-label="Editor"], .ProseMirror[aria-label="Редактор"]',
-    )
+    .locator('.ProseMirror[role="textbox"][aria-multiline="true"]')
     .first();
 }
 
