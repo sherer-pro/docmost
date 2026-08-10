@@ -95,7 +95,10 @@ export class GroupUserService {
       .values(groupUsersToInsert)
       .onConflict((oc) => oc.columns(['userId', 'groupId']).doNothing())
       .execute();
-    this.emitPageEmbedVisibilityChanged(workspaceId);
+    await this.emitPageEmbedVisibilityChanged(
+      workspaceId,
+      validUsers.map((user) => user.id),
+    );
   }
 
   async removeUserFromGroup(
@@ -143,12 +146,24 @@ export class GroupUserService {
         );
       }
     });
-    this.emitPageEmbedVisibilityChanged(workspaceId);
+    await this.emitPageEmbedVisibilityChanged(workspaceId, [userId]);
   }
 
-  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
+  private async emitPageEmbedVisibilityChanged(
+    workspaceId: string,
+    accessUserIds: string[],
+  ): Promise<void> {
     this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
       workspaceId,
+      accessUserIds,
     });
+    await Promise.all(
+      accessUserIds.map((userId) =>
+        this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+          workspaceId,
+          userId,
+        }),
+      ),
+    );
   }
 }

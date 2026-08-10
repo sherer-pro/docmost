@@ -1,4 +1,5 @@
 import { GroupUserService } from './group-user.service';
+import { EventName } from '../../../common/events/event.contants';
 
 describe('GroupUserService', () => {
   it('removes inaccessible watchers in the membership transaction', async () => {
@@ -27,6 +28,10 @@ describe('GroupUserService', () => {
     const watcherRepo = {
       deleteByUsersWithoutSpaceAccess: jest.fn().mockResolvedValue(undefined),
     };
+    const eventEmitter = {
+      emit: jest.fn(),
+      emitAsync: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new GroupUserService(
       groupUserRepo as any,
@@ -35,6 +40,7 @@ describe('GroupUserService', () => {
       groupRepo as any,
       watcherRepo as any,
       db as any,
+      eventEmitter as any,
     );
 
     await service.removeUserFromGroup('user-id', 'group-id', 'workspace-id');
@@ -50,6 +56,14 @@ describe('GroupUserService', () => {
       ['user-id'],
       'space-id',
       { trx },
+    );
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      EventName.PAGE_EMBED_VISIBILITY_CHANGED,
+      { workspaceId: 'workspace-id', accessUserIds: ['user-id'] },
+    );
+    expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+      EventName.AUTHORIZATION_CHANGED,
+      { workspaceId: 'workspace-id', userId: 'user-id' },
     );
   });
 });

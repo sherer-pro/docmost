@@ -25,7 +25,7 @@ import {
 } from "@/features/page/tree/utils";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSpaceUrl } from "@/lib/config.ts";
-import { invalidateAccessSensitiveSearchCaches } from "./access-sensitive-search-cache";
+import { handleAccessInvalidation as applyAccessInvalidation } from "./access-sensitive-search-cache";
 
 const mapTreeNodeToPage = (node: {
   id: string;
@@ -181,7 +181,9 @@ export const useQuerySubscription = () => {
     };
 
     const handleAccessInvalidation = () => {
-      invalidateAccessSensitiveSearchCaches(queryClient);
+      applyAccessInvalidation(queryClient, {
+        hasActiveDocument: Boolean(activeTreeSlug),
+      });
     };
 
     socket?.on("message", handleMessage);

@@ -21,3 +21,16 @@ export function invalidateAccessSensitiveSearchCaches(
     });
   }
 }
+
+export function handleAccessInvalidation(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "removeQueries">,
+  options: {
+    hasActiveDocument: boolean;
+    reload?: () => void;
+  },
+) {
+  invalidateAccessSensitiveSearchCaches(queryClient);
+  if (options.hasActiveDocument) {
+    (options.reload ?? (() => window.location.reload()))();
+  }
+}

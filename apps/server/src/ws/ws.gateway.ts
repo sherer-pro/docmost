@@ -143,7 +143,10 @@ export class WsGateway
   }
 
   @OnEvent(EventName.PAGE_EMBED_VISIBILITY_CHANGED)
-  handlePageEmbedVisibilityChanged(event: { workspaceId: string }): void {
+  handlePageEmbedVisibilityChanged(event: {
+    workspaceId: string;
+    accessUserIds?: string[];
+  }): void {
     if (!this.server) return;
     for (const socket of this.server.sockets.sockets.values()) {
       const user = socket.data.user as User | undefined;
@@ -151,9 +154,14 @@ export class WsGateway
         socket.emit('page-embed:invalidate', {
           operation: 'page_embed_invalidate',
         });
-        socket.emit('access:invalidate', {
-          operation: 'access_invalidate',
-        });
+        if (
+          !event.accessUserIds ||
+          event.accessUserIds.includes(user.id)
+        ) {
+          socket.emit('access:invalidate', {
+            operation: 'access_invalidate',
+          });
+        }
       }
     }
   }
