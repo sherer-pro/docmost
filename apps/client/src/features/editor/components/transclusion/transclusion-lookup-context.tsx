@@ -295,8 +295,10 @@ export function TransclusionLookupProvider({
     };
 
     socket.on("page-embed:invalidate", refreshActiveLookups);
+    socket.on("connect", refreshActiveLookups);
     return () => {
       socket.off("page-embed:invalidate", refreshActiveLookups);
+      socket.off("connect", refreshActiveLookups);
       if (invalidationTimerRef.current) {
         clearTimeout(invalidationTimerRef.current);
         invalidationTimerRef.current = null;

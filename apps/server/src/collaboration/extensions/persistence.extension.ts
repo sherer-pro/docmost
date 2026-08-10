@@ -48,6 +48,7 @@ import { EventName } from '../../common/events/event.contants';
 import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
 import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
 import { validateTemplateInstanceMutation } from '@docmost/editor-ext';
+import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -80,6 +81,7 @@ export class PersistenceExtension implements Extension {
     private readonly transclusionService: TransclusionService,
     private readonly pageEmbedService: PageEmbedService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly collabPageUpdates: CollabPageUpdatePublisherService,
   ) {}
 
   async onLoadDocument(data: onLoadDocumentPayload) {
@@ -403,6 +405,15 @@ export class PersistenceExtension implements Extension {
       });
     } catch (error) {
       this.logSideEffectFailure('page_updated', pageId, error);
+    }
+
+    try {
+      await this.collabPageUpdates.publish({
+        pageIds: [pageId],
+        workspaceId: page.workspaceId,
+      });
+    } catch (error) {
+      this.logSideEffectFailure('page_updated_publish', pageId, error);
     }
 
     try {
