@@ -54,6 +54,15 @@ describe('AiRunStepService approval lifecycle', () => {
       toRun: jest.fn((value) => value),
       enqueue: jest.fn(async () => true),
     };
+    const builtinToolPolicy = {
+      assertRunToolAllowed: jest.fn(async () => ({
+        writeClass: 'write',
+        approvalMode: 'current_page_hash',
+      })),
+    };
+    const profiles = {
+      assertRunProfileCurrent: jest.fn(async () => undefined),
+    };
     const service = new AiRunStepService(
       {} as any,
       runs as any,
@@ -62,10 +71,11 @@ describe('AiRunStepService approval lifecycle', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
+      builtinToolPolicy as any,
+      profiles as any,
     );
     jest.spyOn(service as any, 'getPendingStep').mockResolvedValue(pendingStep);
-    return { service, runs };
+    return { service, runs, builtinToolPolicy, profiles };
   }
 
   it('checks run ownership before reading an approval step', async () => {
@@ -176,6 +186,25 @@ describe('AiRunStepService approval lifecycle', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('rechecks profile and group policy before resolving an approved write tool', async () => {
+    const { service, builtinToolPolicy, profiles } = createService();
+    profiles.assertRunProfileCurrent.mockRejectedValueOnce(
+      new ConflictException({
+        code: 'agent_profile_policy_changed',
+        message: 'A group or profile policy revoked a built-in tool',
+      }),
+    );
+
+    await expect(
+      (service as any).assertApprovedStepPolicyCurrent(run, 'editPageText'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'agent_profile_policy_changed',
+      }),
+    });
+    expect(builtinToolPolicy.assertRunToolAllowed).not.toHaveBeenCalled();
   });
 
   it('claims and recovers one approval while a duplicate fails closed', async () => {

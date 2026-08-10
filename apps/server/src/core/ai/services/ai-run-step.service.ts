@@ -25,6 +25,7 @@ import {
 import type { JsonObject, JsonValue } from '../../../database/types/db';
 import { approvedStepRecoveryAction } from './ai-run-step-recovery';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
+import { AiAssistantProfileService } from './ai-assistant-profile.service';
 
 const APPROVED_STEP_RECOVERY_DELAY_MS = 30_000;
 
@@ -41,6 +42,7 @@ export class AiRunStepService {
     private readonly history: PageHistoryRecorderService,
     private readonly collaboration: CollaborationGateway,
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
+    private readonly profiles: AiAssistantProfileService,
   ) {}
 
   async approve(
@@ -329,7 +331,7 @@ export class AiRunStepService {
         if (!user || !workspace || step.decidedById !== run.userId) {
           throw new Error('agent_write_not_allowed');
         }
-        const definition = await this.builtinToolPolicy.assertRunToolAllowed(
+        const definition = await this.assertApprovedStepPolicyCurrent(
           run,
           step.toolName,
         );
@@ -403,18 +405,31 @@ export class AiRunStepService {
         };
       } catch (error) {
         const responseCode = (error as any)?.response?.code;
+        const profilePolicyError = [
+          'agent_profile_policy_changed',
+          'ai_profile_disabled',
+          'ai_profile_not_allowed',
+        ].includes(responseCode);
         errorCode =
           responseCode === 'agent_tool_policy_changed'
             ? 'agent_tool_policy_changed'
-            : (error as Error)?.message === 'agent_write_stale'
-              ? 'agent_write_stale'
-              : 'agent_write_not_allowed';
+            : profilePolicyError
+              ? responseCode
+              : (error as Error)?.message === 'agent_write_stale'
+                ? 'agent_write_stale'
+                : 'agent_write_not_allowed';
         errorMessage =
           errorCode === 'agent_tool_policy_changed'
             ? 'The built-in tool policy changed during this run'
-            : errorCode === 'agent_write_stale'
-              ? 'The page changed after the proposal was created'
-              : 'The approved write could not be applied';
+            : errorCode === 'agent_profile_policy_changed'
+              ? 'The assistant profile policy changed during this run'
+              : errorCode === 'ai_profile_disabled'
+                ? 'The assistant profile was disabled during this run'
+                : errorCode === 'ai_profile_not_allowed'
+                  ? 'The assistant profile is no longer available to this user'
+                  : errorCode === 'agent_write_stale'
+                    ? 'The page changed after the proposal was created'
+                    : 'The approved write could not be applied';
         result = { ok: false, applied: false, error: errorMessage };
       }
 
@@ -432,9 +447,20 @@ export class AiRunStepService {
         .where('status', '=', 'approved')
         .returningAll()
         .executeTakeFirstOrThrow();
-      const policyChanged = errorCode === 'agent_tool_policy_changed';
+      const policyChanged = [
+        'agent_tool_policy_changed',
+        'agent_profile_policy_changed',
+        'ai_profile_disabled',
+        'ai_profile_not_allowed',
+      ].includes(errorCode ?? '');
       const updatedRun = policyChanged
-        ? await this.failRunForPolicyChange(trx, run.id, now, errorMessage!)
+        ? await this.failRunForPolicyChange(
+            trx,
+            run.id,
+            now,
+            errorCode!,
+            errorMessage!,
+          )
         : await this.resumeRun(trx, run.id, now);
       return {
         run: updatedRun,
@@ -467,7 +493,7 @@ export class AiRunStepService {
     if (outcome.policyChanged) {
       this.events.emitStep(outcome.run, outcome.step);
       this.events.emitStatus(outcome.run, outcome.run.sequence, 'failed', {
-        errorCode: 'agent_tool_policy_changed',
+        errorCode: outcome.run.errorCode,
         errorMessage: outcome.run.errorMessage,
       });
     } else {
@@ -480,13 +506,14 @@ export class AiRunStepService {
     trx: any,
     runId: string,
     now: Date,
+    errorCode: string,
     errorMessage: string,
   ) {
     return trx
       .updateTable('aiRuns')
       .set({
         status: 'failed',
-        errorCode: 'agent_tool_policy_changed',
+        errorCode,
         errorMessage,
         finishReason: 'error',
         completedAt: now,
@@ -498,6 +525,11 @@ export class AiRunStepService {
       .where('status', '=', 'awaiting_approval')
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  private async assertApprovedStepPolicyCurrent(run: any, toolName: string) {
+    await this.profiles.assertRunProfileCurrent(run);
+    return this.builtinToolPolicy.assertRunToolAllowed(run, toolName);
   }
 
   private async resumeRun(trx: any, runId: string, now: Date) {
