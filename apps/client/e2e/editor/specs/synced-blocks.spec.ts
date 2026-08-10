@@ -54,6 +54,18 @@ async function makeEditable(page: import("@playwright/test").Page) {
   await expect(editor).toHaveAttribute("contenteditable", "true");
 }
 
+async function closeOverlayAside(page: import("@playwright/test").Page) {
+  const aside = page.locator("#docmost-context-aside");
+  if (!(await aside.isVisible())) return;
+
+  const closeButton = aside.getByRole("button", {
+    name: /Close panel|Закрыть панель/i,
+  });
+  await expect(closeButton).toBeVisible();
+  await closeButton.click();
+  await expect(aside).not.toBeVisible();
+}
+
 function collectNodeTypes(
   input: unknown,
   result = new Set<string>(),
@@ -380,6 +392,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       await route.continue();
     });
     await page.goto(pageUrl(state, consumer));
+    await closeOverlayAside(page);
     await expect(mainEditor(page)).toContainText(`Shared text ${suffix}`);
     expect(lookupRequests).toBeGreaterThanOrEqual(2);
     await expect(mainEditor(page)).toContainText(`Shared list ${suffix}`);
@@ -435,6 +448,9 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await sourceText.click();
     await memberSourcePage.keyboard.press("End");
     await memberSourcePage.keyboard.type(" live-update");
+    await expect(mainEditor(memberSourcePage)).toContainText(
+      `Shared text ${suffix} live-update`,
+    );
     await expect(mainEditor(page)).toContainText(
       `Shared text ${suffix} live-update`,
     );
