@@ -1478,7 +1478,7 @@
       "operationsSetup": "Configure and test the model and optional retrieval for every space. Approve deployment origins first, keep search disabled until an adapter is ready, and use the built-in and external tool policies to narrow access.",
       "operationsProfileNames": "Keep assistant profile names unique within each space. A duplicate returns 409 with ai_profile_name_conflict; reload the list if needed and choose another name.",
       "operationsRagMigration": "When replacing the standalone RAG worker, stop it first, migrate with RAG_SYNC_ENABLED=false, then configure, Test, and Enable each space. Old environment secrets are not imported. Roll back with the deployment switch, not migration down.",
-      "operationsRecovery": "On failure, recover dependencies before retrying, keep PostgreSQL authoritative, and preserve the Knowledge Base during mapping recovery. For an emergency RAG Sync rollback, set RAG_SYNC_ENABLED=false and restart Docmost; AI_EXTERNAL_MCP_ENABLED controls only outbound MCP.",
+      "operationsRecovery": "On failure, recover dependencies before retrying, keep PostgreSQL authoritative, and preserve the Knowledge Base during mapping recovery. A repeated private-file upload with the same Idempotency-Key resumes its reserved batch after a process failure without creating another file row. For an emergency RAG Sync rollback, set RAG_SYNC_ENABLED=false and restart Docmost; AI_EXTERNAL_MCP_ENABLED controls only outbound MCP.",
       "templateExportScope": "Template catalog entries are excluded. Pages created from templates are exported as ordinary materialized pages."
     },
     "integrations": {

@@ -1477,7 +1477,7 @@
       "operationsSetup": "各スペースでモデルと任意の検索を設定してテストしてください。まずデプロイレベルでアドレスを許可し、アダプターの準備ができるまで検索を有効にせず、組み込みおよび外部ツールのポリシーでアクセスを絞り込んでください。",
       "operationsProfileNames": "アシスタントプロファイル名はスペース内で一意にしてください。重複すると ai_profile_name_conflict を含む 409 が返されます。必要に応じて一覧を再読み込みし、別の名前を選択してください。",
       "operationsRagMigration": "単独の RAG worker を置き換えるときは、まず停止し、RAG_SYNC_ENABLED=false で移行してから、各スペースを設定、Test、Enable してください。古い環境シークレットはインポートされません。ロールバックには migration down ではなくデプロイスイッチを使用してください。",
-      "operationsRecovery": "障害後はまず依存サービスを復旧し、PostgreSQL を信頼できる情報源として扱い、マッピング復元中は Knowledge Base を保持してください。RAG Sync を緊急ロールバックするには RAG_SYNC_ENABLED=false を設定して Docmost を再起動します。AI_EXTERNAL_MCP_ENABLED は送信 MCP のみを制御します。",
+      "operationsRecovery": "障害後はまず依存サービスを復旧し、PostgreSQL を信頼できる情報源として扱い、マッピング復元中は Knowledge Base を保持してください。同じ Idempotency-Key でプライベートファイルのアップロードを再実行すると、プロセス障害後も新しいファイル行を作成せずに予約済みバッチを再開します。RAG Sync を緊急ロールバックするには RAG_SYNC_ENABLED=false を設定して Docmost を再起動します。AI_EXTERNAL_MCP_ENABLED は送信 MCP のみを制御します。",
       "templateExportScope": "テンプレートカタログの項目は除外されます。テンプレートから作成されたページは、通常の実体化されたページとしてエクスポートされます。"
     },
     "integrations": {

@@ -631,6 +631,11 @@ the key or lease identity.
   heartbeat. A stale attempt with a recorded cancellation request becomes
   `cancelled`; every other stale attempt fails with `worker_lost`. The
   reconciler never repeats a stale provider call automatically.
+- Private chat file uploads hold a conversation-scoped PostgreSQL advisory lock
+  across the storage write. Repeating the same multipart request and
+  `Idempotency-Key` after a process failure resumes the reserved batch and its
+  existing file rows; completed and failed batches remain terminal. Reusing the
+  key with different file metadata or content returns `409`.
 - An `awaiting_approval` run with a decided step is recovered by the hash rules
   in **Agent mode** above. Do not repair it by editing Yjs content or reopening a
   terminal `ai_runs` row.
