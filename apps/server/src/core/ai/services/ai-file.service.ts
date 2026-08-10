@@ -910,7 +910,13 @@ export class AiFileService {
       deadline,
       'AI document extraction timed out',
     );
-    const JSZip = (await import('jszip')).default;
+    const jsZipModule = await withDeadline(
+      import('jszip'),
+      deadline,
+      'AI document extraction timed out',
+    );
+    const JSZip = (jsZipModule.default ??
+      jsZipModule) as typeof import('jszip');
     const archive = await withDeadline(
       JSZip.loadAsync(buffer, { checkCRC32: false, createFolders: false }),
       deadline,

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'kysely';
+import * as JSZip from 'jszip';
 import { AiFileService } from './ai-file.service';
 
 jest.mock('./ai-conversation.service', () => ({
@@ -125,6 +126,34 @@ describe('AiFileService upload recovery', () => {
     expect(sql).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('completed');
     expect(result.files).toHaveLength(1);
+  });
+
+  it('extracts text from a valid bounded DOCX archive', async () => {
+    const archive = new JSZip();
+    archive.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    );
+    archive.file(
+      '_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+    );
+    archive.file(
+      'word/document.xml',
+      '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>DOCX audit text</w:t></w:r></w:p></w:body></w:document>',
+    );
+    const buffer = await archive.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+    });
+    const service = Object.create(AiFileService.prototype) as AiFileService;
+
+    const text = await (service as any).extractDocxText(
+      buffer,
+      Date.now() + 10_000,
+    );
+
+    expect(text).toContain('DOCX audit text');
   });
 });
 
