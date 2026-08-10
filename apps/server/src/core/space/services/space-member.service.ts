@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
@@ -24,6 +25,8 @@ import { CursorPaginationResult } from '@docmost/db/pagination/cursor-pagination
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { executeTx } from '@docmost/db/utils';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventName } from '../../../common/events/event.contants';
 
 @Injectable()
 export class SpaceMemberService {
@@ -34,6 +37,7 @@ export class SpaceMemberService {
     private watcherRepo: WatcherRepo,
     private readonly spacePolicy: SpacePolicyService,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async addUserToSpace(
@@ -185,6 +189,17 @@ export class SpaceMemberService {
 
     if (membersToAdd.length > 0) {
       await this.spaceMemberRepo.insertSpaceMember(membersToAdd);
+      const groupUserIds = (
+        await Promise.all(
+          validGroups.map((group) =>
+            this.groupUserRepo.getUserIdsByGroupId(group.id),
+          ),
+        )
+      ).flat();
+      await this.emitAccessChanged(workspaceId, [
+        ...validUsers.map((user) => user.id),
+        ...groupUserIds,
+      ]);
     } else {
       // either they are already members or do not exist on the workspace
     }
@@ -251,6 +266,7 @@ export class SpaceMemberService {
         { trx },
       );
     });
+    await this.emitAccessChanged(workspaceId, affectedUserIds);
   }
 
   async updateSpaceMemberRole(
@@ -296,10 +312,34 @@ export class SpaceMemberService {
       await this.validateLastAdmin(dto.spaceId);
     }
 
+    const affectedUserIds = dto.userId
+      ? [dto.userId]
+      : await this.groupUserRepo.getUserIdsByGroupId(dto.groupId);
+
     await this.spaceMemberRepo.updateSpaceMember(
       { role: dto.role },
       spaceMember.id,
       dto.spaceId,
+    );
+    await this.emitAccessChanged(workspaceId, affectedUserIds);
+  }
+
+  private async emitAccessChanged(
+    workspaceId: string,
+    userIds: string[],
+  ): Promise<void> {
+    const accessUserIds = [...new Set(userIds)];
+    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      workspaceId,
+      accessUserIds,
+    });
+    await Promise.all(
+      accessUserIds.map((userId) =>
+        this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+          workspaceId,
+          userId,
+        }),
+      ),
     );
   }
 

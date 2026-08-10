@@ -1,8 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ISpace } from "@/features/space/types/space.types";
 import { applySpaceUpdateToCache } from "./space-query-cache";
-import { invalidateAccessSensitiveSearchCaches } from "./access-sensitive-search-cache";
+import {
+  handleAccessInvalidation,
+  invalidateAccessSensitiveSearchCaches,
+} from "./access-sensitive-search-cache";
 
 function space(identifier: string): ISpace {
   return {
@@ -56,5 +59,29 @@ describe("invalidateAccessSensitiveSearchCaches", () => {
     for (const queryRoot of queryRoots) {
       expect(queryClient.getQueriesData({ queryKey: [queryRoot] })).toEqual([]);
     }
+  });
+
+  it("reloads an active document so editor and collaboration access are rechecked", () => {
+    const queryClient = new QueryClient();
+    const reload = vi.fn();
+
+    handleAccessInvalidation(queryClient, {
+      hasActiveDocument: true,
+      reload,
+    });
+
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("does not reload non-document routes", () => {
+    const queryClient = new QueryClient();
+    const reload = vi.fn();
+
+    handleAccessInvalidation(queryClient, {
+      hasActiveDocument: false,
+      reload,
+    });
+
+    expect(reload).not.toHaveBeenCalled();
   });
 });

@@ -99,7 +99,7 @@ describe('PageAccessMutationService', () => {
     );
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       EventName.PAGE_EMBED_VISIBILITY_CHANGED,
-      { workspaceId: page.workspaceId },
+      { workspaceId: page.workspaceId, accessUserIds: ['user-1'] },
     );
   });
 
