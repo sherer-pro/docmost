@@ -278,6 +278,13 @@ export class AiRunService {
           return raced;
         }
 
+        await this.assertVisionCompatibleInputs(
+          trx,
+          chatFileIds,
+          attachmentIds,
+          lockedConfig.visionEnabled,
+        );
+
         await this.assertQuotaAndConcurrency(
           trx,
           user.id,
@@ -1245,6 +1252,59 @@ export class AiRunService {
     if (rows.some((row) => !snapshot.readablePageIds.has(row.pageId!))) {
       throw new ForbiddenException('Attachment access denied');
     }
+  }
+
+  private async assertVisionCompatibleInputs(
+    db: any,
+    chatFileIds: string[],
+    attachmentIds: string[],
+    visionEnabled: boolean,
+  ): Promise<void> {
+    if (
+      visionEnabled ||
+      (chatFileIds.length === 0 && attachmentIds.length === 0)
+    ) {
+      return;
+    }
+    const chatFiles = chatFileIds.length
+      ? await db
+          .selectFrom('aiChatFiles')
+          .select(['mimeType', 'extractedText'])
+          .where('id', 'in', chatFileIds)
+          .execute()
+      : [];
+    const attachments = attachmentIds.length
+      ? await db
+          .selectFrom('attachments')
+          .select(['mimeType', 'textContent'])
+          .where('id', 'in', attachmentIds)
+          .execute()
+      : [];
+    const needsVision =
+      chatFiles.some((file: any) =>
+        this.isVisualOnlyInput(file.mimeType, file.extractedText),
+      ) ||
+      attachments.some((file: any) =>
+        this.isVisualOnlyInput(file.mimeType, file.textContent),
+      );
+    if (needsVision) {
+      throw new BadRequestException({
+        code: 'ai_vision_required',
+        message:
+          'Vision must be enabled before sending selected images or image-only PDFs',
+      });
+    }
+  }
+
+  private isVisualOnlyInput(
+    mimeType: string | null,
+    extractedText: string | null,
+  ): boolean {
+    return (
+      (mimeType?.startsWith('image/') === true ||
+        mimeType === 'application/pdf') &&
+      !extractedText?.trim()
+    );
   }
 
   private async findIdempotentRun(
