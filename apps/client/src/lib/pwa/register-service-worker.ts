@@ -16,19 +16,23 @@ export async function registerServiceWorker(): Promise<void> {
         scope: "/",
         updateViaCache: "none",
       });
-      await registration.update();
 
       /**
        * When a new SW version is found, attach an install-state listener.
        * Once the new worker becomes active, reload the page so the app
        * immediately uses the fresh bundle/asset cache.
        */
-      registration.addEventListener("updatefound", () => {
-        const nextWorker = registration.installing;
-
+      const observedWorkers = new WeakSet<ServiceWorker>();
+      const observeWorker = (nextWorker: ServiceWorker | null) => {
         if (!nextWorker) {
           return;
         }
+
+        if (observedWorkers.has(nextWorker)) {
+          return;
+        }
+
+        observedWorkers.add(nextWorker);
 
         nextWorker.addEventListener("statechange", () => {
           if (
@@ -38,7 +42,16 @@ export async function registerServiceWorker(): Promise<void> {
             window.location.reload();
           }
         });
+      };
+
+      registration.addEventListener("updatefound", () => {
+        observeWorker(registration.installing);
       });
+      observeWorker(registration.installing);
+
+      // Attach listeners before the explicit update check so a fast update
+      // cannot complete between update() and updatefound subscription.
+      await registration.update();
     } catch (error) {
       // Log the error explicitly to speed up diagnostics for HTTPS, scope,
       // CSP, or invalid `/sw.js` response issues.
