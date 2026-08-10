@@ -110,6 +110,8 @@ import {
 } from '@/features/database/utils/database-cell-value.ts';
 import {
   DATABASE_PROPERTY_DRAG_MIME,
+  DATABASE_ROW_VIRTUALIZATION_MIN_ROWS,
+  getDatabaseTableViewportHeight,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
   getCheckboxFilterOptions,
@@ -158,7 +160,6 @@ const DEFAULT_FILTER: IDatabaseFilterCondition = defaultDatabaseTableExportState
 const ROWS_PAGE_SIZE = 100;
 const MAX_FILTERS = 10;
 const DELETE_GRACE_PERIOD_MS = 6000;
-const ROW_VIRTUALIZATION_MIN_ROWS = 100;
 const ROW_VIRTUALIZATION_ESTIMATED_HEIGHT = 48;
 const ROW_VIRTUALIZATION_OVERSCAN = 8;
 const DATABASE_TABLE_STATE_STORAGE_PREFIX = 'docmost:database-table-state';
@@ -1112,7 +1113,7 @@ export function DatabaseTableView({
 
   const virtualizedRows = useMemo(() => {
     if (
-      preparedRows.length < ROW_VIRTUALIZATION_MIN_ROWS ||
+      preparedRows.length < DATABASE_ROW_VIRTUALIZATION_MIN_ROWS ||
       tableViewportHeight <= 0
     ) {
       return {
@@ -2384,6 +2385,10 @@ export function DatabaseTableView({
         )}
         <ScrollArea
           viewportRef={tableViewportRef}
+          h={getDatabaseTableViewportHeight(
+            preparedRows.length,
+            Boolean(isMobileViewport),
+          )}
           mah={isMobileViewport ? 520 : 620}
           onScrollPositionChange={(position) => setTableScrollTop(position.y)}
           className={classes.databaseScroll}

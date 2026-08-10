@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DATABASE_PROPERTY_DRAG_MIME,
+  DATABASE_ROW_VIRTUALIZATION_MIN_ROWS,
+  getDatabaseTableViewportHeight,
   getCheckboxFilterOptions,
   getSelectedPreparedRowIds,
   isDatabaseFilterControlsVisible,
@@ -16,6 +18,14 @@ import {
 } from './database-table-view.helpers';
 
 describe('database-table-view helpers', () => {
+  it('uses a bounded viewport when row virtualization becomes active', () => {
+    expect(getDatabaseTableViewportHeight(99, false)).toBeUndefined();
+    expect(
+      getDatabaseTableViewportHeight(DATABASE_ROW_VIRTUALIZATION_MIN_ROWS, false),
+    ).toBe(620);
+    expect(getDatabaseTableViewportHeight(1000, true)).toBe(520);
+  });
+
   it('hides filter controls on mobile while keeping state applicability intact', () => {
     expect(isDatabaseFilterControlsVisible(true)).toBe(false);
     expect(isDatabaseFilterControlsVisible(false)).toBe(true);
