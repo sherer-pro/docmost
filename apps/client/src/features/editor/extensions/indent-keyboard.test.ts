@@ -52,4 +52,29 @@ describe("Indent keyboard shortcuts", () => {
     expect(shiftTabHandled).toBe(true);
     expect(editor.getJSON().content?.[0].attrs?.indent).toBe(0);
   });
+
+  it("indents a paragraph when its text is selected", () => {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Indent.configure({ types: ["heading", "paragraph"] }),
+      ],
+      content: "<p>Keyboard indentation target</p>",
+    });
+    editor.commands.setTextSelection({ from: 1, to: 28 });
+
+    const tabHandled = editor.view.someProp("handleKeyDown", (handler) =>
+      handler(
+        editor!.view,
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+
+    expect(tabHandled).toBe(true);
+    expect(editor.getJSON().content?.[0].attrs?.indent).toBe(1);
+  });
 });

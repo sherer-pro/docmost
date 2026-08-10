@@ -74,6 +74,18 @@ export default function MathBlockView(props: NodeViewProps) {
       <Popover.Target>
         <NodeViewWrapper
           data-katex="true"
+          role="button"
+          tabIndex={editor.isEditable ? 0 : undefined}
+          aria-label={t("Insert math equation")}
+          onKeyDown={(event) => {
+            if (
+              editor.isEditable &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              event.preventDefault();
+              editor.commands.setNodeSelection(getPos());
+            }
+          }}
           className={[
             classes.mathBlock,
             props.selected ? classes.selected : "",
@@ -146,8 +158,13 @@ export default function MathBlockView(props: NodeViewProps) {
           ></Textarea>
 
           <Flex justify="flex-end" align="flex-end">
-            <ActionIcon variant="light" color="red">
-              <IconTrashX size={18} onClick={() => props.deleteNode()} />
+            <ActionIcon
+              variant="light"
+              color="red"
+              aria-label={t("Delete")}
+              onClick={() => props.deleteNode()}
+            >
+              <IconTrashX size={18} />
             </ActionIcon>
           </Flex>
         </Stack>

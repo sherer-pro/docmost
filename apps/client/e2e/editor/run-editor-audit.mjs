@@ -26,7 +26,22 @@ const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
   /\/$/,
   "",
 );
+const apiHost = new URL(apiOrigin).host;
 process.env.DOCMOST_WEBKIT_BASE_URL ??= baseURL;
+const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const sharedMemberSpecs = [
+  "collaboration-share-offline.spec.ts",
+  "synced-blocks.spec.ts",
+  "templates-transclusion.spec.ts",
+];
+const requiresSharedAuditMember =
+  selectedFiles.length === 0 ||
+  selectedFiles.some((file) =>
+    sharedMemberSpecs.some((spec) => file.endsWith(spec)),
+  );
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -62,6 +77,7 @@ async function createApi() {
     extraHTTPHeaders: {
       Authorization: `Bearer ${authToken}`,
       Cookie: `csrfToken=${csrfToken}`,
+      Host: apiHost,
       Origin: apiOrigin,
       Referer: `${apiOrigin}/`,
       "x-csrf-token": csrfToken,
@@ -103,7 +119,11 @@ async function provisionSharedAuditMember(api, spaceId) {
 
   const memberApi = await request.newContext({
     baseURL: apiBaseURL,
-    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+    extraHTTPHeaders: {
+      Host: apiHost,
+      Origin: apiOrigin,
+      Referer: `${apiOrigin}/`,
+    },
   });
   try {
     await responseJson(
@@ -185,10 +205,6 @@ async function ensureRuntimeAuth() {
 
 async function runPlaywright() {
   const cli = require.resolve("@playwright/test/cli");
-  const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
@@ -224,12 +240,22 @@ let state;
 let exitCode = 1;
 let originalWorkspaceTemplatePolicy;
 let sharedAuditMemberUserId;
+let restoreAdminAiPanel = false;
 
 try {
   const runId = new Date()
     .toISOString()
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14);
+  const currentUser = await responseJson(await api.get("/api/users/me"));
+  if (currentUser.user?.settings?.preferences?.aiPanelOpen) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: false },
+      }),
+    );
+    restoreAdminAiPanel = true;
+  }
   originalWorkspaceTemplatePolicy = await responseJson(
     await api.get("/api/pages/templates/policies/workspace"),
   );
@@ -283,21 +309,23 @@ try {
       },
     }),
   );
-  try {
-    sharedAuditMemberUserId = await provisionSharedAuditMember(api, space.id);
-  } catch (error) {
-    await responseJson(await api.delete(`/api/spaces/${space.id}`)).catch(
-      () => undefined,
-    );
-    state.retained = false;
-    state.deletedAt = new Date().toISOString();
-    state.setupFailure = true;
-    await fs.writeFile(
-      statePath,
-      `${JSON.stringify(state, null, 2)}\n`,
-      "utf8",
-    );
-    throw error;
+  if (requiresSharedAuditMember) {
+    try {
+      sharedAuditMemberUserId = await provisionSharedAuditMember(api, space.id);
+    } catch (error) {
+      await responseJson(await api.delete(`/api/spaces/${space.id}`)).catch(
+        () => undefined,
+      );
+      state.retained = false;
+      state.deletedAt = new Date().toISOString();
+      state.setupFailure = true;
+      await fs.writeFile(
+        statePath,
+        `${JSON.stringify(state, null, 2)}\n`,
+        "utf8",
+      );
+      throw error;
+    }
   }
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 
@@ -341,6 +369,13 @@ try {
   delete process.env.DOCMOST_AUDIT_MEMBER_AUTH_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_CSRF_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_USER_ID;
+  if (restoreAdminAiPanel) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: true },
+      }),
+    ).catch(() => undefined);
+  }
   if (
     originalWorkspaceTemplatePolicy &&
     originalWorkspaceTemplatePolicy.systemEnabled

@@ -18,6 +18,7 @@ vi.mock("@mantine/core", () => ({
     size,
     xOffset,
     yOffset,
+    closeButtonProps,
   }: {
     opened: boolean;
     title: React.ReactNode;
@@ -26,6 +27,7 @@ vi.mock("@mantine/core", () => ({
     size: string;
     xOffset: string;
     yOffset: string;
+    closeButtonProps: { "aria-label": string };
   }) =>
     opened ? (
       <section
@@ -36,6 +38,7 @@ vi.mock("@mantine/core", () => ({
         data-size={size}
         data-x-offset={xOffset}
         data-y-offset={yOffset}
+        data-close-label={closeButtonProps["aria-label"]}
       >
         <header>{title}</header>
         {children}
@@ -78,6 +81,7 @@ describe("ImagePreviewModal", () => {
     expect(modal?.getAttribute("data-y-offset")).toBe(
       "var(--image-preview-modal-gutter)",
     );
+    expect(modal?.getAttribute("data-close-label")).toBe("Cancel");
     expect(container.querySelector('img[alt="Preview content"]')).not.toBeNull();
 
     act(() => {

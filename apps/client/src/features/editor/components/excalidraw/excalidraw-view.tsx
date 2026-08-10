@@ -5,6 +5,7 @@ import {
   Card,
   Group,
   Image,
+  Modal,
   Text,
   useComputedColorScheme,
 } from "@mantine/core";
@@ -15,23 +16,21 @@ import { useDisclosure } from "@mantine/hooks";
 import { getFileUrl } from "@/lib/config.ts";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { IAttachment } from "@/features/attachments/types/attachment.types";
-import ReactClearModal from "react-clear-modal";
 import clsx from "clsx";
 import { IconEdit } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
 import {
+  getDiagramAttachmentIdForSave,
   getDiagramAttachmentSrc,
   getDiagramSaveErrorMessage,
+  shouldCreateNewDiagramAttachment,
 } from "@/features/editor/components/diagram/diagram-attachment";
 import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
 import { normalizeBlockWidthMode } from "@docmost/editor-ext";
 
 const ExcalidrawEditor = lazy(
-  () =>
-    import(
-      "@/features/editor/components/excalidraw/excalidraw-editor.tsx"
-    ),
+  () => import("@/features/editor/components/excalidraw/excalidraw-editor.tsx"),
 );
 
 export default function ExcalidrawView(props: NodeViewProps) {
@@ -110,10 +109,21 @@ export default function ExcalidrawView(props: NodeViewProps) {
       // @ts-ignore
       const pageId = editor.storage?.pageId;
 
-      let attachment: IAttachment = null;
-      if (attachmentId) {
-        attachment = await uploadFile(excalidrawSvgFile, pageId, attachmentId);
-      } else {
+      const attachmentIdForSave = getDiagramAttachmentIdForSave(
+        editor.state.doc,
+        attachmentId,
+      );
+      let attachment: IAttachment;
+      try {
+        attachment = await uploadFile(
+          excalidrawSvgFile,
+          pageId,
+          attachmentIdForSave,
+        );
+      } catch (err) {
+        if (!attachmentIdForSave || !shouldCreateNewDiagramAttachment(err)) {
+          throw err;
+        }
         attachment = await uploadFile(excalidrawSvgFile, pageId);
       }
 
@@ -142,52 +152,46 @@ export default function ExcalidrawView(props: NodeViewProps) {
       className="blockWidthWrapper"
       data-block-width-mode={widthMode}
     >
-      {opened && (
-        <ReactClearModal
-          style={{
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            padding: 0,
-            zIndex: 200,
-          }}
-          isOpen={opened}
-          onRequestClose={isSaving ? () => null : close}
-          disableCloseOnBgClick={true}
-          contentProps={{
-            style: {
-              padding: 0,
-              width: "90vw",
-            },
-          }}
+      <Modal
+        opened={opened}
+        onClose={isSaving ? () => null : close}
+        centered
+        size="90vw"
+        padding={0}
+        withCloseButton={false}
+        closeOnClickOutside={false}
+        closeOnEscape={!isSaving}
+        title={t("Draw and sketch excalidraw diagrams")}
+        styles={{ content: { overflow: "hidden" }, body: { padding: 0 } }}
+      >
+        <Group
+          justify="flex-end"
+          wrap="nowrap"
+          bg="var(--mantine-color-body)"
+          p="xs"
         >
-          <Group
-            justify="flex-end"
-            wrap="nowrap"
-            bg="var(--mantine-color-body)"
-            p="xs"
+          <Button onClick={handleSave} loading={isSaving} size={"compact-sm"}>
+            {t("Save & Exit")}
+          </Button>
+          <Button
+            onClick={close}
+            color="red"
+            disabled={isSaving}
+            size={"compact-sm"}
           >
-            <Button onClick={handleSave} loading={isSaving} size={"compact-sm"}>
-              {t("Save & Exit")}
-            </Button>
-            <Button
-              onClick={close}
-              color="red"
-              disabled={isSaving}
-              size={"compact-sm"}
-            >
-              {t("Exit")}
-            </Button>
-          </Group>
-          <div style={{ height: "90vh" }}>
-            <Suspense fallback={null}>
-              <ExcalidrawEditor
-                initialData={excalidrawData}
-                onApiChange={handleExcalidrawApiChange}
-                theme={computedColorScheme}
-              />
-            </Suspense>
-          </div>
-        </ReactClearModal>
-      )}
+            {t("Exit")}
+          </Button>
+        </Group>
+        <div style={{ height: "90vh" }}>
+          <Suspense fallback={null}>
+            <ExcalidrawEditor
+              initialData={excalidrawData}
+              onApiChange={handleExcalidrawApiChange}
+              theme={computedColorScheme}
+            />
+          </Suspense>
+        </div>
+      </Modal>
 
       {src ? (
         <div style={{ position: "relative" }}>
@@ -232,6 +236,7 @@ export default function ExcalidrawView(props: NodeViewProps) {
               onClick={handleOpen}
               variant="default"
               color="gray"
+              aria-label={t("Double-click to edit Excalidraw diagram")}
               mx="xs"
               className="print-hide"
               style={{
@@ -258,7 +263,12 @@ export default function ExcalidrawView(props: NodeViewProps) {
           className={clsx(selected ? "ProseMirror-selectednode" : "")}
         >
           <div style={{ display: "flex", alignItems: "center" }}>
-            <ActionIcon variant="transparent" color="gray">
+            <ActionIcon
+              component="span"
+              variant="transparent"
+              color="gray"
+              aria-hidden="true"
+            >
               <IconEdit size={18} />
             </ActionIcon>
 

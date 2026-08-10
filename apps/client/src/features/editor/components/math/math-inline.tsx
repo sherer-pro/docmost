@@ -66,6 +66,18 @@ export default function MathInlineView(props: NodeViewProps) {
         <Popover.Target>
           <NodeViewWrapper
             data-katex="true"
+            role="button"
+            tabIndex={editor.isEditable ? 0 : undefined}
+            aria-label={t("Insert math equation")}
+            onKeyDown={(event) => {
+              if (
+                editor.isEditable &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
+                event.preventDefault();
+                editor.commands.setNodeSelection(getPos());
+              }
+            }}
             className={[
               classes.mathInline,
               props.selected ? classes.selected : "",

@@ -234,7 +234,9 @@ export const mainExtensions = [
   MathBlock.configure({
     view: MathBlockView,
   }),
-  Details,
+  Details.configure({
+    getToggleButtonLabel: () => i18n.t("Toggle title"),
+  }),
   DetailsSummary,
   DetailsContent,
   PageBreak,
@@ -245,6 +247,9 @@ export const mainExtensions = [
     addPasteHandler: false,
     controls: true,
     nocookie: true,
+    HTMLAttributes: {
+      title: "YouTube video",
+    },
   }),
   TiptapImage.configure({
     view: ImageView,

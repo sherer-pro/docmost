@@ -108,6 +108,17 @@ describe('HtmlPdfRendererService attachment request authorization', () => {
     expect(unknown.abort).toHaveBeenCalledTimes(1);
     expect(unknown.continue).not.toHaveBeenCalled();
   });
+
+  it('fails closed when an allowed attachment image cannot be rendered', async () => {
+    const service = new HtmlPdfRendererService({} as any);
+    const page = {
+      evaluate: jest.fn().mockResolvedValue(2),
+    };
+
+    await expect(
+      (service as any).assertAttachmentImagesLoaded(page),
+    ).rejects.toThrow('PDF export failed to load 2 attachment image resource(s)');
+  });
 });
 
 describe('HtmlPdfRendererService Mermaid sanitization', () => {

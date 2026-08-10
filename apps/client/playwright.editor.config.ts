@@ -35,7 +35,10 @@ export default defineConfig({
     timezoneId: "Europe/Moscow",
     colorScheme: "light",
     trace: "retain-on-failure",
-    video: "off",
+    video:
+      process.env.DOCMOST_EDITOR_AUDIT_VIDEO === "1"
+        ? "on"
+        : "retain-on-failure",
     screenshot: "only-on-failure",
     serviceWorkers: "allow",
   },
