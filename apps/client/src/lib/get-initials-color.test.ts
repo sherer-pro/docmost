@@ -13,5 +13,15 @@ describe("getInitialsColor", () => {
     expect(defaultInitialsColors).not.toContain("lime");
     expect(defaultInitialsColors).not.toContain("orange");
     expect(defaultInitialsColors).not.toContain("yellow");
+    expect(defaultInitialsColors).toEqual(
+      expect.arrayContaining([
+        "blue.9",
+        "grape.9",
+        "indigo.9",
+        "pink.9",
+        "red.9",
+        "violet.9",
+      ]),
+    );
   });
 });
