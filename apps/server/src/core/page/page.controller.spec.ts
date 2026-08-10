@@ -236,6 +236,25 @@ describe('PageController guardrails and mixed-id contract', () => {
     });
   });
 
+  it('rejects deleted pages from pages/info', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'uuid-page',
+      slugId: 'docs-home',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+      deletedAt: new Date(),
+    });
+
+    await expect(
+      controller.getPage(
+        { pageId: 'docs-home' } as any,
+        { id: 'u1' } as any,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(pageAccessService.assertCanReadPage).not.toHaveBeenCalled();
+  });
+
   it('normalizes settings in pages/update response to undefined when source is null', async () => {
     pageService.update.mockResolvedValue({
       id: 'uuid-page',

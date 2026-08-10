@@ -16,6 +16,9 @@ describe('PageRepo identifier contract', () => {
     deleteFrom: jest.fn(() => ({ where: deleteWhereMock })),
     withRecursive: jest.fn(),
     selectFrom: jest.fn(),
+    transaction: jest.fn(() => ({
+      execute: (callback: (trx: any) => unknown) => callback(dbMock as any),
+    })),
   };
 
   const spaceMemberRepoMock = {} as any;
@@ -26,6 +29,7 @@ describe('PageRepo identifier contract', () => {
   let pageRepo: PageRepo;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
 
     updateTableMock.mockReturnValue({ set: setMock });
@@ -216,14 +220,19 @@ describe('PageRepo identifier contract', () => {
       .spyOn(pageRepo as any, 'resolvePageId')
       .mockResolvedValue('resolved-page-id');
 
+    const pageLookup = {
+      where: jest.fn(),
+      executeTakeFirst: jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'resolved-page-id',
+          parentPageId: null,
+          spaceId: 'space-1',
+        }),
+    };
+    pageLookup.where.mockReturnValue(pageLookup);
     dbMock.selectFrom.mockReturnValue({
-      select: jest.fn(() => ({
-        where: jest.fn(() => ({
-          executeTakeFirst: jest
-            .fn()
-            .mockResolvedValueOnce({ id: 'resolved-page-id', parentPageId: null }),
-        })),
-      })),
+      select: jest.fn(() => pageLookup),
     });
 
     dbMock.withRecursive.mockImplementation((_name, callback) => {
@@ -254,10 +263,94 @@ describe('PageRepo identifier contract', () => {
 
     await pageRepo.restorePage('docs-home', 'workspace-1');
 
-    expect(resolveSpy).toHaveBeenCalledWith('docs-home');
+    expect(resolveSpy).toHaveBeenCalledWith('docs-home', dbMock);
     expect(eventEmitterMock.emit).toHaveBeenCalledWith(EventName.PAGE_RESTORED, {
       pageIds: ['resolved-page-id'],
       workspaceId: 'workspace-1',
     });
+  });
+
+  it('restores a subtree and detaches its deleted parent atomically', async () => {
+    jest.restoreAllMocks();
+    const sequence: string[] = [];
+    const restoredPageLookup = {
+      where: jest.fn(),
+      executeTakeFirst: jest.fn().mockResolvedValue({
+        id: '0d75095b-cd06-43bc-9855-7956ec83f4fb',
+        parentPageId: 'parent-page-id',
+        spaceId: 'space-1',
+      }),
+    };
+    restoredPageLookup.where.mockReturnValue(restoredPageLookup);
+    const selectFrom = jest
+      .fn()
+      .mockReturnValueOnce({
+        select: jest.fn(() => restoredPageLookup),
+      })
+      .mockReturnValueOnce({
+        select: jest.fn(() => ({
+          where: jest.fn(() => ({
+            executeTakeFirst: jest.fn().mockResolvedValue({
+              id: 'parent-page-id',
+              deletedAt: new Date(),
+              spaceId: 'space-1',
+              workspaceId: 'workspace-1',
+            }),
+          })),
+        })),
+      });
+    const updateExecute = jest.fn().mockResolvedValue(undefined);
+    const trxMock = {
+      selectFrom,
+      withRecursive: jest.fn((_name, callback) => {
+        callback({
+          selectFrom: jest.fn(() => ({
+            select: jest.fn(() => ({
+              where: jest.fn(() => ({ unionAll: jest.fn() })),
+            })),
+          })),
+        });
+        return {
+          selectFrom: jest.fn(() => ({
+            select: jest.fn(() => ({
+              execute: jest.fn().mockResolvedValue([
+                { id: '0d75095b-cd06-43bc-9855-7956ec83f4fb' },
+                { id: 'child-page-id' },
+              ]),
+            })),
+          })),
+        };
+      }),
+      updateTable: jest.fn(() => ({
+        set: jest.fn(() => ({
+          where: jest.fn(() => ({ execute: updateExecute })),
+        })),
+      })),
+    };
+
+    const executeTxSpy = jest
+      .spyOn(dbUtils, 'executeTx')
+      .mockImplementation(async (_db, callback) => {
+        sequence.push('transaction-start');
+        const result = await callback(trxMock as any);
+        sequence.push('transaction-commit');
+        return result;
+      });
+    eventEmitterMock.emit.mockImplementation(() => {
+      sequence.push('event');
+    });
+
+    await pageRepo.restorePage(
+      '0d75095b-cd06-43bc-9855-7956ec83f4fb',
+      'workspace-1',
+    );
+
+    expect(executeTxSpy).toHaveBeenCalledTimes(1);
+    expect(trxMock.updateTable).toHaveBeenCalledTimes(2);
+    expect(sequence).toEqual([
+      'transaction-start',
+      'transaction-commit',
+      'event',
+    ]);
   });
 });
