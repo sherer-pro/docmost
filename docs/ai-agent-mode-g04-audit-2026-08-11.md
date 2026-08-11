@@ -79,7 +79,7 @@ Server-side prompt-injection resistance is independent of model output: the prov
 
 | Scenario | Check | Result | Evidence |
 | --- | --- | --- | --- |
-| Unsupported provider | Browser before capability test | PASS: Agent radio absent; after successful test it is enabled. | Final Agent run `20260811002611-4c47bd20`. |
+| Unsupported provider | Browser before capability test | PASS: Agent radio absent; after successful test it is enabled. | Final post-integration Agent run `20260811080036-e3d09ec4`. |
 | Approval preview | Real browser + Playwright | PASS: page, before/after, TTL, warning, Approve/Reject are visible; editor remains unchanged and controls are disabled while waiting. | `output/audit/g04/screenshots/04-reject-preview-actions.png`; Agent runner screenshot `01-pending-approval.png`. |
 | Keyboard | Playwright focus + Enter | PASS: focused native Approve control applies the decision. | Test-only commit `7c017c02`; final Agent run. |
 | Reload/reconnect | Browser reload and app restart | PASS: pending approval reappears and remains decidable. | Agent transition journal. |
@@ -147,7 +147,7 @@ Material commands are listed with their observed exit codes. Read-only `rg`, `gi
 | focused `ai-run-step.service.spec.ts` | 0 | 9/9 approval/recovery tests. |
 | client localization/capability tests | 0 | 8/8 focused tests; the earlier full client run passed 131 files/632 tests. |
 | `corepack pnpm --filter ./apps/server exec jest --config jest.config.cjs --runInBand src/common/helpers/prosemirror/ai-page-operation.spec.ts src/collaboration/collaboration.handler.spec.ts` | 0 | 2/2 suites, 17/17 structural/apply tests. |
-| `corepack pnpm run test:ai-agent:e2e` | 0 | Final run `20260811002611-4c47bd20`; two contexts, browser/fault/security matrix, clean scan, volumes removed. |
+| `corepack pnpm run test:ai-agent:e2e` | 0 | Final post-integration run `20260811080036-e3d09ec4`; two contexts, browser/fault/security matrix, clean scan, volumes removed. |
 | `corepack pnpm run test:ai:e2e` with mock port 18084 | 1 | 23/24 passed; one neighboring G02 assertion hard-coded port 1080 although runner accepts `DOCMOST_AI_MOCK_PORT`. Product correctly showed configured 18084. |
 | `corepack pnpm run test:ai:e2e` with expected mock port 1080 | 0 | 24/24 passed across Chromium, Firefox, Pixel 7, and narrow panel. |
 | `corepack pnpm run test:ai-context:e2e` | 0 | Deterministic context/citation/ACL audit passed. |
@@ -174,7 +174,7 @@ No external LLM or SaaS received repository source, real page content, credentia
 
 ## Evidence
 
-- Final Agent runner: `output/audit/ai-agent-mode-2026-08-09/20260811002611-4c47bd20/`.
+- Final Agent runner: `output/audit/ai-agent-mode-2026-08-09/20260811080036-e3d09ec4/`.
 - Runner status: `runner-summary.json` (`passed`, `volumes-removed`).
 - Browser/fault state: `browser-summary.json`, `transition-journal.json`, `toxiproxy-final-state.json`.
 - Provenance and data counts: `container-provenance.json`, `provider-metadata.json`, `database-summary.json`.
