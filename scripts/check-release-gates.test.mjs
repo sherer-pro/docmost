@@ -120,6 +120,12 @@ test("AI context acceptance finds its member beyond the first page", () => {
     aiContextAuditSource,
     /workspace\/members\?limit=100&query=\$\{encodeURIComponent\(email\)\}/u,
   );
+  assert.match(
+    aiContextAuditSource,
+    /await api\(admin, "DELETE", `\/api\/spaces\/\$\{space\.id\}`\)/u,
+  );
+  assert.match(aiContextAuditSource, /state\.retained = false/u);
+  assert.match(aiContextAuditSource, /state\.deletedAt = new Date\(\)\.toISOString\(\)/u);
 });
 
 test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => {
