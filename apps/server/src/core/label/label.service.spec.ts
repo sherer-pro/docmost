@@ -15,6 +15,8 @@ describe('LabelService', () => {
       deleteLabel: jest.fn(),
       findLabelsByPageId: jest.fn(),
       findLabels: jest.fn(),
+      findLabelRegistry: jest.fn(),
+      renameLabel: jest.fn(),
       findPagesByLabelId: jest.fn(),
     };
     const db = {
@@ -217,5 +219,83 @@ describe('LabelService', () => {
       },
     );
     expect(pageAccessService.getEffectiveAccess).not.toHaveBeenCalled();
+  });
+
+  it('renames a normalized label in its own space', async () => {
+    const { service, labelRepo } = createService();
+    const label = {
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    };
+    const renamed = { ...label, name: 'new-name' };
+    labelRepo.findById.mockResolvedValue(label);
+    labelRepo.renameLabel.mockResolvedValue(renamed);
+
+    await expect(
+      service.renameLabel('label-1', ' New Name ', 'workspace-1', 'space-1'),
+    ).resolves.toEqual(renamed);
+
+    expect(labelRepo.renameLabel).toHaveBeenCalledWith(
+      'label-1',
+      'new-name',
+      'workspace-1',
+      'space-1',
+      trx,
+    );
+  });
+
+  it('rejects renaming a label from another space', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-2',
+      type: LabelType.PAGE,
+    });
+
+    await expect(
+      service.renameLabel('label-1', 'new-name', 'workspace-1', 'space-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(labelRepo.renameLabel).not.toHaveBeenCalled();
+  });
+
+  it('maps concurrent duplicate label renames to a conflict', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    });
+    labelRepo.renameLabel.mockRejectedValue({ code: '23505' });
+
+    await expect(
+      service.renameLabel('label-1', 'duplicate', 'workspace-1', 'space-1'),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('deletes a managed label and relies on the page-label cascade', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    });
+
+    await service.deleteLabel('label-1', 'workspace-1', 'space-1');
+
+    expect(labelRepo.deleteLabel).toHaveBeenCalledWith(
+      'label-1',
+      'workspace-1',
+      'space-1',
+      trx,
+    );
   });
 });
