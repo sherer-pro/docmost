@@ -1,6 +1,6 @@
 import { Button } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { DictionaryMarkdown } from "./dictionary-markdown";
@@ -37,6 +37,8 @@ export function DictionaryHighlightLayer({
 }: DictionaryHighlightLayerProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const associatedHighlightRef = useRef<HTMLElement | null>(null);
+  const tooltipId = useId();
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [initialTerm, setInitialTerm] = useState("");
@@ -52,6 +54,27 @@ export function DictionaryHighlightLayer({
     if (!root || termsById.size === 0) {
       return;
     }
+
+    const removeTooltipAssociation = () => {
+      const element = associatedHighlightRef.current;
+      if (!element) {
+        return;
+      }
+
+      const describedBy =
+        element
+          .getAttribute("aria-describedby")
+          ?.split(/\s+/)
+          .filter((id) => id && id !== tooltipId) ?? [];
+
+      if (describedBy.length > 0) {
+        element.setAttribute("aria-describedby", describedBy.join(" "));
+      } else {
+        element.removeAttribute("aria-describedby");
+      }
+
+      associatedHighlightRef.current = null;
+    };
 
     const getHighlightElement = (target: EventTarget | null) => {
       if (!(target instanceof HTMLElement)) {
@@ -71,6 +94,17 @@ export function DictionaryHighlightLayer({
       }
 
       const rect = element.getBoundingClientRect();
+      removeTooltipAssociation();
+      const describedBy =
+        element
+          .getAttribute("aria-describedby")
+          ?.split(/\s+/)
+          .filter(Boolean) ?? [];
+      element.setAttribute(
+        "aria-describedby",
+        [...new Set([...describedBy, tooltipId])].join(" "),
+      );
+      associatedHighlightRef.current = element;
       setPopover({
         term,
         top: Math.min(rect.bottom + 8, window.innerHeight - 12),
@@ -78,15 +112,26 @@ export function DictionaryHighlightLayer({
       });
     };
 
-    const hideDefinition = () => setPopover(null);
+    const hideDefinition = () => {
+      removeTooltipAssociation();
+      setPopover(null);
+    };
     const handleMouseOver = (event: Event) => showDefinition(event.target);
     const handleFocusIn = (event: Event) => showDefinition(event.target);
     const handleClick = (event: Event) => showDefinition(event.target);
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !getHighlightElement(event.target) ||
-        !["Enter", " "].includes(event.key)
-      ) {
+      if (!getHighlightElement(event.target)) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        hideDefinition();
+        return;
+      }
+
+      if (!["Enter", " "].includes(event.key)) {
         return;
       }
 
@@ -103,6 +148,7 @@ export function DictionaryHighlightLayer({
     root.addEventListener("focusout", hideDefinition);
 
     return () => {
+      removeTooltipAssociation();
       root.removeEventListener("mouseover", handleMouseOver);
       root.removeEventListener("focusin", handleFocusIn);
       root.removeEventListener("click", handleClick);
@@ -110,7 +156,7 @@ export function DictionaryHighlightLayer({
       root.removeEventListener("mouseout", hideDefinition);
       root.removeEventListener("focusout", hideDefinition);
     };
-  }, [termsById]);
+  }, [termsById, tooltipId]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -169,6 +215,8 @@ export function DictionaryHighlightLayer({
       {popover &&
         createPortal(
           <div
+            id={tooltipId}
+            role="tooltip"
             className={classes.definitionPopover}
             style={{ top: popover.top, left: Math.max(12, popover.left) }}
           >

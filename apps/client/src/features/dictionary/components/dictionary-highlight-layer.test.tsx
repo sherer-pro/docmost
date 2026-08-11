@@ -93,4 +93,36 @@ describe("DictionaryHighlightLayer", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(editorKeyDown).not.toHaveBeenCalled();
   });
+
+  it("exposes a focused definition as an associated tooltip", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        <DictionaryHighlightLayer terms={[term]}>
+          <span
+            className="dictionary-highlight"
+            data-dictionary-term-id="term-1"
+            role="button"
+            tabIndex={0}
+          >
+            Alpha
+          </span>
+        </DictionaryHighlightLayer>,
+      );
+    });
+
+    const highlight = container.querySelector<HTMLElement>(
+      ".dictionary-highlight",
+    );
+
+    await act(async () => highlight?.focus());
+
+    const tooltip = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(tooltip).not.toBeNull();
+    expect(tooltip?.id).toBeTruthy();
+    expect(highlight?.getAttribute("aria-describedby")).toBe(tooltip?.id);
+  });
 });
