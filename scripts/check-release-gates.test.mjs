@@ -26,10 +26,7 @@ const [
   readFile("apps/client/e2e/ai-agent/run-ai-agent-audit.mjs", "utf8"),
   readFile("apps/client/e2e/ai-agent/docker-compose.audit.yml", "utf8"),
   readFile("apps/server/src/database/migrate.ts", "utf8"),
-  readFile(
-    "apps/client/e2e/editor/specs/mobile-accessibility.spec.ts",
-    "utf8",
-  ),
+  readFile("apps/client/e2e/editor/specs/mobile-accessibility.spec.ts", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -66,6 +63,11 @@ test("AI browser acceptance isolates and restores the admin panel preference", (
     restore > run,
     "AI panel preference must be restored after the audit",
   );
+  assert.match(
+    aiSupportSource,
+    /data: \{ locale, aiPanelOpen: false \}/u,
+    "each browser case must start with the shared admin panel closed",
+  );
 });
 
 test("AI browser acceptance opens the off-screen assistant before use", () => {
@@ -91,9 +93,8 @@ test("editor mobile acceptance isolates the shared assistant state", () => {
     "each mobile scenario must start with the assistant closed",
   );
   assert.equal(
-    editorMobileSource.match(
-      /aiPanelOpen: original\.aiPanelOpen \?\? false,/gu,
-    )?.length,
+    editorMobileSource.match(/aiPanelOpen: original\.aiPanelOpen \?\? false,/gu)
+      ?.length,
     2,
     "each mobile scenario must restore the original assistant state",
   );
