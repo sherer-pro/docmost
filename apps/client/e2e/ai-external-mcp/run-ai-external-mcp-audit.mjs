@@ -11,6 +11,7 @@ const baseURL = (process.env.DOCMOST_BASE_URL ?? "http://localhost:3000").replac
 const appOrigin = new URL(baseURL).origin;
 const network = process.env.DOCMOST_AI_MCP_NETWORK ?? "docmost_default";
 const appContainer = process.env.DOCMOST_CONTAINER_NAME ?? "docmost-docmost-1";
+const dbContainer = process.env.DOCMOST_DB_CONTAINER_NAME ?? "docmost-db-1";
 const suffix = runId.toLowerCase();
 const containers = {
   hostile: `ai-mcp-hostile-${suffix}`,
@@ -39,6 +40,7 @@ const traces = [];
 const createdServerIds = [];
 let createdSpace;
 let createdGroup;
+let createdMember;
 let originalSettings;
 let originalLocale;
 let apiContext;
@@ -549,8 +551,11 @@ async function browserEvidence() {
       });
       const page = await context.newPage();
       await page.goto("/settings/ai/guide");
-      const expected = locale === "ru-RU" ? "Администраторы пространства" : "Space administrators";
-      await page.getByText(expected, { exact: false }).waitFor({ state: "visible" });
+      const expected =
+        locale === "ru-RU"
+          ? /^Администраторы пространства управляют групповыми правилами/
+          : /^Space administrators manage group rules/;
+      await page.getByText(expected).waitFor({ state: "visible" });
       await page.screenshot({
         path: path.join(auditRoot, "screenshots", `security-guide-${locale}.png`),
         fullPage: true,
@@ -605,11 +610,20 @@ async function browserEvidence() {
     }
     // Rendering safety is asserted from active DOM capabilities below. The
     // conversation panel may virtualize or collapse the literal result text.
-    const rendering = await page.evaluate(() => ({
-      executed: globalThis.__mcpPwned,
-      javascriptLinks: document.querySelectorAll('a[href^="javascript:"]').length,
-      inlineHandlers: document.querySelectorAll("[onerror], [onclick]").length,
-    }));
+    const rendering = await waitFor(
+      "stable malicious-result page",
+      async () =>
+        page
+          .evaluate(() => ({
+            executed: globalThis.__mcpPwned,
+            javascriptLinks: document.querySelectorAll('a[href^="javascript:"]')
+              .length,
+            inlineHandlers: document.querySelectorAll("[onerror], [onclick]")
+              .length,
+          }))
+          .catch(() => undefined),
+      10_000,
+    );
     await page.screenshot({
       path: path.join(auditRoot, "screenshots", "malicious-result-sanitized.png"),
       fullPage: true,
@@ -636,13 +650,307 @@ async function browserEvidence() {
   }
 }
 
+async function provisionMember() {
+  const email = `g06-member-${runId}@audit.invalid`;
+  const password = `G06-Member-${runId}!`;
+  await api("POST", "/api/workspace/invites/create", {
+    emails: [email],
+    groupIds: [],
+    role: "member",
+  });
+  const invitations = (
+    await api(
+      "GET",
+      `/api/workspace/invites?query=${encodeURIComponent(email)}&limit=50`,
+    )
+  ).payload;
+  const invitation = invitations.items.find((item) => item.email === email);
+  if (!invitation?.id) throw new Error("Audit member invitation was not found");
+  const link = (
+    await api("POST", "/api/workspace/invites/link", {
+      invitationId: invitation.id,
+    })
+  ).payload;
+  const token = new URL(link.inviteLink).searchParams.get("token");
+  if (!token) throw new Error("Audit member invitation token was not returned");
+
+  const acceptContext = await request.newContext({
+    baseURL,
+    timeout: 30_000,
+    extraHTTPHeaders: { Origin: appOrigin, Referer: `${appOrigin}/` },
+  });
+  try {
+    const accepted = await acceptContext.post("/api/workspace/invites/accept", {
+      data: {
+        invitationId: invitation.id,
+        token,
+        name: "G06 Member",
+        password,
+      },
+    });
+    if (!accepted.ok()) {
+      throw new Error(`Audit member acceptance returned ${accepted.status()}`);
+    }
+    const state = await acceptContext.storageState();
+    const authToken = state.cookies.find(
+      (cookie) => cookie.name === "authToken",
+    )?.value;
+    const csrfToken = state.cookies.find(
+      (cookie) => cookie.name === "csrfToken",
+    )?.value;
+    if (!authToken || !csrfToken) {
+      throw new Error("Audit member cookies were not issued");
+    }
+    const meResponse = await acceptContext.get("/api/users/me");
+    const me = unwrap(await meResponse.json());
+    if (!me?.user?.id) throw new Error("Audit member identity was not returned");
+    await api("POST", "/api/spaces/members/add", {
+      spaceId: createdSpace.id,
+      role: "writer",
+      userIds: [me.user.id],
+      groupIds: [],
+    });
+    return { id: me.user.id, authToken, csrfToken };
+  } finally {
+    await acceptContext.dispose();
+  }
+}
+
+async function memberApi(method, url, data) {
+  if (!createdMember) throw new Error("Audit member is not provisioned");
+  const context = await request.newContext({
+    baseURL,
+    timeout: 30_000,
+    extraHTTPHeaders: {
+      Authorization: `Bearer ${createdMember.authToken}`,
+      Cookie: `csrfToken=${createdMember.csrfToken}`,
+      Origin: appOrigin,
+      Referer: `${appOrigin}/`,
+      "x-csrf-token": createdMember.csrfToken,
+      Accept: "application/json",
+    },
+  });
+  try {
+    return await context.fetch(url, {
+      method,
+      ...(data === undefined ? {} : { data }),
+    });
+  } finally {
+    await context.dispose();
+  }
+}
+
+async function browserRevokeConsentDuringRun(conversationId) {
+  await api(
+    "POST",
+    `/api/ai/conversations/${conversationId}/actions/open`,
+    {},
+  );
+  const browser = await chromium.launch({ headless: true });
+  const consoleErrors = [];
+  const pageErrors = [];
+  try {
+    const context = await browser.newContext({
+      baseURL,
+      storageState: {
+        cookies: [
+          {
+            name: "authToken",
+            value: required("DOCMOST_AUTH_TOKEN"),
+            domain: new URL(baseURL).hostname,
+            path: "/",
+            httpOnly: true,
+            secure: new URL(baseURL).protocol === "https:",
+            sameSite: "Lax",
+          },
+          {
+            name: "csrfToken",
+            value: required("DOCMOST_CSRF_TOKEN"),
+            domain: new URL(baseURL).hostname,
+            path: "/",
+            httpOnly: false,
+            secure: new URL(baseURL).protocol === "https:",
+            sameSite: "Lax",
+          },
+        ],
+        origins: [],
+      },
+    });
+    const page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    const pageSlug = String(createdSpace.page.title)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    await page.goto(
+      `/s/${createdSpace.slug}/p/${pageSlug}-${createdSpace.page.slugId}`,
+    );
+    const composer = page.getByRole("button", {
+      name: /External tools|Внешние инструменты/i,
+    });
+    const aside = page.locator("#docmost-context-aside");
+    const asideHidden =
+      (await aside.count()) === 0 ||
+      (await aside.getAttribute("aria-hidden").catch(() => "true")) === "true";
+    if (asideHidden) {
+      const open = page.getByRole("button", {
+        name: /Open AI assistant|Открыть (?:AI|ИИ)-помощника/i,
+      });
+      await open.click();
+      await waitFor(
+        "AI assistant panel",
+        async () =>
+          (await aside.count()) > 0 &&
+          (await aside.getAttribute("aria-hidden").catch(() => "true")) !==
+            "true",
+        10_000,
+      );
+    }
+    await composer.waitFor({ state: "visible" });
+    const composerDisabled = await composer.isDisabled();
+    let switchDisabled = true;
+    let revoked = false;
+    if (!composerDisabled) {
+      await composer.click();
+      const consentSwitch = page.getByRole("checkbox", {
+        name: /Allow Hostile audit|Разрешить Hostile audit/i,
+      });
+      await consentSwitch.waitFor({ state: "visible" });
+      switchDisabled = await consentSwitch.isDisabled();
+      if (!switchDisabled && (await consentSwitch.isChecked())) {
+        await Promise.all([
+          page.waitForResponse(
+            (response) =>
+              response.url().includes("/ai/mcp-preferences") &&
+              response.request().method() === "PUT",
+          ),
+          consentSwitch.click(),
+        ]);
+        revoked = !(await consentSwitch.isChecked());
+      }
+    }
+    await page.screenshot({
+      path: path.join(
+        auditRoot,
+        "screenshots",
+        "consent-revocation-during-run.png",
+      ),
+      fullPage: true,
+    });
+    await context.close();
+    return {
+      composerDisabled,
+      switchDisabled,
+      revoked,
+      consoleErrorCount: consoleErrors.length,
+      pageErrorCount: pageErrors.length,
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+async function browserRoleIsolation() {
+  if (!createdMember) throw new Error("Audit member is not provisioned");
+  const browser = await chromium.launch({ headless: true });
+  const errors = [];
+  try {
+    const cookieState = (authToken, csrfToken) => ({
+      cookies: [
+        {
+          name: "authToken",
+          value: authToken,
+          domain: new URL(baseURL).hostname,
+          path: "/",
+          httpOnly: true,
+          secure: new URL(baseURL).protocol === "https:",
+          sameSite: "Lax",
+        },
+        {
+          name: "csrfToken",
+          value: csrfToken,
+          domain: new URL(baseURL).hostname,
+          path: "/",
+          httpOnly: false,
+          secure: new URL(baseURL).protocol === "https:",
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    });
+    const [ownerContext, memberContext] = await Promise.all([
+      browser.newContext({
+        baseURL,
+        storageState: cookieState(
+          required("DOCMOST_AUTH_TOKEN"),
+          required("DOCMOST_CSRF_TOKEN"),
+        ),
+      }),
+      browser.newContext({
+        baseURL,
+        storageState: cookieState(
+          createdMember.authToken,
+          createdMember.csrfToken,
+        ),
+      }),
+    ]);
+    const [ownerPage, memberPage] = await Promise.all([
+      ownerContext.newPage(),
+      memberContext.newPage(),
+    ]);
+    for (const [role, page] of [
+      ["owner", ownerPage],
+      ["member", memberPage],
+    ]) {
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(`${role}:console`);
+      });
+      page.on("pageerror", () => errors.push(`${role}:pageerror`));
+    }
+    await Promise.all([
+      ownerPage.goto("/settings/ai/external-tools"),
+      memberPage.goto("/settings/ai/external-tools"),
+    ]);
+    const ownerVisible = await ownerPage
+      .getByText(/External MCP servers|Внешние MCP-серверы/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    await waitFor(
+      "member admin-route redirect",
+      () => !memberPage.url().includes("/settings/ai/external-tools"),
+      10_000,
+    );
+    const memberRedirected = !memberPage
+      .url()
+      .includes("/settings/ai/external-tools");
+    await Promise.all([
+      ownerPage.screenshot({
+        path: path.join(auditRoot, "screenshots", "role-owner-admin.png"),
+        fullPage: true,
+      }),
+      memberPage.screenshot({
+        path: path.join(auditRoot, "screenshots", "role-member-denied.png"),
+        fullPage: true,
+      }),
+    ]);
+    await Promise.all([ownerContext.close(), memberContext.close()]);
+    return { ownerVisible, memberRedirected, errorCount: errors.length };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function encryptionProof(serverId) {
   const detail = (await api("GET", `/api/ai/mcp-servers/${serverId}`)).payload;
   const responseText = JSON.stringify(detail);
   const sql = `select json_build_object('present', headers_encrypted is not null, 'envelopePrefix', left(headers_encrypted, 7), 'ciphertextBytes', octet_length(headers_encrypted), 'containsPlaintext', position('${headerCanary.replaceAll("'", "''")}' in headers_encrypted) > 0) from ai_mcp_servers where id='${serverId}';`;
   const database = docker([
     "exec",
-    "docmost-db-1",
+    dbContainer,
     "psql",
     "-U",
     originalContainerEnv.POSTGRES_USER ?? "docmost",
@@ -682,7 +990,7 @@ function discoveryDatabaseShape(serverId) {
   const sql = `select json_build_object('type', jsonb_typeof(discovered_tools), 'arrayLength', case when jsonb_typeof(discovered_tools) = 'array' then jsonb_array_length(discovered_tools) else null end, 'columnCount', discovery_tool_count) from ai_mcp_servers where id='${serverId}';`;
   const value = docker([
     "exec",
-    "docmost-db-1",
+    dbContainer,
     "psql",
     "-U",
     originalContainerEnv.POSTGRES_USER ?? "docmost",
@@ -902,6 +1210,7 @@ async function runLiveAudit() {
       format: "json",
     })
   ).payload;
+  createdMember = await provisionMember();
   createdGroup = (
     await api("POST", "/api/groups/actions/create", {
       name: `MCP audit group ${runId}`,
@@ -1028,9 +1337,32 @@ async function runLiveAudit() {
   ]);
   const blockedSent = await startAgentRun("blocked");
   await waitFor("blocked hostile call", async () => hostileState().blockedCalls > 0, 30_000);
-  await putBinding(hostile.id, { enabled: false });
+  const browserRevocation = await browserRevokeConsentDuringRun(
+    blockedSent.conversation.id,
+  );
+  if (!browserRevocation.revoked) {
+    await setPreferences([
+      { serverId: hostile.id, optedIn: false },
+      { serverId: reference.id, optedIn: false },
+    ]);
+  }
   const blockedRun = await waitRun(blockedSent.run.id, 30_000);
   hostileControl("/__audit/release");
+  addMatrix(
+    "user_opt_out_during_run_browser",
+    "active-run UI permits revocation but not a new opt-in",
+    browserRevocation.revoked &&
+      !browserRevocation.composerDisabled &&
+      !browserRevocation.switchDisabled &&
+      browserRevocation.consoleErrorCount === 0 &&
+      browserRevocation.pageErrorCount === 0
+      ? "PASS"
+      : "FAIL",
+    {
+      severity: "high",
+      evidence: `composerDisabled=${browserRevocation.composerDisabled};switchDisabled=${browserRevocation.switchDisabled};revoked=${browserRevocation.revoked};consoleErrors=${browserRevocation.consoleErrorCount};pageErrors=${browserRevocation.pageErrorCount}`,
+    },
+  );
   addMatrix(
     "revoke_during_blocked_call",
     "live recheck aborts and refuses stale result",
@@ -1107,15 +1439,48 @@ async function runLiveAudit() {
     { serverId: hostile.id, optedIn: true },
     { serverId: reference.id, optedIn: false },
   ]);
+  await api("PATCH", `/api/ai/mcp-servers/${hostile.id}`, {
+    url: `${origins.reference}/mcp`,
+  });
+  const destinationChangedPreferences = (
+    await api("GET", `/api/spaces/${createdSpace.id}/ai/mcp-preferences`)
+  ).payload;
+  const changedDestinationPreference = destinationChangedPreferences.items.find(
+    (item) => item.serverId === hostile.id,
+  );
+  addMatrix(
+    "destination_change_revokes_consent",
+    "changing the recipient URL revokes saved per-user consent",
+    changedDestinationPreference?.optedIn === false ? "PASS" : "FAIL",
+    {
+      severity: "critical",
+      evidence: `optedIn=${String(changedDestinationPreference?.optedIn)}`,
+    },
+  );
   await recreateApp(false);
   await gateAttempt("deployment_switch_off_agent_call", 0);
   await recreateApp(true);
 
+  const memberAdminResponse = await memberApi("GET", "/api/ai/mcp-settings");
+  const memberPreferenceResponse = await memberApi(
+    "GET",
+    `/api/spaces/${createdSpace.id}/ai/mcp-preferences`,
+  );
+  const roleBrowser = await browserRoleIsolation();
   addMatrix(
     "member_role_denial",
-    "ordinary member cannot manage workspace catalog",
-    process.env.DOCMOST_MEMBER_AUTH_TOKEN ? "NOT RUN" : "BLOCKED",
-    { severity: "high", evidence: "no isolated member session supplied" },
+    "ordinary member cannot manage the catalog but can read own space consent",
+    memberAdminResponse.status() === 403 &&
+      memberPreferenceResponse.status() === 200 &&
+      roleBrowser.ownerVisible &&
+      roleBrowser.memberRedirected &&
+      roleBrowser.errorCount === 0
+      ? "PASS"
+      : "FAIL",
+    {
+      severity: "high",
+      evidence: `adminApi=${memberAdminResponse.status()};preferencesApi=${memberPreferenceResponse.status()};ownerVisible=${roleBrowser.ownerVisible};memberRedirected=${roleBrowser.memberRedirected};browserErrors=${roleBrowser.errorCount}`,
+    },
   );
   addMatrix(
     "dns_rebinding_two_sink",
