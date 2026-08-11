@@ -263,6 +263,7 @@ let api;
 let spaceId;
 let exitCode = 1;
 let mockStarted = false;
+let originalAdminAiPanelOpen;
 try {
   await ensureRuntimeAuth();
   await execFileAsync("docker", [
@@ -297,6 +298,17 @@ try {
     );
 
   api = await createApi();
+  const currentUser = await responseJson(await api.get("/api/users/me"));
+  originalAdminAiPanelOpen = Boolean(
+    currentUser.user?.settings?.preferences?.aiPanelOpen,
+  );
+  if (originalAdminAiPanelOpen) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: false },
+      }),
+    );
+  }
   const space = await responseJson(
     await api.post("/api/spaces", {
       data: {
@@ -401,6 +413,13 @@ try {
     await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
   }
 } finally {
+  if (api && originalAdminAiPanelOpen !== undefined) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { aiPanelOpen: originalAdminAiPanelOpen },
+      }),
+    ).catch(() => undefined);
+  }
   if (api) await api.dispose();
   const appContainer =
     process.env.DOCMOST_CONTAINER_NAME ??

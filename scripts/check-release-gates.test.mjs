@@ -3,11 +3,22 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { validateReleaseGateContract } from "./check-release-gates.mjs";
 
-const [ciSource, dockerSource, ragSource, packageSource] = await Promise.all([
+const [
+  ciSource,
+  dockerSource,
+  ragSource,
+  packageSource,
+  aiAuditSource,
+  aiSupportSource,
+  aiProviderSettingsSource,
+] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
   readFile(".github/workflows/rag-open-webui-compat.yml", "utf8"),
   readFile("package.json", "utf8"),
+  readFile("apps/client/e2e/ai/run-ai-audit.mjs", "utf8"),
+  readFile("apps/client/e2e/ai/support.ts", "utf8"),
+  readFile("apps/client/e2e/ai/specs/provider-settings.spec.ts", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -27,6 +38,50 @@ function inputs(overrides = {}) {
 
 test("accepts the checked-in release gate contract", () => {
   assert.deepEqual(validateReleaseGateContract(inputs()), []);
+});
+
+test("AI browser acceptance isolates and restores the admin panel preference", () => {
+  const snapshot = aiAuditSource.indexOf("originalAdminAiPanelOpen = Boolean(");
+  const normalize = aiAuditSource.indexOf("data: { aiPanelOpen: false }");
+  const run = aiAuditSource.indexOf("exitCode = await runPlaywright()");
+  const restore = aiAuditSource.indexOf(
+    "data: { aiPanelOpen: originalAdminAiPanelOpen }",
+  );
+
+  assert.ok(snapshot >= 0, "AI panel preference must be captured");
+  assert.ok(normalize > snapshot, "AI panel must be closed before the audit");
+  assert.ok(run > normalize, "Playwright must run after panel normalization");
+  assert.ok(
+    restore > run,
+    "AI panel preference must be restored after the audit",
+  );
+});
+
+test("AI browser acceptance opens the off-screen assistant before use", () => {
+  assert.match(aiSupportSource, /openButton\.or\(composer\)\.first\(\)/u);
+  assert.match(aiSupportSource, /if \(asideIsOpen\) \{/u);
+  assert.ok(
+    aiSupportSource.indexOf("if (asideIsOpen) {") <
+      aiSupportSource.indexOf("if (composerInViewport) return"),
+    "the logical panel state must be checked before transition geometry",
+  );
+  assert.match(aiSupportSource, /if \(composerInViewport\) return/u);
+  assert.match(
+    aiSupportSource,
+    /not\.toHaveAttribute\("aria-hidden", "true"\)/u,
+  );
+  assert.match(aiSupportSource, /expect\(composer\)\.toBeInViewport\(\)/u);
+});
+
+test("AI provider acceptance follows the configured mock origin", () => {
+  assert.match(
+    aiProviderSettingsSource,
+    /process\.env\.DOCMOST_AI_PROVIDER_BASE_URL/u,
+  );
+  assert.doesNotMatch(
+    aiProviderSettingsSource,
+    /toHaveValue\(\/host\\\.docker\\\.internal:1080\//u,
+  );
 });
 
 const workflowMutations = [
