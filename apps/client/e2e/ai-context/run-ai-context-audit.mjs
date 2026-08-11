@@ -1145,6 +1145,10 @@ try {
   await fs.writeFile(path.join(auditRoot, "audit-state.json"), `${JSON.stringify(state, null, 2)}\n`);
   await fs.writeFile(path.join(auditRoot, "scenario-results.json"), `${JSON.stringify(results, null, 2)}\n`);
   await fs.writeFile(path.join(auditRoot, "actual-context.json"), `${JSON.stringify(modelState, null, 2)}\n`);
+  await api(admin, "DELETE", `/api/spaces/${space.id}`);
+  state.retained = false;
+  state.deletedAt = new Date().toISOString();
+  await fs.writeFile(path.join(auditRoot, "audit-state.json"), `${JSON.stringify(state, null, 2)}\n`);
   process.stdout.write(`AI context audit passed: ${space.id}\n`);
 } finally {
   if (member) await member.dispose();
