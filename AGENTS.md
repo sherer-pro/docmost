@@ -21,12 +21,12 @@
 
 ### Entry points
 
-- Local fullstack development: `pnpm dev` (frontend + backend in parallel).
+- Local fullstack development: `pnpm dev` (frontend + API + dedicated collaboration process in parallel).
 - Backend dev: `pnpm server:dev`.
 - Frontend dev: `pnpm client:dev`.
 - Optional Open WebUI sync: enable `RAG_SYNC_ENABLED`, configure the writer allowlist in the root `.env`, and manage each space target/credential in the AI settings UI; the runtime starts with the main server.
 - Production run for the built backend: `pnpm start` (root script → `apps/server start:prod`).
-- Realtime collaboration server: `pnpm collab` / `pnpm collab:dev`.
+- Realtime collaboration server: `pnpm collab` / `pnpm collab:dev`; the API never hosts `/collab`.
 - Email templates preview (backend): `pnpm email:dev`.
 
 ### Where things are located
@@ -119,7 +119,7 @@
 
 ### Development
 
-- Fullstack dev: `pnpm dev`
+- Fullstack dev (frontend + API + collab): `pnpm dev`
 - Backend only: `pnpm server:dev`
 - Frontend only: `pnpm client:dev`
 - Local preview of the frontend build: `pnpm --filter ./apps/client preview`
@@ -167,7 +167,7 @@
 ### Containers
 
 - Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
-- Docker Compose env: copy `.env.compose.example` to `.env`, replace `REPLACE_WITH_LONG_SECRET` and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`. Compose mounts required credentials as Docker secrets and starts the API plus dedicated collaboration process from the same application image. Optional integration secrets are granted only through a local Compose override as documented in `README.md`. Local Compose creates `docmost_edge`; a server using the existing external proxy network sets `EDGE_NETWORK_NAME=edge` and `EDGE_NETWORK_EXTERNAL=true`.
+- Docker Compose env: copy `.env.compose.example` to `.env`, replace both `REPLACE_WITH_LONG_SECRET` values and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`. Compose mounts `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET` as Docker secrets and starts the API plus dedicated collaboration process from the same application image. Optional integration secrets are granted only through a local Compose override as documented in `README.md`. Local Compose creates `docmost_edge`; a server using the existing external proxy network sets `EDGE_NETWORK_NAME=edge` and `EDGE_NETWORK_EXTERNAL=true`.
 - Local container startup: `docker compose up -d --build`
 - Built-in Open WebUI sync uses the ordinary `docker compose up -d --build` stack. `RAG_SYNC_ENABLED` and runtime limits are deployment env, while target identifiers and encrypted writer keys are configured per space in the UI. There is no separate profile, service, or image.
 - Build the current code into an image: `docker build -t docmost:local .`
@@ -241,7 +241,7 @@ Minimum:
 - AI/RAG network policy and admission control: `AI_PROVIDER_ALLOWED_ORIGINS`, `AI_RETRIEVAL_ALLOWED_ORIGINS`, `AI_EXTERNAL_MCP_ENABLED`, `AI_MCP_ALLOWED_ORIGINS`, `AI_STREAM_IDLE_TIMEOUT_MS`, `RAG_API_RATE_LIMIT_PER_MINUTE`, `RAG_API_MAX_CONCURRENT`, `RAG_API_BULK_MAX_CONCURRENT`, `MCP_RATE_LIMIT_PER_MINUTE`, `MCP_MAX_CONCURRENT`. Provider credentials and models are configured per space and encrypted in the database.
 - Per-space AI provider network policy: `AI_PROVIDER_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins. Keep it empty until the provider origins are approved; development additionally permits loopback endpoints.
 - External retrieval network policy: `AI_RETRIEVAL_ALLOWED_ORIGINS` separately allowlists exact trusted `http(s)` origins for optional `http-json-v1` and `open-webui-knowledge-v1` retrieval adapters. Development additionally permits loopback endpoints.
-- Outbound external MCP: `AI_EXTERNAL_MCP_ENABLED` is the deployment kill switch and defaults to `false`. `AI_MCP_ALLOWED_ORIGINS` is a third, independent SSRF allowlist that a workspace administrator can narrow but never widen; an origin must appear in it *and* in the workspace allowlist. Unlike the provider and retrieval policies there is no development escape hatch for unlisted origins, and loopback is rejected outright in production and accepted in development only when both allowlists name it.
+- Outbound external MCP: `AI_EXTERNAL_MCP_ENABLED` is the deployment kill switch and defaults to `false`. `AI_MCP_ALLOWED_ORIGINS` is a third, independent SSRF allowlist that a workspace administrator can narrow but never widen; an origin must appear in it _and_ in the workspace allowlist. Unlike the provider and retrieval policies there is no development escape hatch for unlisted origins, and loopback is rejected outright in production and accepted in development only when both allowlists name it.
 - AI provider streaming: `AI_STREAM_IDLE_TIMEOUT_MS` controls the maximum wait between provider SSE chunks, including the first chunk. It defaults to 120000 ms, accepts 5000-600000 ms, resets on every chunk, and is capped by the per-space request timeout. Slow local reasoning models may use 300000 ms.
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Auth throttling storage: `AUTH_RATE_LIMIT_STORAGE` may be `memory` for local development, but production validation requires `redis`.
@@ -273,7 +273,7 @@ Minimum:
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
   3. before PR: `pnpm verify:full` (build → lint → tests → security suite).
   4. before release candidates: `pnpm verify:release` against the documented production-like runtime.
-  4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
+  5. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
 - Functional checks (`check:env`, `build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
 
 ---
@@ -297,6 +297,7 @@ Minimum:
 - File import fails the task if referenced attachment uploads fail after retries, preventing committed pages with broken attachment references.
 - Workspace invitation create/resend/accept and page-duplication attachment work use the transactional `queue_outbox` table. Domain rows and outbox rows must be committed in the same Kysely transaction; BullMQ carries only an empty wake-up signal. Delivery is at least once, invitation secrets are encrypted and cleared at terminal status, and operators must follow `apps/server/docs/queue-outbox-runbook.md`.
 - Redis collaboration document ownership is a random-token lease. Renew and release must remain owner-checked Lua operations, renewal loops must stay sequential, and observed renewal/pub-sub failure must close the local document before processing more custom operations.
+- Hocuspocus, `/collab`, document leases, persistence hooks, and `HistoryProcessor` belong only to `CollabAppModule`. API features use `CollaborationDocumentPort` over `COLLAB_INTERNAL_URL`; do not add a local gateway fallback. Provision collab first, then API, and roll back API before collab.
 - URL and mail logs must not include query values, recipients, subjects, bodies, invitation links, or raw provider errors. The log mail driver is diagnostic-only and emits `mail_delivery_disabled` instead of message content in production.
 - Generic iframe embeds are blocked unless their exact origin is listed in `EMBED_ALLOWED_ORIGINS`; built-in providers use the shared frame-source allowlist and server CSP.
 - RAG API (`/api/rag/*`) is API-key-only:
@@ -342,7 +343,7 @@ Minimum:
 - Compose uses placeholders (`REPLACE_WITH_LONG_SECRET`, `STRONG_DB_PASSWORD`) in `.env.compose.example`; replace them before startup. Required application/database credentials are mounted as Docker secrets instead of being copied into container metadata. Optional credential sources are not granted by the base stack; enable only the required secret grants in a deployment-local override.
 - Per-space model and retrieval credentials live in `ai_space_configs`, encrypted with the application secret. Never return encrypted credential columns, put secrets in queue payloads, or store them in `spaces.settings`.
 - Agent mode is disabled by default and must pass the provider tool-calling test for the current provider/base URL/model fingerprint before it can be enabled. It is a per-conversation opt-in, uses the existing context/RAG pipeline, and is bounded to 8 model steps and 16 tool calls per approval segment, 32 model steps and 64 tool calls per run, 32 KiB per tool result, and 128 KiB total. An approved, rejected, or expired write proposal starts a new segment.
-- Agent writes are limited to safe operations on the current page. Each operation creates an initiator-only approval that expires after one hour; approval must recheck write ACL and the live Yjs content hash. Never add whole-document replacement, page lifecycle, table/database, comment/share, media, arbitrary-code, or *write* tools on external MCP servers. Outbound external MCP tools are read-only by contract (`AiExternalMcpApprovedTool.writeClass` is the literal `'read_only'`) and by schema (`ai_run_steps` rejects an `external_mcp` step whose `write_class` is not `read_only`); they never produce an approval step.
+- Agent writes are limited to safe operations on the current page. Each operation creates an initiator-only approval that expires after one hour; approval must recheck write ACL and the live Yjs content hash. Never add whole-document replacement, page lifecycle, table/database, comment/share, media, arbitrary-code, or _write_ tools on external MCP servers. Outbound external MCP tools are read-only by contract (`AiExternalMcpApprovedTool.writeClass` is the literal `'read_only'`) and by schema (`ai_run_steps` rejects an `external_mcp` step whose `write_class` is not `read_only`); they never produce an approval step.
 - Pending agent approvals do not consume provider concurrency, but new agent runs are limited to 6 pending approvals per user and 30 per space. Approval uses the shared PostgreSQL admission locks, and an approved step reserves a provider slot until the run returns to `queued`.
 - Agent write proposals persist deterministic node IDs and an expected post-apply hash in the existing step result JSON. The reconciler may replay a decided approval only while the live Yjs hash still equals the proposal base, finalizes without replay when the expected hash is already live, and fails stale otherwise. Do not remove this recovery metadata or split the step/run resume transaction.
 - **Inbound** `/mcp` is always mounted as stateless Streamable HTTP and accepts only `key_type=mcp` API keys scoped to one space. It exposes the read-only shared tools, excludes attachment binaries/extracted text, and must keep page ACL and the AI content policy authoritative. RAG and MCP keys are not interchangeable.
@@ -424,6 +425,7 @@ This project has a knowledge graph at graphify-out/ with god nodes, community st
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
+
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
