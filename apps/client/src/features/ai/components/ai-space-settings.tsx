@@ -154,11 +154,19 @@ type AiSpaceSettingsProps = {
   spaceId: string;
   section?: AiSpaceSettingsSection;
   onDirtyChange?: (dirty: boolean) => void;
+  canManageAssistantProfilePolicy?: boolean;
 };
 
 export function AiSpaceSettings(props: AiSpaceSettingsProps) {
   if (props.section === "profiles") {
-    return <AiAssistantProfilesSettings spaceId={props.spaceId} />;
+    return (
+      <AiAssistantProfilesSettings
+        spaceId={props.spaceId}
+        canManageWorkspacePolicy={Boolean(
+          props.canManageAssistantProfilePolicy,
+        )}
+      />
+    );
   }
   if (props.section === "ragSync") {
     return (
@@ -609,45 +617,45 @@ function AiSpaceProviderSettings({
 
         {showSection("identity") && (
           <SettingsSection
-              icon={<IconMessageCircle size={18} />}
-              title={t("ai.settings.identitySection")}
-              description={t("ai.settings.identityDescription")}
-            >
-              <Stack gap="md">
-                <Switch
-                  label={t("ai.settings.customNameEnabled")}
-                  description={t("ai.settings.customNameEnabledDescription")}
-                  {...form.getInputProps("assistantNameEnabled", {
-                    type: "checkbox",
-                  })}
+            icon={<IconMessageCircle size={18} />}
+            title={t("ai.settings.identitySection")}
+            description={t("ai.settings.identityDescription")}
+          >
+            <Stack gap="md">
+              <Switch
+                label={t("ai.settings.customNameEnabled")}
+                description={t("ai.settings.customNameEnabledDescription")}
+                {...form.getInputProps("assistantNameEnabled", {
+                  type: "checkbox",
+                })}
+              />
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                <TextInput
+                  label={t("ai.settings.assistantName")}
+                  description={t("ai.settings.assistantNameDescription")}
+                  required={form.values.assistantNameEnabled}
+                  disabled={!form.values.assistantNameEnabled}
+                  {...form.getInputProps("assistantName")}
                 />
-                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                  <TextInput
-                    label={t("ai.settings.assistantName")}
-                    description={t("ai.settings.assistantNameDescription")}
-                    required={form.values.assistantNameEnabled}
-                    disabled={!form.values.assistantNameEnabled}
-                    {...form.getInputProps("assistantName")}
-                  />
-                  <Select
-                    label={t("ai.settings.assistantGender")}
-                    description={t("ai.settings.assistantGenderDescription")}
-                    data={[
-                      {
-                        value: "masculine",
-                        label: t("ai.settings.assistantGenderMasculine"),
-                      },
-                      {
-                        value: "feminine",
-                        label: t("ai.settings.assistantGenderFeminine"),
-                      },
-                    ]}
-                    allowDeselect={false}
-                    disabled={!form.values.assistantNameEnabled}
-                    {...form.getInputProps("assistantGender")}
-                  />
-                </SimpleGrid>
-              </Stack>
+                <Select
+                  label={t("ai.settings.assistantGender")}
+                  description={t("ai.settings.assistantGenderDescription")}
+                  data={[
+                    {
+                      value: "masculine",
+                      label: t("ai.settings.assistantGenderMasculine"),
+                    },
+                    {
+                      value: "feminine",
+                      label: t("ai.settings.assistantGenderFeminine"),
+                    },
+                  ]}
+                  allowDeselect={false}
+                  disabled={!form.values.assistantNameEnabled}
+                  {...form.getInputProps("assistantGender")}
+                />
+              </SimpleGrid>
+            </Stack>
           </SettingsSection>
         )}
 
@@ -882,9 +890,7 @@ function AiSpaceProviderSettings({
           </SettingsSection>
         )}
 
-        {showSection("tools") && (
-          <AiBuiltinToolSpacePolicy spaceId={spaceId} />
-        )}
+        {showSection("tools") && <AiBuiltinToolSpacePolicy spaceId={spaceId} />}
 
         {/* External tools are only reachable in agent mode, so this sits next
             to the agent section. It persists on its own, like content. */}
