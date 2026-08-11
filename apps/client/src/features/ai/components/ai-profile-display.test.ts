@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   AI_LEGACY_SPACE_PROFILE_VALUE,
+  resolveActiveAiComposerProfileOptionLabel,
   resolveAiComposerProfileLabel,
+  shouldShowHiddenActiveAiComposerProfileOption,
+  shouldShowUnavailableAiComposerProfileOption,
 } from "./ai-profile-display";
 
 const options = [
@@ -70,5 +73,52 @@ describe("resolveAiComposerProfileLabel", () => {
         unavailableLabel: "Unavailable",
       }),
     ).toBe("Space assistant");
+  });
+});
+
+describe("resolveActiveAiComposerProfileOptionLabel", () => {
+  it("uses the frozen conversation identity instead of the newer live version", () => {
+    expect(
+      resolveActiveAiComposerProfileOptionLabel(
+        { name: "Reviewer", version: 9 },
+        { name: "Reviewer renamed", version: 11 },
+      ),
+    ).toBe("Reviewer · v9");
+  });
+});
+
+describe("shouldShowUnavailableAiComposerProfileOption", () => {
+  it("does not call a live profile unavailable only because the user hid it", () => {
+    expect(
+      shouldShowUnavailableAiComposerProfileOption("profile-1", ["profile-1"]),
+    ).toBe(false);
+  });
+
+  it("keeps a frozen identity visible when its live profile is unavailable", () => {
+    expect(shouldShowUnavailableAiComposerProfileOption("profile-1", [])).toBe(
+      true,
+    );
+  });
+});
+
+describe("shouldShowHiddenActiveAiComposerProfileOption", () => {
+  it("keeps a hidden live profile visible for its active conversation", () => {
+    expect(
+      shouldShowHiddenActiveAiComposerProfileOption(
+        "profile-1",
+        ["profile-1"],
+        [],
+      ),
+    ).toBe(true);
+  });
+
+  it("does not duplicate a normally visible profile", () => {
+    expect(
+      shouldShowHiddenActiveAiComposerProfileOption(
+        "profile-1",
+        ["profile-1"],
+        ["profile-1"],
+      ),
+    ).toBe(false);
   });
 });

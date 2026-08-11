@@ -209,6 +209,15 @@ describe('assistant profiles with PostgreSQL (e2e)', () => {
       workspace,
     );
 
+  it('exposes the effective model override policy to space managers', async () => {
+    await expect(
+      profiles.list(spaceId, owner, workspace),
+    ).resolves.toMatchObject({
+      enabled: true,
+      modelOverridesEnabled: true,
+    });
+  });
+
   it('creates, reads, updates concurrently, and soft-deletes a profile', async () => {
     const created = await createProfile('CRUD profile');
     await expect(

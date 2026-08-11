@@ -67,6 +67,7 @@ import {
   aiStreamingRunsAtom,
 } from "@/features/ai/atoms/ai-atoms.ts";
 import { reduceAiRunState } from "@/features/ai/utils/ai-run-state.ts";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export const AI_QUERY_KEYS = {
   conversations: (pageId: string) => ["ai", "conversations", pageId] as const,
@@ -97,10 +98,11 @@ export const AI_QUERY_KEYS = {
     ["ai", "assistant-profile-preferences", spaceId] as const,
 };
 
-export function useAiAssistantProfilePolicyQuery() {
+export function useAiAssistantProfilePolicyQuery(enabled = true) {
   return useQuery({
     queryKey: AI_QUERY_KEYS.profilePolicy,
     queryFn: getAiAssistantProfilePolicy,
+    enabled,
   });
 }
 
@@ -147,6 +149,7 @@ export function useAiAssistantProfileQuery(
 
 export function useCreateAiAssistantProfileMutation(spaceId: string) {
   const queryClient = useQueryClient();
+  const emit = useQueryEmit();
   return useMutation({
     mutationFn: (data: CreateAiAssistantProfileRequest) =>
       createAiAssistantProfile(spaceId, data),
@@ -155,6 +158,11 @@ export function useCreateAiAssistantProfileMutation(spaceId: string) {
         AI_QUERY_KEYS.profile(spaceId, profile.id),
         profile,
       );
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profiles(spaceId)],
+      });
       return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.profiles(spaceId),
       });
@@ -164,6 +172,7 @@ export function useCreateAiAssistantProfileMutation(spaceId: string) {
 
 export function useUpdateAiAssistantProfileMutation(spaceId: string) {
   const queryClient = useQueryClient();
+  const emit = useQueryEmit();
   return useMutation({
     mutationFn: ({
       profileId,
@@ -180,18 +189,49 @@ export function useUpdateAiAssistantProfileMutation(spaceId: string) {
       void queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.profiles(spaceId),
       });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profile(spaceId, profile.id)],
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profiles(spaceId)],
+      });
     },
   });
 }
 
 export function useDeleteAiAssistantProfileMutation(spaceId: string) {
   const queryClient = useQueryClient();
+  const emit = useQueryEmit();
   return useMutation({
     mutationFn: (profileId: string) =>
       deleteAiAssistantProfile(spaceId, profileId),
     onSuccess: async (_, profileId) => {
       queryClient.removeQueries({
         queryKey: AI_QUERY_KEYS.profile(spaceId, profileId),
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profile(spaceId, profileId)],
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profiles(spaceId)],
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profilePreferences(spaceId)],
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.config(spaceId)],
       });
       await Promise.all([
         queryClient.invalidateQueries({
@@ -235,6 +275,7 @@ export function useUpdateAiAssistantProfilePreferencesMutation(
   spaceId: string,
 ) {
   const queryClient = useQueryClient();
+  const emit = useQueryEmit();
   return useMutation({
     mutationFn: (data: UpdateAiAssistantProfilePreferencesRequest) =>
       updateAiAssistantProfilePreferences(spaceId, data),
@@ -243,6 +284,16 @@ export function useUpdateAiAssistantProfilePreferencesMutation(
         AI_QUERY_KEYS.profilePreferences(spaceId),
         preferences,
       );
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profilePreferences(spaceId)],
+      });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...AI_QUERY_KEYS.profiles(spaceId)],
+      });
       return queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.profiles(spaceId),
       });
