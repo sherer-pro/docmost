@@ -202,6 +202,7 @@ function CommentListItem({
   const commentBodyCollapseStyle = {
     "--comment-body-collapse-lines": COMMENT_BODY_COLLAPSE_LINES,
   } as React.CSSProperties;
+  const commentBodyId = `comment-${comment.id}-body`;
 
   return (
     <Box ref={ref} pb="xs">
@@ -256,6 +257,7 @@ function CommentListItem({
         {!isEditing ? (
           <>
             <div
+              id={commentBodyId}
               ref={bodyContentRef}
               className={clsx(!isBodyExpanded && classes.commentBodyCollapsed)}
               style={commentBodyCollapseStyle}
@@ -269,6 +271,7 @@ function CommentListItem({
                 size="compact-sm"
                 variant="subtle"
                 color="gray"
+                aria-controls={commentBodyId}
                 aria-expanded={isBodyExpanded}
                 onClick={() => setIsBodyExpanded((expanded) => !expanded)}
               >

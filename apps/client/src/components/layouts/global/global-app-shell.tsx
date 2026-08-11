@@ -44,6 +44,12 @@ export default function GlobalAppShell({
   const [asideState] = useAtom(asideStateAtom);
   const setAsideState = useSetAtom(asideStateAtom);
   const { isAsideOpen } = asideState;
+  const fullscreenAsideTitle =
+    asideState.tab === "comments"
+      ? t("Comments")
+      : asideState.tab === "toc"
+        ? t("Table of contents")
+        : assistantIdentity.name;
   const [asideWidth, setAsideWidth] = useAtom(asideWidthAtom);
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
@@ -300,7 +306,7 @@ export default function GlobalAppShell({
             size="100%"
             withCloseButton={false}
             padding={0}
-            title={assistantIdentity.name}
+            title={fullscreenAsideTitle}
             keepMounted
             transitionProps={{ duration: reduceMotion ? 0 : 180 }}
             styles={{
