@@ -66,6 +66,16 @@ async function closeOverlayAside(page: import("@playwright/test").Page) {
   await expect(aside).not.toBeVisible();
 }
 
+async function reloadAfterAccessChange(page: import("@playwright/test").Page) {
+  const currentUrl = page.url();
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+  } catch (error) {
+    if (!String(error).includes("NS_BINDING_ABORTED")) throw error;
+    await page.goto(currentUrl, { waitUntil: "domcontentloaded" });
+  }
+}
+
 function collectNodeTypes(
   input: unknown,
   result = new Set<string>(),
@@ -529,7 +539,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       parentPageId: moveTarget.id,
       position: generateJitteredKeyBetween(null, null),
     });
-    await anonymousPage.reload();
+    await reloadAfterAccessChange(anonymousPage);
     await expect(publicDocument(anonymousPage)).not.toContainText(
       `Shared text ${suffix} live-update`,
     );
