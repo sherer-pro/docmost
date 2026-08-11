@@ -250,11 +250,26 @@ const workflowMutations = [
     "dockerSource",
     "docker push shererpro/docmost:latest",
   ],
+  [
+    "Open WebUI artifact sanitizer",
+    "ragSource",
+    "node scripts/sanitize-ci-log-stream.mjs",
+  ],
+  [
+    "Open WebUI artifact scan",
+    "ragSource",
+    "node scripts/scan-ci-artifacts.mjs output/audit",
+  ],
+  [
+    "Open WebUI sanitized artifact marker",
+    "ragSource",
+    "if: failure() && hashFiles('output/audit/.sanitized') != ''",
+  ],
 ];
 
 for (const [name, sourceName, command] of workflowMutations) {
   test(`rejects removal of the ${name} gate`, () => {
-    const source = sourceName === "ciSource" ? ciSource : dockerSource;
+    const source = { ciSource, dockerSource, ragSource }[sourceName];
     assert.ok(source.includes(command), `${command} fixture must exist`);
     const mutated = source.replace(
       command,

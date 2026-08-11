@@ -52,9 +52,21 @@ const REQUIRED_JOB_METADATA = {
   ],
 };
 
-const FAILURE_TOLERANT_COMMANDS = new Set([
-  "node scripts/sanitize-ci-log-stream.mjs",
-]);
+const REQUIRED_WORKFLOW_JOBS = {
+  "rag-open-webui-compat.yml": {
+    jobName: "compatibility",
+    commands: [
+      "node scripts/run-rag-open-webui-compat.mjs",
+      "node scripts/sanitize-ci-log-stream.mjs",
+      "node scripts/scan-ci-artifacts.mjs output/audit",
+      "touch output/audit/.sanitized",
+    ],
+    metadata: [
+      "if: failure() && hashFiles('output/audit/.sanitized') != ''",
+      "retention-days: 7",
+    ],
+  },
+};
 
 const REQUIRED_VERIFICATION_COMMANDS = {
   "verify:quick": [
@@ -199,7 +211,6 @@ function requireWorkflowCommand(errors, block, jobName, command) {
     return;
   }
   if (
-    !FAILURE_TOLERANT_COMMANDS.has(command) &&
     matches.every((line) => line.slice(line.indexOf(command)).includes("||"))
   ) {
     errors.push(`${jobName} must not mask failures from ${command}`);
@@ -275,6 +286,20 @@ function validateWorkflowHygiene(errors, workflowSources) {
         errors.push(
           `${fileName} action ${reference} must use an immutable 40-character commit SHA`,
         );
+      }
+    }
+
+    const requiredJob = REQUIRED_WORKFLOW_JOBS[fileName];
+    if (requiredJob) {
+      const block = jobBlock(source, requiredJob.jobName);
+      for (const command of requiredJob.commands) {
+        requireWorkflowCommand(errors, block, requiredJob.jobName, command);
+      }
+      const executableText = executableWorkflowText(block);
+      for (const metadata of requiredJob.metadata) {
+        if (!executableText.includes(metadata)) {
+          errors.push(`${requiredJob.jobName} must define ${metadata}`);
+        }
       }
     }
   }
