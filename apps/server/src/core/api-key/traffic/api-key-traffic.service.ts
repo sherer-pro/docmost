@@ -79,6 +79,7 @@ function trafficSummary(): TrafficSummary {
 export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ApiKeyTrafficService.name);
   private readonly redis: Redis;
+  private readonly ownsRedisConnection: boolean;
   private readonly prefix = 'api-key:traffic';
   private readonly concurrencyTtlMs = 10 * 60_000;
   private readonly concurrencyRenewMs = Math.floor(
@@ -134,7 +135,21 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
   `;
 
   constructor(redisService: RedisService) {
-    this.redis = redisService.getOrThrow();
+    const sharedRedis = redisService.getOrThrow();
+    if (typeof sharedRedis.duplicate === 'function') {
+      this.redis = sharedRedis.duplicate({
+        autoResendUnfulfilledCommands: false,
+        commandTimeout: 5_000,
+        connectionName: 'docmost-api-key-traffic',
+        enableOfflineQueue: false,
+        maxRetriesPerRequest: 0,
+      });
+      this.ownsRedisConnection = true;
+    } else {
+      // Lightweight test doubles do not need to implement connection cloning.
+      this.redis = sharedRedis;
+      this.ownsRedisConnection = false;
+    }
   }
 
   onModuleInit(): void {
@@ -144,6 +159,7 @@ export class ApiKeyTrafficService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     if (this.summaryTimer) clearInterval(this.summaryTimer);
+    if (this.ownsRedisConnection) this.redis.disconnect();
   }
 
   async acquire(input: {

@@ -33,16 +33,35 @@ export class ApiKeyTrafficGuard implements CanActivate {
     if (!apiKeyId) return true;
     const path = String(request.raw?.url ?? request.url ?? '').split('?')[0];
     const bulk = profile === 'rag' && this.isBulkRagPath(path);
-    const lease = await this.traffic.acquire({
-      profile,
-      apiKeyId,
-      bulk,
-      limits:
-        profile === 'rag'
-          ? this.environment.getRagApiTrafficLimits()
-          : this.environment.getMcpTrafficLimits(),
-    });
+    const startedAt = Date.now();
+    let closedBeforeAdmission = false;
+    const admission = { release: undefined as (() => void) | undefined };
+    const onCloseBeforeAdmission = () => {
+      closedBeforeAdmission = true;
+      admission.release?.();
+    };
+    response.raw?.once('close', onCloseBeforeAdmission);
+    request.raw?.once('aborted', onCloseBeforeAdmission);
+
+    let lease;
+    try {
+      lease = await this.traffic.acquire({
+        profile,
+        apiKeyId,
+        bulk,
+        limits:
+          profile === 'rag'
+            ? this.environment.getRagApiTrafficLimits()
+            : this.environment.getMcpTrafficLimits(),
+      });
+    } catch (error) {
+      response.raw?.off('close', onCloseBeforeAdmission);
+      request.raw?.off('aborted', onCloseBeforeAdmission);
+      throw error;
+    }
     if (!lease.allowed) {
+      response.raw?.off('close', onCloseBeforeAdmission);
+      request.raw?.off('aborted', onCloseBeforeAdmission);
       const retryAfterSeconds = Math.max(
         1,
         Math.ceil(lease.retryAfterMs / 1000),
@@ -63,11 +82,11 @@ export class ApiKeyTrafficGuard implements CanActivate {
 
     let released = false;
     let renewing = false;
-    const startedAt = Date.now();
+    const renewal = { timer: undefined as NodeJS.Timeout | undefined };
     const release = (outcome: 'completed' | 'aborted' | 'error') => {
       if (released) return;
       released = true;
-      if (renewTimer) clearInterval(renewTimer);
+      if (renewal.timer) clearInterval(renewal.timer);
       const rawLength = Number(response.raw?.getHeader?.('content-length'));
       this.traffic.observeRequest(
         profile,
@@ -77,6 +96,15 @@ export class ApiKeyTrafficGuard implements CanActivate {
       );
       void this.traffic.release(lease);
     };
+    admission.release = () => release('aborted');
+    if (
+      closedBeforeAdmission ||
+      request.raw?.aborted ||
+      response.raw?.destroyed
+    ) {
+      release('aborted');
+      return false;
+    }
     const failClosed = () => {
       if (released) return;
       this.traffic.observeLeaseLoss(profile);
@@ -121,15 +149,13 @@ export class ApiKeyTrafficGuard implements CanActivate {
         renewing = false;
       }
     };
-    const renewTimer = lease.renewAfterMs
+    renewal.timer = lease.renewAfterMs
       ? setInterval(() => void renew(), lease.renewAfterMs)
       : undefined;
-    renewTimer?.unref();
+    renewal.timer?.unref();
     response.raw?.once('finish', () =>
       release(response.raw?.statusCode >= 500 ? 'error' : 'completed'),
     );
-    response.raw?.once('close', () => release('aborted'));
-    request.raw?.once('aborted', () => release('aborted'));
     return true;
   }
 
