@@ -15,7 +15,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
 import {
@@ -37,6 +37,7 @@ export default function SpaceLabelsSettings({
   const [editingLabel, setEditingLabel] = useState<ILabelRegistryItem>();
   const [name, setName] = useState("");
   const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingEditFocus = useRef<string>();
   const registry = useInfiniteQuery({
     queryKey: ["label-registry", spaceId],
     initialPageParam: undefined as string | undefined,
@@ -45,6 +46,19 @@ export default function SpaceLabelsSettings({
     getNextPageParam: (lastPage) => lastPage.meta.nextCursor ?? undefined,
   });
   const labels = registry.data?.pages.flatMap((page) => page.items) ?? [];
+
+  useEffect(() => {
+    const labelId = pendingEditFocus.current;
+    if (editingLabel || !labelId) {
+      return;
+    }
+
+    const editButton = editButtonRefs.current.get(labelId);
+    if (editButton) {
+      editButton.focus();
+      pendingEditFocus.current = undefined;
+    }
+  }, [editingLabel]);
 
   const invalidateLabels = async () => {
     await Promise.all([
@@ -56,13 +70,9 @@ export default function SpaceLabelsSettings({
 
   const stopEditing = () => {
     const labelId = editingLabel?.id;
+    pendingEditFocus.current = labelId;
     setEditingLabel(undefined);
     setName("");
-    requestAnimationFrame(() => {
-      if (labelId) {
-        editButtonRefs.current.get(labelId)?.focus();
-      }
-    });
   };
 
   const renameMutation = useMutation({
@@ -152,11 +162,14 @@ export default function SpaceLabelsSettings({
                   if (event.key === "Enter") {
                     submitRename();
                   } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
                     stopEditing();
                   }
                 }}
                 maxLength={100}
                 autoFocus
+                data-mantine-stop-propagation
                 style={{ flex: 1 }}
               />
               <Button
@@ -186,6 +199,8 @@ export default function SpaceLabelsSettings({
                   ref={(element) => {
                     if (element) {
                       editButtonRefs.current.set(label.id, element);
+                    } else {
+                      editButtonRefs.current.delete(label.id);
                     }
                   }}
                   variant="subtle"
