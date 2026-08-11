@@ -7,8 +7,37 @@ import {
   createZipReadBudget,
   extractZip,
   readZipEntryWithBudget,
+  validateZipArchiveBuffer,
   ZipBudgetExceededError,
 } from './file.utils';
+
+function lieAboutCentralDirectorySize(
+  archive: Buffer,
+  entryName: string,
+  declaredSize: number,
+): Buffer {
+  const result = Buffer.from(archive);
+  const endOffset = result.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (endOffset < 0) throw new Error('ZIP end record not found');
+
+  let cursor = result.readUInt32LE(endOffset + 16);
+  while (cursor < endOffset) {
+    if (result.readUInt32LE(cursor) !== 0x02014b50) break;
+    const fileNameLength = result.readUInt16LE(cursor + 28);
+    const extraLength = result.readUInt16LE(cursor + 30);
+    const commentLength = result.readUInt16LE(cursor + 32);
+    const name = result
+      .subarray(cursor + 46, cursor + 46 + fileNameLength)
+      .toString('utf8');
+    if (name === entryName) {
+      result.writeUInt32LE(declaredSize, cursor + 24);
+      return result;
+    }
+    cursor += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  throw new Error(`ZIP entry not found: ${entryName}`);
+}
 
 async function writeZip(
   outputPath: string,
@@ -43,40 +72,42 @@ describe('extractZip', () => {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it('prevents parent-directory traversal and keeps valid files', async () => {
+  it('rejects parent-directory traversal without writing archive files', async () => {
     await writeZip(archivePath, {
       '../escape.txt': 'pwned',
       'safe.md': '# Safe',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'escape.txt'))).toBe(false);
-    expect(fs.readFileSync(path.join(targetDir, 'safe.md'), 'utf8')).toBe(
-      '# Safe',
-    );
+    expect(fs.existsSync(path.join(targetDir, 'safe.md'))).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[security][zip-entry-rejected]'),
     );
     expect(
       warnSpy.mock.calls.some(([message]) =>
-        String(message).includes('reason=invalid-entry'),
+        String(message).includes('reason=invalid-entry-path'),
       ),
     ).toBe(true);
   });
 
-  it('normalizes absolute-path entries into the target directory', async () => {
+  it('rejects absolute-path entries instead of normalizing them', async () => {
     await writeZip(archivePath, {
       '/absolute-escape.txt': 'pwned',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      /absolute path entries are not allowed/,
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'absolute-escape.txt'))).toBe(
       false,
     );
     expect(fs.existsSync(path.join(targetDir, 'absolute-escape.txt'))).toBe(
-      true,
+      false,
     );
   });
 
@@ -85,7 +116,9 @@ describe('extractZip', () => {
       '..\\windows-escape.txt': 'pwned',
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'windows-escape.txt'))).toBe(
       false,
@@ -102,12 +135,14 @@ describe('extractZip', () => {
       'payload.zip': innerZipBuffer,
     });
 
-    await extractZip(archivePath, targetDir);
+    await expect(extractZip(archivePath, targetDir)).rejects.toThrow(
+      'Unsafe ZIP entry path',
+    );
 
     expect(fs.existsSync(path.join(tempRoot, 'nested-escape.txt'))).toBe(false);
-    expect(
-      fs.readFileSync(path.join(targetDir, 'nested', 'safe.txt'), 'utf8'),
-    ).toBe('safe');
+    expect(fs.existsSync(path.join(targetDir, 'nested', 'safe.txt'))).toBe(
+      false,
+    );
   });
 
   it('rejects symbolic-link entries instead of materializing them', async () => {
@@ -220,5 +255,23 @@ describe('readZipEntryWithBudget', () => {
     await expect(readZipEntryWithBudget(entry, budget)).rejects.toBeInstanceOf(
       ZipBudgetExceededError,
     );
+  });
+});
+
+describe('validateZipArchiveBuffer', () => {
+  it('rejects compressed data whose central-directory size is understated', async () => {
+    const zip = new JSZip();
+    zip.file('bomb.bin', Buffer.alloc(4 * 1024 * 1024, 0));
+    const archive = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+    });
+    const forged = lieAboutCentralDirectorySize(archive, 'bomb.bin', 1);
+
+    await expect(
+      validateZipArchiveBuffer(forged, {
+        maxEntryUncompressedBytes: 32 * 1024,
+      }),
+    ).rejects.toThrow();
   });
 });

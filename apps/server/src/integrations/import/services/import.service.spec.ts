@@ -46,6 +46,49 @@ import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
 } from '@docmost/api-contract';
 
+function duplicateCentralDirectoryEntry(
+  archive: Buffer,
+  entryName: string,
+): Buffer {
+  const endSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+  const centralSignature = 0x02014b50;
+  const endOffset = archive.lastIndexOf(endSignature);
+  if (endOffset < 0) throw new Error('ZIP end record not found');
+
+  const centralOffset = archive.readUInt32LE(endOffset + 16);
+  let cursor = centralOffset;
+  let duplicate: Buffer | undefined;
+  while (cursor < endOffset) {
+    if (archive.readUInt32LE(cursor) !== centralSignature) break;
+    const fileNameLength = archive.readUInt16LE(cursor + 28);
+    const extraLength = archive.readUInt16LE(cursor + 30);
+    const commentLength = archive.readUInt16LE(cursor + 32);
+    const recordLength = 46 + fileNameLength + extraLength + commentLength;
+    const name = archive
+      .subarray(cursor + 46, cursor + 46 + fileNameLength)
+      .toString('utf8');
+    if (name === entryName) {
+      duplicate = Buffer.from(archive.subarray(cursor, cursor + recordLength));
+      break;
+    }
+    cursor += recordLength;
+  }
+  if (!duplicate) throw new Error(`ZIP entry not found: ${entryName}`);
+
+  const endRecord = Buffer.from(archive.subarray(endOffset));
+  endRecord.writeUInt16LE(endRecord.readUInt16LE(8) + 1, 8);
+  endRecord.writeUInt16LE(endRecord.readUInt16LE(10) + 1, 10);
+  endRecord.writeUInt32LE(
+    endRecord.readUInt32LE(12) + duplicate.length,
+    12,
+  );
+  return Buffer.concat([
+    archive.subarray(0, endOffset),
+    duplicate,
+    endRecord,
+  ]);
+}
+
 describe('ImportService Docmost archive preview', () => {
   const service = new ImportService(
     {} as any,
@@ -241,5 +284,30 @@ describe('ImportService Docmost archive preview', () => {
         await zip.generateAsync({ type: 'nodebuffer' }),
       ),
     ).rejects.toThrow('Unsafe ZIP entry path');
+  });
+
+  it('rejects symbolic-link entries during preview', async () => {
+    const archive = await buildArchive();
+    const zip = await JSZip.loadAsync(archive);
+    zip.file('unsafe-link', '../outside.txt', {
+      unixPermissions: 0o120777,
+    });
+
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await zip.generateAsync({ type: 'nodebuffer', platform: 'UNIX' }),
+      ),
+    ).rejects.toThrow('symbolic link');
+  });
+
+  it('rejects duplicate ZIP entry names during preview', async () => {
+    const archive = duplicateCentralDirectoryEntry(
+      await buildArchive(),
+      'docmost-data.json',
+    );
+
+    await expect(
+      (service as any).inspectDocmostArchive(archive),
+    ).rejects.toThrow('duplicate ZIP entry');
   });
 });
