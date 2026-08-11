@@ -57,6 +57,7 @@ import {
 import type { PageEmbedGraphLease } from '../../../core/page/transclusion/page-embed-graph-lock.service';
 import { PageTemplatePolicyService } from '../../../core/page/transclusion/page-template-policy.service';
 import { FileTaskStatus } from '../utils/file.utils';
+import { normalizeLabelName } from '../../../core/label/utils';
 
 interface StagedAttachment {
   sourceId: string;
@@ -976,7 +977,7 @@ export class DocmostArchiveImportService {
       [];
 
     for (const source of data.labels) {
-      const normalized = this.normalizeName(source.name);
+      const normalized = normalizeLabelName(source.name);
       let labelId = byName.get(normalized);
       if (!labelId) {
         labelId = uuid7();
@@ -984,7 +985,7 @@ export class DocmostArchiveImportService {
           .insertInto('labels')
           .values({
             id: labelId,
-            name: source.name,
+            name: normalized,
             type: 'page',
             spaceId: fileTask.spaceId!,
             workspaceId: fileTask.workspaceId,
@@ -1063,13 +1064,20 @@ export class DocmostArchiveImportService {
     );
 
     for (const source of data.dictionary) {
+      const seenAliases = new Set<string>();
       const aliases = [source.term, ...(source.forms ?? [])]
         .map((alias, index) => ({
           alias: this.normalizeVisibleAlias(alias),
           normalizedAlias: this.normalizeName(alias),
           isPrimary: index === 0,
         }))
-        .filter((alias) => alias.alias);
+        .filter((alias) => {
+          if (!alias.alias || seenAliases.has(alias.normalizedAlias)) {
+            return false;
+          }
+          seenAliases.add(alias.normalizedAlias);
+          return true;
+        });
       const primary = aliases[0];
       if (!primary) continue;
       const existingPrimary = aliasesByNormalized.get(primary.normalizedAlias);
