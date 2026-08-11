@@ -60,11 +60,31 @@ export class FileTaskController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('info')
-  async getFileTask(@Body() dto: FileTaskIdDto, @AuthUser() user: User) {
+  async getFileTask(
+    @Body() dto: FileTaskIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
     const fileTask = await this.fileTaskQueryService.findById(dto.fileTaskId);
 
-    if (!fileTask || !fileTask.spaceId) {
+    if (
+      !fileTask ||
+      !fileTask.spaceId ||
+      fileTask.workspaceId !== workspace.id
+    ) {
       throw new NotFoundException('File task not found');
+    }
+
+    const workspaceAbility = this.workspaceAbility.createForUser(
+      user,
+      workspace,
+    );
+    const canManageWorkspace = workspaceAbility.can(
+      WorkspaceCaslAction.Manage,
+      WorkspaceCaslSubject.Settings,
+    );
+    if (fileTask.creatorId !== user.id && !canManageWorkspace) {
+      throw new ForbiddenException();
     }
 
     const ability = await this.spaceAbility.createForUser(

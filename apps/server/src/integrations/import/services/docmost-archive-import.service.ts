@@ -56,6 +56,7 @@ import {
 } from '../../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import type { PageEmbedGraphLease } from '../../../core/page/transclusion/page-embed-graph-lock.service';
 import { PageTemplatePolicyService } from '../../../core/page/transclusion/page-template-policy.service';
+import { FileTaskStatus } from '../utils/file.utils';
 
 interface StagedAttachment {
   sourceId: string;
@@ -73,6 +74,9 @@ interface ArchiveSnapshotValue {
   content: unknown;
   attachmentIdMap: Map<string, string>;
 }
+
+const DOCMOST_ATTACHMENT_UPLOAD_ATTEMPTS = 3;
+const DOCMOST_ATTACHMENT_RETRY_DELAY_MS = 2_000;
 
 const transclusionSnapshotKey = (
   referencePageId: string | undefined,
@@ -422,6 +426,7 @@ export class DocmostArchiveImportService {
         report.created.databases = data.databases?.length ?? 0;
         report.created.rows = data.databaseRows?.length ?? 0;
         report.created.attachments = stagedAttachments.length;
+        await this.markImportCommitted(trx, fileTask, report);
       });
     } catch (error) {
       await Promise.allSettled(
@@ -569,11 +574,36 @@ export class DocmostArchiveImportService {
         AttachmentType.File,
         params.fileTask.workspaceId,
       )}/${id}/${safeFileName}`;
-      await this.storageService.uploadStream(
-        filePath,
-        createReadStream(sourcePath),
-        { recreateClient: true },
-      );
+      let lastError: unknown;
+      for (
+        let attempt = 1;
+        attempt <= DOCMOST_ATTACHMENT_UPLOAD_ATTEMPTS;
+        attempt += 1
+      ) {
+        try {
+          await this.storageService.uploadStream(
+            filePath,
+            createReadStream(sourcePath),
+            { recreateClient: true },
+          );
+          lastError = undefined;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < DOCMOST_ATTACHMENT_UPLOAD_ATTEMPTS) {
+            this.logger.warn({
+              event: 'docmost_archive_attachment_upload_retry',
+              attachmentId: id,
+              attempt,
+            });
+            await this.waitForAttachmentRetry();
+          }
+        }
+      }
+      if (lastError) {
+        await this.storageService.delete(filePath).catch(() => undefined);
+        throw lastError;
+      }
       staged.push({
         sourceId,
         id,
@@ -613,6 +643,40 @@ export class DocmostArchiveImportService {
         ),
       );
       throw error;
+    }
+  }
+
+  private waitForAttachmentRetry(): Promise<void> {
+    return new Promise((resolve) =>
+      setTimeout(resolve, DOCMOST_ATTACHMENT_RETRY_DELAY_MS),
+    );
+  }
+
+  private async markImportCommitted(
+    trx: KyselyTransaction,
+    fileTask: FileTask,
+    report: ImportReport,
+  ): Promise<void> {
+    const previousResult =
+      fileTask.result &&
+      typeof fileTask.result === 'object' &&
+      !Array.isArray(fileTask.result)
+        ? fileTask.result
+        : {};
+    const result = await trx
+      .updateTable('fileTasks')
+      .set({
+        status: FileTaskStatus.Success,
+        errorMessage: null,
+        result: { ...previousResult, report } as any,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', fileTask.id)
+      .where('status', '=', FileTaskStatus.Processing)
+      .executeTakeFirst();
+
+    if (result.numUpdatedRows !== 1n) {
+      throw new Error('Import task is no longer in processing state');
     }
   }
 

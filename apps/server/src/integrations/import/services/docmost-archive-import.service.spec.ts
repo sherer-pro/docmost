@@ -5,6 +5,9 @@ import {
   remapDatabasePageReference,
   remapDatabaseViewConfig,
 } from '../../../core/database/utils/database-copy.utils';
+import { promises as fs } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 describe('DocmostArchiveImportService reference rewriting', () => {
   const service = new DocmostArchiveImportService(
@@ -426,5 +429,209 @@ describe('DocmostArchiveImportService reference rewriting', () => {
 
     expect(value).toBeNull();
     expect(state.skipped.userReferences).toBe(1);
+  });
+});
+
+describe('DocmostArchiveImportService import durability', () => {
+  const createService = (db: any, storageService: any) =>
+    new DocmostArchiveImportService(
+      db,
+      {} as any,
+      {} as any,
+      storageService,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+  const report = {
+    created: {
+      pages: 1,
+      databases: 0,
+      rows: 0,
+      attachments: 1,
+      labels: 0,
+      dictionaryTerms: 0,
+    },
+    updated: { dictionaryTerms: 0 },
+    skipped: {
+      dictionaryTerms: 0,
+      userReferences: 0,
+      pageReferences: 0,
+    },
+    warnings: [],
+  };
+
+  it('retries attachment uploads with a fresh stream and succeeds', async () => {
+    const extractDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'docmost-attachment-retry-'),
+    );
+    await fs.mkdir(path.join(extractDir, 'attachments'), { recursive: true });
+    await fs.writeFile(
+      path.join(extractDir, 'attachments', 'source.bin'),
+      'portable attachment',
+    );
+    let attempts = 0;
+    const streams = new Set<unknown>();
+    const storageService = {
+      uploadStream: jest.fn(async (_filePath: string, stream: any) => {
+        streams.add(stream);
+        stream.destroy();
+        attempts += 1;
+        if (attempts < 3) throw new Error('synthetic storage failure');
+      }),
+      delete: jest.fn(async () => undefined),
+    };
+    const service = createService({}, storageService);
+    jest
+      .spyOn(service as any, 'waitForAttachmentRetry')
+      .mockResolvedValue(undefined);
+
+    try {
+      const staged = await (service as any).stageAttachments({
+        extractDir,
+        fileTask: {
+          workspaceId: 'workspace-1',
+          spaceId: 'space-1',
+          creatorId: 'user-1',
+        },
+        data: {
+          attachments: [
+            {
+              id: 'attachment-source',
+              pageId: 'page-source',
+              archivePath: 'attachments/source.bin',
+              fileName: 'source.bin',
+              fileSize: 19,
+              fileExt: 'bin',
+              mimeType: 'application/octet-stream',
+              type: 'file',
+            },
+          ],
+        },
+        pageIdMap: new Map([['page-source', 'page-target']]),
+        attachmentIdMap: new Map([
+          ['attachment-source', 'attachment-target'],
+        ]),
+        snapshotAttachmentMapsByConsumer: new Map(),
+      });
+
+      expect(storageService.uploadStream).toHaveBeenCalledTimes(3);
+      expect(streams.size).toBe(3);
+      expect(staged).toHaveLength(1);
+      expect(storageService.delete).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(extractDir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes a partial storage object after retries are exhausted', async () => {
+    const extractDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'docmost-attachment-failure-'),
+    );
+    await fs.mkdir(path.join(extractDir, 'attachments'), { recursive: true });
+    await fs.writeFile(
+      path.join(extractDir, 'attachments', 'source.bin'),
+      'portable attachment',
+    );
+    const storageService = {
+      uploadStream: jest.fn(async (_filePath: string, stream: any) => {
+        stream.destroy();
+        throw new Error('synthetic storage failure');
+      }),
+      delete: jest.fn(async () => undefined),
+    };
+    const service = createService({}, storageService);
+    jest
+      .spyOn(service as any, 'waitForAttachmentRetry')
+      .mockResolvedValue(undefined);
+
+    try {
+      await expect(
+        (service as any).stageAttachments({
+          extractDir,
+          fileTask: {
+            workspaceId: 'workspace-1',
+            spaceId: 'space-1',
+            creatorId: 'user-1',
+          },
+          data: {
+            attachments: [
+              {
+                id: 'attachment-source',
+                pageId: 'page-source',
+                archivePath: 'attachments/source.bin',
+                fileName: 'source.bin',
+                fileSize: 19,
+                fileExt: 'bin',
+                mimeType: 'application/octet-stream',
+                type: 'file',
+              },
+            ],
+          },
+          pageIdMap: new Map([['page-source', 'page-target']]),
+          attachmentIdMap: new Map([
+            ['attachment-source', 'attachment-target'],
+          ]),
+          snapshotAttachmentMapsByConsumer: new Map(),
+        }),
+      ).rejects.toThrow('synthetic storage failure');
+      expect(storageService.uploadStream).toHaveBeenCalledTimes(3);
+      expect(storageService.delete).toHaveBeenCalledTimes(1);
+    } finally {
+      await fs.rm(extractDir, { recursive: true, force: true });
+    }
+  });
+
+  it('marks task success inside the materialization transaction', async () => {
+    const executeTakeFirst = jest.fn(async () => ({ numUpdatedRows: 1n }));
+    const secondWhere = jest.fn(() => ({ executeTakeFirst }));
+    const firstWhere = jest.fn(() => ({ where: secondWhere }));
+    const set = jest.fn(() => ({ where: firstWhere }));
+    const trx = { updateTable: jest.fn(() => ({ set })) };
+    const service = createService({}, {});
+
+    await (service as any).markImportCommitted(
+      trx,
+      {
+        id: 'task-1',
+        result: { preview: { displayName: 'Archive' } },
+      },
+      report,
+    );
+
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        errorMessage: null,
+        result: {
+          preview: { displayName: 'Archive' },
+          report,
+        },
+      }),
+    );
+    expect(secondWhere).toHaveBeenCalledWith('status', '=', 'processing');
+  });
+
+  it('aborts materialization when the task state fence is lost', async () => {
+    const executeTakeFirst = jest.fn(async () => ({ numUpdatedRows: 0n }));
+    const trx = {
+      updateTable: jest.fn(() => ({
+        set: () => ({
+          where: () => ({ where: () => ({ executeTakeFirst }) }),
+        }),
+      })),
+    };
+    const service = createService({}, {});
+
+    await expect(
+      (service as any).markImportCommitted(
+        trx,
+        { id: 'task-1', result: null },
+        report,
+      ),
+    ).rejects.toThrow('no longer in processing state');
   });
 });
