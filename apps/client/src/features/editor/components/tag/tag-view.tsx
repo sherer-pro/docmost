@@ -1,6 +1,6 @@
 import { NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import cx from "clsx";
-import { useRef, useState } from "react";
+import { type KeyboardEvent, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,6 +19,7 @@ interface PopoverPosition {
 export default function TagView(props: NodeViewProps) {
   const { t } = useTranslation();
   const targetRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipId = useId();
   const [popover, setPopover] = useState<PopoverPosition | null>(null);
   const value = getValidTagValue(props.node.attrs.value);
   const definition = getBuiltInTagDefinition(value);
@@ -42,16 +43,37 @@ export default function TagView(props: NodeViewProps) {
 
   const hideDescription = () => setPopover(null);
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      hideDescription();
+      return;
+    }
+
+    if (!["Enter", " "].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    showDescription();
+  };
+
   return (
     <NodeViewWrapper
       as="span"
       className={cx(classes.tag, classes[color], {
         [classes.selected]: props.selected,
       })}
+      aria-describedby={popover ? tooltipId : undefined}
       data-tag-value={value}
+      role="button"
+      tabIndex={0}
       onBlur={hideDescription}
       onClick={showDescription}
       onFocus={showDescription}
+      onKeyDown={handleKeyDown}
       onMouseEnter={showDescription}
       onMouseLeave={hideDescription}
     >
@@ -61,6 +83,8 @@ export default function TagView(props: NodeViewProps) {
       {popover &&
         createPortal(
           <div
+            id={tooltipId}
+            role="tooltip"
             className={classes.descriptionPopover}
             style={{ top: popover.top, left: Math.max(12, popover.left) }}
           >

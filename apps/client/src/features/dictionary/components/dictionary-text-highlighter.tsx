@@ -74,6 +74,7 @@ export function DictionaryTextHighlighter({
             <span
               className="dictionary-highlight"
               data-dictionary-term-id={match.term.id}
+              role="button"
               tabIndex={0}
             >
               {highlighted}
