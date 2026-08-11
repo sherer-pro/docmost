@@ -50,6 +50,8 @@ API key JWT payload includes:
 - `sub` (creator user id)
 
 Data returned by `/api/rag/*` is always restricted to `spaceId` from the API key.
+The workspace must remain active and the scoped space must remain unarchived;
+archiving the space invalidates its RAG and MCP keys immediately.
 
 - Resource exists but outside token scope -> `403 Forbidden`
 - Missing/invalid/expired/revoked token -> `401 Unauthorized`
