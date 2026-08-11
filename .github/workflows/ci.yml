@@ -236,6 +236,7 @@ jobs:
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
             -e PAGE_TEMPLATES_ENABLED=true \
+            -e DRAWIO_URL=https://embed.diagrams.net \
             -e AI_PROVIDER_ALLOWED_ORIGINS=http://host.docker.internal:1080 \
             -e AI_RETRIEVAL_ALLOWED_ORIGINS=http://host.docker.internal:1080 \
             -e RAG_SYNC_ENABLED=true \
@@ -317,6 +318,7 @@ jobs:
           DOCMOST_COLLAB_URL: http://127.0.0.1:3001
           DOCMOST_ADMIN_EMAIL: ci-admin@example.test
           DOCMOST_ADMIN_PASSWORD: CI-smoke-password-123!
+          DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net
         run: pnpm test:editor:e2e
 
       - name: AI browser acceptance against the production image
@@ -393,7 +395,7 @@ jobs:
         run: |
           mkdir -p ci-artifacts
           capture_log() {
-            docker logs "$1" 2>&1 | node scripts/sanitize-ci-log-stream.mjs >"ci-artifacts/$2" || true
+            { docker logs "$1" 2>&1 || true; } | node scripts/sanitize-ci-log-stream.mjs >"ci-artifacts/$2"
           }
           capture_log docmost-app server.log
           capture_log docmost-app-replica server-replica.log

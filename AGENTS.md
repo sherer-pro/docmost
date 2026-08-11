@@ -145,6 +145,7 @@
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
 - Editor browser acceptance matrix: `pnpm test:editor:e2e`
 - AI assistant browser acceptance matrix: `pnpm test:ai:e2e`
+- AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
 - AI context, citations, retrieval, and editor-selection acceptance: `pnpm test:ai-context:e2e`
 - Cross-platform line-ending contract tests for generated docs and route inventory: `pnpm test:text-contracts`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
@@ -270,7 +271,8 @@ Minimum:
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
-  3. before PR / release candidates: `pnpm verify:full` (build → lint → tests → security suite).
+  3. before PR: `pnpm verify:full` (build → lint → tests → security suite).
+  4. before release candidates: `pnpm verify:release` against the documented production-like runtime.
   4. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
 - Functional checks (`check:env`, `build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
 
