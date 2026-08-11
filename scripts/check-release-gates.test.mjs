@@ -278,6 +278,46 @@ test("rejects a required command that exists only in a comment", () => {
   assert.ok(errors.includes("validate must run pnpm test:security"));
 });
 
+test("rejects a required workflow command with fail-open handling", () => {
+  const mutated = ciSource.replace(
+    "        run: pnpm test:security",
+    "        run: pnpm test:security || true",
+  );
+  assert.notEqual(mutated, ciSource, "security command fixture must exist");
+  const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+  assert.ok(
+    errors.includes(
+      "validate must not mask failures from pnpm test:security",
+    ),
+  );
+});
+
+test("rejects a required workflow command in a disabled step", () => {
+  const mutated = ciSource.replace(
+    /      - name: Security regression tests\r?\n        run: pnpm test:security/u,
+    "      - name: Security regression tests\n        if: false\n        run: pnpm test:security",
+  );
+  assert.notEqual(mutated, ciSource, "security step fixture must exist");
+  const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+  assert.ok(errors.includes("validate must run pnpm test:security"));
+});
+
+test("rejects fail-open command chaining in root verification scripts", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["verify:quick"] = mutatedPackage.scripts[
+    "verify:quick"
+  ].replace(
+    "&& corepack pnpm run test:security",
+    "|| corepack pnpm run test:security",
+  );
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes("verify:quick must include run test:security"),
+  );
+});
+
 for (const [scriptName, command] of [
   ["verify:quick", "run test:security"],
   ["verify:full", "run build"],
