@@ -268,11 +268,12 @@ export class AiMcpAdminService {
     const settings = await this.readSettings(workspace.id);
     const update: Record<string, unknown> = { updatedById: user.id };
     let connectionChanged = false;
+    const destinationChanged = dto.url !== undefined && dto.url !== row.url;
 
     if (dto.name !== undefined) {
       update.name = dto.name.trim();
     }
-    if (dto.url !== undefined && dto.url !== row.url) {
+    if (destinationChanged) {
       await this.assertUrlAllowed(dto.url, settings.allowedOrigins);
       update.url = dto.url;
       connectionChanged = true;
@@ -317,13 +318,35 @@ export class AiMcpAdminService {
 
     let updated;
     try {
-      updated = await this.db
-        .updateTable('aiMcpServers')
-        .set(update as never)
-        .where('id', '=', serverId)
-        .where('workspaceId', '=', workspace.id)
-        .returningAll()
-        .executeTakeFirstOrThrow();
+      updated = await this.db.transaction().execute(async (trx) => {
+        const next = await trx
+          .updateTable('aiMcpServers')
+          .set(update as never)
+          .where('id', '=', serverId)
+          .where('workspaceId', '=', workspace.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+
+        if (destinationChanged) {
+          // Consent names the recipient host. A changed destination is a new
+          // disclosure decision, so every saved opt-in must fail closed.
+          await trx
+            .updateTable('aiMcpUserPreferences')
+            .set({ enabled: false, updatedAt: new Date() })
+            .where(
+              'bindingId',
+              'in',
+              trx
+                .selectFrom('aiMcpSpaceBindings')
+                .select('id')
+                .where('serverId', '=', serverId)
+                .where('workspaceId', '=', workspace.id),
+            )
+            .execute();
+        }
+
+        return next;
+      });
     } catch (error) {
       throw this.mapUniqueViolation(error);
     }
