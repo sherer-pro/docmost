@@ -147,7 +147,7 @@ export const test = base.extend<{ evidence: void }>({
       ]);
       const locale = testInfo.project.name.includes("en-") ? "en-US" : "ru-RU";
       const localeResponse = await context.request.post("/api/users/update", {
-        data: { locale },
+        data: { locale, aiPanelOpen: false },
         headers: {
           Origin: url.origin,
           Referer: `${url.origin}/`,
