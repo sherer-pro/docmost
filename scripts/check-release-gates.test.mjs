@@ -175,15 +175,21 @@ test("production migrations resolve file-backed secrets before connecting", () =
 
 const workflowMutations = [
   ["community boundary", "ciSource", "pnpm check:no-ee"],
+  ["community boundary tests", "ciSource", "pnpm test:no-ee"],
+  ["architecture contract", "ciSource", "pnpm check:architecture"],
+  ["release gate self-check", "ciSource", "pnpm check:release-gates"],
   ["build", "ciSource", "pnpm build"],
   ["route inventory", "ciSource", "pnpm routes:inventory:check"],
   ["RAG docs", "ciSource", "pnpm check:rag-docs"],
   ["AI docs", "ciSource", "pnpm check:ai-docs"],
+  ["text contracts", "ciSource", "pnpm test:text-contracts"],
   ["environment", "ciSource", "pnpm check:env"],
   ["lint", "ciSource", "pnpm lint"],
   ["client unit", "ciSource", "pnpm --filter ./apps/client test"],
   ["server unit", "ciSource", "pnpm --filter ./apps/server test"],
+  ["RAG Sync contract", "ciSource", "pnpm test:rag-sync:contract"],
   ["security", "ciSource", "pnpm test:security"],
+  ["comment language", "ciSource", "pnpm check:comments:en"],
   ["audit exceptions", "ciSource", "pnpm check:audit-exceptions"],
   [
     "production dependency audit",
@@ -191,11 +197,21 @@ const workflowMutations = [
     "pnpm audit --prod --audit-level high",
   ],
   [
+    "integration build",
+    "ciSource",
+    "pnpm server:build",
+  ],
+  [
     "empty database migrations",
     "ciSource",
     "pnpm --filter ./apps/server migration:latest",
   ],
   ["server integration", "ciSource", "pnpm --filter ./apps/server test:e2e"],
+  [
+    "production image build",
+    "ciSource",
+    "docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .",
+  ],
   [
     "compiled production smoke",
     "ciSource",
@@ -218,6 +234,21 @@ const workflowMutations = [
     "sanitized artifact marker",
     "ciSource",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
+  ],
+  [
+    "release image build",
+    "dockerSource",
+    "docker build --build-arg PNPM_OFFLINE=0",
+  ],
+  [
+    "versioned image publish",
+    "dockerSource",
+    "docker push shererpro/docmost:${VERSION}",
+  ],
+  [
+    "latest image publish",
+    "dockerSource",
+    "docker push shererpro/docmost:latest",
   ],
 ];
 
@@ -323,6 +354,7 @@ for (const [scriptName, command] of [
   ["verify:full", "run build"],
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run test:ai:e2e"],
+  ["verify:release", "run test:ai-agent:e2e"],
 ]) {
   test(`rejects ${scriptName} without ${command}`, () => {
     const mutatedPackage = structuredClone(packageJson);
