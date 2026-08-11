@@ -14,6 +14,7 @@ const [
   aiAgentAuditSource,
   aiAgentComposeSource,
   migrationSource,
+  editorMobileSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -25,6 +26,10 @@ const [
   readFile("apps/client/e2e/ai-agent/run-ai-agent-audit.mjs", "utf8"),
   readFile("apps/client/e2e/ai-agent/docker-compose.audit.yml", "utf8"),
   readFile("apps/server/src/database/migrate.ts", "utf8"),
+  readFile(
+    "apps/client/e2e/editor/specs/mobile-accessibility.spec.ts",
+    "utf8",
+  ),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -77,6 +82,21 @@ test("AI browser acceptance opens the off-screen assistant before use", () => {
     /not\.toHaveAttribute\("aria-hidden", "true"\)/u,
   );
   assert.match(aiSupportSource, /expect\(composer\)\.toBeInViewport\(\)/u);
+});
+
+test("editor mobile acceptance isolates the shared assistant state", () => {
+  assert.equal(
+    editorMobileSource.match(/aiPanelOpen: false,/gu)?.length,
+    2,
+    "each mobile scenario must start with the assistant closed",
+  );
+  assert.equal(
+    editorMobileSource.match(
+      /aiPanelOpen: original\.aiPanelOpen \?\? false,/gu,
+    )?.length,
+    2,
+    "each mobile scenario must restore the original assistant state",
+  );
 });
 
 test("AI provider acceptance follows the configured mock origin", () => {
