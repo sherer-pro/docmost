@@ -47,6 +47,8 @@ const REQUIRED_JOB_COMMANDS = {
 
 const REQUIRED_JOB_METADATA = {
   "production-smoke": [
+    "-e DRAWIO_URL=https://embed.diagrams.net",
+    "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
     "retention-days: 7",
   ],
