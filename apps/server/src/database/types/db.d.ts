@@ -535,6 +535,7 @@ export interface RagSyncBindings {
   createdById: string | null;
   id: Generated<string>;
   knowledgeId: string | null;
+  lastTestedAt: Timestamp | null;
   spaceId: string;
   state: Generated<string>;
   targetClaimId: string | null;

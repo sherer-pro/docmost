@@ -705,6 +705,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts)                                   | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path.                                                                  | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead.                                              |
 | [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts)                                 | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities.                                                                                                          | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead.                                                  |
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
+| [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                   | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                       | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
 | [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
@@ -725,7 +726,11 @@ clear an unused clean binding to release its active claim.
 
 Persistent per-space configuration is stored in PostgreSQL. The Open WebUI
 writer credential is encrypted with `APP_SECRET` and API responses expose only
-`writerApiKeyConfigured`. Query-time retrieval remains independent and keeps
+`writerApiKeyConfigured` plus the non-secret `lastTestedAt` timestamp. A
+successful bounded probe records `rag_sync_bindings.last_tested_at`; changing
+the target or writer key clears it. Existing bindings are intentionally not
+backfilled because historical probe success cannot be reconstructed safely.
+Query-time retrieval remains independent and keeps
 its own adapter and query credential. The public `/api/rag/*` surface also
 remains independent and continues to authorize an external indexer through a
 space-scoped RAG API key. Keep `APP_SECRET` stable across replicas and restarts.
@@ -766,8 +771,11 @@ The management contract is:
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/test` performs a bounded
   upload/process/delete probe on a clean disabled binding. Before the upload it
   durably marks cleanup as required; only a confirmed marker deletion clears
-  that flag, so an interrupted test must be recovered through cleanup;
-- `POST /api/spaces/:spaceId/ai/rag-sync/actions/enable` starts scheduling;
+  that flag and records `lastTestedAt`, so an interrupted test must be recovered
+  through cleanup;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/enable` starts scheduling only
+  after the current target and writer credential have passed Test. Otherwise it
+  returns `rag_sync_target_not_tested`;
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/disable` enters draining;
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/retry-cleanup` resumes cleanup;
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/force-disable` stops work while
@@ -825,7 +833,8 @@ runtime in the main image; there is no additional profile or release image.
 Upgrade from the retired standalone worker with a database backup and an
 explicit single-writer cutover: stop the old worker, deploy and migrate the new
 server with `RAG_SYNC_ENABLED=false`, configure the deployment writer allowlist,
-then enable and Test each space binding before turning it on. Do not import the
+then configure and Test each space binding before enabling it. The API enforces
+this order. Do not import the
 old per-space environment secrets automatically. Revoke the old Docmost RAG API
 keys only after the embedded binding is healthy. Initial reconciliation accepts
 legacy schema-v1 ownership metadata and writes only schema v2 thereafter.

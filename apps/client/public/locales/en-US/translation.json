@@ -1382,6 +1382,8 @@
       "targetMismatchDescription": "This is allowed, but the Open WebUI target used for space search does not match the synchronization target below.",
       "cleanupRequiredTitle": "Remote cleanup is incomplete",
       "cleanupRequiredDescription": "The target cannot be changed until managed files are removed or an administrator explicitly abandons cleanup.",
+      "targetTestRequiredTitle": "Test the target before enabling",
+      "targetTestRequiredDescription": "Run Test writer successfully for the saved target and credentials. Enable remains unavailable until the test completes.",
       "bindingState": "Binding state",
       "health": "Runtime health",
       "lastSuccess": "Last successful sync",
@@ -1440,6 +1442,7 @@
       "error": {
         "deploymentDisabled": "RAG synchronization is disabled for this deployment.",
         "notConfigured": "Complete the target and writer-key settings first.",
+        "targetNotTested": "Run a successful writer test for the current target before enabling synchronization.",
         "targetInUse": "This Knowledge Base is already assigned to another space.",
         "configConflict": "The configuration changed in another session. Reload and try again.",
         "cleanupRequired": "Finish or explicitly abandon remote cleanup first.",
@@ -1481,7 +1484,7 @@
       "operationsTitle": "Administrator checklist",
       "operationsSetup": "Configure and test the model and optional retrieval for every space. Approve deployment origins first, keep search disabled until an adapter is ready, and use the built-in and external tool policies to narrow access. Enable image understanding before users send images or image-only PDFs; otherwise the server rejects that input instead of silently omitting it.",
       "operationsProfileNames": "Keep assistant profile names unique within each space. A duplicate returns 409 with ai_profile_name_conflict; reload the list if needed and choose another name.",
-      "operationsRagMigration": "When replacing the standalone RAG worker, stop it first, migrate with RAG_SYNC_ENABLED=false, then configure, Test, and Enable each space. Old environment secrets are not imported. Roll back with the deployment switch, not migration down.",
+      "operationsRagMigration": "When replacing the standalone RAG worker, stop it first, migrate with RAG_SYNC_ENABLED=false, then configure, Test, and Enable each space. The API rejects Enable until the current target has passed Test. Old environment secrets are not imported. Roll back with the deployment switch, not migration down.",
       "operationsRecovery": "On failure, recover dependencies before retrying, keep PostgreSQL authoritative, and preserve the Knowledge Base during mapping recovery. A repeated private-file upload with the same Idempotency-Key resumes its reserved batch after a process failure without creating another file row. For an emergency RAG Sync rollback, set RAG_SYNC_ENABLED=false and restart Docmost; AI_EXTERNAL_MCP_ENABLED controls only outbound MCP.",
       "templateExportScope": "Template catalog entries are excluded. Pages created from templates are exported as ordinary materialized pages."
     },
