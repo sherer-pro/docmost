@@ -36,7 +36,10 @@ describe('page template content', () => {
     const normalized = normalizeTemplateDraft(
       {
         type: 'doc',
-        content: [{ type: 'paragraph' }, { type: 'heading', attrs: { level: 2 } }],
+        content: [
+          { type: 'paragraph' },
+          { type: 'heading', attrs: { level: 2 } },
+        ],
       },
       () => ids.shift()!,
     );
@@ -79,7 +82,10 @@ describe('page template content', () => {
     };
     const published = {
       type: 'doc',
-      content: [field('field-a', '', 'Project owner'), managed('block-a', 'New')],
+      content: [
+        field('field-a', '', 'Project owner'),
+        managed('block-a', 'New'),
+      ],
     };
 
     const next = createTemplateInstanceContent(published, previous);
@@ -111,6 +117,52 @@ describe('page template content', () => {
     expect(validateTemplateInstanceMutation(previous, fieldEdit)).toBe(true);
     expect(validateTemplateInstanceMutation(previous, managedEdit)).toBe(false);
     expect(validateTemplateInstanceMutation(previous, reordered)).toBe(false);
+  });
+
+  it('rejects nested template containers hidden inside editable field values', () => {
+    const previous = {
+      type: 'doc',
+      content: [managed('block-a', 'Fixed', true), field('field-a', 'Alice')],
+    };
+    const nestedManagedBlock = {
+      type: 'doc',
+      content: [
+        managed('block-a', 'Fixed', true),
+        {
+          ...field('field-a', ''),
+          content: [managed('nested-block', 'Injected', false)],
+        },
+      ],
+    };
+
+    expect(validateTemplateInstanceMutation(previous, nestedManagedBlock)).toBe(
+      false,
+    );
+  });
+
+  it('repairs duplicate top-level service identifiers during normalization', () => {
+    const generatedIds = ['block-b', 'field-b'];
+    const normalized = normalizeTemplateDraft(
+      {
+        type: 'doc',
+        content: [
+          managed('shared-id', 'First'),
+          managed('shared-id', 'Second'),
+          field('shared-id', 'Alice'),
+        ],
+      },
+      () => generatedIds.shift()!,
+    );
+
+    expect(normalized.content?.map((node) => node.attrs)).toEqual([
+      { templateBlockId: 'shared-id', locked: false },
+      { templateBlockId: 'block-b', locked: false },
+      {
+        fieldId: 'field-b',
+        label: 'Owner',
+        placeholder: 'Enter a value',
+      },
+    ]);
   });
 
   it('reports removed populated fields and structural changes', () => {
@@ -146,5 +198,24 @@ describe('page template content', () => {
     ]);
     expect(isTemplateFieldFilled(populated)).toBe(true);
     expect(isTemplateFieldFilled(field('field-b'))).toBe(false);
+  });
+
+  it('recursively unwraps nested template containers when materializing content', () => {
+    const detached = detachTemplateContent({
+      type: 'doc',
+      content: [
+        {
+          ...field('field-a', ''),
+          content: [managed('nested-block', 'Nested value', true)],
+        },
+      ],
+    });
+
+    expect(detached.content).toEqual([
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Nested value' }],
+      },
+    ]);
   });
 });
