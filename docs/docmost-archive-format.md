@@ -80,13 +80,26 @@ the import preview.
 4. `POST /api/file-tasks/info` returns the persisted preview and final report.
 
 Structural data is committed atomically. Attachment payloads are staged before
-the database transaction and removed if it fails. Re-importing an archive
-always creates a new copy; it never updates source objects.
+the database transaction, uploaded with bounded retries, and removed if an
+upload or transaction fails. The success task state is written in the same
+transaction as the restored rows, so a worker crash cannot leave committed
+content behind a failed task or replay a committed import. Re-importing an
+archive always creates a new copy; it never updates source objects.
 
-ZIP validation checks CRC32 while decompressing and applies per-entry,
-cumulative-byte, nesting-depth, and entry-count limits. Absolute paths, path
-traversal, symbolic-link entries, malformed manifests, unsupported versions,
-and attachment size or checksum mismatches are rejected before import.
+ZIP validation preserves raw central-directory entries long enough to reject
+duplicate names, absolute paths, path traversal, symbolic links, excessive path
+depth, and excessive entry counts before JSZip can normalize or collapse them.
+Every non-directory entry is then streamed through per-entry and cumulative
+uncompressed-byte budgets before CRC32 validation. This streaming pass also
+rejects archives whose actual data exceeds a forged central-directory size.
+Malformed manifests, unsupported versions, CRC errors, and attachment size or
+checksum mismatches are rejected before import.
+
+File-task preview, progress, and report metadata is scoped to the workspace and
+is visible only to the task creator or a workspace member allowed to manage
+workspace settings. The client persists an active task identifier per space,
+resumes polling after reload, and clears it only after success, failure, or
+cancel.
 
 ## Compatibility
 
