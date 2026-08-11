@@ -11,8 +11,7 @@ The fork transforms Docmost from a primarily wiki-oriented system into a platfor
 
 Its key differences include a built-in AI assistant for each space, RAG and Open WebUI synchronization, Notion-style databases, extended document properties, a terminology dictionary, a more capable editor, portable archives, push notifications, and a stricter security model.
 
-> [!IMPORTANT]
-> **The entire Enterprise Edition application layer has been removed.** The fork has no separate EE runtime modules, imports, license enforcement, billing integration, or enterprise code tree. Former EE user-facing capabilities—including SSO, MFA, comments, advanced search, and sharing controls—are implemented directly in the AGPL 3.0 core. Historical database migrations retain some legacy schema names only to remove obsolete EE data during upgrades.
+> [!IMPORTANT] > **The entire Enterprise Edition application layer has been removed.** The fork has no separate EE runtime modules, imports, license enforcement, billing integration, or enterprise code tree. Former EE user-facing capabilities—including SSO, MFA, comments, advanced search, and sharing controls—are implemented directly in the AGPL 3.0 core. Historical database migrations retain some legacy schema names only to remove obsolete EE data during upgrades.
 
 ### 1. Built-in AI assistant for each space
 
@@ -42,7 +41,6 @@ The fork includes its own AI assistant, configured separately for each space:
 
 - a unified, responsive Markdown composer with visible context, space-search, and Chat/Agent controls, Enter-to-send keyboard behavior, and an auto-saving context manager that groups the current document, space sources, private files, and attachments in one flow.
 
-
 The previous legacy editor text-generation workflow has been removed and replaced with a unified assistant integrated into the core version of the fork.
 
 ![AI assistant with document context and Markdown composer](./docs/images/fork-specific-enhancements/en/ai-assistant-context.png)
@@ -65,7 +63,6 @@ The assistant can work not only with a user-entered message, but also with Docmo
 
 - space search results.
 
-
 For selected text, actions include shortening, explaining, improving, correcting grammar, continuing, translating, and changing the tone.
 
 AI output can be:
@@ -81,7 +78,6 @@ AI output can be:
 - copied;
 
 - reviewed together with the sources used.
-
 
 The assistant also supports draft persistence, automatic chat titles, search across chats and commands, background AI activity indicators, and streamed generation.
 
@@ -143,7 +139,6 @@ Supported capabilities include:
 
 - a stateless read-only MCP endpoint for external assistants, using the same
   access-aware tool registry and exact capability policy as agent mode.
-
 
 This allows Docmost content to serve as an up-to-date knowledge base for local
 or corporate LLMs. RAG and MCP keys are scoped to one space, are not
@@ -239,7 +234,6 @@ AI features are implemented as a separate server-side subsystem:
 
 ![AI request limits and retention controls](./docs/images/fork-specific-enhancements/en/ai-request-infrastructure.png)
 
-
 ### 5. Notion-style databases
 
 The fork includes structured databases:
@@ -270,7 +264,6 @@ The fork includes structured databases:
 
 ![Database page and table controls](./docs/images/fork-specific-enhancements/en/database.png)
 
-
 ### 6. Extended document properties
 
 Pages and database rows include configurable fields:
@@ -285,7 +278,6 @@ Pages and database rows include configurable fields:
 
 - estimated reading time.
 
-
 The set of visible fields is configured separately for each space.
 
 The AI role field indicates how AI participated in creating the document:
@@ -299,7 +291,6 @@ The AI role field indicates how AI participated in creating the document:
 - `Coauthor+`;
 
 - `Author`.
-
 
 Changes to significant properties are recorded in the document history.
 
@@ -327,7 +318,6 @@ The fork provides more advanced terminology management:
 
 ![Space terminology dictionary](./docs/images/fork-specific-enhancements/en/dictionary.png)
 
-
 ### 8. Search and content indexing
 
 Search works across pages, databases, rows, and attachments while preserving current workspace, space, public-sharing, and page-level access rules:
@@ -351,7 +341,6 @@ Search works across pages, databases, rows, and attachments while preserving cur
 - indexed candidates are always reloaded from PostgreSQL and rechecked against live access policy before being returned.
 
 ![Search filters and result breadcrumbs](./docs/images/fork-specific-enhancements/en/search-indexing.png)
-
 
 ### 9. Extended editor
 
@@ -395,7 +384,6 @@ The editor includes the following additional capabilities:
 
 ![Extended editor, tables, and navigation](./docs/images/fork-specific-enhancements/en/extended-editor.png)
 
-
 ### 10. Import, export, and data portability
 
 The export system for pages, spaces, and databases has been redesigned:
@@ -418,7 +406,6 @@ Markdown, HTML, and PDF exports materialize accessible synced content and replac
 denied or deleted sources with a neutral message. They do not expose internal
 transclusion identifiers.
 
-
 A custom portable Docmost archive format has also been added:
 
 - export of pages, spaces, and databases;
@@ -438,7 +425,6 @@ source is inside the archive. External relationships are exported with an
 access-checked snapshot and become ordinary content during import.
 
 ![Import and export options](./docs/images/fork-specific-enhancements/en/import-export.png)
-
 
 ### 11. Comments and collaboration
 
@@ -467,7 +453,6 @@ The collaboration system has been extended with:
 - more reliable page-tree synchronization.
 
 ![Comments, presence, and collaboration](./docs/images/fork-specific-enhancements/en/collaboration.png)
-
 
 ### 12. Notifications
 
@@ -499,7 +484,6 @@ An extended notification system has been added:
 
 ![Push and email notification preferences](./docs/images/fork-specific-enhancements/en/notifications.png)
 
-
 ### 13. Access control
 
 The fork provides stricter permission management:
@@ -529,7 +513,6 @@ The fork provides stricter permission management:
 - OIDC, SAML, and LDAP group synchronization follows only mappings explicitly created by an administrator.
 
 ![Page access control for users and groups](./docs/images/fork-specific-enhancements/en/access-control.png)
-
 
 ### 14. Security
 
@@ -591,7 +574,6 @@ Additional protection mechanisms include:
 
 ![Security, sharing controls, MFA, and SSO](./docs/images/fork-specific-enhancements/en/security-sso.png)
 
-
 ### 15. PWA, interface, and navigation
 
 The fork can be installed as a Progressive Web App:
@@ -605,7 +587,6 @@ The fork can be installed as a Progressive Web App:
 - a dedicated offline page;
 
 - automatic client-version updates.
-
 
 It also adds:
 
@@ -632,7 +613,6 @@ It also adds:
 - more consistent placement of controls.
 
 ![Home navigation and recently updated pages](./docs/images/fork-specific-enhancements/en/pwa-navigation.png)
-
 
 ### 16. Operations and development
 
@@ -690,7 +670,7 @@ Host development:
 
 ```bash
 cp .env.example .env
-# Set APP_SECRET, DATABASE_URL, and REDIS_URL in .env.
+# Set APP_SECRET, COLLAB_INTERNAL_SECRET, DATABASE_URL, and REDIS_URL in .env.
 corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
@@ -699,12 +679,18 @@ Docker Compose:
 
 ```bash
 cp .env.compose.example .env
-# Replace REPLACE_WITH_LONG_SECRET and STRONG_DB_PASSWORD in .env.
+# Replace both REPLACE_WITH_LONG_SECRET values and STRONG_DB_PASSWORD in .env.
 docker compose up -d --build
 ```
 
+`pnpm dev` starts the frontend, API, and collaboration process separately.
+`COLLAB_URL` is the browser-visible collaboration origin, while
+`COLLAB_INTERNAL_URL` is the server-to-server origin. There is no supported
+fallback that hosts `/collab` on the API process.
+
 Compose starts the API and dedicated collaboration process from the same
-application image. Required credentials from `.env` are mounted as Docker
+application image. `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET`
+from `.env` are mounted as Docker
 secrets and are not copied into container configuration metadata. Optional
 credential secrets are defined but not granted by the base stack, so disabled
 S3, SMTP, Postmark, Typesense, and Web Push integrations do not require dummy
@@ -728,7 +714,8 @@ services:
       - docmost_typesense_api_key
 ```
 
-The available optional secret names are
+The required application secret names are `docmost_app_secret` and
+`docmost_collab_internal_secret`. The available optional secret names are
 `docmost_aws_s3_secret_access_key`, `docmost_smtp_password`,
 `docmost_postmark_token`, `docmost_typesense_api_key`, and
 `docmost_web_push_vapid_private_key`. Granting a secret with an unset source is
@@ -797,19 +784,18 @@ This repository is licensed under the open-source AGPL 3.0 license.
 
 See the [development documentation](https://docmost.com/docs/self-hosting/development)
 
-
 ## Test toolchain version matrix
 
 Validated backend coverage stack (Node 22) used in this repository:
 
-| Component | Version | Notes |
-| --- | --- | --- |
-| Node.js | 22.x | Runtime baseline for local/dev and container builds. |
-| Jest | 30.2.0 | Main test runner for backend unit/integration tests. |
-| ts-jest | 29.4.6 | Single TypeScript transformer for backend Jest config. |
-| babel-jest | 30.2.0 | Version pinned at workspace level to avoid accidental mismatches. |
-| test-exclude | 6.0.0 | Coverage include/exclude helper used in Jest/Istanbul ecosystem. |
-| coverageProvider | v8 | Native Node V8 coverage provider (no Babel Istanbul transform). |
+| Component        | Version | Notes                                                             |
+| ---------------- | ------- | ----------------------------------------------------------------- |
+| Node.js          | 22.x    | Runtime baseline for local/dev and container builds.              |
+| Jest             | 30.2.0  | Main test runner for backend unit/integration tests.              |
+| ts-jest          | 29.4.6  | Single TypeScript transformer for backend Jest config.            |
+| babel-jest       | 30.2.0  | Version pinned at workspace level to avoid accidental mismatches. |
+| test-exclude     | 6.0.0   | Coverage include/exclude helper used in Jest/Istanbul ecosystem.  |
+| coverageProvider | v8      | Native Node V8 coverage provider (no Babel Istanbul transform).   |
 
 Backend smoke command for early coverage regressions:
 
@@ -866,12 +852,12 @@ Runtime/tooling baseline used in this repository:
 - pnpm 10.4.0
 
 ## Thanks
+
 Special thanks to;
 
 <img width="100" alt="Crowdin" src="https://github.com/user-attachments/assets/a6c3d352-e41b-448d-b6cd-3fbca3109f07" />
 
 [Crowdin](https://crowdin.com/) for providing access to their localization platform.
-
 
 <img width="48" alt="Algolia-mark-square-white" src="https://github.com/user-attachments/assets/6ccad04a-9589-4965-b6a1-d5cb1f4f9e94" />
 
