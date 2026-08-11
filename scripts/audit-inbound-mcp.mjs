@@ -254,12 +254,22 @@ export async function auditInboundMcp(options = {}) {
         }),
       ),
     );
+    const statuses = responses.map((response) => response.status);
+    const enforcementObserved = statuses.includes(429);
+    const requireConcurrencyLimit =
+      options.requireConcurrencyLimit === true ||
+      ['1', 'true'].includes(
+        String(options.requireConcurrencyLimit ?? '').toLowerCase(),
+      );
     checks.push({
-      name: 'concurrency probe',
-      passed: responses.every((response) =>
-        [200, 429, 503].includes(response.status),
-      ),
-      statuses: responses.map((response) => response.status),
+      name: requireConcurrencyLimit
+        ? 'concurrency limit enforcement'
+        : 'concurrency response safety',
+      passed:
+        statuses.every((status) => [200, 429, 503].includes(status)) &&
+        (!requireConcurrencyLimit || enforcementObserved),
+      enforcementObserved,
+      statuses,
     });
   }
 
@@ -295,6 +305,8 @@ async function main() {
     readToolName: process.env.DOCMOST_MCP_READ_TOOL,
     writeToolName: process.env.DOCMOST_MCP_WRITE_TOOL,
     concurrency: process.env.DOCMOST_MCP_CONCURRENCY,
+    requireConcurrencyLimit:
+      process.env.DOCMOST_MCP_REQUIRE_CONCURRENCY_LIMIT,
     rateRequests: process.env.DOCMOST_MCP_RATE_REQUESTS,
   });
   console.log(JSON.stringify(result, null, 2));
