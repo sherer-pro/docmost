@@ -16,6 +16,7 @@ const [
   aiAgentComposeSource,
   migrationSource,
   editorMobileSource,
+  aiContextAuditSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -29,6 +30,7 @@ const [
   readFile("apps/client/e2e/ai-agent/docker-compose.audit.yml", "utf8"),
   readFile("apps/server/src/database/migrate.ts", "utf8"),
   readFile("apps/client/e2e/editor/specs/mobile-accessibility.spec.ts", "utf8"),
+  readFile("apps/client/e2e/ai-context/run-ai-context-audit.mjs", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -110,6 +112,13 @@ test("AI provider acceptance follows the configured mock origin", () => {
   assert.doesNotMatch(
     aiProviderSettingsSource,
     /toHaveValue\(\/host\\\.docker\\\.internal:1080\//u,
+  );
+});
+
+test("AI context acceptance finds its member beyond the first page", () => {
+  assert.match(
+    aiContextAuditSource,
+    /workspace\/members\?limit=100&query=\$\{encodeURIComponent\(email\)\}/u,
   );
 });
 
