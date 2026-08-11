@@ -66,6 +66,29 @@ describe('ApiKeyTrafficService', () => {
     jest.useRealTimers();
   });
 
+  it('uses an isolated fail-fast Redis connection for traffic admission', () => {
+    const limiterRedis = {
+      disconnect: jest.fn(),
+    };
+    const sharedRedis = {
+      duplicate: jest.fn().mockReturnValue(limiterRedis),
+    };
+    const service = new ApiKeyTrafficService({
+      getOrThrow: () => sharedRedis,
+    } as any);
+
+    expect(sharedRedis.duplicate).toHaveBeenCalledWith({
+      autoResendUnfulfilledCommands: false,
+      commandTimeout: 5_000,
+      connectionName: 'docmost-api-key-traffic',
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 0,
+    });
+
+    service.onModuleDestroy();
+    expect(limiterRedis.disconnect).toHaveBeenCalledTimes(1);
+  });
+
   it('enforces shared concurrency atomically across service instances', async () => {
     const redis = new SharedRedisFake();
     const redisService = { getOrThrow: () => redis } as any;

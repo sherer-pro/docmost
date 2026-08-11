@@ -91,7 +91,7 @@ export class ApiKeyService {
     spaceId: string,
   ) {
     const space = await this.spaceRepo.findById(spaceId, workspace.id);
-    if (!space || space.workspaceId !== workspace.id) {
+    if (!space || space.workspaceId !== workspace.id || space.archivedAt) {
       throw new NotFoundException('Space not found');
     }
 
@@ -287,7 +287,15 @@ export class ApiKeyService {
       this.spaceRepo.findById(payload.spaceId, payload.workspaceId),
     ]);
 
-    if (!workspace || !space || !user || user.deletedAt || user.deactivatedAt) {
+    if (
+      !workspace ||
+      workspace.deletedAt ||
+      !space ||
+      space.archivedAt ||
+      !user ||
+      user.deletedAt ||
+      user.deactivatedAt
+    ) {
       throw new UnauthorizedException('API key is invalid');
     }
 

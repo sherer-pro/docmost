@@ -11,7 +11,6 @@ export interface ApiKeyQueryParams {
   cursor?: string;
   beforeCursor?: string;
   limit?: number;
-  adminView?: boolean;
   keyType?: "rag" | "mcp";
 }
 

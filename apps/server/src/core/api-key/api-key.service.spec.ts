@@ -15,6 +15,7 @@ import {
   AI_BUILTIN_TOOL_POLICY_RESOLVER,
   AiBuiltinToolPolicyResolver,
 } from '../ai/tools/ai-builtin-tool-policy.token';
+import { ListApiKeysDto } from './dto/api-key.dto';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
@@ -354,6 +355,48 @@ describe('ApiKeyService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('rejects a key after its workspace is soft-deleted', async () => {
+    stubValidKey(ownerUser);
+    workspaceRepo.findById.mockResolvedValue({
+      ...workspace,
+      deletedAt: new Date(),
+    } as any);
+
+    await expect(
+      service.validateApiKey(validPayload(ownerUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects a key after its scoped space is archived', async () => {
+    stubValidKey(ownerUser);
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: workspace.id,
+      archivedAt: new Date(),
+    } as any);
+
+    await expect(
+      service.validateApiKey(validPayload(ownerUser)),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('does not create a key for an archived space', async () => {
+    spaceRepo.findById.mockResolvedValue({
+      id: 'space-1',
+      workspaceId: workspace.id,
+      archivedAt: new Date(),
+    } as any);
+
+    await expect(
+      service.createApiKey(ownerUser, workspace, {
+        name: 'Archived space key',
+        spaceId: 'space-1',
+      }),
+    ).rejects.toThrow('Space not found');
+
+    expect(apiKeyRepo.insertApiKey).not.toHaveBeenCalled();
+  });
+
   it('allows stateless replay only while the key and creator remain valid', async () => {
     stubValidKey(memberUser);
     spaceMemberRepo.getUserSpaceRoles.mockResolvedValue([
@@ -373,9 +416,7 @@ describe('ApiKeyService', () => {
 
   it('rejects API key management for member users', async () => {
     await expect(
-      service.listApiKeys(memberUser, workspace, {
-        adminView: true,
-      } as any),
+      service.listApiKeys(memberUser, workspace, new ListApiKeysDto()),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     await expect(

@@ -937,10 +937,14 @@ revalidates all of the following:
 - the token signature, issuer, and expiry;
 - the live API-key row, type, scope, revocation state, and optional hard
   expiry;
-- the workspace, space, and key creator;
+- the active workspace, unarchived space, and key creator;
 - the creator's active/deactivated/deleted state;
 - current space membership for a non-admin creator;
 - page ACL and AI content-exclusion policy for each returned page.
+
+Archiving the scoped space invalidates its RAG and MCP keys immediately. New
+keys cannot be created for an archived space; unarchive the space and rotate the
+integration key if the integration must be restored.
 
 An MCP token is accepted only on `/mcp`. RAG tokens, user access tokens,
 cookies, and revoked or wrong-space keys are rejected. MCP tokens are rejected
