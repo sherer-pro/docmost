@@ -312,7 +312,7 @@ export function validateReleaseGateContract({
   }
   for (const command of [
     "docker build --build-arg PNPM_OFFLINE=0",
-    "docker push shererpro/docmost:${VERSION}",
+    'docker push "shererpro/docmost:${VERSION}"',
     "docker push shererpro/docmost:latest",
   ]) {
     requireWorkflowCommand(errors, publish, "publish", command);
