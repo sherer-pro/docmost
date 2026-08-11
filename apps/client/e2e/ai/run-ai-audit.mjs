@@ -26,6 +26,7 @@ const apiOrigin = (process.env.DOCMOST_API_ORIGIN ?? baseURL).replace(
   /\/$/,
   "",
 );
+const apiHost = new URL(apiOrigin).host;
 const mockImage =
   "mockserver/mockserver@sha256:fed9b2089e021947f785d1f0bfda3723352bb2c1634ce7b0bcd42dfd1b0fd02f";
 const mockPort = Number(process.env.DOCMOST_AI_MOCK_PORT ?? 1080);
@@ -76,6 +77,7 @@ async function createApi() {
       Cookie: `csrfToken=${csrfToken}`,
       Origin: apiOrigin,
       Referer: `${apiOrigin}/`,
+      Host: apiHost,
       "x-csrf-token": csrfToken,
       Accept: "application/json",
     },
@@ -112,7 +114,11 @@ async function provisionAuditMember(api, spaceId, index) {
   const memberContext = await request.newContext({
     baseURL: apiBaseURL,
     timeout: 30_000,
-    extraHTTPHeaders: { Origin: apiOrigin, Referer: `${apiOrigin}/` },
+    extraHTTPHeaders: {
+      Origin: apiOrigin,
+      Referer: `${apiOrigin}/`,
+      Host: apiHost,
+    },
   });
   try {
     await responseJson(

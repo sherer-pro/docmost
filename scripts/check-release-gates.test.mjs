@@ -74,6 +74,15 @@ test("AI browser acceptance isolates and restores the admin panel preference", (
   );
 });
 
+test("AI browser API setup binds the transport host to the CSRF origin", () => {
+  assert.match(aiAuditSource, /const apiHost = new URL\(apiOrigin\)\.host/u);
+  assert.equal(
+    aiAuditSource.match(/Host: apiHost,/gu)?.length,
+    2,
+    "admin and invited-member setup must use the trusted API host",
+  );
+});
+
 test("AI browser acceptance opens the off-screen assistant before use", () => {
   assert.match(aiSupportSource, /openButton\.or\(composer\)\.first\(\)/u);
   assert.match(aiSupportSource, /if \(asideIsOpen\) \{/u);
