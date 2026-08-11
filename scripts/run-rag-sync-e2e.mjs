@@ -49,6 +49,7 @@ async function waitForHealth() {
 }
 
 try {
+  await run("docker", [...compose, "down", "--volumes", "--remove-orphans"]);
   const upArgs = ["up", "-d"];
   if (process.env.RAG_SYNC_E2E_SKIP_BUILD !== "true") upArgs.push("--build");
   await run("docker", [...compose, ...upArgs]);
