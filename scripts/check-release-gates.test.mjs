@@ -12,6 +12,7 @@ const [
   aiSupportSource,
   aiProviderSettingsSource,
   aiAgentAuditSource,
+  aiAgentSpecSource,
   aiAgentComposeSource,
   migrationSource,
   editorMobileSource,
@@ -24,6 +25,7 @@ const [
   readFile("apps/client/e2e/ai/support.ts", "utf8"),
   readFile("apps/client/e2e/ai/specs/provider-settings.spec.ts", "utf8"),
   readFile("apps/client/e2e/ai-agent/run-ai-agent-audit.mjs", "utf8"),
+  readFile("apps/client/e2e/ai-agent/specs/agent-mode.audit.spec.ts", "utf8"),
   readFile("apps/client/e2e/ai-agent/docker-compose.audit.yml", "utf8"),
   readFile("apps/server/src/database/migrate.ts", "utf8"),
   readFile("apps/client/e2e/editor/specs/mobile-accessibility.spec.ts", "utf8"),
@@ -123,6 +125,11 @@ test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => 
   );
   assert.match(aiAgentAuditSource, /"isolated collaboration server"/u);
   assert.match(aiAgentAuditSource, /DOCMOST_AI_AGENT_COLLAB_PORT/u);
+  assert.match(
+    aiAgentSpecSource,
+    /memberEditor\.fill\(`STALE_\$\{runId\} concurrent-writer-change`\)/u,
+  );
+  assert.match(aiAgentSpecSource, /concurrent writer change to persist/u);
   assert.match(
     aiAgentAuditSource,
     /createRequire\(import\.meta\.url\)\.resolve\("@playwright\/test\/cli"\)/u,
