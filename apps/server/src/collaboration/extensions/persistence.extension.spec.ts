@@ -96,6 +96,7 @@ function createHarness() {
     eventEmitter,
     collabPageUpdates,
     instanceQuery,
+    trx,
   };
 }
 
@@ -193,6 +194,34 @@ describe('PersistenceExtension failure boundary', () => {
     expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     expect(extension['dirtyDocuments'].has(DOCUMENT_NAME)).toBe(true);
     extension['clearDocumentDirty'](DOCUMENT_NAME);
+  });
+
+  it('rejects an older synchronized-template revision before persisting page content', async () => {
+    const { extension, pageRepo, trx } = createHarness();
+    trx.updateTable.mockImplementation((tableName: string) => {
+      const query: any = {
+        set: () => query,
+        where: () => query,
+        returning: () => query,
+        executeTakeFirst: async () =>
+          tableName === 'pageTemplateInstances' ? undefined : { id: 'op-1' },
+      };
+      return query;
+    });
+    const payload = createStorePayload();
+    payload.context = {
+      user: { id: USER_ID },
+      pageTemplateMutationId: 'operation-1',
+      pageTemplateOperationLeaseToken: 'lease-1',
+      pageTemplateSystemSyncRevision: 1,
+    };
+
+    await expect(extension.onStoreDocument(payload)).rejects.toMatchObject({
+      response: { code: 'page_template_revision_stale' },
+    });
+
+    expect(trx.updateTable).toHaveBeenCalledWith('pageTemplateInstances');
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
   });
 
   it('does not let a post-commit dependency failure reject the store hook', async () => {

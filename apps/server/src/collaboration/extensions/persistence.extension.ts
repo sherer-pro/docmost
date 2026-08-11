@@ -218,6 +218,39 @@ export class PersistenceExtension implements Extension {
             }
           }
 
+          if (context?.pageTemplateSystemSyncRevision) {
+            const revisionApplied = await trx
+              .updateTable('pageTemplateInstances')
+              .set({
+                appliedRevision: context.pageTemplateSystemSyncRevision,
+                status: 'active',
+                lastErrorCode: null,
+                updatedAt: new Date(),
+              })
+              .where('childPageId', '=', pageId)
+              .where('instanceKind', '=', 'synced')
+              .where('status', 'in', ['active', 'syncing', 'error'])
+              .where((eb) =>
+                eb.or([
+                  eb('appliedRevision', 'is', null),
+                  eb(
+                    'appliedRevision',
+                    '<',
+                    context.pageTemplateSystemSyncRevision!,
+                  ),
+                ]),
+              )
+              .returning('id')
+              .executeTakeFirst();
+            if (!revisionApplied) {
+              throw new ConflictException({
+                code: 'page_template_revision_stale',
+                message:
+                  'A newer synchronized template revision is already applied',
+              });
+            }
+          }
+
           const contributorIds = context?.pageTemplateSystemSyncRevision
             ? undefined
             : Array.from(
