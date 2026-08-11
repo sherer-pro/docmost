@@ -1,4 +1,4 @@
-import { sanitizeUrl } from '@docmost/editor-ext';
+import { sanitizeUrl } from '@docmost/editor-ext/server';
 import { nanoid } from 'nanoid';
 import type { AiApprovalPreview } from '@docmost/api-contract';
 import { hashCanonicalJson } from '../canonical-json.util';

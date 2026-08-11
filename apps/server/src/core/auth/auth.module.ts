@@ -8,6 +8,7 @@ import { TokenModule } from './token.module';
 import { AuthRateLimitModule } from './rate-limit/auth-rate-limit.module';
 import { MfaModule } from '../mfa/mfa.module';
 import { SessionModule } from '../session/session.module';
+import { ApiKeyValidationModule } from '../api-key/api-key-validation.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SessionModule } from '../session/session.module';
     MfaModule,
     AuthRateLimitModule,
     SessionModule,
+    ApiKeyValidationModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, SignupService, JwtStrategy],

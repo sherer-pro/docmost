@@ -13,6 +13,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from './database.service';
+import { DatabaseExportService } from './database-export.service';
 import * as JSZip from 'jszip';
 import { DatabaseExportFormat } from '../dto/database.dto';
 import { ExportFormat } from '../../../integrations/export/dto/export-dto';
@@ -120,7 +121,7 @@ describe('DatabaseService mixed tree flows', () => {
     databaseViewRepo as any,
     pageRepo as any,
     pageService as any,
-    exportService as any,
+    new DatabaseExportService(exportService as any, pageRepo as any),
     userRepo as any,
     spaceAbility as any,
     pageAccessService as any,

@@ -2,6 +2,7 @@ jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { PageTemplateService } from './page-template.service';
+import { PageTemplateRuntimeService } from './page-template-runtime.service';
 
 const user = {
   id: '019fdaa0-0000-7000-8000-000000000010',
@@ -774,7 +775,7 @@ describe('PageTemplateService space boundaries', () => {
   });
 
   it('fails startup when legacy page embeds remain after migration', async () => {
-    const { service } = buildService();
+    const { service, pageRepo } = buildService();
     jest
       .spyOn(service as any, 'findLegacyPageEmbedCandidates')
       .mockResolvedValueOnce([{ referencePageId: consumerPageId }])
@@ -783,7 +784,12 @@ describe('PageTemplateService space boundaries', () => {
       .spyOn(service as any, 'migrateLegacyPageEmbedsForPage')
       .mockResolvedValue(false);
 
-    await expect((service as any).migrateLegacyPageEmbeds()).rejects.toThrow(
+    const runtime = new PageTemplateRuntimeService(
+      {} as any,
+      pageRepo,
+      service,
+    );
+    await expect((runtime as any).migrateLegacyPageEmbeds()).rejects.toThrow(
       'legacy_page_embed_migration_incomplete',
     );
   });

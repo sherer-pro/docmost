@@ -10,7 +10,7 @@ import {
 import { ExpressionBuilder, sql } from 'kysely';
 import { PaginationOptions } from '../../pagination/pagination-options';
 import type { DB } from '@docmost/db/types/db';
-import { DefaultGroup } from '../../../core/group/dto/create-group.dto';
+import { DefaultGroup } from '../../../common/domain/group.constants';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 
 @Injectable()

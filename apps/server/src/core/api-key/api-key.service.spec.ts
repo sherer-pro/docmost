@@ -16,6 +16,7 @@ import {
   AiBuiltinToolPolicyResolver,
 } from '../ai/tools/ai-builtin-tool-policy.token';
 import { ListApiKeysDto } from './dto/api-key.dto';
+import { ApiKeyValidationService } from './api-key-validation.service';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
@@ -43,6 +44,7 @@ describe('ApiKeyService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApiKeyService,
+        ApiKeyValidationService,
         {
           provide: ApiKeyRepo,
           useValue: {

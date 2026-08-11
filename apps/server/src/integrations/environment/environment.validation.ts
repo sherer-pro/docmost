@@ -18,6 +18,7 @@ import {
   AI_STREAM_IDLE_TIMEOUT_MIN_MS,
 } from './environment.constants';
 import { resolveEnvironmentFileSecrets } from './environment-file-secrets';
+import { StartupConfigurationError } from '../../common/errors/startup.errors';
 
 export class EnvironmentVariables {
   @IsOptional()
@@ -318,10 +319,18 @@ export class EnvironmentVariables {
   })
   WEB_PUSH_SUBJECT: string;
 
-  @IsOptional()
-  @ValidateIf((obj) => obj.COLLAB_URL != '' && obj.COLLAB_URL != null)
+  @IsNotEmpty()
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   COLLAB_URL: string;
+
+  @IsNotEmpty()
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  COLLAB_INTERNAL_URL: string;
+
+  @IsNotEmpty()
+  @MinLength(32)
+  @IsNotIn(['REPLACE_WITH_LONG_SECRET'])
+  COLLAB_INTERNAL_SECRET: string;
 
   @IsOptional()
   @Matches(/^\d+$/)
@@ -431,22 +440,13 @@ export function validate(config: Record<string, any>) {
   ];
 
   if (errors.length > 0 || runtimeContractErrors.length > 0) {
-    console.error(
-      'The Environment variables has failed the following validations:',
+    const validationErrors = errors.flatMap((error) =>
+      Object.values(error.constraints ?? {}),
     );
-
-    errors.map((error) => {
-      console.error(JSON.stringify(error.constraints));
-    });
-
-    runtimeContractErrors.forEach((error) => {
-      console.error(JSON.stringify({ runtimeContract: error }));
-    });
-
-    console.error(
-      'Please fix the environment variables and try again. Exiting program...',
-    );
-    process.exit(1);
+    throw new StartupConfigurationError([
+      ...validationErrors,
+      ...runtimeContractErrors,
+    ]);
   }
 
   return validatedConfig;

@@ -12,7 +12,7 @@ import { Center, Loader, MantineProvider } from "@mantine/core";
 import { BrowserRouter } from "react-router-dom";
 import { ModalsProvider } from "@mantine/modals";
 import { Notifications } from "@mantine/notifications";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { i18nReady } from "./i18n";
 import { PostHogProvider } from "posthog-js/react";
@@ -30,17 +30,7 @@ import {
   clearSensitiveClientState,
   registerLogoutSync,
 } from "@/features/auth/utils/client-session-cleanup.ts";
-
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      retry: false,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-});
+import { queryClient } from "@/lib/query-client.ts";
 
 registerStaleClientRecovery();
 

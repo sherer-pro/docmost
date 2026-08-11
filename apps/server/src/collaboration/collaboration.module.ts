@@ -16,12 +16,12 @@ import { TokenModule } from '../core/auth/token.module';
 import { HistoryProcessor } from './processors/history.processor';
 import { LoggerExtension } from './extensions/logger.extension';
 import { CollaborationHandler } from './collaboration.handler';
-import { CollabHistoryService } from './services/collab-history.service';
 import { WatcherModule } from '../core/watcher/watcher.module';
 import { TransclusionPersistenceModule } from '../core/page/transclusion/transclusion.module';
 import { PageAccessModule } from '../core/page-access/page-access.module';
 import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
 import { CollabPageUpdatePublisherService } from './services/collab-page-update-publisher.service';
+import { CollaborationHistoryModule } from './services/collaboration-history.module';
 
 @Module({
   providers: [
@@ -30,21 +30,23 @@ import { CollabPageUpdatePublisherService } from './services/collab-page-update-
     PersistenceExtension,
     LoggerExtension,
     HistoryProcessor,
-    CollabHistoryService,
     CollaborationHandler,
     CollabPageUpdatePublisherService,
   ],
-  exports: [CollaborationGateway, CollabHistoryService],
+  exports: [CollaborationGateway],
   imports: [
     TokenModule,
     WatcherModule,
     TransclusionPersistenceModule,
     PageAccessModule,
     SpacePolicyModule,
+    CollaborationHistoryModule,
   ],
 })
-export class CollaborationModule implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(CollaborationModule.name);
+export class CollaborationRuntimeModule
+  implements OnModuleInit, OnModuleDestroy
+{
+  private readonly logger = new Logger(CollaborationRuntimeModule.name);
   private collabWsAdapter: CollabWsAdapter;
   private path = '/collab';
 

@@ -47,7 +47,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
 import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
-import { validateTemplateInstanceMutation } from '@docmost/editor-ext';
+import { validateTemplateInstanceMutation } from '@docmost/editor-ext/server';
 import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
 
 @Injectable()

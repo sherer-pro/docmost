@@ -87,7 +87,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/main.tsx", () => ({
+vi.mock("@/lib/query-client.ts", () => ({
   queryClient: mocks.queryClient,
 }));
 

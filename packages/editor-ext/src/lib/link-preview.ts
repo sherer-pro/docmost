@@ -1,5 +1,4 @@
-import { mergeAttributes, Node } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
+import { mergeAttributes, Node } from '@tiptap/core';
 
 export interface LinkPreviewOptions {
   HTMLAttributes: Record<string, any>;
@@ -16,7 +15,7 @@ export interface LinkPreviewAttributes {
   requestId?: string;
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     linkPreview: {
       setLinkPreview: (attributes: LinkPreviewAttributes) => ReturnType;
@@ -25,7 +24,7 @@ declare module "@tiptap/core" {
 }
 
 export const LinkPreview = Node.create<LinkPreviewOptions>({
-  name: "linkPreview",
+  name: 'linkPreview',
 
   addOptions() {
     return {
@@ -34,7 +33,7 @@ export const LinkPreview = Node.create<LinkPreviewOptions>({
     };
   },
 
-  group: "block",
+  group: 'block',
   atom: true,
   draggable: true,
 
@@ -44,22 +43,22 @@ export const LinkPreview = Node.create<LinkPreviewOptions>({
         default: null,
       },
       title: {
-        default: "",
+        default: '',
       },
       description: {
-        default: "",
+        default: '',
       },
       image: {
-        default: "",
+        default: '',
       },
       siteName: {
-        default: "",
+        default: '',
       },
       loading: {
         default: false,
       },
       requestId: {
-        default: "",
+        default: '',
       },
     };
   },
@@ -74,9 +73,9 @@ export const LinkPreview = Node.create<LinkPreviewOptions>({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      'div',
       mergeAttributes(
-        { "data-type": this.name },
+        { 'data-type': this.name },
         this.options.HTMLAttributes,
         HTMLAttributes,
       ),
@@ -99,6 +98,6 @@ export const LinkPreview = Node.create<LinkPreviewOptions>({
   addNodeView() {
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

@@ -1,5 +1,4 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 import { getPageEmbedPresentationAttributes } from './page-embed-presentation';
 
 export interface PageEmbedOptions {
@@ -70,6 +69,6 @@ export const PageEmbed = Node.create<PageEmbedOptions>({
   addNodeView() {
     if (!this.options.view) return null;
     this.editor.isInitialized = true;
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

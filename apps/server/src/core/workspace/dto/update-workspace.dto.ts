@@ -10,7 +10,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { builtInTagValues } from '@docmost/editor-ext';
+import { builtInTagValues } from '@docmost/editor-ext/server';
 
 export class WorkspaceTagSettingsDto {
   @IsOptional()

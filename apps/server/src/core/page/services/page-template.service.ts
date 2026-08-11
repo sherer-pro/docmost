@@ -2,11 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
-  OnModuleDestroy,
-  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
@@ -22,7 +21,10 @@ import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
-import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
+import {
+  COLLABORATION_DOCUMENT_PORT,
+  CollaborationDocumentPort,
+} from '../../../collaboration/collaboration-document.port';
 import { strictJsonToNode } from '../../../collaboration/collaboration.util';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -59,7 +61,7 @@ import {
   isTemplateFieldFilled,
   normalizeTemplateDraft,
   summarizeTemplateDiff,
-} from '@docmost/editor-ext';
+} from '@docmost/editor-ext/server';
 import {
   DetachSyncedTemplateDto,
   PublishPageTemplateDto,
@@ -87,10 +89,8 @@ type LegacyMigrationIssue = {
 };
 
 @Injectable()
-export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
+export class PageTemplateService {
   private readonly logger = new Logger(PageTemplateService.name);
-  private readonly activeSyncRuns = new Set<string>();
-  private syncResumeTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
@@ -102,27 +102,14 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     private readonly databaseRowRepo: DatabaseRowRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly storageService: StorageService,
-    private readonly collaborationGateway: CollaborationGateway,
+    @Inject(COLLABORATION_DOCUMENT_PORT)
+    private readonly collaborationGateway: CollaborationDocumentPort,
     private readonly policy: PageTemplatePolicyService,
     private readonly pageEmbedService: PageEmbedService,
     private readonly transclusionService: TransclusionService,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     @Optional() private readonly queueOutbox?: QueueOutboxService,
   ) {}
-
-  async onModuleInit(): Promise<void> {
-    await this.migrateLegacyPageEmbeds();
-    void this.resumePendingSyncRuns();
-    this.syncResumeTimer = setInterval(
-      () => void this.resumePendingSyncRuns(),
-      15_000,
-    );
-    this.syncResumeTimer.unref?.();
-  }
-
-  onModuleDestroy(): void {
-    if (this.syncResumeTimer) clearInterval(this.syncResumeTimer);
-  }
 
   async getProvenance(pageId: string, user: User) {
     const page = await this.pageRepo.findById(pageId);
@@ -1119,10 +1106,6 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     return { accepted: true, runId: run.id };
   }
 
-  async processSyncRunFromOutbox(runId: string): Promise<void> {
-    await this.processSyncRun(runId);
-  }
-
   async archive(pageId: string, user: User) {
     const template = await this.requireManagedTemplate(pageId, user);
     if (!template.templateArchivedAt) {
@@ -1756,46 +1739,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async migrateLegacyPageEmbeds(): Promise<void> {
-    const candidates = await this.findLegacyPageEmbedCandidates();
-    if (candidates.length === 0) return;
-
-    let migrated = 0;
-    let failed = 0;
-    for (const candidate of candidates) {
-      try {
-        if (
-          await this.migrateLegacyPageEmbedsForPage(candidate.referencePageId)
-        ) {
-          migrated += 1;
-        }
-      } catch (error) {
-        failed += 1;
-        await this.recordLegacyMigrationFailure(
-          candidate.referencePageId,
-          error,
-        ).catch((journalError) => {
-          this.logger.error(
-            `Legacy page embed failure journal write failed; pageId=${candidate.referencePageId}; code=${this.errorCode(journalError)}`,
-          );
-        });
-        this.logger.error(
-          `Legacy page embed migration failed; pageId=${candidate.referencePageId}; code=${this.errorCode(error)}`,
-        );
-      }
-    }
-
-    const remainingCount = (await this.findLegacyPageEmbedCandidates()).length;
-    if (remainingCount > 0 || failed > 0) {
-      this.logger.error(
-        `Legacy page embed migration incomplete; migrated=${migrated}; failed=${failed}; remaining=${remainingCount}`,
-      );
-      throw new Error('legacy_page_embed_migration_incomplete');
-    }
-    this.logger.log(`Legacy page embed migration completed; pages=${migrated}`);
-  }
-
-  private async findLegacyPageEmbedCandidates(): Promise<
+  async findLegacyPageEmbedCandidates(): Promise<
     Array<{ referencePageId: string }>
   > {
     const result = await sql<{ referencePageId: string }>`
@@ -1811,7 +1755,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     return result.rows;
   }
 
-  private async recordLegacyMigrationFailure(
+  async recordLegacyMigrationFailure(
     pageId: string,
     error: unknown,
   ): Promise<void> {
@@ -1835,9 +1779,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .execute();
   }
 
-  private async migrateLegacyPageEmbedsForPage(
-    pageId: string,
-  ): Promise<boolean> {
+  async migrateLegacyPageEmbedsForPage(pageId: string): Promise<boolean> {
     const page = await this.pageRepo.findById(pageId, { includeContent: true });
     if (!page || page.deletedAt) {
       await this.deleteLegacyPageReferences(pageId);
@@ -2175,7 +2117,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async findLegacyMigrationActor(page: Page): Promise<User | null> {
+  async findLegacyMigrationActor(page: Page): Promise<User | null> {
     const creator = await this.db
       .selectFrom('users')
       .selectAll()
@@ -2242,131 +2184,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       : false;
   }
 
-  private async resumePendingSyncRuns(): Promise<void> {
-    const runs = await this.db
-      .selectFrom('pageTemplateSyncRuns')
-      .select('id')
-      .where((eb) =>
-        eb.or([
-          eb('status', '=', 'pending'),
-          eb.and([
-            eb('status', '=', 'running'),
-            eb.or([
-              eb('leaseExpiresAt', 'is', null),
-              eb('leaseExpiresAt', '<=', new Date()),
-            ]),
-          ]),
-        ]),
-      )
-      .orderBy('createdAt', 'asc')
-      .limit(10)
-      .execute();
-    for (const run of runs) void this.processSyncRun(run.id);
-  }
-
-  private async processSyncRun(runId: string): Promise<void> {
-    if (this.activeSyncRuns.has(runId)) return;
-    this.activeSyncRuns.add(runId);
-    const leaseToken = uuid7();
-    try {
-      const claimed = await this.db
-        .updateTable('pageTemplateSyncRuns')
-        .set({
-          status: 'running',
-          leaseToken,
-          leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
-          startedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where('id', '=', runId)
-        .where((eb) =>
-          eb.or([
-            eb('status', '=', 'pending'),
-            eb.and([
-              eb('status', '=', 'running'),
-              eb.or([
-                eb('leaseExpiresAt', 'is', null),
-                eb('leaseExpiresAt', '<=', new Date()),
-              ]),
-            ]),
-          ]),
-        )
-        .returningAll()
-        .executeTakeFirst();
-      if (!claimed) return;
-      await this.db
-        .updateTable('pageTemplateSyncItems')
-        .set({ status: 'pending', updatedAt: new Date() })
-        .where('runId', '=', runId)
-        .where('status', '=', 'running')
-        .execute();
-      const [revision, requestedActor] = await Promise.all([
-        this.db
-          .selectFrom('pageTemplateRevisions')
-          .selectAll()
-          .where('id', '=', claimed.revisionId)
-          .executeTakeFirst(),
-        claimed.requestedById
-          ? this.db
-              .selectFrom('users')
-              .selectAll()
-              .where('id', '=', claimed.requestedById)
-              .where('workspaceId', '=', claimed.workspaceId)
-              .executeTakeFirst()
-          : null,
-      ]);
-      let actor = requestedActor;
-      if (!actor && revision) {
-        const template = await this.pageRepo.findById(claimed.templatePageId);
-        if (template) actor = await this.findLegacyMigrationActor(template);
-      }
-      if (!revision || !actor) {
-        await this.finishSyncRun(
-          runId,
-          leaseToken,
-          'failed',
-          'page_template_sync_actor_missing',
-        );
-        return;
-      }
-      const items = await this.db
-        .selectFrom('pageTemplateSyncItems')
-        .selectAll()
-        .where('runId', '=', runId)
-        .where('status', '=', 'pending')
-        .orderBy('createdAt', 'asc')
-        .execute();
-      for (const item of items) {
-        const renewed = await this.db
-          .updateTable('pageTemplateSyncRuns')
-          .set({
-            leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
-            updatedAt: new Date(),
-          })
-          .where('id', '=', runId)
-          .where('leaseToken', '=', leaseToken)
-          .returning('id')
-          .executeTakeFirst();
-        if (!renewed) return;
-        await this.processSyncItem(claimed, revision, item, actor as User);
-      }
-      await this.recalculateSyncRun(runId, leaseToken);
-    } catch (error) {
-      this.logger.error(
-        `Template synchronization run failed; runId=${runId}; code=${this.errorCode(error)}`,
-      );
-      await this.finishSyncRun(
-        runId,
-        leaseToken,
-        'failed',
-        this.errorCode(error),
-      );
-    } finally {
-      this.activeSyncRuns.delete(runId);
-    }
-  }
-
-  private async processSyncItem(
+  async processSyncItem(
     run: any,
     revision: any,
     item: any,
@@ -2642,10 +2460,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async recalculateSyncRun(
-    runId: string,
-    leaseToken: string,
-  ): Promise<void> {
+  async recalculateSyncRun(runId: string, leaseToken: string): Promise<void> {
     const rows = await this.db
       .selectFrom('pageTemplateSyncItems')
       .select('status')
@@ -2677,7 +2492,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
       .execute();
   }
 
-  private async finishSyncRun(
+  async finishSyncRun(
     runId: string,
     leaseToken: string,
     status: 'failed',
@@ -2699,11 +2514,9 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async getLiveContent(pageId: string, user: User): Promise<any> {
-    return this.collaborationGateway.handleYjsEvent(
-      'getAiPageContent',
-      `page.${pageId}`,
-      { user },
-    ) as Promise<any>;
+    return this.collaborationGateway.getPageContent(`page.${pageId}`, {
+      user,
+    }) as Promise<any>;
   }
 
   private async applyMutation(
@@ -2716,8 +2529,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     user: User,
     systemSyncRevision?: number,
   ): Promise<{ beforeHash: string; afterHash: string }> {
-    return this.collaborationGateway.handleYjsEvent(
-      'applyPageTemplateMutation',
+    return this.collaborationGateway.applyPageTemplateMutation(
       `page.${pageId}`,
       {
         originalContent,
@@ -2729,7 +2541,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         systemSyncRevision,
         user,
       },
-    ) as Promise<{ beforeHash: string; afterHash: string }>;
+    );
   }
 
   private async requireTemplateSource(
@@ -3407,7 +3219,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     return value;
   }
 
-  private errorCode(error: unknown): string {
+  errorCode(error: unknown): string {
     const response =
       error && typeof error === 'object' && 'getResponse' in error
         ? (error as any).getResponse()

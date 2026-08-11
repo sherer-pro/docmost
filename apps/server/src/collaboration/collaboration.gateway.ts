@@ -112,18 +112,16 @@ export class CollaborationGateway {
 
       // Forward raw WebSocket messages to the extension
       client.on('message', (data: ArrayBuffer) => {
-        void this.redisSync!
-          .onSocketMessage(
-            wrappedSocket as any,
-            serializedHTTPRequest,
-            data,
-          )
-          .catch(() => {
-            this.logger.error(
-              'Failed to forward a collaboration message through Redis',
-            );
-            wrappedSocket.close(1011, 'Collaboration forwarding failed');
-          });
+        void this.redisSync!.onSocketMessage(
+          wrappedSocket as any,
+          serializedHTTPRequest,
+          data,
+        ).catch(() => {
+          this.logger.error(
+            'Failed to forward a collaboration message through Redis',
+          );
+          wrappedSocket.close(1011, 'Collaboration forwarding failed');
+        });
       });
 
       // Forward close events
@@ -153,15 +151,21 @@ export class CollaborationGateway {
     eventName: TName,
     documentName: string,
     payload: Parameters<CollabEventHandlers[TName]>[1],
-  ) {
+  ): Promise<Awaited<ReturnType<CollabEventHandlers[TName]>>> {
     if (this.redisSync) {
-      return this.redisSync.handleEvent(eventName, documentName, payload);
+      return this.redisSync.handleEvent(
+        eventName,
+        documentName,
+        payload,
+      ) as Promise<Awaited<ReturnType<CollabEventHandlers[TName]>>>;
     }
     const handler = this.localHandlers[eventName] as (
       documentName: string,
       payload: Parameters<CollabEventHandlers[TName]>[1],
     ) => unknown;
-    return handler(documentName, payload);
+    return handler(documentName, payload) as Promise<
+      Awaited<ReturnType<CollabEventHandlers[TName]>>
+    >;
   }
 
   openDirectConnection(documentName: string, context?: any) {

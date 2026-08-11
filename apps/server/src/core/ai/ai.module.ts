@@ -56,7 +56,7 @@ import {
 } from './controllers/ai-mcp-settings.controller';
 import { AiMcpSpaceController } from './controllers/ai-mcp-space.controller';
 import { PageModule } from '../page/page.module';
-import { CollaborationModule } from '../../collaboration/collaboration.module';
+import { CollaborationClientModule } from '../../collaboration/client/collaboration-client.module';
 import { ShareModule } from '../share/share.module';
 import { TransclusionModule } from '../page/transclusion/transclusion.module';
 import {
@@ -72,7 +72,7 @@ import { AiSourceAccessService } from './services/ai-source-access.service';
     SearchModule,
     AiContentPolicyModule,
     PageModule,
-    CollaborationModule,
+    CollaborationClientModule,
     ShareModule,
     TransclusionModule,
   ],

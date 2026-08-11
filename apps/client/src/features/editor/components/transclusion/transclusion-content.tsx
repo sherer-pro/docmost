@@ -1,19 +1,21 @@
 import { EditorProvider } from "@tiptap/react";
+import type { Extensions } from "@tiptap/core";
 import { memo, useEffect, useRef, useState } from "react";
 import type { DragEvent, SyntheticEvent } from "react";
-import { transclusionContentExtensions } from "@/features/editor/extensions/extensions";
 import classes from "./transclusion.module.css";
 
 type Props = {
   content: unknown;
   renderEditor?: boolean;
   version?: string;
+  extensions: Extensions;
 };
 
 function TransclusionContent({
   content,
   renderEditor = true,
   version,
+  extensions,
 }: Props) {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
@@ -59,7 +61,7 @@ function TransclusionContent({
           editable={false}
           immediatelyRender={false}
           shouldRerenderOnTransaction={false}
-          extensions={transclusionContentExtensions}
+          extensions={extensions}
           content={content as any}
         />
       )}

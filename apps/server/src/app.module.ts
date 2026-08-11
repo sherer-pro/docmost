@@ -3,7 +3,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CoreModule } from './core/core.module';
 import { EnvironmentModule } from './integrations/environment/environment.module';
-import { CollaborationModule } from './collaboration/collaboration.module';
 import { WsModule } from './ws/ws.module';
 import { DatabaseModule } from '@docmost/db/database.module';
 import { StorageModule } from './integrations/storage/storage.module';
@@ -22,6 +21,7 @@ import { LoggerModule } from './common/logger/logger.module';
 import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { CommonSecurityModule } from './common/security/security.module';
+import { QueueOutboxWorkerBindingService } from './integrations/queue/outbox/queue-outbox-worker-binding.service';
 
 @Module({
   imports: [
@@ -33,7 +33,6 @@ import { CommonSecurityModule } from './common/security/security.module';
     RedisModule.forRootAsync({
       useClass: RedisConfigService,
     }),
-    CollaborationModule,
     WsModule,
     QueueModule.forRoot(),
     StaticModule,
@@ -53,6 +52,7 @@ import { CommonSecurityModule } from './common/security/security.module';
   controllers: [AppController],
   providers: [
     AppService,
+    QueueOutboxWorkerBindingService,
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,

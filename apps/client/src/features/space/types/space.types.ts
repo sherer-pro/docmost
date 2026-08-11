@@ -3,7 +3,7 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from "@/features/space/permissions/permissions.type.ts";
-import { ExportFormat } from "@/features/page/types/page.types.ts";
+import { ExportFormat } from "@/features/page/types/export.types.ts";
 import type { SpacePolicy } from "@docmost/api-contract";
 
 export interface ISpaceSharingSettings {
@@ -130,9 +130,6 @@ export type ISpaceMember = { role: string } & (SpaceUserInfo | SpaceGroupInfo);
 
 export interface IExportSpaceParams {
   spaceId: string;
-  format:
-    | ExportFormat.Docmost
-    | ExportFormat.HTML
-    | ExportFormat.Markdown;
+  format: ExportFormat.Docmost | ExportFormat.HTML | ExportFormat.Markdown;
   includeAttachments?: boolean;
 }

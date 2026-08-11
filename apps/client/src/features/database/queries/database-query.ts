@@ -11,7 +11,7 @@ import {
   convertDatabaseToPage,
   updateDatabase,
 } from "@/features/database/services/database-service";
-import { queryClient } from "@/main";
+import { queryClient } from "@/lib/query-client";
 import { DATABASE_QUERY_KEYS } from "@/features/page/queries/query-keys";
 import {
   invalidateDatabaseEntity,

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -51,11 +52,14 @@ import { Queue } from 'bullmq';
 import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { EventName } from '../../../common/events/event.contants';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
+import {
+  COLLABORATION_DOCUMENT_PORT,
+  CollaborationDocumentPort,
+} from '../../../collaboration/collaboration-document.port';
 import {
   markdownToHtml,
   validateTemplateInstanceMutation,
-} from '@docmost/editor-ext';
+} from '@docmost/editor-ext/server';
 import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
 import {
@@ -120,7 +124,8 @@ export class PageService {
     @InjectQueue(QueueName.GENERAL_QUEUE) private generalQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private eventEmitter: EventEmitter2,
-    private collaborationGateway: CollaborationGateway,
+    @Inject(COLLABORATION_DOCUMENT_PORT)
+    private collaborationGateway: CollaborationDocumentPort,
     private readonly watcherService: WatcherService,
     private readonly recipientResolverService: RecipientResolverService,
     private readonly databaseRepo: DatabaseRepo,
@@ -981,11 +986,11 @@ export class PageService {
     );
 
     const documentName = `page.${pageId}`;
-    await this.collaborationGateway.handleYjsEvent(
-      'updatePageContent',
-      documentName,
-      { operation, prosemirrorJson, user },
-    );
+    await this.collaborationGateway.updatePageContent(documentName, {
+      operation,
+      prosemirrorJson,
+      user,
+    });
   }
 
   private async assertTemplateInstanceContentMutation(
@@ -1009,9 +1014,7 @@ export class PageService {
 
     const current = getProsemirrorContent(page.content) as any;
     const incoming = getProsemirrorContent(prosemirrorJson) as any;
-    const currentNodes = Array.isArray(current?.content)
-      ? current.content
-      : [];
+    const currentNodes = Array.isArray(current?.content) ? current.content : [];
     const incomingNodes = Array.isArray(incoming?.content)
       ? incoming.content
       : [];

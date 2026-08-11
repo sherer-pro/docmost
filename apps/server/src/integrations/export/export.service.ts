@@ -46,7 +46,7 @@ import {
   collectPageEmbedPresentationReferences,
   detachTemplateContent,
   materializePageEmbedsForPresentation,
-} from '@docmost/editor-ext';
+} from '@docmost/editor-ext/server';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
   getPageAiRole,

@@ -73,7 +73,7 @@ import {
   getSidebarPages,
 } from "@/features/page/services/page-service.ts";
 import { IPage, SidebarPagesParams } from "@/features/page/types/page.types.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { useDisclosure, useElementSize, useMergedRef } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { dfs } from "react-arborist/dist/module/utils";

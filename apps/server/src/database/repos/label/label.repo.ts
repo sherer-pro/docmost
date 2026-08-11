@@ -7,7 +7,7 @@ import { dbOrTx } from '@docmost/db/utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { normalizeLabelName } from '../../../core/label/utils';
+import { normalizeLabelName } from '../../../common/domain/label-name';
 import { sql } from 'kysely';
 
 export const LabelType = {

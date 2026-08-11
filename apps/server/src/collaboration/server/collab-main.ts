@@ -12,42 +12,52 @@ import { createCorsOptions } from '../../common/security/cors.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { getTrustedProxiesFromEnv } from '../../common/security/trusted-proxy.util';
 import { envPath } from '../../common/helpers';
+import { terminateStartup } from '../../common/errors/startup.errors';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(
-    CollabAppModule,
-    new FastifyAdapter({
-      trustProxy: getTrustedProxiesFromEnv(envPath),
-      routerOptions: {
-        maxParamLength: 1000,
-        ignoreTrailingSlash: true,
-        ignoreDuplicateSlashes: true,
+  let app: NestFastifyApplication | undefined;
+
+  try {
+    app = await NestFactory.create<NestFastifyApplication>(
+      CollabAppModule,
+      new FastifyAdapter({
+        trustProxy: getTrustedProxiesFromEnv(envPath),
+        routerOptions: {
+          maxParamLength: 1000,
+          ignoreTrailingSlash: true,
+          ignoreDuplicateSlashes: true,
+        },
+      }),
+      {
+        logger: new InternalLogFilter(),
+        bufferLogs: false,
       },
-    }),
-    {
-      logger: new InternalLogFilter(),
-      bufferLogs: false,
-    },
-  );
+    );
 
-  app.useLogger(app.get(PinoLogger));
+    app.useLogger(app.get(PinoLogger));
 
-  app.setGlobalPrefix('api', { exclude: ['/'] });
+    app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  app.enableCors(createCorsOptions());
+    app.enableCors(createCorsOptions());
 
-  const reflector = app.get(Reflector);
-  app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
-  app.enableShutdownHooks();
+    const reflector = app.get(Reflector);
+    app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
+    app.enableShutdownHooks();
 
-  const logger = new Logger('CollabServer');
-  const environmentService = app.get(EnvironmentService);
+    const logger = new Logger('CollabServer');
+    const environmentService = app.get(EnvironmentService);
 
-  const port = environmentService.getCollabPort();
-  const host = environmentService.getHost();
-  await app.listen(port, host, () => {
-    logger.log(`Listening on http://127.0.0.1:${port}`);
-  });
+    const port = environmentService.getCollabPort();
+    const host = environmentService.getHost();
+    await app.listen(port, host, () => {
+      logger.log(`Listening on http://127.0.0.1:${port}`);
+    });
+  } catch (error) {
+    if (app) {
+      await app.close().catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
-bootstrap();
+void bootstrap().catch(terminateStartup);

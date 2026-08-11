@@ -45,6 +45,14 @@ const FILE_SECRET_BINDINGS = new Map([
     },
   ],
   [
+    "COLLAB_INTERNAL_SECRET",
+    {
+      fileKey: "COLLAB_INTERNAL_SECRET_FILE",
+      secretName: "docmost_collab_internal_secret",
+      required: true,
+    },
+  ],
+  [
     "DATABASE_URL",
     {
       fileKey: "DATABASE_URL_FILE",

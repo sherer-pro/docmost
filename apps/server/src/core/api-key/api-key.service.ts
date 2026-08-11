@@ -4,7 +4,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiKeyRepo } from '@docmost/db/repos/api-key/api-key.repo';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -26,6 +25,7 @@ import {
   AI_BUILTIN_TOOL_POLICY_RESOLVER,
   AiBuiltinToolPolicyResolver,
 } from '../ai/tools/ai-builtin-tool-policy.token';
+import { ApiKeyValidationService } from './api-key-validation.service';
 
 /**
  * Ceiling for API key JWTs created without an explicit expiry date. The key row
@@ -45,6 +45,7 @@ export class ApiKeyService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     @Inject(AI_BUILTIN_TOOL_POLICY_RESOLVER)
     private readonly builtinToolPolicy: AiBuiltinToolPolicyResolver,
+    private readonly apiKeyValidation: ApiKeyValidationService,
   ) {}
 
   private async resolveMcpCapabilities(
@@ -257,72 +258,6 @@ export class ApiKeyService {
     payload: JwtApiKeyPayload,
     expectedType: 'rag' | 'mcp' = 'rag',
   ) {
-    const apiKey = await this.apiKeyRepo.findById(payload.apiKeyId);
-
-    if (!apiKey || apiKey.deletedAt) {
-      throw new UnauthorizedException('API key is invalid');
-    }
-
-    if (
-      apiKey.workspaceId !== payload.workspaceId ||
-      apiKey.spaceId !== payload.spaceId ||
-      apiKey.creatorId !== payload.sub
-    ) {
-      throw new UnauthorizedException('API key is invalid');
-    }
-    if (
-      apiKey.keyType !== expectedType ||
-      (payload.keyType !== undefined && payload.keyType !== apiKey.keyType)
-    ) {
-      throw new UnauthorizedException('API key type is invalid');
-    }
-
-    if (apiKey.expiresAt && apiKey.expiresAt <= new Date()) {
-      throw new UnauthorizedException('API key has expired');
-    }
-
-    const [workspace, user, space] = await Promise.all([
-      this.workspaceRepo.findById(payload.workspaceId),
-      this.userRepo.findById(payload.sub, payload.workspaceId),
-      this.spaceRepo.findById(payload.spaceId, payload.workspaceId),
-    ]);
-
-    if (
-      !workspace ||
-      workspace.deletedAt ||
-      !space ||
-      space.archivedAt ||
-      !user ||
-      user.deletedAt ||
-      user.deactivatedAt
-    ) {
-      throw new UnauthorizedException('API key is invalid');
-    }
-
-    // Membership is verified at creation time, but it can be revoked afterwards.
-    // Re-checking here is what makes removing a user from a space (or demoting
-    // them) actually invalidate the keys they created for it.
-    if (!this.isAdminOrOwner(user)) {
-      const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
-        user.id,
-        apiKey.spaceId,
-      );
-
-      if (!userSpaceRoles?.length) {
-        throw new UnauthorizedException('API key is invalid');
-      }
-    }
-
-    await this.apiKeyRepo.updateApiKey(apiKey.id, {
-      lastUsedAt: new Date(),
-    });
-
-    return {
-      user,
-      workspace,
-      space,
-      authType: 'api_key',
-      apiKey,
-    };
+    return this.apiKeyValidation.validateApiKey(payload, expectedType);
   }
 }

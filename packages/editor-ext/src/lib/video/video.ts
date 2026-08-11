@@ -1,5 +1,4 @@
-import { ReactNodeViewRenderer } from "@tiptap/react";
-import { Range, Node } from "@tiptap/core";
+import { Range, Node } from '@tiptap/core';
 
 export interface VideoOptions {
   view: any;
@@ -19,23 +18,23 @@ export interface VideoAttributes {
   };
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     videoBlock: {
       setVideo: (attributes: VideoAttributes) => ReturnType;
       setVideoAt: (
-        attributes: VideoAttributes & { pos: number | Range }
+        attributes: VideoAttributes & { pos: number | Range },
       ) => ReturnType;
-      setVideoAlign: (align: "left" | "center" | "right") => ReturnType;
+      setVideoAlign: (align: 'left' | 'center' | 'right') => ReturnType;
       setVideoWidth: (width: number) => ReturnType;
     };
   }
 }
 
 export const TiptapVideo = Node.create<VideoOptions>({
-  name: "video",
+  name: 'video',
 
-  group: "block",
+  group: 'block',
   isolating: true,
   atom: true,
   defining: true,
@@ -51,52 +50,52 @@ export const TiptapVideo = Node.create<VideoOptions>({
   addAttributes() {
     return {
       src: {
-        default: "",
-        parseHTML: (element) => element.getAttribute("src"),
+        default: '',
+        parseHTML: (element) => element.getAttribute('src'),
         renderHTML: (attributes) => ({
           src: attributes.src,
         }),
       },
       alt: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("aria-label"),
+        parseHTML: (element) => element.getAttribute('aria-label'),
         renderHTML: (attributes: VideoAttributes) => ({
-          "aria-label": attributes.alt,
+          'aria-label': attributes.alt,
         }),
       },
       attachmentId: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-id"),
+        parseHTML: (element) => element.getAttribute('data-attachment-id'),
         renderHTML: (attributes: VideoAttributes) => ({
-          "data-attachment-id": attributes.attachmentId,
+          'data-attachment-id': attributes.attachmentId,
         }),
       },
       width: {
-        default: "100%",
-        parseHTML: (element) => element.getAttribute("width"),
+        default: '100%',
+        parseHTML: (element) => element.getAttribute('width'),
         renderHTML: (attributes: VideoAttributes) => ({
           width: attributes.width,
         }),
       },
       size: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-size"),
+        parseHTML: (element) => element.getAttribute('data-size'),
         renderHTML: (attributes: VideoAttributes) => ({
-          "data-size": attributes.size,
+          'data-size': attributes.size,
         }),
       },
       align: {
-        default: "center",
-        parseHTML: (element) => element.getAttribute("data-align"),
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align'),
         renderHTML: (attributes: VideoAttributes) => ({
-          "data-align": attributes.align,
+          'data-align': attributes.align,
         }),
       },
       aspectRatio: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-aspect-ratio"),
+        parseHTML: (element) => element.getAttribute('data-aspect-ratio'),
         renderHTML: (attributes: VideoAttributes) => ({
-          "data-aspect-ratio": attributes.aspectRatio,
+          'data-aspect-ratio': attributes.aspectRatio,
         }),
       },
       placeholder: {
@@ -109,16 +108,16 @@ export const TiptapVideo = Node.create<VideoOptions>({
   parseHTML() {
     return [
       {
-        tag: "video",
+        tag: 'video',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "video",
-      { controls: "true", ...HTMLAttributes },
-      ["source", HTMLAttributes],
+      'video',
+      { controls: 'true', ...HTMLAttributes },
+      ['source', HTMLAttributes],
     ];
   },
 
@@ -128,7 +127,7 @@ export const TiptapVideo = Node.create<VideoOptions>({
         (attrs: VideoAttributes) =>
         ({ commands }) => {
           return commands.insertContent({
-            type: "video",
+            type: 'video',
             attrs: attrs,
           });
         },
@@ -136,12 +135,12 @@ export const TiptapVideo = Node.create<VideoOptions>({
       setVideoAlign:
         (align) =>
         ({ commands }) =>
-          commands.updateAttributes("video", { align }),
+          commands.updateAttributes('video', { align }),
 
       setVideoWidth:
         (width) =>
         ({ commands }) =>
-          commands.updateAttributes("video", {
+          commands.updateAttributes('video', {
             width: `${Math.max(0, Math.min(100, width))}%`,
           }),
     };
@@ -151,6 +150,6 @@ export const TiptapVideo = Node.create<VideoOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

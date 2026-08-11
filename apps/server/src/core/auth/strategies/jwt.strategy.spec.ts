@@ -3,7 +3,6 @@ import { JwtStrategy } from './jwt.strategy';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
-import { ModuleRef } from '@nestjs/core';
 import { JwtType } from '../dto/jwt-payload';
 
 describe('JwtStrategy', () => {
@@ -12,8 +11,7 @@ describe('JwtStrategy', () => {
   let userRepo: jest.Mocked<UserRepo>;
   let userSessionRepo: { findActiveById: jest.Mock };
   let sessionActivityService: { trackActivity: jest.Mock };
-  let moduleRef: jest.Mocked<ModuleRef>;
-  let apiKeyService: { validateApiKey: jest.Mock };
+  let apiKeyValidation: { validateApiKey: jest.Mock };
 
   beforeEach(() => {
     workspaceRepo = {
@@ -32,13 +30,9 @@ describe('JwtStrategy', () => {
       trackActivity: jest.fn(),
     };
 
-    apiKeyService = {
+    apiKeyValidation = {
       validateApiKey: jest.fn(),
     };
-
-    moduleRef = {
-      get: jest.fn().mockReturnValue(apiKeyService),
-    } as any;
 
     const environmentService = {
       getAppSecret: jest.fn().mockReturnValue('test-secret'),
@@ -50,7 +44,7 @@ describe('JwtStrategy', () => {
       userSessionRepo as any,
       sessionActivityService as any,
       environmentService,
-      moduleRef,
+      apiKeyValidation as any,
     );
   });
 
@@ -72,8 +66,8 @@ describe('JwtStrategy', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('validates API key payload on /api/rag via ApiKeyService', async () => {
-    apiKeyService.validateApiKey.mockResolvedValue({
+  it('validates API key payload on /api/rag via ApiKeyValidationService', async () => {
+    apiKeyValidation.validateApiKey.mockResolvedValue({
       authType: 'api_key',
     });
 
@@ -91,7 +85,7 @@ describe('JwtStrategy', () => {
       },
     );
 
-    expect(apiKeyService.validateApiKey).toHaveBeenCalledWith(
+    expect(apiKeyValidation.validateApiKey).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyId: 'key-1',
         workspaceId: 'workspace-1',
@@ -103,7 +97,7 @@ describe('JwtStrategy', () => {
   });
 
   it('validates an API key on /mcp as an MCP key', async () => {
-    apiKeyService.validateApiKey.mockResolvedValue({
+    apiKeyValidation.validateApiKey.mockResolvedValue({
       authType: 'api_key',
     });
 
@@ -122,7 +116,7 @@ describe('JwtStrategy', () => {
       },
     );
 
-    expect(apiKeyService.validateApiKey).toHaveBeenCalledWith(
+    expect(apiKeyValidation.validateApiKey).toHaveBeenCalledWith(
       expect.objectContaining({ apiKeyId: 'key-1', keyType: 'mcp' }),
       'mcp',
     );
@@ -147,7 +141,7 @@ describe('JwtStrategy', () => {
         ),
       ).rejects.toBeInstanceOf(UnauthorizedException);
 
-      expect(apiKeyService.validateApiKey).not.toHaveBeenCalled();
+      expect(apiKeyValidation.validateApiKey).not.toHaveBeenCalled();
     },
   );
 

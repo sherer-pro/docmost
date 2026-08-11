@@ -1,6 +1,15 @@
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { DatabaseModule } from './database.module';
 import { DatabaseReadinessService } from './services/database-readiness.service';
+import { GroupPersistenceModule } from './persistence/group-persistence.module';
+import { LabelPersistenceModule } from './persistence/label-persistence.module';
+import { ApiKeyPersistenceModule } from './persistence/api-key-persistence.module';
+import { QueueOutboxPersistenceModule } from './persistence/queue-outbox-persistence.module';
+import { GroupRepo } from './repos/group/group.repo';
+import { GroupUserRepo } from './repos/group/group-user.repo';
+import { LabelRepo } from './repos/label/label.repo';
+import { ApiKeyRepo } from './repos/api-key/api-key.repo';
+import { QueueOutboxRepo } from './repos/queue-outbox/queue-outbox.repo';
 
 describe('DatabaseModule', () => {
   it('exports the singleton database readiness barrier', () => {
@@ -15,6 +24,31 @@ describe('DatabaseModule', () => {
       ),
     ).toHaveLength(1);
     expect(exports).toContain(DatabaseReadinessService);
+  });
+
+  it('owns touched repositories in one narrow persistence module each', () => {
+    const imports =
+      Reflect.getMetadata(MODULE_METADATA.IMPORTS, DatabaseModule) ?? [];
+    const providers =
+      Reflect.getMetadata(MODULE_METADATA.PROVIDERS, DatabaseModule) ?? [];
+
+    expect(imports).toEqual(
+      expect.arrayContaining([
+        GroupPersistenceModule,
+        LabelPersistenceModule,
+        ApiKeyPersistenceModule,
+        QueueOutboxPersistenceModule,
+      ]),
+    );
+    expect(providers).not.toEqual(
+      expect.arrayContaining([
+        GroupRepo,
+        GroupUserRepo,
+        LabelRepo,
+        ApiKeyRepo,
+        QueueOutboxRepo,
+      ]),
+    );
   });
 
   it('completes production migrations before marking the database ready', async () => {

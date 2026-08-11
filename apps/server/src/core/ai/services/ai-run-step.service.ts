@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -16,7 +17,10 @@ import { AiRunEventService } from './ai-run-event.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { PageService } from '../../page/services/page.service';
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
-import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
+import {
+  COLLABORATION_DOCUMENT_PORT,
+  CollaborationDocumentPort,
+} from '../../../collaboration/collaboration-document.port';
 import { sql } from 'kysely';
 import {
   AiPageOperation,
@@ -40,7 +44,8 @@ export class AiRunStepService {
     private readonly pages: PageService,
     private readonly pageAccess: PageAccessService,
     private readonly history: PageHistoryRecorderService,
-    private readonly collaboration: CollaborationGateway,
+    @Inject(COLLABORATION_DOCUMENT_PORT)
+    private readonly collaboration: CollaborationDocumentPort,
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
     private readonly profiles: AiAssistantProfileService,
   ) {}
@@ -367,11 +372,10 @@ export class AiRunStepService {
         );
         assertSafeAiPageOperation(operation);
         const expectedAfterHash = this.expectedAfterHash(step.result);
-        const currentContentHash = (await this.collaboration.handleYjsEvent(
-          'getAiPageContentHash',
+        const currentContentHash = await this.collaboration.getPageContentHash(
           `page.${run.pageId}`,
           { user },
-        )) as string;
+        );
         const recoveryAction = approvedStepRecoveryAction(
           step.baseContentHash,
           expectedAfterHash,
@@ -387,8 +391,7 @@ export class AiRunStepService {
                 afterHash: expectedAfterHash,
                 recovered: true,
               }
-            : ((await this.collaboration.handleYjsEvent(
-                'applyAiPageOperation',
+            : ((await this.collaboration.applyAiPageOperation(
                 `page.${run.pageId}`,
                 {
                   operation,
@@ -411,13 +414,15 @@ export class AiRunStepService {
           'ai_profile_not_allowed',
         ].includes(responseCode);
         errorCode =
-          responseCode === 'agent_tool_policy_changed'
-            ? 'agent_tool_policy_changed'
-            : profilePolicyError
-              ? responseCode
-              : (error as Error)?.message === 'agent_write_stale'
-                ? 'agent_write_stale'
-                : 'agent_write_not_allowed';
+          responseCode === 'agent_write_stale'
+            ? 'agent_write_stale'
+            : responseCode === 'agent_tool_policy_changed'
+              ? 'agent_tool_policy_changed'
+              : profilePolicyError
+                ? responseCode
+                : (error as Error)?.message === 'agent_write_stale'
+                  ? 'agent_write_stale'
+                  : 'agent_write_not_allowed';
         errorMessage =
           errorCode === 'agent_tool_policy_changed'
             ? 'The built-in tool policy changed during this run'

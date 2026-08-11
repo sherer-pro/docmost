@@ -36,7 +36,7 @@ const content = (managedText: string, fieldText: string) => ({
 
 describe('PageService synchronized template content guard', () => {
   const pageRepo = { findById: jest.fn() };
-  const collaborationGateway = { handleYjsEvent: jest.fn() };
+  const collaborationGateway = { updatePageContent: jest.fn() };
   const activeInstanceQuery: any = {
     select: jest.fn(() => activeInstanceQuery),
     where: jest.fn(() => activeInstanceQuery),
@@ -76,7 +76,7 @@ describe('PageService synchronized template content guard', () => {
       .mockImplementation(async (value: unknown) => value);
     activeInstanceQuery.executeTakeFirst.mockResolvedValue({ id: 'instance' });
     pageRepo.findById.mockResolvedValue({ content: content('Managed v1', '') });
-    collaborationGateway.handleYjsEvent.mockResolvedValue(undefined);
+    collaborationGateway.updatePageContent.mockResolvedValue(undefined);
   });
 
   it('rejects a managed block change before opening the live document', async () => {
@@ -95,7 +95,7 @@ describe('PageService synchronized template content guard', () => {
       status: 409,
     });
 
-    expect(collaborationGateway.handleYjsEvent).not.toHaveBeenCalled();
+    expect(collaborationGateway.updatePageContent).not.toHaveBeenCalled();
   });
 
   it('allows local field values while keeping managed content unchanged', async () => {
@@ -107,7 +107,7 @@ describe('PageService synchronized template content guard', () => {
       { id: 'user-1' } as any,
     );
 
-    expect(collaborationGateway.handleYjsEvent).toHaveBeenCalledTimes(1);
+    expect(collaborationGateway.updatePageContent).toHaveBeenCalledTimes(1);
   });
 
   it('rejects appended managed nodes before opening the live document', async () => {
@@ -129,6 +129,6 @@ describe('PageService synchronized template content guard', () => {
       status: 409,
     });
 
-    expect(collaborationGateway.handleYjsEvent).not.toHaveBeenCalled();
+    expect(collaborationGateway.updatePageContent).not.toHaveBeenCalled();
   });
 });

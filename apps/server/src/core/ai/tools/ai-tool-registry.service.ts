@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,7 +24,10 @@ import { PageAccessService } from '../../page-access/page-access.service';
 import { SearchService } from '../../search/search.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { PageService } from '../../page/services/page.service';
-import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
+import {
+  COLLABORATION_DOCUMENT_PORT,
+  CollaborationDocumentPort,
+} from '../../../collaboration/collaboration-document.port';
 import {
   AiPageOperation,
   ProseMirrorJson,
@@ -45,7 +49,7 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../../casl/interfaces/space-ability.type';
-import { diffProseMirrorDocuments } from '@docmost/editor-ext';
+import { diffProseMirrorDocuments } from '@docmost/editor-ext/server';
 import { jsonToNode } from '../../../collaboration/collaboration.util';
 import { PageTemplatePolicyService } from '../../page/transclusion/page-template-policy.service';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
@@ -212,7 +216,8 @@ export class AiToolRegistryService {
     private readonly search: SearchService,
     private readonly contentPolicy: AiContentPolicyService,
     private readonly pages: PageService,
-    private readonly collaboration: CollaborationGateway,
+    @Inject(COLLABORATION_DOCUMENT_PORT)
+    private readonly collaboration: CollaborationDocumentPort,
     private readonly shareService: ShareService,
     private readonly environment: EnvironmentService,
     private readonly spaceAbility: SpaceAbilityFactory,
@@ -1211,11 +1216,7 @@ export class AiToolRegistryService {
         contentHash: hashProseMirrorJson(document),
         items: outline.slice(0, 300),
       },
-      citations: await this.pageCitations(
-        page,
-        document,
-        context,
-      ),
+      citations: await this.pageCitations(page, document, context),
     };
   }
 
@@ -1229,10 +1230,7 @@ export class AiToolRegistryService {
       context.source === 'agent' && context.currentPageId === pageId
         ? await this.getLivePageContent(pageId, context, 'read')
         : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
-    const node = getAiPageNode(
-      document,
-      nodeId,
-    );
+    const node = getAiPageNode(document, nodeId);
     return {
       content: {
         pageId,
@@ -1240,12 +1238,7 @@ export class AiToolRegistryService {
         contentHash: hashProseMirrorJson(document),
         node,
       },
-      citations: await this.pageCitations(
-        page,
-        document,
-        context,
-        nodeId,
-      ),
+      citations: await this.pageCitations(page, document, context, nodeId),
     };
   }
 
@@ -2564,8 +2557,7 @@ export class AiToolRegistryService {
     purpose: 'read' | 'write' = 'write',
   ): Promise<ProseMirrorJson> {
     try {
-      const content = (await this.collaboration.handleYjsEvent(
-        'getAiPageContent',
+      const content = (await this.collaboration.getPageContent(
         `page.${pageId}`,
         { user: context.user },
       )) as ProseMirrorJson | null;

@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { formatMemberCount } from "@/lib";
 import { IGroup } from "@/features/group/types/group.types.ts";
 import Paginate from "@/components/common/paginate.tsx";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { getGroupMembers } from "@/features/group/services/group-service.ts";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
 import tableClasses from "@/components/ui/responsive-table.module.css";

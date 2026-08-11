@@ -2,7 +2,7 @@ import { Modal, Text, Button, Group, Stack } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { useRevokeApiKeyMutation } from "@/features/api-key/queries/api-key-query.ts";
-import { IApiKey } from "@/features/api-key";
+import type { IApiKey } from "@/features/api-key/types/api-key.types.ts";
 
 interface RevokeApiKeyModalProps {
   opened: boolean;

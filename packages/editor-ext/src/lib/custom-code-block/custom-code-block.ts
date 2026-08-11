@@ -1,9 +1,8 @@
-import type { CodeBlockOptions } from "@tiptap/extension-code-block";
-import CodeBlock from "@tiptap/extension-code-block";
+import type { CodeBlockOptions } from '@tiptap/extension-code-block';
+import CodeBlock from '@tiptap/extension-code-block';
 
-import { LowlightPlugin } from "./lowlight-plugin.js";
-import { ReactNodeViewRenderer } from "@tiptap/react";
-import { normalizeBlockWidthMode } from "../block-width";
+import { LowlightPlugin } from './lowlight-plugin.js';
+import { normalizeBlockWidthMode } from '../block-width';
 
 export interface CodeBlockLowlightOptions extends CodeBlockOptions {
   /**
@@ -13,7 +12,7 @@ export interface CodeBlockLowlightOptions extends CodeBlockOptions {
   view: any;
 }
 
-const TAB_CHAR = "\u00A0\u00A0";
+const TAB_CHAR = '\u00A0\u00A0';
 
 /**
  * This extension allows you to highlight code blocks with lowlight.
@@ -21,13 +20,13 @@ const TAB_CHAR = "\u00A0\u00A0";
  */
 export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
   selectable: true,
-  marks: "comment",
+  marks: 'comment',
 
   addOptions() {
     return {
       ...this.parent?.(),
       lowlight: {},
-      languageClassPrefix: "language-",
+      languageClassPrefix: 'language-',
       exitOnTripleEnter: true,
       exitOnArrowDown: true,
       defaultLanguage: null,
@@ -40,14 +39,14 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
     return {
       ...this.parent?.(),
       widthMode: {
-        default: "normal",
+        default: 'normal',
         parseHTML: (element) =>
           normalizeBlockWidthMode(
-            element.getAttribute("data-block-width-mode") ||
-              element.getAttribute("data-width-mode"),
+            element.getAttribute('data-block-width-mode') ||
+              element.getAttribute('data-width-mode'),
           ),
         renderHTML: (attributes) => ({
-          "data-block-width-mode": normalizeBlockWidthMode(
+          'data-block-width-mode': normalizeBlockWidthMode(
             attributes.widthMode,
           ),
         }),
@@ -59,7 +58,7 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
     return {
       ...this.parent?.(),
       Tab: () => {
-        if (this.editor.isActive("codeBlock")) {
+        if (this.editor.isActive('codeBlock')) {
           this.editor
             .chain()
             .command(({ tr }) => {
@@ -70,8 +69,8 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
           return true;
         }
       },
-      "Mod-a": () => {
-        if (this.editor.isActive("codeBlock")) {
+      'Mod-a': () => {
+        if (this.editor.isActive('codeBlock')) {
           const { state } = this.editor;
           const { $from } = state.selection;
 
@@ -81,7 +80,7 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
 
           for (depth = $from.depth; depth > 0; depth--) {
             const node = $from.node(depth);
-            if (node.type.name === "codeBlock") {
+            if (node.type.name === 'codeBlock') {
               codeBlockNode = node;
               codeBlockPos = $from.start(depth) - 1;
               break;
@@ -113,7 +112,7 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 
   addProseMirrorPlugins() {

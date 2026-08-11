@@ -16,7 +16,10 @@ import { useTranslation } from "react-i18next";
 import { IconCalendar, IconInfoCircle } from "@tabler/icons-react";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
 import { useCreateApiKeyMutation } from "@/features/api-key/queries/api-key-query";
-import { ICreatedApiKey, type McpClientPreset } from "@/features/api-key";
+import type {
+  ICreatedApiKey,
+  McpClientPreset,
+} from "@/features/api-key/types/api-key.types.ts";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
 import type { AiBuiltinToolCapability } from "@docmost/api-contract";
 import { useAiBuiltinToolSpacePolicyQuery } from "@/features/ai/queries/ai-tool-policy-query.ts";
@@ -300,10 +303,11 @@ export function CreateApiKeyModal({
                   onChange={setCapabilities}
                 />
                 {unavailableCapabilities.length > 0 && (
-                  <Alert color="yellow" title={t("apiKeys.capabilitiesRevoked")}>
-                    <Text size="xs">
-                      {unavailableCapabilities.join(", ")}
-                    </Text>
+                  <Alert
+                    color="yellow"
+                    title={t("apiKeys.capabilitiesRevoked")}
+                  >
+                    <Text size="xs">{unavailableCapabilities.join(", ")}</Text>
                     <Button
                       mt="xs"
                       size="xs"

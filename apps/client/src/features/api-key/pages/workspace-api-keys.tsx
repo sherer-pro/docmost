@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Alert, Button, Group, Loader, Space, Stack, Text } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Group,
+  Loader,
+  Space,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { IconAlertCircle, IconKeyOff, IconRefresh } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
@@ -12,11 +20,11 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/features/api-key/queries/api-key-query.ts";
 import {
-  ICreatedApiKey,
-  IApiKey,
+  type ICreatedApiKey,
+  type IApiKey,
   type ApiKeyType,
   type McpClientPreset,
-} from "@/features/api-key";
+} from "@/features/api-key/types/api-key.types.ts";
 
 interface WorkspaceApiKeysPanelProps {
   keyType: ApiKeyType;
@@ -26,8 +34,9 @@ export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
   const { t } = useTranslation();
   const { cursor, goNext, goPrev } = useCursorPaginate();
   const [createModalOpened, setCreateModalOpened] = useState(false);
-  const [createdApiKey, setCreatedApiKey] =
-    useState<ICreatedApiKey | null>(null);
+  const [createdApiKey, setCreatedApiKey] = useState<ICreatedApiKey | null>(
+    null,
+  );
   const [createdClient, setCreatedClient] =
     useState<McpClientPreset>("universal");
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
@@ -84,7 +93,9 @@ export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
           title={t("Error")}
         >
           <Stack gap="sm" align="flex-start">
-            <Text size="sm">{t("Failed to load page. An error occurred.")}</Text>
+            <Text size="sm">
+              {t("Failed to load page. An error occurred.")}
+            </Text>
             <Button
               size="xs"
               variant="light"

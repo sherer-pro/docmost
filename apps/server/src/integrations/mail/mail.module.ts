@@ -17,6 +17,7 @@ import { NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER } from '../queue/outbox/queu
       useExisting: EmailProcessor,
     },
   ],
+  exports: [NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER],
 })
 export class MailModule {
   static forRootAsync(options: MailModuleOptions): DynamicModule {
@@ -24,7 +25,7 @@ export class MailModule {
       module: MailModule,
       imports: options.imports || [],
       providers: [mailDriverConfigProvider, mailDriverProvider, MailService],
-      exports: [MailService],
+      exports: [MailService, NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER],
     };
   }
 }

@@ -15,8 +15,9 @@ import { createCorsOptions } from './common/security/cors.util';
 import { EnvironmentService } from './integrations/environment/environment.service';
 import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
 import { envPath } from './common/helpers';
-import { getEmbedFrameSources } from '@docmost/editor-ext';
+import { getEmbedFrameSources } from '@docmost/editor-ext/server';
 import { API_PREFIX_EXCLUDES } from './common/config/api-prefix-excludes';
+import { terminateStartup } from './common/errors/startup.errors';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -202,109 +203,118 @@ function applySecurityHeaders(
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter({
-      trustProxy: getTrustedProxiesFromEnv(envPath),
-      routerOptions: {
-        maxParamLength: 1000,
-        ignoreTrailingSlash: true,
-        ignoreDuplicateSlashes: true,
+  let app: NestFastifyApplication | undefined;
+
+  try {
+    app = await NestFactory.create<NestFastifyApplication>(
+      AppModule,
+      new FastifyAdapter({
+        trustProxy: getTrustedProxiesFromEnv(envPath),
+        routerOptions: {
+          maxParamLength: 1000,
+          ignoreTrailingSlash: true,
+          ignoreDuplicateSlashes: true,
+        },
+      }),
+      {
+        rawBody: true,
+        // captures NestJS internal errors
+        logger: new InternalLogFilter(),
+        // bufferLogs must be false else pino will fail
+        // to log OnApplicationBootstrap logs
+        bufferLogs: false,
       },
-    }),
-    {
-      rawBody: true,
-      // captures NestJS internal errors
-      logger: new InternalLogFilter(),
-      // bufferLogs must be false else pino will fail
-      // to log OnApplicationBootstrap logs
-      bufferLogs: false,
-    },
-  );
+    );
 
-  app.useLogger(app.get(PinoLogger));
+    app.useLogger(app.get(PinoLogger));
 
-  app.setGlobalPrefix('api', {
-    exclude: API_PREFIX_EXCLUDES,
-  });
-
-  const reflector = app.get(Reflector);
-  const redisIoAdapter = new WsRedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis();
-
-  app.useWebSocketAdapter(redisIoAdapter);
-
-  // Nest already registers an `application/x-www-form-urlencoded` parser
-  // (see `rawBody: true` above), so `@fastify/formbody` must not be added here.
-  await app.register(fastifyMultipart);
-  await app.register(fastifyCookie);
-
-  app
-    .getHttpAdapter()
-    .getInstance()
-    .decorateReply('setHeader', function (name: string, value: unknown) {
-      this.header(name, value);
-    })
-    .decorateReply('end', function () {
-      this.send('');
-    })
-    .addHook('preHandler', function (req, reply, done) {
-      const isHttps = req.protocol === 'https';
-
-      applySecurityHeaders(req.originalUrl, isHttps, reply);
-
-      // don't require workspaceId for the following paths
-      const excludedPaths = [
-        '/api/auth/setup',
-        '/api/health',
-        '/api/workspace/check-hostname',
-        '/api/workspace/create',
-        '/api/workspace/joined',
-      ];
-
-      if (
-        req.originalUrl.startsWith('/api') &&
-        !excludedPaths.some((path) => req.originalUrl.startsWith(path))
-      ) {
-        if (!req.raw?.['workspaceId'] && req.originalUrl !== '/api') {
-          throw new NotFoundException('Workspace not found');
-        }
-        done();
-      } else {
-        done();
-      }
+    app.setGlobalPrefix('api', {
+      exclude: API_PREFIX_EXCLUDES,
     });
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      stopAtFirstError: true,
-      transform: true,
-    }),
-  );
+    const reflector = app.get(Reflector);
+    const redisIoAdapter = new WsRedisIoAdapter(app);
+    await redisIoAdapter.connectToRedis();
 
-  app.enableCors(createCorsOptions());
-  app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
-  app.enableShutdownHooks();
+    app.useWebSocketAdapter(redisIoAdapter);
 
-  const logger = new Logger('NestApplication');
-  const environmentService = app.get(EnvironmentService);
+    // Nest already registers an `application/x-www-form-urlencoded` parser
+    // (see `rawBody: true` above), so `@fastify/formbody` must not be added here.
+    await app.register(fastifyMultipart);
+    await app.register(fastifyCookie);
 
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.error(`UnhandledRejection, reason: ${reason}`, promise);
-  });
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .decorateReply('setHeader', function (name: string, value: unknown) {
+        this.header(name, value);
+      })
+      .decorateReply('end', function () {
+        this.send('');
+      })
+      .addHook('preHandler', function (req, reply, done) {
+        const isHttps = req.protocol === 'https';
 
-  process.on('uncaughtException', (error) => {
-    logger.error('UncaughtException:', error);
-  });
+        applySecurityHeaders(req.originalUrl, isHttps, reply);
 
-  const port = environmentService.getPort();
-  const host = environmentService.getHost();
-  await app.listen(port, host, () => {
-    logger.log(
-      `Listening on http://127.0.0.1:${port} / ${environmentService.getAppUrl()}`,
+        // don't require workspaceId for the following paths
+        const excludedPaths = [
+          '/api/auth/setup',
+          '/api/health',
+          '/api/workspace/check-hostname',
+          '/api/workspace/create',
+          '/api/workspace/joined',
+        ];
+
+        if (
+          req.originalUrl.startsWith('/api') &&
+          !excludedPaths.some((path) => req.originalUrl.startsWith(path))
+        ) {
+          if (!req.raw?.['workspaceId'] && req.originalUrl !== '/api') {
+            throw new NotFoundException('Workspace not found');
+          }
+          done();
+        } else {
+          done();
+        }
+      });
+
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        stopAtFirstError: true,
+        transform: true,
+      }),
     );
-  });
+
+    app.enableCors(createCorsOptions());
+    app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
+    app.enableShutdownHooks();
+
+    const logger = new Logger('NestApplication');
+    const environmentService = app.get(EnvironmentService);
+
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error(`UnhandledRejection, reason: ${reason}`, promise);
+    });
+
+    process.on('uncaughtException', (error) => {
+      logger.error('UncaughtException:', error);
+    });
+
+    const port = environmentService.getPort();
+    const host = environmentService.getHost();
+    await app.listen(port, host, () => {
+      logger.log(
+        `Listening on http://127.0.0.1:${port} / ${environmentService.getAppUrl()}`,
+      );
+    });
+  } catch (error) {
+    if (app) {
+      await app.close().catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
-bootstrap();
+void bootstrap().catch(terminateStartup);

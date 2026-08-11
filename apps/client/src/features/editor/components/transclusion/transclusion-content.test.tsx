@@ -1,19 +1,21 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TransclusionContent from "./transclusion-content";
 import { useTransclusionViewport } from "./use-transclusion-viewport";
+import { Document } from "@tiptap/extension-document";
+import { Paragraph } from "@tiptap/extension-paragraph";
+import { Text } from "@tiptap/extension-text";
 
-vi.mock("@/features/editor/extensions/extensions", async () => {
-  const [{ Document }, { Paragraph }, { Text }] = await Promise.all([
-    import("@tiptap/extension-document"),
-    import("@tiptap/extension-paragraph"),
-    import("@tiptap/extension-text"),
-  ]);
-  return { transclusionContentExtensions: [Document, Paragraph, Text] };
-});
+const extensions = [Document, Paragraph, Text];
+
+function TestTransclusionContent(
+  props: Omit<ComponentProps<typeof TransclusionContent>, "extensions">,
+) {
+  return <TransclusionContent {...props} extensions={extensions} />;
+}
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -48,7 +50,7 @@ describe("TransclusionContent", () => {
   it("does not mount a nested editor outside the render window", () => {
     act(() => {
       root.render(
-        <TransclusionContent content={content} renderEditor={false} />,
+        <TestTransclusionContent content={content} renderEditor={false} />,
       );
     });
 
@@ -57,9 +59,7 @@ describe("TransclusionContent", () => {
 
   it("preserves the measured height when the nested editor unmounts", async () => {
     class TestResizeObserver {
-      constructor(
-        private readonly callback: ResizeObserverCallback,
-      ) {}
+      constructor(private readonly callback: ResizeObserverCallback) {}
 
       observe(target: Element) {
         this.callback(
@@ -79,11 +79,11 @@ describe("TransclusionContent", () => {
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
 
     await act(async () => {
-      root.render(<TransclusionContent content={content} />);
+      root.render(<TestTransclusionContent content={content} />);
     });
     await act(async () => {
       root.render(
-        <TransclusionContent content={content} renderEditor={false} />,
+        <TestTransclusionContent content={content} renderEditor={false} />,
       );
     });
 
@@ -94,7 +94,9 @@ describe("TransclusionContent", () => {
 
   it("remounts the nested editor when the lookup version changes", async () => {
     await act(async () => {
-      root.render(<TransclusionContent content={content} version="before" />);
+      root.render(
+        <TestTransclusionContent content={content} version="before" />,
+      );
     });
     expect(container.querySelector(".ProseMirror")?.textContent).toBe(
       "Synced content",
@@ -102,7 +104,7 @@ describe("TransclusionContent", () => {
 
     await act(async () => {
       root.render(
-        <TransclusionContent
+        <TestTransclusionContent
           content={{
             type: "doc",
             content: [
@@ -127,7 +129,7 @@ describe("TransclusionContent", () => {
     act(() => {
       root.render(
         <div onDragOver={onDragOver}>
-          <TransclusionContent content={content} renderEditor={false} />
+          <TestTransclusionContent content={content} renderEditor={false} />
         </div>,
       );
     });
@@ -156,7 +158,10 @@ describe("useTransclusionViewport", () => {
     let observed: Element | undefined;
     let options: IntersectionObserverInit | undefined;
     class TestIntersectionObserver {
-      constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+      constructor(
+        cb: IntersectionObserverCallback,
+        init?: IntersectionObserverInit,
+      ) {
         callback = cb;
         options = init;
       }
@@ -191,12 +196,15 @@ describe("useTransclusionViewport", () => {
 
     await act(async () => {
       callback?.(
-        [{ target: observed!, isIntersecting: true } as IntersectionObserverEntry],
+        [
+          {
+            target: observed!,
+            isIntersecting: true,
+          } as IntersectionObserverEntry,
+        ],
         {} as IntersectionObserver,
       );
     });
-    expect(container.firstElementChild?.getAttribute("data-near")).toBe(
-      "true",
-    );
+    expect(container.firstElementChild?.getAttribute("data-near")).toBe("true");
   });
 });

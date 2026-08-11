@@ -31,7 +31,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { useTranslation } from "react-i18next";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { getRecentChanges } from "@/features/page/services/page-service.ts";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
@@ -52,12 +52,9 @@ function syncArchivedSpaceQueries(queryClient: QueryClient, space: ISpace) {
 
   queryClient.invalidateQueries({
     predicate: (item) =>
-      [
-        "spaces",
-        "recent-changes",
-        "page-search",
-        "search-suggestion",
-      ].includes(item.queryKey[0] as string),
+      ["spaces", "recent-changes", "page-search", "search-suggestion"].includes(
+        item.queryKey[0] as string,
+      ),
   });
 }
 
@@ -82,7 +79,9 @@ export function useSpacePolicyContextQuery(spaceSlug?: string) {
   });
 }
 
-export function useSpaceQuery(spaceIdentifier: string): UseQueryResult<ISpace, Error> {
+export function useSpaceQuery(
+  spaceIdentifier: string,
+): UseQueryResult<ISpace, Error> {
   const query = useQuery({
     queryKey: ["space", spaceIdentifier],
     queryFn: () => getSpaceByIdentifier(spaceIdentifier),
@@ -166,7 +165,6 @@ export function useUpdateSpaceMutation() {
         queryClient.setQueryData(["space", data.slug], updatedSpace);
       }
 
-
       /**
        * Update all lists of database strings after changing settings
        * document fields in space so that the UI of tables/trees does not require
@@ -174,7 +172,7 @@ export function useUpdateSpaceMutation() {
        */
       queryClient.invalidateQueries({
         predicate: (item) =>
-          item.queryKey[0] === 'database' && item.queryKey[2] === 'rows',
+          item.queryKey[0] === "database" && item.queryKey[2] === "rows",
       });
       queryClient.invalidateQueries({
         queryKey: ["spaces"],

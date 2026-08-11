@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 export const ENVIRONMENT_FILE_SECRET_KEYS = [
   'APP_SECRET',
+  'COLLAB_INTERNAL_SECRET',
   'DATABASE_URL',
   'REDIS_URL',
   'AWS_S3_SECRET_ACCESS_KEY',

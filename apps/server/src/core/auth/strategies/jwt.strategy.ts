@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -8,8 +8,7 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { FastifyRequest } from 'fastify';
 import { extractBearerTokenFromHeader } from '../../../common/helpers';
-import { ModuleRef } from '@nestjs/core';
-import { ApiKeyService } from '../../api-key/api-key.service';
+import { ApiKeyValidationService } from '../../api-key/api-key-validation.service';
 import { SessionActivityService } from '../../session/session-activity.service';
 import { JWT_ALGORITHM, JWT_ISSUER } from '../services/token.service';
 
@@ -23,15 +22,13 @@ function isRouteOrDescendant(rawUrl: string, route: string): boolean {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  private logger = new Logger('JwtStrategy');
-
   constructor(
     private userRepo: UserRepo,
     private workspaceRepo: WorkspaceRepo,
     private userSessionRepo: UserSessionRepo,
     private sessionActivityService: SessionActivityService,
     private readonly environmentService: EnvironmentService,
-    private moduleRef: ModuleRef,
+    private readonly apiKeyValidation: ApiKeyValidationService,
   ) {
     super({
       jwtFromRequest: (req: FastifyRequest) => {
@@ -80,7 +77,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         );
       }
 
-      return this.validateApiKey(payload as JwtApiKeyPayload, expectedType);
+      return this.apiKeyValidation.validateApiKey(
+        payload as JwtApiKeyPayload,
+        expectedType,
+      );
     }
 
     if (payload.type !== JwtType.ACCESS) {
@@ -128,25 +128,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return { user, workspace, session };
   }
 
-  private async validateApiKey(
-    payload: JwtApiKeyPayload,
-    expectedType: 'rag' | 'mcp',
-  ) {
-    const apiKeyService = this.moduleRef.get(ApiKeyService, {
-      strict: false,
-    });
-
-    if (apiKeyService) {
-      return apiKeyService.validateApiKey(payload, expectedType);
-    }
-
-    this.logger.error('ApiKeyService is not available in DI container');
-    throw new UnauthorizedException('API key auth is unavailable');
-  }
-
   private getApiKeyType(req: any): 'rag' | 'mcp' | null {
-    const rawUrl: string =
-      req?.originalUrl ?? req?.raw?.url ?? req?.url ?? '';
+    const rawUrl: string = req?.originalUrl ?? req?.raw?.url ?? req?.url ?? '';
     if (isRouteOrDescendant(rawUrl, '/api/rag')) return 'rag';
     if (isRouteOrDescendant(rawUrl, '/mcp')) return 'mcp';
     return null;
