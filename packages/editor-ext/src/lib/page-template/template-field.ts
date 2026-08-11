@@ -1,5 +1,4 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 
 export interface TemplateFieldOptions {
   view: any;
@@ -48,9 +47,7 @@ export const TemplateField = Node.create<TemplateFieldOptions>({
         default: null,
         parseHTML: (element) => element.getAttribute('data-template-label'),
         renderHTML: (attributes) =>
-          attributes.label
-            ? { 'data-template-label': attributes.label }
-            : {},
+          attributes.label ? { 'data-template-label': attributes.label } : {},
       },
       placeholder: {
         default: null,
@@ -93,7 +90,10 @@ export const TemplateField = Node.create<TemplateFieldOptions>({
       convertTemplateManagedBlockToField:
         (attributes = {}) =>
         ({ state, dispatch }) => {
-          const found = findAncestor(state.selection.$from, 'templateManagedBlock');
+          const found = findAncestor(
+            state.selection.$from,
+            'templateManagedBlock',
+          );
           if (!found) return false;
           const id =
             attributes.fieldId ??
@@ -150,7 +150,7 @@ export const TemplateField = Node.create<TemplateFieldOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });
 
@@ -175,6 +175,8 @@ function isEmptyManagedBlock(node: any): boolean {
 }
 
 function createTemplateFieldId(): string {
-  return globalThis.crypto?.randomUUID?.() ??
-    `field-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `field-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }

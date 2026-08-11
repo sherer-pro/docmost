@@ -66,11 +66,6 @@ export default defineConfig(({ mode }) => {
           ws: true,
           rewriteWsOrigin: true,
         },
-        "/collab": {
-          target: APP_URL,
-          ws: true,
-          rewriteWsOrigin: true,
-        },
       },
     },
   };

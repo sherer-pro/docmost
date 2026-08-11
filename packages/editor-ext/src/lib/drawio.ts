@@ -1,9 +1,5 @@
-import { Node, mergeAttributes } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
-import {
-  normalizeBlockWidthMode,
-  type BlockWidthMode,
-} from "./block-width";
+import { Node, mergeAttributes } from '@tiptap/core';
+import { normalizeBlockWidthMode, type BlockWidthMode } from './block-width';
 
 export interface DrawioOptions {
   HTMLAttributes: Record<string, any>;
@@ -19,7 +15,7 @@ export interface DrawioAttributes {
   widthMode?: BlockWidthMode;
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     drawio: {
       setDrawio: (attributes?: DrawioAttributes) => ReturnType;
@@ -28,9 +24,9 @@ declare module "@tiptap/core" {
 }
 
 export const Drawio = Node.create<DrawioOptions>({
-  name: "drawio",
+  name: 'drawio',
   inline: false,
-  group: "block",
+  group: 'block',
   isolating: true,
   atom: true,
   defining: true,
@@ -46,58 +42,58 @@ export const Drawio = Node.create<DrawioOptions>({
   addAttributes() {
     return {
       src: {
-        default: "",
-        parseHTML: (element) => element.getAttribute("data-src"),
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-src'),
         renderHTML: (attributes) => ({
-          "data-src": attributes.src,
+          'data-src': attributes.src,
         }),
       },
       title: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-title"),
+        parseHTML: (element) => element.getAttribute('data-title'),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-title": attributes.title,
+          'data-title': attributes.title,
         }),
       },
       width: {
-        default: "100%",
-        parseHTML: (element) => element.getAttribute("data-width"),
+        default: '100%',
+        parseHTML: (element) => element.getAttribute('data-width'),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-width": attributes.width,
+          'data-width': attributes.width,
         }),
       },
       widthMode: {
-        default: "normal",
+        default: 'normal',
         parseHTML: (element) =>
           normalizeBlockWidthMode(
-            element.getAttribute("data-block-width-mode") ||
-              element.getAttribute("data-width-mode"),
+            element.getAttribute('data-block-width-mode') ||
+              element.getAttribute('data-width-mode'),
           ),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-block-width-mode": normalizeBlockWidthMode(
+          'data-block-width-mode': normalizeBlockWidthMode(
             attributes.widthMode,
           ),
         }),
       },
       size: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-size"),
+        parseHTML: (element) => element.getAttribute('data-size'),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-size": attributes.size,
+          'data-size': attributes.size,
         }),
       },
       align: {
-        default: "center",
-        parseHTML: (element) => element.getAttribute("data-align"),
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align'),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-align": attributes.align,
+          'data-align': attributes.align,
         }),
       },
       attachmentId: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-id"),
+        parseHTML: (element) => element.getAttribute('data-attachment-id'),
         renderHTML: (attributes: DrawioAttributes) => ({
-          "data-attachment-id": attributes.attachmentId,
+          'data-attachment-id': attributes.attachmentId,
         }),
       },
     };
@@ -113,18 +109,18 @@ export const Drawio = Node.create<DrawioOptions>({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      'div',
       mergeAttributes(
-        { "data-type": this.name },
+        { 'data-type': this.name },
         this.options.HTMLAttributes,
-        HTMLAttributes
+        HTMLAttributes,
       ),
       [
-        "img",
+        'img',
         {
-          src: HTMLAttributes["data-src"],
-          alt: HTMLAttributes["data-title"],
-          width: HTMLAttributes["data-width"],
+          src: HTMLAttributes['data-src'],
+          alt: HTMLAttributes['data-title'],
+          width: HTMLAttributes['data-width'],
         },
       ],
     ];
@@ -136,7 +132,7 @@ export const Drawio = Node.create<DrawioOptions>({
         (attrs: DrawioAttributes) =>
         ({ commands }) => {
           return commands.insertContent({
-            type: "drawio",
+            type: 'drawio',
             attrs: attrs,
           });
         },
@@ -147,6 +143,6 @@ export const Drawio = Node.create<DrawioOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

@@ -21,8 +21,8 @@ import { IPagination, QueryParams } from "@/lib/types.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
-import { queryClient } from "@/main.tsx";
-import { useTranslation } from 'react-i18next';
+import { queryClient } from "@/lib/query-client.ts";
+import { useTranslation } from "react-i18next";
 
 export function useGetGroupsQuery(
   params?: QueryParams,
@@ -68,7 +68,10 @@ export function useCreateGroupMutation() {
       notifications.show({ message: t("Group created successfully") });
     },
     onError: () => {
-      notifications.show({ message: t("Failed to create group"), color: "red" });
+      notifications.show({
+        message: t("Failed to create group"),
+        color: "red",
+      });
     },
   });
 }

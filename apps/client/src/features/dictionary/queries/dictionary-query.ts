@@ -1,7 +1,7 @@
 import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import {
   createDictionaryTerm,
   deleteDictionaryTerm,
@@ -114,8 +114,7 @@ export function useDeleteDictionaryTermMutation(spaceId?: string) {
     },
     onError: (error) => {
       notifications.show({
-        message:
-          error["response"]?.data?.message || t("Failed to delete term"),
+        message: error["response"]?.data?.message || t("Failed to delete term"),
         color: "red",
       });
     },

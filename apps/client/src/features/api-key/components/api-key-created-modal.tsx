@@ -21,7 +21,10 @@ import {
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert";
-import { ICreatedApiKey, type McpClientPreset } from "@/features/api-key";
+import type {
+  ICreatedApiKey,
+  McpClientPreset,
+} from "@/features/api-key/types/api-key.types.ts";
 import CopyTextButton from "@/components/common/copy.tsx";
 import { getAppUrl, getServerAppUrl } from "@/lib/config.ts";
 import {

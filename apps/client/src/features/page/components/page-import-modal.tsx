@@ -42,7 +42,7 @@ import {
   loadPendingDocmostImport,
   storePendingDocmostImport,
 } from "@/features/file-task/utils/pending-docmost-import.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import type {
   DocmostImportOptions,
@@ -197,9 +197,7 @@ function ImportFormatSelection({
     notifications.show({
       id: "import",
       title: t("Importing Docmost archive"),
-      message: t(
-        "The archive is being restored. You can safely return later.",
-      ),
+      message: t("The archive is being restored. You can safely return later."),
       loading: true,
       withCloseButton: true,
       autoClose: false,

@@ -70,7 +70,7 @@ import {
   invalidatePageEntity,
   invalidateSidebarTree,
 } from "@/features/page/queries/cache-invalidation.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 

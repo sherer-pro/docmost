@@ -69,7 +69,7 @@ import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
 import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
 import { duplicatePage } from "@/features/page/services/page-service.ts";
 import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { useNavigate } from "react-router-dom";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";

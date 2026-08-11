@@ -375,6 +375,14 @@ export class EnvironmentService {
     return this.configService.get<string>('COLLAB_URL');
   }
 
+  getCollabInternalUrl(): string {
+    return this.configService.get<string>('COLLAB_INTERNAL_URL');
+  }
+
+  getCollabInternalSecret(): string {
+    return this.configService.get<string>('COLLAB_INTERNAL_SECRET');
+  }
+
   getCollabPort(): number {
     return parseInt(this.configService.get<string>('COLLAB_PORT', '3001'));
   }

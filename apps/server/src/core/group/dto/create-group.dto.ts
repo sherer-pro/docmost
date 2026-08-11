@@ -7,7 +7,9 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {Transform, TransformFnParams} from "class-transformer";
+import { Transform, TransformFnParams } from 'class-transformer';
+
+export { DefaultGroup } from '../../../common/domain/group.constants';
 
 export class CreateGroupDto {
   @MinLength(2)
@@ -25,9 +27,4 @@ export class CreateGroupDto {
   @ArrayMaxSize(50)
   @IsUUID('all', { each: true })
   userIds?: string[];
-}
-
-export enum DefaultGroup {
-  EVERYONE = 'Everyone',
-  DESCRIPTION = 'Group for all users in this workspace.',
 }

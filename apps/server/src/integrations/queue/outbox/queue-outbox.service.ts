@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
@@ -25,18 +24,15 @@ import { DuplicatePageAttachmentsService } from '../services/duplicate-page-atta
 import {
   DuplicatePageAttachmentsOutboxPayload,
   NotificationEmailOutboxPayload,
-  NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER,
-  NotificationEmailDeliveryPolicyHandler,
   NotificationEmailSecretPayload,
   NotificationDispatchOutboxPayload,
-  PAGE_TEMPLATE_SYNC_HANDLER,
-  PageTemplateSyncOutboxHandler,
   PageTemplateSyncOutboxPayload,
   QueueOutboxKind,
   WorkspaceInvitationAcceptedEmailOutboxPayload,
   WorkspaceInvitationEmailOutboxPayload,
   WorkspaceInvitationEmailSecretPayload,
 } from './queue-outbox.types';
+import { QueueOutboxHandlerRegistryService } from './queue-outbox-handler-registry.service';
 
 const OUTBOX_LEASE_MS = 2 * 60 * 1000;
 const OUTBOX_LEASE_RENEW_MS = 30 * 1000;
@@ -71,7 +67,7 @@ export class QueueOutboxService {
     private readonly generalQueue: Queue,
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
-    private readonly moduleRef: ModuleRef,
+    private readonly handlerRegistry: QueueOutboxHandlerRegistryService,
   ) {}
 
   async enqueueWorkspaceInvitationEmail(
@@ -401,10 +397,7 @@ export class QueueOutboxService {
         return 'completed';
       case QueueOutboxKind.PAGE_TEMPLATE_SYNC: {
         const payload = this.parsePageTemplateSync(entry.payload);
-        const handler = this.moduleRef.get<PageTemplateSyncOutboxHandler>(
-          PAGE_TEMPLATE_SYNC_HANDLER,
-          { strict: false },
-        );
+        const handler = this.handlerRegistry.getPageTemplateSync();
         await handler.processSyncRunFromOutbox(payload.runId);
         return 'completed';
       }
@@ -431,11 +424,7 @@ export class QueueOutboxService {
       throw new PermanentOutboxError('notification_email_id_mismatch');
     }
 
-    const deliveryPolicy =
-      this.moduleRef.get<NotificationEmailDeliveryPolicyHandler>(
-        NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER,
-        { strict: false },
-      );
+    const deliveryPolicy = this.handlerRegistry.getNotificationEmailDelivery();
     if (
       !(await deliveryPolicy.isNotificationEmailStillDeliverable(
         secret.message,

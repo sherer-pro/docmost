@@ -3,7 +3,8 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs", "package.json"],
-      "project": ["*.cjs", "*.json", "scripts/*.mjs"]
+      "project": ["*.cjs", "*.json", "scripts/*.mjs"],
+      "ignoreBinaries": ["cmd.exe"]
     },
     "apps/server": {
       "entry": [

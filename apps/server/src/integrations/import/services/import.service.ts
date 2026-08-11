@@ -25,7 +25,7 @@ import {
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import * as Y from 'yjs';
-import { markdownToHtml } from '@docmost/editor-ext';
+import { markdownToHtml } from '@docmost/editor-ext/server';
 import {
   createZipReadBudget,
   DEFAULT_EXTRACT_ZIP_LIMITS,
@@ -558,7 +558,9 @@ export class ImportService {
     let manifest: DocmostArchiveManifest;
     try {
       manifest = JSON.parse(
-        (await this.readArchiveEntry(metadataFile, readBudget)).toString('utf8'),
+        (await this.readArchiveEntry(metadataFile, readBudget)).toString(
+          'utf8',
+        ),
       ) as DocmostArchiveManifest;
     } catch (error) {
       if (error instanceof BadRequestException) {

@@ -13,7 +13,7 @@ import { zodResolver } from "mantine-form-zod-resolver";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
 import { useUpdateApiKeyMutation } from "@/features/api-key/queries/api-key-query";
-import { IApiKey } from "@/features/api-key";
+import type { IApiKey } from "@/features/api-key/types/api-key.types.ts";
 import { useEffect } from "react";
 import type { AiBuiltinToolCapability } from "@docmost/api-contract";
 import { useState } from "react";
@@ -136,46 +136,47 @@ export function UpdateApiKeyModal({
           {apiKey?.keyType === "mcp" &&
             policyState === "ready" &&
             toolPolicy.data && (
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                {t("apiKeys.capabilities")}
-              </Text>
-              <AiToolCapabilityList
-                catalog={toolPolicy.data.catalog}
-                available={getAvailableMcpCapabilities(toolPolicy.data)}
-                exposure="mcp"
-                allowed={allowedCapabilities}
-                onChange={setAllowedCapabilities}
-              />
-              {unavailableCapabilities.length > 0 && (
-                <Alert color="yellow" title={t("apiKeys.capabilitiesRevoked")}>
-                  <Text size="xs">
-                    {unavailableCapabilities.join(", ")}
-                  </Text>
-                  <Button
-                    mt="xs"
-                    size="xs"
-                    variant="light"
-                    onClick={() =>
-                      setAllowedCapabilities((current) =>
-                        current.filter(
-                          (capability) =>
-                            !unavailableCapabilities.includes(capability),
-                        ),
-                      )
-                    }
-                  >
-                    {t("apiKeys.removeUnavailableCapabilities")}
-                  </Button>
-                </Alert>
-              )}
-              {allowedCapabilities.length === 0 && (
-                <Text size="xs" c="red">
-                  {t("apiKeys.validation.capabilityRequired")}
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>
+                  {t("apiKeys.capabilities")}
                 </Text>
-              )}
-            </Stack>
-          )}
+                <AiToolCapabilityList
+                  catalog={toolPolicy.data.catalog}
+                  available={getAvailableMcpCapabilities(toolPolicy.data)}
+                  exposure="mcp"
+                  allowed={allowedCapabilities}
+                  onChange={setAllowedCapabilities}
+                />
+                {unavailableCapabilities.length > 0 && (
+                  <Alert
+                    color="yellow"
+                    title={t("apiKeys.capabilitiesRevoked")}
+                  >
+                    <Text size="xs">{unavailableCapabilities.join(", ")}</Text>
+                    <Button
+                      mt="xs"
+                      size="xs"
+                      variant="light"
+                      onClick={() =>
+                        setAllowedCapabilities((current) =>
+                          current.filter(
+                            (capability) =>
+                              !unavailableCapabilities.includes(capability),
+                          ),
+                        )
+                      }
+                    >
+                      {t("apiKeys.removeUnavailableCapabilities")}
+                    </Button>
+                  </Alert>
+                )}
+                {allowedCapabilities.length === 0 && (
+                  <Text size="xs" c="red">
+                    {t("apiKeys.validation.capabilityRequired")}
+                  </Text>
+                )}
+              </Stack>
+            )}
 
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>

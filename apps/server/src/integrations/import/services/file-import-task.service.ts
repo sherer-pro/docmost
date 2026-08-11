@@ -21,7 +21,7 @@ import { FileTask, InsertablePage } from '@docmost/db/types/entity.types';
 import {
   markdownToHtml,
   stripGeneratedHeadingNumbersFromJson,
-} from '@docmost/editor-ext';
+} from '@docmost/editor-ext/server';
 import { getProsemirrorContent } from '../../../common/helpers/prosemirror/utils';
 import { formatImportHtml } from '../utils/import-formatter';
 import {

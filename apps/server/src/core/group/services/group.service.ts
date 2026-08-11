@@ -4,7 +4,8 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { CreateGroupDto, DefaultGroup } from '../dto/create-group.dto';
+import { CreateGroupDto } from '../dto/create-group.dto';
+import { DefaultGroup } from '../../../common/domain/group.constants';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { UpdateGroupDto } from '../dto/update-group.dto';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';

@@ -7,6 +7,8 @@ import { GeneralQueueProcessor } from './processors/general-queue.processor';
 import { DuplicatePageAttachmentsService } from './services/duplicate-page-attachments.service';
 import { QueueOutboxService } from './outbox/queue-outbox.service';
 import { QueueOutboxBootstrapService } from './outbox/queue-outbox-bootstrap.service';
+import { QueueOutboxHandlerRegistryService } from './outbox/queue-outbox-handler-registry.service';
+import { QueueOutboxPersistenceModule } from '../../database/persistence/queue-outbox-persistence.module';
 
 export interface QueueModuleOptions {
   registerGeneralWorker?: boolean;
@@ -20,6 +22,7 @@ export class QueueModule {
     const workerProviders = registerWorker
       ? [
           DuplicatePageAttachmentsService,
+          QueueOutboxHandlerRegistryService,
           QueueOutboxService,
           QueueOutboxBootstrapService,
           GeneralQueueProcessor,
@@ -29,6 +32,7 @@ export class QueueModule {
     return {
       module: QueueModule,
       imports: [
+        QueueOutboxPersistenceModule,
         BullModule.forRootAsync({
           useFactory: (environmentService: EnvironmentService) => {
             const redisConfig = parseRedisUrl(environmentService.getRedisUrl());
@@ -107,7 +111,12 @@ export class QueueModule {
           name: QueueName.NOTIFICATION_QUEUE,
         }),
       ],
-      exports: [BullModule, ...(registerWorker ? [QueueOutboxService] : [])],
+      exports: [
+        BullModule,
+        ...(registerWorker
+          ? [QueueOutboxService, QueueOutboxHandlerRegistryService]
+          : []),
+      ],
       providers: workerProviders,
     };
   }

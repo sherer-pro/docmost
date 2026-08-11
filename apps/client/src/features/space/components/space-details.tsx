@@ -28,7 +28,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { modals } from "@mantine/modals";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import {
   ResponsiveSettingsContent,
   ResponsiveSettingsControl,
@@ -429,9 +429,7 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
                   <Text size="sm" c="dimmed">
                     {isArchived
                       ? t("Unarchive this space and restore editing.")
-                      : t(
-                          "Archive this space and make its content read-only.",
-                        )}
+                      : t("Archive this space and make its content read-only.")}
                   </Text>
                 </ResponsiveSettingsContent>
                 <ResponsiveSettingsControl>

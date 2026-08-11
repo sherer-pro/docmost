@@ -14,7 +14,7 @@ import {
 } from "@/features/page-history/services/page-history-service";
 import { IPageHistory } from "@/features/page-history/types/page.types";
 import { IPagination } from "@/lib/types.ts";
-import { queryClient } from "@/main";
+import { queryClient } from "@/lib/query-client";
 
 const HISTORY_STALE_TIME = 60 * 60 * 1000;
 

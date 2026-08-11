@@ -1,4 +1,4 @@
-import { getEmbedUrlAndProvider } from '@docmost/editor-ext';
+import { getEmbedUrlAndProvider } from '@docmost/editor-ext/server';
 import { Logger } from '@nestjs/common';
 import * as path from 'path';
 import { v7 } from 'uuid';

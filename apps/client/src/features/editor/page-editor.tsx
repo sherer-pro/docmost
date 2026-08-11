@@ -60,7 +60,7 @@ import { useCollabToken } from "@/features/auth/queries/auth-query.tsx";
 import SearchAndReplaceDialog from "@/features/editor/components/search-and-replace/search-and-replace-dialog.tsx";
 import { useDebouncedCallback, useDocumentVisibility } from "@mantine/hooks";
 import { useIdle } from "@/hooks/use-idle.ts";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
 import { useParams } from "react-router-dom";
 import { extractPageSlugId } from "@/lib";
@@ -293,9 +293,7 @@ export default function PageEditor({
       const onSyncedHandler = (event: onSyncedParameters) => {
         setIsRemoteSynced(event.state);
       };
-      const onUnsyncedChangesHandler = (
-        event: onUnsyncedChangesParameters,
-      ) => {
+      const onUnsyncedChangesHandler = (event: onUnsyncedChangesParameters) => {
         setUnsyncedChanges(event.number);
       };
       let authRefreshInFlight = false;
@@ -661,38 +659,13 @@ export default function PageEditor({
     <>
       <TransclusionLookupProvider>
         <div className="editor-container" style={{ position: "relative" }}>
-        <div ref={menuContainerRef}>
-          {editor && editorIsEditable && templateKind === "synced" && (
-            <TemplateBlockToolbar editor={editor} />
-          )}
-          {editor && editorIsEditable && fixedToolbarEnabled && (
-            <>
-              <FixedToolbar
-                editor={editor}
-                pageId={pageId}
-                spaceId={spaceId}
-                dictionaryEnabled={dictionaryEnabled}
-                canManageDictionary={canManageDictionary}
-                canCreateInlineComments={canCreateInlineComments}
-              />
-            </>
-          )}
-
-          <DictionaryHighlightLayer terms={activeDictionaryTerms}>
-            <EditorContent
-              editor={editor}
-              className={clsx(editorContentClassName)}
-            />
-          </DictionaryHighlightLayer>
-
-          {editor && (
-            <SearchAndReplaceDialog editor={editor} editable={editable} />
-          )}
-
-          {editor && editorIsEditable && (
-            <div>
-              {!fixedToolbarEnabled && (
-                <EditorBubbleMenu
+          <div ref={menuContainerRef}>
+            {editor && editorIsEditable && templateKind === "synced" && (
+              <TemplateBlockToolbar editor={editor} />
+            )}
+            {editor && editorIsEditable && fixedToolbarEnabled && (
+              <>
+                <FixedToolbar
                   editor={editor}
                   pageId={pageId}
                   spaceId={spaceId}
@@ -700,33 +673,58 @@ export default function PageEditor({
                   canManageDictionary={canManageDictionary}
                   canCreateInlineComments={canCreateInlineComments}
                 />
-              )}
-              <TableMenu editor={editor} />
-              <TableCellMenu editor={editor} appendTo={menuContainerRef} />
-              <ImageMenu editor={editor} />
-              <VideoMenu editor={editor} />
-              <AudioMenu editor={editor} />
-              <PdfMenu editor={editor} />
-              <CalloutMenu editor={editor} />
-              <SubpagesMenu editor={editor} />
-              <ExcalidrawMenu editor={editor} />
-              <DrawioMenu editor={editor} />
-              <LinkMenu editor={editor} appendTo={menuContainerRef} />
-            </div>
+              </>
+            )}
+
+            <DictionaryHighlightLayer terms={activeDictionaryTerms}>
+              <EditorContent
+                editor={editor}
+                className={clsx(editorContentClassName)}
+              />
+            </DictionaryHighlightLayer>
+
+            {editor && (
+              <SearchAndReplaceDialog editor={editor} editable={editable} />
+            )}
+
+            {editor && editorIsEditable && (
+              <div>
+                {!fixedToolbarEnabled && (
+                  <EditorBubbleMenu
+                    editor={editor}
+                    pageId={pageId}
+                    spaceId={spaceId}
+                    dictionaryEnabled={dictionaryEnabled}
+                    canManageDictionary={canManageDictionary}
+                    canCreateInlineComments={canCreateInlineComments}
+                  />
+                )}
+                <TableMenu editor={editor} />
+                <TableCellMenu editor={editor} appendTo={menuContainerRef} />
+                <ImageMenu editor={editor} />
+                <VideoMenu editor={editor} />
+                <AudioMenu editor={editor} />
+                <PdfMenu editor={editor} />
+                <CalloutMenu editor={editor} />
+                <SubpagesMenu editor={editor} />
+                <ExcalidrawMenu editor={editor} />
+                <DrawioMenu editor={editor} />
+                <LinkMenu editor={editor} appendTo={menuContainerRef} />
+              </div>
+            )}
+            {editor && !editorIsEditable && canCreateInlineComments && (
+              <ReadOnlyCommentBubbleMenu editor={editor} />
+            )}
+            {sharedShowCommentPopup && (
+              <CommentDialog editor={editor} pageId={pageId} />
+            )}
+          </div>
+          {showBottomSpacer && (
+            <div
+              onClick={() => editor.commands.focus("end")}
+              style={{ paddingBottom: "20vh" }}
+            ></div>
           )}
-          {editor && !editorIsEditable && canCreateInlineComments && (
-            <ReadOnlyCommentBubbleMenu editor={editor} />
-          )}
-          {sharedShowCommentPopup && (
-            <CommentDialog editor={editor} pageId={pageId} />
-          )}
-        </div>
-        {showBottomSpacer && (
-          <div
-            onClick={() => editor.commands.focus("end")}
-            style={{ paddingBottom: "20vh" }}
-          ></div>
-        )}
         </div>
       </TransclusionLookupProvider>
       <PageTemplatePicker pageId={pageId} spaceId={spaceId} />

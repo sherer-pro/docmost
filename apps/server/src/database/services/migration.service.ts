@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import { Migrator, FileMigrationProvider, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { DatabaseMigrationError } from '../../common/errors/startup.errors';
 
 const MIGRATION_LOCK_NAMESPACE = 27517;
 const MIGRATION_LOCK_ID = 20260619;
@@ -32,7 +33,7 @@ export class MigrationService {
     });
 
     if (hasMigrationError) {
-      process.exit(1);
+      throw new DatabaseMigrationError();
     }
   }
 
@@ -77,7 +78,7 @@ export class MigrationService {
     });
 
     if (error) {
-      this.logger.error('Failed to run database migration. Exiting program.');
+      this.logger.error('Failed to run database migration');
       this.logger.error(error);
       return true;
     }

@@ -24,7 +24,7 @@ import {
   detachSyncedPageTemplate,
   hashProseMirrorJson,
 } from "@/features/page-template/services/page-template-api";
-import { queryClient } from "@/main";
+import { queryClient } from "@/lib/query-client";
 
 export function TemplateInstanceAlert({
   pageId,
@@ -128,7 +128,9 @@ export function TemplateInstanceAlert({
         </Group>
         {!data.canReadTemplate && (
           <Text size="sm" c="dimmed" mt="xs">
-            {t("The source template is restricted, but this page remains usable.")}
+            {t(
+              "The source template is restricted, but this page remains usable.",
+            )}
           </Text>
         )}
       </Alert>

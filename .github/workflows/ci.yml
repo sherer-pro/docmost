@@ -231,6 +231,8 @@ jobs:
             -e NODE_ENV=production \
             -e APP_URL=http://127.0.0.1:3000 \
             -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e COLLAB_INTERNAL_URL=http://docmost-collab:3001 \
+            -e COLLAB_INTERNAL_SECRET=ci-only-collab-secret-at-least-32-characters \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
             -e REDIS_URL=redis://docmost-redis:6379 \
@@ -258,6 +260,8 @@ jobs:
             -e NODE_ENV=production \
             -e APP_URL=http://127.0.0.1:3000 \
             -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e COLLAB_INTERNAL_URL=http://docmost-collab:3001 \
+            -e COLLAB_INTERNAL_SECRET=ci-only-collab-secret-at-least-32-characters \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
             -e REDIS_URL=redis://docmost-redis:6379 \
@@ -283,6 +287,8 @@ jobs:
             -e NODE_ENV=production \
             -e APP_URL=http://127.0.0.1:3000 \
             -e COLLAB_URL=http://127.0.0.1:3001 \
+            -e COLLAB_INTERNAL_URL=http://docmost-collab:3001 \
+            -e COLLAB_INTERNAL_SECRET=ci-only-collab-secret-at-least-32-characters \
             -e COLLAB_PORT=3001 \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \

@@ -229,10 +229,10 @@ export const mainExtensions = [
     },
   }),
   MathInline.configure({
-    view: MathInlineView,
+    view: ReactNodeViewRenderer(MathInlineView),
   }),
   MathBlock.configure({
-    view: MathBlockView,
+    view: ReactNodeViewRenderer(MathBlockView),
   }),
   Details.configure({
     getToggleButtonLabel: () => i18n.t("Toggle title"),
@@ -241,7 +241,7 @@ export const mainExtensions = [
   DetailsContent,
   PageBreak,
   Tag.configure({
-    view: TagView,
+    view: ReactNodeViewRenderer(TagView),
   }),
   Youtube.configure({
     addPasteHandler: false,
@@ -252,20 +252,20 @@ export const mainExtensions = [
     },
   }),
   TiptapImage.configure({
-    view: ImageView,
+    view: ReactNodeViewRenderer(ImageView),
     allowBase64: false,
   }),
   TiptapVideo.configure({
-    view: VideoView,
+    view: ReactNodeViewRenderer(VideoView),
   }),
   TiptapAudio.configure({
-    view: AudioView,
+    view: ReactNodeViewRenderer(AudioView),
   }),
   Callout.configure({
-    view: CalloutView,
+    view: ReactNodeViewRenderer(CalloutView),
   }),
   CustomCodeBlock.configure({
-    view: CodeBlockView,
+    view: ReactNodeViewRenderer(CodeBlockView),
     //@ts-ignore
     lowlight,
     HTMLAttributes: {
@@ -274,34 +274,37 @@ export const mainExtensions = [
   }),
   Selection,
   Attachment.configure({
-    view: AttachmentView,
+    view: ReactNodeViewRenderer(AttachmentView),
   }),
   TiptapPdf.configure({
-    view: PdfView,
+    view: ReactNodeViewRenderer(PdfView),
   }),
   Drawio.configure({
-    view: DrawioView,
+    view: ReactNodeViewRenderer(DrawioView),
   }),
   Excalidraw.configure({
-    view: ExcalidrawView,
+    view: ReactNodeViewRenderer(ExcalidrawView),
   }),
   Embed.configure({
-    view: EmbedView,
+    view: ReactNodeViewRenderer(EmbedView),
   }),
   LinkPreview.configure({
-    view: LinkPreviewView,
+    view: ReactNodeViewRenderer(LinkPreviewView),
   }),
   Subpages.configure({
-    view: SubpagesView,
+    view: ReactNodeViewRenderer(SubpagesView),
   }),
   TransclusionSource.configure({
-    view: TransclusionView,
+    view: ReactNodeViewRenderer(TransclusionView),
   }),
   TransclusionReference.configure({
-    view: TransclusionReferenceView,
+    view: ReactNodeViewRenderer(TransclusionReferenceView),
+    getContentExtensions: () => transclusionContentExtensions,
   }),
-  TemplateManagedBlock.configure({ view: TemplateManagedBlockView }),
-  TemplateField.configure({ view: TemplateFieldView }),
+  TemplateManagedBlock.configure({
+    view: ReactNodeViewRenderer(TemplateManagedBlockView),
+  }),
+  TemplateField.configure({ view: ReactNodeViewRenderer(TemplateFieldView) }),
   TransclusionDeletionGuard.configure({
     onBlocked: (reason) => {
       notifications.show({
@@ -378,7 +381,10 @@ export const createMainExtensions = ({
 }: MainExtensionsOptions = {}) =>
   mainExtensions.map((extension: any) =>
     extension.name === "tag"
-      ? Tag.configure({ view: TagView, tagDefinitions })
+      ? Tag.configure({
+          view: ReactNodeViewRenderer(TagView),
+          tagDefinitions,
+        })
       : extension,
   );
 

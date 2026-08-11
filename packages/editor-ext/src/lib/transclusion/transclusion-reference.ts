@@ -1,11 +1,11 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 import { getTransclusionPresentationAttributes } from './transclusion-presentation';
 import { isValidTransclusionIdentifier } from './constants';
 
 export interface TransclusionReferenceOptions {
   HTMLAttributes: Record<string, any>;
   view: any;
+  getContentExtensions?: () => any[];
 }
 
 export interface TransclusionReferenceAttributes {
@@ -30,6 +30,7 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
     return {
       HTMLAttributes: {},
       view: null,
+      getContentExtensions: undefined,
     };
   },
 
@@ -104,6 +105,6 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

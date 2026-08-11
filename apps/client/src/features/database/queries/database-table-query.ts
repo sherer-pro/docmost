@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
 import {
   batchUpdateDatabaseRows,
   batchUpdateDatabaseCells,
@@ -19,7 +15,7 @@ import {
   updateDatabaseView,
   getDatabaseRowContextByPage,
   getDatabaseRows,
-} from '@/features/database/services';
+} from "@/features/database/services";
 import {
   IBatchUpdateDatabaseCellsPayload,
   IBatchUpdateDatabaseRowsPayload,
@@ -33,20 +29,20 @@ import {
   IUpdateDatabaseRowResponse,
   IUpdateDatabasePropertyPayload,
   IUpdateDatabaseViewPayload,
-} from '@/features/database/types/database.types';
+} from "@/features/database/types/database.types";
 import {
   IDatabaseRowContext,
   IDatabaseRowsPage,
   IDatabaseRowsQueryParams,
   IDatabaseRowWithCells,
-} from '@/features/database/types/database-table.types';
-import { queryClient } from '@/main.tsx';
-import { DATABASE_QUERY_KEYS } from '@/features/page/queries/query-keys.ts';
+} from "@/features/database/types/database-table.types";
+import { queryClient } from "@/lib/query-client.ts";
+import { DATABASE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import {
   invalidateDatabaseRowContext,
   invalidateDatabaseProperties,
   invalidateSidebarTree,
-} from '@/features/page/queries/cache-invalidation.ts';
+} from "@/features/page/queries/cache-invalidation.ts";
 
 const normalizeDatabaseRowsResponse = (
   data: IDatabaseRowWithCells[] | IDatabaseRowsPage,
@@ -163,8 +159,6 @@ export function useDeleteDatabaseViewMutation(databaseId?: string) {
   });
 }
 
-
-
 export function useDatabaseRowContextQuery(
   pageId?: string,
 ): UseQueryResult<IDatabaseRowContext | null, Error> {
@@ -220,7 +214,6 @@ export function useCreateDatabasePropertyMutation(databaseId?: string) {
   });
 }
 
-
 export function useUpdateDatabasePropertyMutation(databaseId?: string) {
   return useMutation({
     mutationFn: ({
@@ -270,7 +263,11 @@ export function useBatchUpdateDatabaseCellsMutation(databaseId?: string) {
 }
 
 export function useBatchUpdateDatabaseRowsMutation(databaseId?: string) {
-  return useMutation<IBatchUpdateDatabaseRowsResponse, Error, IBatchUpdateDatabaseRowsPayload>({
+  return useMutation<
+    IBatchUpdateDatabaseRowsResponse,
+    Error,
+    IBatchUpdateDatabaseRowsPayload
+  >({
     mutationFn: (payload) =>
       batchUpdateDatabaseRows(databaseId as string, payload),
     onSuccess: () => {
@@ -279,7 +276,6 @@ export function useBatchUpdateDatabaseRowsMutation(databaseId?: string) {
     },
   });
 }
-
 
 export function useDeleteDatabaseRowMutation(databaseId?: string) {
   return useMutation({

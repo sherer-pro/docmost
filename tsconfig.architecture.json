@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/client/src/*"],
+      "src/*": ["apps/server/src/*"],
+      "@docmost/api-contract": ["packages/api-contract/src/index.ts"],
+      "@docmost/api-contract/*": ["packages/api-contract/src/*"],
+      "@docmost/db/types/db": ["apps/server/src/database/types/db.d.ts"],
+      "@docmost/db/*": ["apps/server/src/database/*"],
+      "@docmost/editor-ext": ["packages/editor-ext/src/index.ts"],
+      "@docmost/editor-ext/*": ["packages/editor-ext/src/*"],
+      "@docmost/transactional/*": [
+        "apps/server/src/integrations/transactional/*"
+      ]
+    }
+  }
+}

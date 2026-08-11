@@ -1,7 +1,7 @@
 import { Group, Menu, Table, Text } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { IApiKey } from "@/features/api-key";
+import type { IApiKey } from "@/features/api-key/types/api-key.types.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import React from "react";
 import NoTableResults from "@/components/common/no-table-results";

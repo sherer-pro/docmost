@@ -1,5 +1,4 @@
-import { Node, mergeAttributes } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
+import { Node, mergeAttributes } from '@tiptap/core';
 
 export interface AttachmentOptions {
   HTMLAttributes: Record<string, any>;
@@ -9,7 +8,7 @@ export interface AttachmentOptions {
 /**
  * Attachment display mode in the editor.
  */
-export type AttachmentDisplayMode = "file" | "embed";
+export type AttachmentDisplayMode = 'file' | 'embed';
 
 export interface AttachmentAttributes {
   url?: string;
@@ -21,7 +20,7 @@ export interface AttachmentAttributes {
   placeholder?: string;
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     attachment: {
       setAttachment: (attributes: AttachmentAttributes) => ReturnType;
@@ -30,9 +29,9 @@ declare module "@tiptap/core" {
 }
 
 export const Attachment = Node.create<AttachmentOptions>({
-  name: "attachment",
+  name: 'attachment',
   inline: false,
-  group: "block",
+  group: 'block',
   isolating: true,
   atom: true,
   defining: true,
@@ -47,46 +46,46 @@ export const Attachment = Node.create<AttachmentOptions>({
   addAttributes() {
     return {
       url: {
-        default: "",
-        parseHTML: (element) => element.getAttribute("data-attachment-url"),
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-attachment-url'),
         renderHTML: (attributes) => ({
-          "data-attachment-url": attributes.url,
+          'data-attachment-url': attributes.url,
         }),
       },
       name: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-name"),
+        parseHTML: (element) => element.getAttribute('data-attachment-name'),
         renderHTML: (attributes: AttachmentAttributes) => ({
-          "data-attachment-name": attributes.name,
+          'data-attachment-name': attributes.name,
         }),
       },
       mime: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-mime"),
+        parseHTML: (element) => element.getAttribute('data-attachment-mime'),
         renderHTML: (attributes: AttachmentAttributes) => ({
-          "data-attachment-mime": attributes.mime,
+          'data-attachment-mime': attributes.mime,
         }),
       },
       size: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-attachment-size"),
+        parseHTML: (element) => element.getAttribute('data-attachment-size'),
         renderHTML: (attributes: AttachmentAttributes) => ({
-          "data-attachment-size": attributes.size,
+          'data-attachment-size': attributes.size,
         }),
       },
       attachmentId: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-id"),
+        parseHTML: (element) => element.getAttribute('data-attachment-id'),
         renderHTML: (attributes: AttachmentAttributes) => ({
-          "data-attachment-id": attributes.attachmentId,
+          'data-attachment-id': attributes.attachmentId,
         }),
       },
       displayMode: {
-        default: "file",
+        default: 'file',
         parseHTML: (element) =>
-          element.getAttribute("data-attachment-display-mode") ?? "file",
+          element.getAttribute('data-attachment-display-mode') ?? 'file',
         renderHTML: (attributes: AttachmentAttributes) => ({
-          "data-attachment-display-mode": attributes.displayMode,
+          'data-attachment-display-mode': attributes.displayMode,
         }),
       },
       placeholder: {
@@ -106,20 +105,20 @@ export const Attachment = Node.create<AttachmentOptions>({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      'div',
       mergeAttributes(
-        { "data-type": this.name },
+        { 'data-type': this.name },
         this.options.HTMLAttributes,
-        HTMLAttributes
+        HTMLAttributes,
       ),
       [
-        "a",
+        'a',
         {
-          href: HTMLAttributes["data-attachment-url"],
-          class: "attachment",
-          target: "blank",
+          href: HTMLAttributes['data-attachment-url'],
+          class: 'attachment',
+          target: 'blank',
         },
-        `${HTMLAttributes["data-attachment-name"]}`,
+        `${HTMLAttributes['data-attachment-name']}`,
       ],
     ];
   },
@@ -130,7 +129,7 @@ export const Attachment = Node.create<AttachmentOptions>({
         (attrs: AttachmentAttributes) =>
         ({ commands }) => {
           return commands.insertContent({
-            type: "attachment",
+            type: 'attachment',
             attrs: attrs,
           });
         },
@@ -141,6 +140,6 @@ export const Attachment = Node.create<AttachmentOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

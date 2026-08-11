@@ -9,14 +9,16 @@ import {
 import {
   createApiKey,
   getApiKeys,
-  ICreatedApiKey,
-  IApiKey,
-  ApiKeyQueryParams,
-  ICreateApiKeyRequest,
-  IUpdateApiKeyRequest,
   revokeApiKey,
   updateApiKey,
-} from "@/features/api-key";
+} from "@/features/api-key/services/api-key-service.ts";
+import type {
+  ApiKeyQueryParams,
+  ICreateApiKeyRequest,
+  ICreatedApiKey,
+  IApiKey,
+  IUpdateApiKeyRequest,
+} from "@/features/api-key/types/api-key.types.ts";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 

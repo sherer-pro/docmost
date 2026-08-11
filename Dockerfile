@@ -12,7 +12,7 @@ FROM build-base AS builder
 WORKDIR /app
 
 # 1) Copy only dependency-defining files first to maximize layer cache reuse.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
 COPY apps/*/package.json ./apps/
 COPY packages/*/package.json ./packages/
@@ -46,7 +46,7 @@ FROM build-base AS runtime-dependencies
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
 COPY apps/server/package.json ./apps/server/package.json
 COPY packages/editor-ext/package.json ./packages/editor-ext/package.json
@@ -61,7 +61,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     else \
       pnpm install --frozen-lockfile --prod; \
     fi && \
-    node -e "require('@napi-rs/canvas')"
+    (cd apps/server && node -e "require('@napi-rs/canvas')")
 
 FROM node-base AS installer
 
@@ -91,6 +91,7 @@ COPY --chown=node:node --from=runtime-dependencies /app/apps/server/node_modules
 # Copy packages
 COPY --chown=node:node --from=builder /app/packages/editor-ext/dist /app/packages/editor-ext/dist
 COPY --chown=node:node --from=builder /app/packages/editor-ext/package.json /app/packages/editor-ext/package.json
+COPY --chown=node:node --from=runtime-dependencies /app/packages/editor-ext/node_modules /app/packages/editor-ext/node_modules
 COPY --chown=node:node --from=builder /app/packages/api-contract/dist /app/packages/api-contract/dist
 COPY --chown=node:node --from=builder /app/packages/api-contract/package.json /app/packages/api-contract/package.json
 
@@ -100,7 +101,9 @@ COPY --chown=node:node --from=runtime-dependencies /app/node_modules /app/node_m
 # PDF ingestion imports pdfjs-dist before it opens a document. Fail the image
 # build if pnpm's platform-optional canvas binding is absent from the runtime
 # dependency layer instead of shipping an image where every PDF is unreadable.
-RUN node --input-type=module -e "await import('pdfjs-dist/legacy/build/pdf.mjs'); await import('@napi-rs/canvas')"
+RUN cd apps/server \
+  && node -e "require('@docmost/editor-ext/server')" \
+  && node --input-type=module -e "await import('pdfjs-dist/legacy/build/pdf.mjs'); await import('@napi-rs/canvas')"
 
 RUN find /app/apps /app/packages -type f \( -name '*.map' -o -name '*.d.ts' \) -delete \
   && find /app/node_modules -type f \( -name '.env' -o -name '.env.*' \) -delete

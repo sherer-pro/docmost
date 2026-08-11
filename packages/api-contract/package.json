@@ -10,5 +10,8 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "sideEffects": false
+  "sideEffects": false,
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
 }

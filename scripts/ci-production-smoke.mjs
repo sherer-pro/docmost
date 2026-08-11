@@ -17,6 +17,42 @@ function fail(message) {
   throw new Error(`Production smoke failed: ${message}`);
 }
 
+async function assertDedicatedCollaborationBoundary() {
+  const apiCollabUrl = new URL("/collab", baseUrl);
+  apiCollabUrl.protocol = apiCollabUrl.protocol === "https:" ? "wss:" : "ws:";
+
+  await new Promise((resolve, reject) => {
+    const socket = new WebSocket(apiCollabUrl);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("API collaboration boundary check timed out"));
+    }, 5_000);
+    socket.addEventListener("open", () => {
+      clearTimeout(timeout);
+      socket.close();
+      reject(new Error("API unexpectedly accepted a /collab WebSocket"));
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+
+  const unauthenticatedInternal = await fetch(
+    new URL("/api/internal/collaboration/commands", collabUrl),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    },
+  );
+  if (unauthenticatedInternal.status !== 401) {
+    fail(
+      `unauthenticated internal collaboration command returned ${unauthenticatedInternal.status}`,
+    );
+  }
+}
+
 async function readJson(response) {
   const text = await response.text();
   if (!text) return undefined;
@@ -199,6 +235,7 @@ async function collaborationSmoke(pageId) {
   reconnect.destroy();
 }
 
+await assertDedicatedCollaborationBoundary();
 await setup();
 const spaces = await api("api/spaces");
 const primarySpace = findObject(

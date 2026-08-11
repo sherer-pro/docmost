@@ -8,10 +8,8 @@ import {
 import { InjectKysely, KyselyModule } from 'nestjs-kysely';
 import { EnvironmentService } from '../integrations/environment/environment.service';
 import { CamelCasePlugin, LogEvent, sql } from 'kysely';
-import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
-import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PageRepo } from './repos/page/page.repo';
@@ -19,7 +17,6 @@ import { CommentRepo } from './repos/comment/comment.repo';
 import { PageHistoryRepo } from './repos/page/page-history.repo';
 import { AttachmentRepo } from './repos/attachment/attachment.repo';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import * as process from 'node:process';
 import { MigrationService } from '@docmost/db/services/migration.service';
 import { UserTokenRepo } from './repos/user-token/user-token.repo';
 import { BacklinkRepo } from '@docmost/db/repos/backlink/backlink.repo';
@@ -28,13 +25,11 @@ import { NotificationRepo } from '@docmost/db/repos/notification/notification.re
 import { WatcherRepo } from '@docmost/db/repos/watcher/watcher.repo';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
 import { PushNotificationJobRepo } from '@docmost/db/repos/push-notification-job/push-notification-job.repo';
-import { QueueOutboxRepo } from '@docmost/db/repos/queue-outbox/queue-outbox.repo';
 import { DatabaseRepo } from './repos/database/database.repo';
 import { DatabasePropertyRepo } from './repos/database/database-property.repo';
 import { DatabaseRowRepo } from './repos/database/database-row.repo';
 import { DatabaseCellRepo } from './repos/database/database-cell.repo';
 import { DatabaseViewRepo } from './repos/database/database-view.repo';
-import { ApiKeyRepo } from './repos/api-key/api-key.repo';
 import { DictionaryTermRepo } from './repos/dictionary/dictionary-term.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { SpaceListener } from '@docmost/db/listeners/space.listener';
@@ -45,10 +40,14 @@ import { postgres } from './postgres-client';
 import { PageAccessRuleRepo } from './repos/page/page-access-rule.repo';
 import { UserSessionRepo } from './repos/session/user-session.repo';
 import { FavoriteRepo } from './repos/favorite/favorite.repo';
-import { LabelRepo } from './repos/label/label.repo';
 import { PageTransclusionsRepo } from './repos/page-transclusions/page-transclusions.repo';
 import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-transclusion-references.repo';
 import { DatabaseReadinessService } from '@docmost/db/services/database-readiness.service';
+import { DatabaseConnectionError } from '../common/errors/startup.errors';
+import { GroupPersistenceModule } from './persistence/group-persistence.module';
+import { LabelPersistenceModule } from './persistence/label-persistence.module';
+import { ApiKeyPersistenceModule } from './persistence/api-key-persistence.module';
+import { QueueOutboxPersistenceModule } from './persistence/queue-outbox-persistence.module';
 
 @Global()
 @Module({
@@ -85,14 +84,16 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
         },
       }),
     }),
+    GroupPersistenceModule,
+    LabelPersistenceModule,
+    ApiKeyPersistenceModule,
+    QueueOutboxPersistenceModule,
   ],
   providers: [
     MigrationService,
     DatabaseReadinessService,
     WorkspaceRepo,
     UserRepo,
-    GroupRepo,
-    GroupUserRepo,
     SpaceRepo,
     SpaceMemberRepo,
     PageRepo,
@@ -106,18 +107,15 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
-    QueueOutboxRepo,
     DatabaseRepo,
     DatabasePropertyRepo,
     DatabaseRowRepo,
     DatabaseCellRepo,
     DatabaseViewRepo,
-    ApiKeyRepo,
     DictionaryTermRepo,
     PageAccessRuleRepo,
     UserSessionRepo,
     FavoriteRepo,
-    LabelRepo,
     PageTransclusionsRepo,
     PageTransclusionReferencesRepo,
     PageListener,
@@ -127,8 +125,6 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
   exports: [
     WorkspaceRepo,
     UserRepo,
-    GroupRepo,
-    GroupUserRepo,
     SpaceRepo,
     SpaceMemberRepo,
     PageRepo,
@@ -142,18 +138,19 @@ import { DatabaseReadinessService } from '@docmost/db/services/database-readines
     WatcherRepo,
     PushSubscriptionRepo,
     PushNotificationJobRepo,
-    QueueOutboxRepo,
     DatabaseRepo,
     DatabasePropertyRepo,
     DatabaseRowRepo,
     DatabaseCellRepo,
     DatabaseViewRepo,
-    ApiKeyRepo,
     DictionaryTermRepo,
     PageAccessRuleRepo,
     UserSessionRepo,
     FavoriteRepo,
-    LabelRepo,
+    GroupPersistenceModule,
+    LabelPersistenceModule,
+    ApiKeyPersistenceModule,
+    QueueOutboxPersistenceModule,
     PageTransclusionsRepo,
     PageTransclusionReferencesRepo,
     DatabaseReadinessService,
@@ -209,9 +206,9 @@ export class DatabaseModule implements OnModuleInit, BeforeApplicationShutdown {
           await new Promise((resolve) => setTimeout(resolve, retryDelay));
         } else {
           this.logger.error(
-            `Failed to connect to database after ${retryAttempts} attempts. Exiting...`,
+            `Failed to connect to database after ${retryAttempts} attempts`,
           );
-          process.exit(1);
+          throw new DatabaseConnectionError(retryAttempts);
         }
       }
     }

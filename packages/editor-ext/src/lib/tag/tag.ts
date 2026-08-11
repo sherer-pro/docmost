@@ -1,5 +1,4 @@
 import { mergeAttributes, Node, nodeInputRule } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 import { builtInTagDefinitions, getTagLabel, getValidTagValue } from './utils';
 import type { TagDefinition, TagValue } from './utils';
 
@@ -103,7 +102,7 @@ export const Tag = Node.create<TagOptions>({
 
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 
   addCommands() {

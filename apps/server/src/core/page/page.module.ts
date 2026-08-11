@@ -5,7 +5,8 @@ import { PageHistoryService } from './services/page-history.service';
 import { TrashCleanupService } from './services/trash-cleanup.service';
 import { PageHistoryRecorderService } from './services/page-history-recorder.service';
 import { StorageModule } from '../../integrations/storage/storage.module';
-import { CollaborationModule } from '../../collaboration/collaboration.module';
+import { CollaborationClientModule } from '../../collaboration/client/collaboration-client.module';
+import { CollaborationHistoryModule } from '../../collaboration/services/collaboration-history.module';
 import { WatcherModule } from '../watcher/watcher.module';
 import { NotificationModule } from '../notification/notification.module';
 import { LabelModule } from '../label/label.module';
@@ -17,6 +18,7 @@ import { PageTemplateService } from './services/page-template.service';
 import { PageAccessModule } from '../page-access/page-access.module';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
 import { PAGE_TEMPLATE_SYNC_HANDLER } from '../../integrations/queue/outbox/queue-outbox.types';
+import { PageTemplateRuntimeService } from './services/page-template-runtime.service';
 
 @Module({
   controllers: [PageController, PageTemplateController],
@@ -29,15 +31,22 @@ import { PAGE_TEMPLATE_SYNC_HANDLER } from '../../integrations/queue/outbox/queu
     BacklinkService,
     LinkPreviewService,
     PageTemplateService,
+    PageTemplateRuntimeService,
     {
       provide: PAGE_TEMPLATE_SYNC_HANDLER,
-      useExisting: PageTemplateService,
+      useExisting: PageTemplateRuntimeService,
     },
   ],
-  exports: [PageService, PageHistoryService, PageHistoryRecorderService],
+  exports: [
+    PageService,
+    PageHistoryService,
+    PageHistoryRecorderService,
+    PAGE_TEMPLATE_SYNC_HANDLER,
+  ],
   imports: [
     StorageModule,
-    CollaborationModule,
+    CollaborationClientModule,
+    CollaborationHistoryModule,
     WatcherModule,
     NotificationModule,
     LabelModule,

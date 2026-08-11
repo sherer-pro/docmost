@@ -1,5 +1,4 @@
-import { mergeAttributes, Node } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
+import { mergeAttributes, Node } from '@tiptap/core';
 
 export interface SubpagesOptions {
   HTMLAttributes: Record<string, any>;
@@ -8,7 +7,7 @@ export interface SubpagesOptions {
 
 export interface SubpagesAttributes {}
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     subpages: {
       insertSubpages: (attributes?: SubpagesAttributes) => ReturnType;
@@ -17,7 +16,7 @@ declare module "@tiptap/core" {
 }
 
 export const Subpages = Node.create<SubpagesOptions>({
-  name: "subpages",
+  name: 'subpages',
 
   addOptions() {
     return {
@@ -26,7 +25,7 @@ export const Subpages = Node.create<SubpagesOptions>({
     };
   },
 
-  group: "block",
+  group: 'block',
   atom: true,
   draggable: true,
 
@@ -40,11 +39,11 @@ export const Subpages = Node.create<SubpagesOptions>({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
+      'div',
       mergeAttributes(
-        { "data-type": this.name },
+        { 'data-type': this.name },
         this.options.HTMLAttributes,
-        HTMLAttributes
+        HTMLAttributes,
       ),
     ];
   },
@@ -66,6 +65,6 @@ export const Subpages = Node.create<SubpagesOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

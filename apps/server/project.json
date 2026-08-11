@@ -38,10 +38,9 @@
     },
     "collab:dev": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build"],
       "options": {
         "cwd": "apps/server",
-        "command": "cross-env NODE_ENV=development node dist/apps/server/src/collaboration/server/collab-main"
+        "command": "cross-env NODE_ENV=development nest start --watch --entryFile collaboration/server/collab-main"
       }
     },
     "email:dev": {

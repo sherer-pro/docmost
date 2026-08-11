@@ -1,5 +1,4 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 
 export interface TemplateManagedBlockOptions {
   view: any;
@@ -60,10 +59,7 @@ export const TemplateManagedBlock = Node.create<TemplateManagedBlockOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       'div',
-      mergeAttributes(
-        { 'data-type': 'templateManagedBlock' },
-        HTMLAttributes,
-      ),
+      mergeAttributes({ 'data-type': 'templateManagedBlock' }, HTMLAttributes),
       0,
     ];
   },
@@ -87,11 +83,13 @@ export const TemplateManagedBlock = Node.create<TemplateManagedBlockOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });
 
 function createTemplateNodeId(): string {
-  return globalThis.crypto?.randomUUID?.() ??
-    `template-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `template-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }

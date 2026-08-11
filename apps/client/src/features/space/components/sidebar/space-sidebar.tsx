@@ -52,7 +52,7 @@ import { SwitchSpace } from "./switch-space";
 import ExportModal from "@/components/common/export-modal";
 import { useCreateDatabaseMutation } from "@/features/database/queries/database-query.ts";
 import { notifications } from "@mantine/notifications";
-import { queryClient } from "@/main.tsx";
+import { queryClient } from "@/lib/query-client.ts";
 import { getPageById } from "@/features/page/services/page-service.ts";
 import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";

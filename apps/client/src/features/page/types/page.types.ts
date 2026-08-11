@@ -10,6 +10,9 @@ import {
   type PageContentFormat,
   type PageContentOperation,
 } from "@docmost/api-contract";
+import { ExportFormat } from "@/features/page/types/export.types.ts";
+
+export { ExportFormat } from "@/features/page/types/export.types.ts";
 
 /**
  * Page settings stored in `pages.settings`.
@@ -186,11 +189,4 @@ export interface IExportPageParams {
   format: ExportFormat;
   includeChildren?: boolean;
   includeAttachments?: boolean;
-}
-
-export enum ExportFormat {
-  Docmost = "docmost",
-  HTML = "html",
-  Markdown = "markdown",
-  PDF = "pdf",
 }

@@ -12,7 +12,6 @@ import {
 } from './collaboration.util';
 import * as Y from 'yjs';
 import { updateYFragment } from 'y-prosemirror';
-import { User } from '@docmost/db/types/entity.types';
 import {
   AiPageOperation,
   applyAiPageOperation,
@@ -20,10 +19,12 @@ import {
 } from '../common/helpers/prosemirror/ai-page-operation';
 import { strictJsonToNode } from './collaboration.util';
 import { PageEmbedService } from '../core/page/transclusion/page-embed.service';
+import type {
+  CollaborationActor,
+  CollaborationCommandHandlers,
+} from './collaboration-document.port';
 
-export type CollabEventHandlers = ReturnType<
-  CollaborationHandler['getHandlers']
->;
+export type CollabEventHandlers = CollaborationCommandHandlers;
 
 @Injectable()
 export class CollaborationHandler {
@@ -31,21 +32,14 @@ export class CollaborationHandler {
 
   constructor(private readonly pageEmbeds: PageEmbedService) {}
 
-  getHandlers(hocuspocus: Hocuspocus) {
+  getHandlers(hocuspocus: Hocuspocus): CollaborationCommandHandlers {
     return {
-      alterState: async (documentName: string, payload: { pageId: string }) => {
-        // dummy
-        // this.logger.log('Processing', documentName, payload);
-        // await this.withYdocConnection(hocuspocus, documentName, {}, (doc) => {
-        //   const fragment = doc.getXmlFragment('default');
-        //});
-      },
       updatePageContent: async (
         documentName: string,
         payload: {
           prosemirrorJson: any;
           operation: string;
-          user: User;
+          user: CollaborationActor;
         },
       ) => {
         const { prosemirrorJson, operation, user } = payload;
@@ -126,7 +120,7 @@ export class CollaborationHandler {
           operation: AiPageOperation;
           baseContentHash: string;
           expectedAfterHash: string;
-          user: User;
+          user: CollaborationActor;
         },
       ) => {
         const { operation, baseContentHash, expectedAfterHash, user } = payload;
@@ -175,7 +169,7 @@ export class CollaborationHandler {
           operationLeaseToken: string;
           workspaceId: string;
           systemSyncRevision?: number;
-          user: User;
+          user: CollaborationActor;
         },
       ) => {
         const {
@@ -264,7 +258,7 @@ export class CollaborationHandler {
       },
       getAiPageContentHash: async (
         documentName: string,
-        payload: { user: User },
+        payload: { user: CollaborationActor },
       ) => {
         return this.withYdocConnection(
           hocuspocus,
@@ -276,7 +270,7 @@ export class CollaborationHandler {
       },
       getAiPageContent: async (
         documentName: string,
-        payload: { user: User },
+        payload: { user: CollaborationActor },
       ) => {
         return this.withYdocConnection(
           hocuspocus,

@@ -58,11 +58,10 @@ function createHarness(invitation?: Record<string, unknown>) {
   const notificationEmailDeliveryPolicy = {
     isNotificationEmailStillDeliverable: jest.fn().mockResolvedValue(true),
   };
-  const moduleRef = {
-    get: jest.fn((token: string) =>
-      token === 'NOTIFICATION_EMAIL_DELIVERY_POLICY_HANDLER'
-        ? notificationEmailDeliveryPolicy
-        : pageTemplateSync,
+  const handlerRegistry = {
+    getPageTemplateSync: jest.fn(() => pageTemplateSync),
+    getNotificationEmailDelivery: jest.fn(
+      () => notificationEmailDeliveryPolicy,
     ),
   };
   const generalQueue = { add: jest.fn().mockResolvedValue(undefined) };
@@ -77,7 +76,7 @@ function createHarness(invitation?: Record<string, unknown>) {
     duplicatePageAttachments as any,
     generalQueue as any,
     notificationQueue as any,
-    moduleRef as any,
+    handlerRegistry as any,
   );
 
   return {

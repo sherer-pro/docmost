@@ -116,6 +116,7 @@
 | POST | `/groups/members/remove` | `apps/server/src/core/group/group.controller.ts` |
 | GET | `/health` | `apps/server/src/integrations/health/health.controller.ts` |
 | GET | `/health/live` | `apps/server/src/integrations/health/health.controller.ts` |
+| POST | `/internal/collaboration/commands` | `apps/server/src/collaboration/server/collaboration-internal.controller.ts` |
 | POST | `/labels` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/delete` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/pages` | `apps/server/src/core/label/label.controller.ts` |

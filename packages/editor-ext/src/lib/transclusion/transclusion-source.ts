@@ -1,5 +1,4 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 import {
   isValidTransclusionIdentifier,
   TRANSCLUSION_SOURCE_CONTENT_EXPRESSION,
@@ -154,6 +153,6 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
 
   addNodeView() {
     if (!this.options.view) return null;
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

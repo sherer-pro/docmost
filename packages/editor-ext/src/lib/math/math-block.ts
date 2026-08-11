@@ -1,7 +1,6 @@
-import { Node, nodeInputRule } from "@tiptap/core";
-import { ReactNodeViewRenderer } from "@tiptap/react";
+import { Node, nodeInputRule } from '@tiptap/core';
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     mathBlock: {
       setMathBlock: () => ReturnType;
@@ -21,8 +20,8 @@ export interface MathBlockAttributes {
 export const inputRegex = /(?:^|\s)((?:\$\$\$)((?:[^$]+))(?:\$\$\$))$/;
 
 export const MathBlock = Node.create({
-  name: "mathBlock",
-  group: "block",
+  name: 'mathBlock',
+  group: 'block',
   atom: true,
 
   addOptions() {
@@ -35,7 +34,7 @@ export const MathBlock = Node.create({
   addAttributes() {
     return {
       text: {
-        default: "",
+        default: '',
         parseHTML: (element) => {
           return element.innerHTML;
         },
@@ -48,7 +47,7 @@ export const MathBlock = Node.create({
       {
         tag: `div[data-type="${this.name}"]`,
         getAttrs: (node: HTMLElement) => {
-          return node.hasAttribute("data-katex") ? {} : false;
+          return node.hasAttribute('data-katex') ? {} : false;
         },
       },
     ];
@@ -56,8 +55,8 @@ export const MathBlock = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "div",
-      { "data-type": this.name, "data-katex": true },
+      'div',
+      { 'data-type': this.name, 'data-katex': true },
       `${HTMLAttributes.text}`,
     ];
   },
@@ -66,7 +65,7 @@ export const MathBlock = Node.create({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 
   addCommands() {
@@ -88,7 +87,7 @@ export const MathBlock = Node.create({
         find: inputRegex,
         type: this.type,
         getAttributes: (match) => ({
-          text: match[1].replaceAll("$", ""),
+          text: match[1].replaceAll('$', ''),
         }),
       }),
     ];

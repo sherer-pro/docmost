@@ -69,6 +69,7 @@ import { RagSyncModule } from './rag-sync/rag-sync.module';
     McpModule,
     SsoModule,
   ],
+  exports: [PageModule],
 })
 export class CoreModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

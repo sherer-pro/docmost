@@ -64,6 +64,7 @@ export default function TransclusionReferenceView(props: NodeViewProps) {
 
 function TransclusionReferenceBody({
   editor,
+  extension,
   node,
   deleteNode,
   getPos,
@@ -239,6 +240,7 @@ function TransclusionReferenceBody({
           content={result.content}
           renderEditor={renderEditor}
           version={result.sourceUpdatedAt}
+          extensions={extension.options.getContentExtensions?.() ?? []}
         />
       ) : result.status === "no_access" ? (
         <NoAccessPlaceholder />

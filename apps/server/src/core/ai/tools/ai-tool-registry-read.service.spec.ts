@@ -102,7 +102,7 @@ function buildRegistry(options?: {
     contentPolicy as any,
     pages as any,
     {
-      handleYjsEvent: jest.fn(async () => {
+      getPageContent: jest.fn(async () => {
         if (options?.liveError) throw new Error('collaboration unavailable');
         return options?.liveContent ?? { type: 'doc', content: [] };
       }),

@@ -1,7 +1,6 @@
-import Image from "@tiptap/extension-image";
-import { ImageOptions as DefaultImageOptions } from "@tiptap/extension-image";
-import { ReactNodeViewRenderer } from "@tiptap/react";
-import { mergeAttributes, Range } from "@tiptap/core";
+import Image from '@tiptap/extension-image';
+import { ImageOptions as DefaultImageOptions } from '@tiptap/extension-image';
+import { mergeAttributes, Range } from '@tiptap/core';
 
 export interface ImageOptions extends DefaultImageOptions {
   view: any;
@@ -20,24 +19,24 @@ export interface ImageAttributes {
   };
 }
 
-declare module "@tiptap/core" {
+declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     imageBlock: {
       setImage: (attributes: ImageAttributes) => ReturnType;
       setImageAt: (
-        attributes: ImageAttributes & { pos: number | Range }
+        attributes: ImageAttributes & { pos: number | Range },
       ) => ReturnType;
-      setImageAlign: (align: "left" | "center" | "right") => ReturnType;
+      setImageAlign: (align: 'left' | 'center' | 'right') => ReturnType;
       setImageWidth: (width: number) => ReturnType;
     };
   }
 }
 
 export const TiptapImage = Image.extend<ImageOptions>({
-  name: "image",
+  name: 'image',
 
   inline: false,
-  group: "block",
+  group: 'block',
   isolating: true,
   atom: true,
   defining: true,
@@ -52,52 +51,52 @@ export const TiptapImage = Image.extend<ImageOptions>({
   addAttributes() {
     return {
       src: {
-        default: "",
-        parseHTML: (element) => element.getAttribute("src"),
+        default: '',
+        parseHTML: (element) => element.getAttribute('src'),
         renderHTML: (attributes) => ({
           src: attributes.src,
         }),
       },
       width: {
-        default: "100%",
-        parseHTML: (element) => element.getAttribute("width"),
+        default: '100%',
+        parseHTML: (element) => element.getAttribute('width'),
         renderHTML: (attributes: ImageAttributes) => ({
           width: attributes.width,
         }),
       },
       align: {
-        default: "center",
-        parseHTML: (element) => element.getAttribute("data-align"),
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align'),
         renderHTML: (attributes: ImageAttributes) => ({
-          "data-align": attributes.align,
+          'data-align': attributes.align,
         }),
       },
       alt: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("alt"),
+        parseHTML: (element) => element.getAttribute('alt'),
         renderHTML: (attributes: ImageAttributes) => ({
           alt: attributes.alt,
         }),
       },
       attachmentId: {
         default: undefined,
-        parseHTML: (element) => element.getAttribute("data-attachment-id"),
+        parseHTML: (element) => element.getAttribute('data-attachment-id'),
         renderHTML: (attributes: ImageAttributes) => ({
-          "data-attachment-id": attributes.attachmentId,
+          'data-attachment-id': attributes.attachmentId,
         }),
       },
       size: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-size"),
+        parseHTML: (element) => element.getAttribute('data-size'),
         renderHTML: (attributes: ImageAttributes) => ({
-          "data-size": attributes.size,
+          'data-size': attributes.size,
         }),
       },
       aspectRatio: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-aspect-ratio"),
+        parseHTML: (element) => element.getAttribute('data-aspect-ratio'),
         renderHTML: (attributes: ImageAttributes) => ({
-          "data-aspect-ratio": attributes.aspectRatio,
+          'data-aspect-ratio': attributes.aspectRatio,
         }),
       },
       placeholder: {
@@ -109,7 +108,7 @@ export const TiptapImage = Image.extend<ImageOptions>({
 
   renderHTML({ HTMLAttributes }) {
     return [
-      "img",
+      'img',
       mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
     ];
   },
@@ -120,7 +119,7 @@ export const TiptapImage = Image.extend<ImageOptions>({
         (attrs: ImageAttributes) =>
         ({ commands }) => {
           return commands.insertContent({
-            type: "image",
+            type: 'image',
             attrs: attrs,
           });
         },
@@ -129,7 +128,7 @@ export const TiptapImage = Image.extend<ImageOptions>({
         (attrs) =>
         ({ commands }) => {
           return commands.insertContentAt(attrs.pos, {
-            type: "image",
+            type: 'image',
             attrs: attrs,
           });
         },
@@ -137,12 +136,12 @@ export const TiptapImage = Image.extend<ImageOptions>({
       setImageAlign:
         (align) =>
         ({ commands }) =>
-          commands.updateAttributes("image", { align }),
+          commands.updateAttributes('image', { align }),
 
       setImageWidth:
         (width) =>
         ({ commands }) =>
-          commands.updateAttributes("image", {
+          commands.updateAttributes('image', {
             width: `${Math.max(0, Math.min(100, width))}%`,
           }),
     };
@@ -152,6 +151,6 @@ export const TiptapImage = Image.extend<ImageOptions>({
     // Force the react node view to render immediately using flush sync (https://github.com/ueberdosis/tiptap/blob/b4db352f839e1d82f9add6ee7fb45561336286d8/packages/react/src/ReactRenderer.tsx#L183-L191)
     this.editor.isInitialized = true;
 
-    return ReactNodeViewRenderer(this.options.view);
+    return this.options.view;
   },
 });

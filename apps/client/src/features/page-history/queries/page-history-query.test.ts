@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/main", () => ({
+vi.mock("@/lib/query-client", () => ({
   queryClient: mocks,
 }));
 
