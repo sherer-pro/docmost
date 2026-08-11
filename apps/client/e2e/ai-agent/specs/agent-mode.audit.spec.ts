@@ -395,17 +395,20 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
       retrieval: { adapter: "none", url: null },
     };
     await api(admin, "PATCH", `/api/spaces/${space.id}/ai/config`, providerConfig);
+    const complex = complexDocument(`COMPLEX_${runId}`);
+    const page = await createPage(admin, space.id, "Agent complex document", complex);
+    const url = pageUrl(space, page);
+    await openAssistant(adminPage, url);
+    await expect(adminPage.getByRole("radio", { name: /^Agent$/i })).toHaveCount(0);
     await api(admin, "POST", `/api/spaces/${space.id}/ai/config/actions/test-agent`, {});
     await api(admin, "PATCH", `/api/spaces/${space.id}/ai/config`, { agentEnabled: true });
 
     const workspacePolicy = (await api<any>(admin, "GET", "/api/ai/tool-policy")).payload;
-    const complex = complexDocument(`COMPLEX_${runId}`);
-    const page = await createPage(admin, space.id, "Agent complex document", complex);
-    const url = pageUrl(space, page);
     await Promise.all([
       openAssistant(adminPage, url),
       memberContext.newPage().then((memberPage) => memberPage.goto(url)),
     ]);
+    await expect(adminPage.getByRole("radio", { name: /^Agent$/i })).toBeEnabled();
     const liveEditor = adminPage
       .locator('.ProseMirror[aria-label="Editor"], .ProseMirror[aria-label="Редактор"]')
       .first();
@@ -436,7 +439,9 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
     const approve = adminPage.getByRole("button", { name: /Approve|Одобрить/i });
     await expect(approve).toBeVisible();
     await capture(adminPage, "01-pending-approval");
-    await approve.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+    await approve.focus();
+    await expect(approve).toBeFocused();
+    await adminPage.keyboard.press("Enter");
     const successDone = await waitRun(admin, success.run.id, ["completed"]);
     const writeSteps = successDone.steps.filter((step: any) => step.writeClass === "write");
     expect(writeSteps).toHaveLength(1);
@@ -508,9 +513,8 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
     if ((await memberEditor.getAttribute("contenteditable")) !== "true") {
       await memberPage.getByRole("radiogroup").getByText(/Edit|Редактировать/i).click();
     }
-    await memberEditor.click();
-    await memberPage.keyboard.press("Control+End");
-    await memberPage.keyboard.type(" concurrent-writer-change");
+    await expect(memberEditor).toHaveAttribute("contenteditable", "true");
+    await memberEditor.fill(`STALE_${runId} concurrent-writer-change`);
     await expect(memberEditor).toContainText("concurrent-writer-change");
     const staleDecision = await api(admin, "POST", `/api/ai/runs/${stale.run.id}/steps/${staleStep.id}/actions/approve`, {}, true);
     expect(staleDecision.ok).toBe(true);
