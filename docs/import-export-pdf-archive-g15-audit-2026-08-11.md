@@ -170,7 +170,8 @@ all exited 0 unless explicitly noted below. The material execution log is:
 | `corepack pnpm run check:comments:en` | 0 | passed again after report creation |
 | shared-stack `corepack pnpm run test:editor:e2e` | 1 | 17/23; Draw.io x4 plus two transient failures |
 | isolated final-image editor E2E with local Draw.io route | 1 | 19/23; only reproducible Draw.io x4 remained |
-| artifact sanitizer and scanner | 0 | 0 credential findings; canary absent from API, logs, DB, Redis, storage |
+| `sanitize-traces.mjs --root ...` / `scan-artifacts.mjs --root ...` final invocation | 1 | operator CLI mismatch: these scripts take a positional root; failed before reading or writing the evidence tree |
+| artifact sanitizer and scanner with the positional evidence root | 0 | final rerun: 0 credential findings; canary absent from API, logs, DB, Redis, storage |
 
 The targeted editor rerun also failed the same four Draw.io assertions, proving
 the failure is stable rather than a G15 change. The initial Firefox navigation
