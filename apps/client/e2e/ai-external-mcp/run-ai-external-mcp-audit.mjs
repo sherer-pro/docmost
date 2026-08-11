@@ -791,23 +791,16 @@ async function browserRevokeConsentDuringRun(conversationId) {
     const composer = page.getByRole("button", {
       name: /External tools|Внешние инструменты/i,
     });
-    const aside = page.locator("#docmost-context-aside");
-    const asideHidden =
-      (await aside.count()) === 0 ||
-      (await aside.getAttribute("aria-hidden").catch(() => "true")) === "true";
-    if (asideHidden) {
+    if (!(await composer.isVisible().catch(() => false))) {
       const open = page.getByRole("button", {
         name: /Open AI assistant|Открыть (?:AI|ИИ)-помощника/i,
       });
-      await open.click();
-      await waitFor(
-        "AI assistant panel",
-        async () =>
-          (await aside.count()) > 0 &&
-          (await aside.getAttribute("aria-hidden").catch(() => "true")) !==
-            "true",
-        10_000,
-      );
+      await open.click({ timeout: 1_000 }).catch(async (error) => {
+        // The persisted conversation can reopen the panel between our check
+        // and click. In that race the overlay correctly intercepts the stale
+        // trigger; the visible composer is the success condition.
+        if (!(await composer.isVisible().catch(() => false))) throw error;
+      });
     }
     await composer.waitFor({ state: "visible" });
     const composerDisabled = await composer.isDisabled();
@@ -815,9 +808,11 @@ async function browserRevokeConsentDuringRun(conversationId) {
     let revoked = false;
     if (!composerDisabled) {
       await composer.click();
-      const consentSwitch = page.getByRole("checkbox", {
-        name: /Allow Hostile audit|Разрешить Hostile audit/i,
-      });
+      const consentSwitch = page
+        .locator("label")
+        .filter({ hasText: /Hostile audit/i })
+        .locator('input[type="checkbox"]')
+        .first();
       await consentSwitch.waitFor({ state: "visible" });
       switchDisabled = await consentSwitch.isDisabled();
       if (!switchDisabled && (await consentSwitch.isChecked())) {
@@ -914,11 +909,14 @@ async function browserRoleIsolation() {
       ownerPage.goto("/settings/ai/external-tools"),
       memberPage.goto("/settings/ai/external-tools"),
     ]);
-    const ownerVisible = await ownerPage
+    const ownerSurface = ownerPage
       .getByText(/External MCP servers|Внешние MCP-серверы/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
+      .first();
+    const ownerVisible = await waitFor(
+      "owner external MCP admin surface",
+      () => ownerSurface.isVisible().catch(() => false),
+      10_000,
+    );
     await waitFor(
       "member admin-route redirect",
       () => !memberPage.url().includes("/settings/ai/external-tools"),
@@ -1492,7 +1490,11 @@ async function runLiveAudit() {
 
 async function cleanup() {
   try {
-    if (apiContext) {
+    if (
+      process.env.DOCMOST_AUTH_TOKEN?.trim() &&
+      process.env.DOCMOST_CSRF_TOKEN?.trim()
+    ) {
+      await adminApi();
       if (originalLocale) {
         await api("POST", "/api/users/update", { locale: originalLocale }).catch(() => undefined);
       }
