@@ -76,6 +76,17 @@ function getCodeBlockContentStart(editor: Editor): number {
   return contentStart;
 }
 
+function countCommentMarks(value: {
+  descendants: (callback: (node: any) => void) => void;
+}): number {
+  let count = 0;
+  value.descendants((node) => {
+    count +=
+      node.marks?.filter((mark) => mark.type.name === "comment").length ?? 0;
+  });
+  return count;
+}
+
 describe("inline comments in editor selections", () => {
   it("allows comment marks inside code blocks", () => {
     const editor = createEditor({
@@ -110,6 +121,48 @@ describe("inline comments in editor selections", () => {
 
       expect(markedText?.text).toBe("value");
       expect(markElement?.textContent).toBe("value");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("restores a deleted inline anchor through undo and redo", () => {
+    const editor = createEditor("<p>Alpha Beta Gamma</p>");
+
+    try {
+      editor.commands.setTextSelection({ from: 7, to: 11 });
+      editor.commands.setComment("comment-undo");
+      expect(countCommentMarks(editor.state.doc)).toBe(1);
+
+      editor.commands.deleteSelection();
+      expect(countCommentMarks(editor.state.doc)).toBe(0);
+
+      editor.commands.undo();
+      expect(editor.getText()).toContain("Beta");
+      expect(countCommentMarks(editor.state.doc)).toBe(1);
+
+      editor.commands.redo();
+      expect(editor.getText()).not.toContain("Beta");
+      expect(countCommentMarks(editor.state.doc)).toBe(0);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("strips an existing comment id from pasted content", () => {
+    const editor = createEditor("<p>Alpha Beta Gamma</p>");
+
+    try {
+      editor.commands.setTextSelection({ from: 7, to: 11 });
+      editor.commands.setComment("comment-copy");
+      let pasted = editor.state.doc.slice(7, 11);
+
+      editor.view.someProp("transformPasted", (transform) => {
+        pasted = transform(pasted, editor.view);
+        return false;
+      });
+
+      expect(countCommentMarks(pasted.content)).toBe(0);
     } finally {
       editor.destroy();
     }

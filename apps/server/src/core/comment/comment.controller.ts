@@ -112,6 +112,10 @@ export class CommentController {
 
     await this.pageAccessService.assertCanWritePage(page, user);
 
+    if (comment.parentCommentId) {
+      throw new BadRequestException('Only comment threads can be resolved');
+    }
+
     return this.commentService.resolve(comment, dto, user);
   }
 
@@ -209,23 +213,23 @@ export class CommentController {
     const isOwner = comment.creatorId === user.id;
 
     if (isOwner) {
-      /*
-      // Check if comment has children from other users
       const hasChildrenFromOthers =
         await this.commentRepo.hasChildrenFromOtherUsers(comment.id, user.id);
 
-      // Owner can delete if no children from other users
       if (!hasChildrenFromOthers) {
         await this.commentRepo.deleteComment(comment.id);
         return;
       }
 
-      // If has children from others, only space admin can delete
-      if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+      const access = await this.pageAccessService.assertCanMoveDeleteShare(
+        page,
+        user,
+      );
+      if (!access.capabilities.canMoveDeleteShare) {
         throw new ForbiddenException(
           'Only space admins can delete comments with replies from other users',
         );
-      }*/
+      }
       await this.commentRepo.deleteComment(comment.id);
       return;
     }

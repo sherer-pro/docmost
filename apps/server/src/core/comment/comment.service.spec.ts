@@ -315,8 +315,8 @@ describe('CommentService', () => {
       pageId: 'page-1',
       spaceId: 'space-1',
       workspaceId: 'workspace-1',
-      resolvedById: 'user-1',
-      resolvedAt: new Date(),
+      resolvedById: null,
+      resolvedAt: null,
     });
 
     await service.resolve(
@@ -356,5 +356,44 @@ describe('CommentService', () => {
       }),
       trx,
     );
+  });
+
+  it('does not update or notify when resolve state is unchanged', async () => {
+    const { service, commentRepo, queueOutboxService } = createService();
+    commentRepo.findById.mockResolvedValue({
+      id: 'comment-resolved',
+      creatorId: 'user-2',
+      pageId: 'page-1',
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+      resolvedById: 'user-1',
+      resolvedAt: new Date('2026-08-10T10:00:00.000Z'),
+    });
+
+    await service.resolve(
+      {
+        id: 'comment-resolved',
+        creatorId: 'user-2',
+        pageId: 'page-1',
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+      } as any,
+      {
+        commentId: 'comment-resolved',
+        pageId: 'page-1',
+        resolved: true,
+      },
+      { id: 'user-1' } as any,
+    );
+
+    expect(commentRepo.findById).toHaveBeenCalledWith('comment-resolved', {
+      trx: expect.anything(),
+      withLock: true,
+    });
+    expect(commentRepo.updateComment).not.toHaveBeenCalled();
+    expect(
+      queueOutboxService.enqueueNotificationDispatch,
+    ).not.toHaveBeenCalled();
+    expect(queueOutboxService.kick).not.toHaveBeenCalled();
   });
 });
