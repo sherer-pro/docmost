@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: docker-publish-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   gates:
     name: Required release gates

@@ -28,6 +28,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
 
   try {
     await apiPost(api, "/api/users/update", {
+      aiPanelOpen: false,
       pageEditModeByPageId: {
         ...(original.pageEditModeByPageId ?? {}),
         [seeded.page.id]: "read",
@@ -69,6 +70,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
 
   } finally {
     await apiPost(api, "/api/users/update", {
+      aiPanelOpen: original.aiPanelOpen ?? false,
       fixedToolbar: original.fixedToolbar ?? false,
       pageEditModeByPageId: original.pageEditModeByPageId ?? {},
     }).catch(() => undefined);
@@ -91,6 +93,7 @@ test("mobile assistant drawer has an accessible name", async ({
 
   try {
     await apiPost(api, "/api/users/update", {
+      aiPanelOpen: false,
       pageEditModeByPageId: {
         ...(original.pageEditModeByPageId ?? {}),
         [seeded.page.id]: "edit",
@@ -121,6 +124,7 @@ test("mobile assistant drawer has an accessible name", async ({
     });
   } finally {
     await apiPost(api, "/api/users/update", {
+      aiPanelOpen: original.aiPanelOpen ?? false,
       pageEditModeByPageId: original.pageEditModeByPageId ?? {},
     }).catch(() => undefined);
     await api.dispose();

@@ -80,21 +80,37 @@ export async function openAssistant(
   });
   const aside = page.locator("#docmost-context-aside");
 
-  if (await composer.isVisible()) return;
-  const restoredPanel = await composer
-    .waitFor({ state: "visible", timeout: 20_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (restoredPanel) return;
+  await expect(openButton.or(composer).first()).toBeAttached();
+  const asideIsOpen =
+    (await aside.count()) > 0 &&
+    (await aside.getAttribute("aria-hidden")) !== "true";
+  if (asideIsOpen) {
+    await expect(composer).toBeVisible();
+    await expect(composer).toBeInViewport();
+    return;
+  }
+
+  const composerBox = (await composer.count())
+    ? await composer.boundingBox()
+    : null;
+  const viewport = page.viewportSize();
+  const composerInViewport = Boolean(
+    composerBox &&
+      viewport &&
+      composerBox.x < viewport.width &&
+      composerBox.y < viewport.height &&
+      composerBox.x + composerBox.width > 0 &&
+      composerBox.y + composerBox.height > 0,
+  );
+  if (composerInViewport) return;
 
   await expect(openButton).toBeAttached();
-  if (
-    (await aside.count()) === 0 ||
-    (await aside.getAttribute("aria-hidden")) === "true"
-  ) {
-    await openButton.click({ force: true });
-  }
+  await openButton.click({ force: true });
+  await expect(composer).toBeAttached();
+  if (await aside.count())
+    await expect(aside).not.toHaveAttribute("aria-hidden", "true");
   await expect(composer).toBeVisible();
+  await expect(composer).toBeInViewport();
 }
 
 export const test = base.extend<{ evidence: void }>({

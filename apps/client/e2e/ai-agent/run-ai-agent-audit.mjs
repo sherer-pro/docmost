@@ -1,16 +1,21 @@
 import { randomBytes } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { request } from "@playwright/test";
 
 const clientRoot = path.resolve(import.meta.dirname, "../..");
 const repoRoot = path.resolve(clientRoot, "../..");
-const dateRoot = path.join(repoRoot, "output/audit/ai-agent-mode-2026-08-09");
+const dateRoot = path.resolve(
+  process.env.DOCMOST_AI_AGENT_AUDIT_ROOT ??
+    path.join(repoRoot, "output/audit/ai-agent-mode"),
+);
 const runId = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(4).toString("hex")}`;
 const auditRoot = path.join(dateRoot, runId);
 const composeProject = `docmost-ai-agent-${runId.toLowerCase()}`;
+const playwrightCli = createRequire(import.meta.url).resolve("@playwright/test/cli");
 const composeFiles = [
   path.join(repoRoot, "docker-compose.yml"),
   path.join(import.meta.dirname, "docker-compose.audit.yml"),
@@ -54,7 +59,8 @@ function run(command, args, options = {}) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed with ${result.status}: ${(result.stderr || result.stdout).slice(-4000)}`);
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+    throw new Error(`${command} ${args.join(" ")} failed with ${result.status}: ${output.slice(-4000)}`);
   }
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
@@ -162,6 +168,8 @@ const databasePassword = randomBytes(30).toString("base64url");
 const adminPassword = `Aa1!${randomBytes(30).toString("base64url")}`;
 const adminEmail = `ai-agent-admin-${runId}@example.com`;
 const canary = `audit-canary-${randomBytes(24).toString("base64url")}`;
+const databaseUrl = `postgresql://docmost:${databasePassword}@toxiproxy:15432/docmost`;
+const redisUrl = "redis://toxiproxy:16379";
 const composeEnv = {
   ...process.env,
   COMPOSE_PROJECT_NAME: composeProject,
@@ -173,8 +181,8 @@ const composeEnv = {
   POSTGRES_USER: "docmost",
   POSTGRES_DB: "docmost",
   POSTGRES_PASSWORD: databasePassword,
-  DATABASE_URL: `postgresql://docmost:${databasePassword}@toxiproxy:15432/docmost`,
-  REDIS_URL: "redis://toxiproxy:16379",
+  DATABASE_URL: databaseUrl,
+  REDIS_URL: redisUrl,
   EDGE_NETWORK_NAME: `${composeProject}_edge`,
   EDGE_NETWORK_EXTERNAL: "false",
   DOCMOST_AI_AGENT_MODEL_PORT: String(modelPort),
@@ -247,19 +255,15 @@ try {
     DOCMOST_AI_AGENT_COMPOSE_PROJECT: composeProject,
     DOCMOST_AI_AGENT_CANARY: canary,
   };
-  const testRun = run("corepack", [
-    "pnpm",
-    "--filter",
-    "./apps/client",
-    "exec",
-    "playwright",
+  const testRun = run(process.execPath, [
+    playwrightCli,
     "test",
     "--config",
     "playwright.ai-agent.config.ts",
   ], {
+    cwd: clientRoot,
     env: playwrightEnv,
     timeout: 15 * 60_000,
-    shell: process.platform === "win32",
   });
   await fs.writeFile(path.join(auditRoot, "playwright-console.log"), `${testRun.stdout}${testRun.stderr}`);
 
@@ -282,6 +286,7 @@ try {
     startedAt,
     completedAt: new Date().toISOString(),
     baseURL,
+    collabURL,
     status: "passed",
     cleanup: "pending",
   }, null, 2)}\n`);
