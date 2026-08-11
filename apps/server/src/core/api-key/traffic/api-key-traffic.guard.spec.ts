@@ -56,6 +56,67 @@ describe('ApiKeyTrafficGuard', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  it('releases a lease acquired after the client disconnects', async () => {
+    const responseRaw = new EventEmitter() as EventEmitter & {
+      statusCode: number;
+      getHeader: () => undefined;
+    };
+    responseRaw.statusCode = 200;
+    responseRaw.getHeader = () => undefined;
+    const requestRaw = new EventEmitter();
+    let resolveAcquire: (value: any) => void = () => undefined;
+    const traffic = {
+      acquire: jest.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveAcquire = resolve;
+        }),
+      ),
+      renew: jest.fn(),
+      release: jest.fn().mockResolvedValue(undefined),
+      observeLeaseLoss: jest.fn(),
+      observeRequest: jest.fn(),
+    };
+    const guard = new ApiKeyTrafficGuard(
+      { getAllAndOverride: () => 'mcp' } as any,
+      traffic as any,
+      { getMcpTrafficLimits: () => ({}) } as any,
+    );
+    const context = {
+      getHandler: () => undefined,
+      getClass: () => undefined,
+      switchToHttp: () => ({
+        getRequest: () => ({
+          user: { apiKey: { id: 'key' } },
+          raw: requestRaw,
+          url: '/mcp',
+        }),
+        getResponse: () => ({ raw: responseRaw }),
+      }),
+    } as any;
+
+    const activation = guard.canActivate(context);
+    requestRaw.emit('aborted');
+    resolveAcquire({
+      allowed: true,
+      retryAfterMs: 0,
+      leaseId: 'late-lease',
+      keys: ['concurrent'],
+      renewAfterMs: 100,
+    });
+
+    await expect(activation).resolves.toBe(false);
+    expect(traffic.release).toHaveBeenCalledTimes(1);
+    expect(traffic.release).toHaveBeenCalledWith(
+      expect.objectContaining({ leaseId: 'late-lease' }),
+    );
+    expect(traffic.observeRequest).toHaveBeenCalledWith(
+      'mcp',
+      'aborted',
+      expect.any(Number),
+      0,
+    );
+  });
+
   it('fails closed with a stable 503 when lease renewal is lost before headers', async () => {
     jest.useFakeTimers();
     const responseRaw = new EventEmitter() as EventEmitter & {
