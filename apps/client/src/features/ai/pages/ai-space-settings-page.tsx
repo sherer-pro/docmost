@@ -83,7 +83,9 @@ export default function AiSpaceSettingsPage() {
       <EmptyState
         icon={IconMapOff}
         title={t("ai.integrations.spaceNotFound")}
-        description={t("This page may have been deleted, moved, or you may not have access.")}
+        description={t(
+          "This page may have been deleted, moved, or you may not have access.",
+        )}
         action={
           <Button component={Link} to="/home" variant="light">
             {t("Take me back to homepage")}
@@ -110,7 +112,9 @@ export default function AiSpaceSettingsPage() {
       <EmptyState
         icon={IconLock}
         title={t("page.access.role.none")}
-        description={t("This page may have been deleted, moved, or you may not have access.")}
+        description={t(
+          "This page may have been deleted, moved, or you may not have access.",
+        )}
         action={
           <Button component={Link} to={`/s/${space.slug}`} variant="light">
             {t("ai.integrations.backToSpace")}
@@ -207,6 +211,7 @@ export default function AiSpaceSettingsPage() {
             spaceId={space.id}
             section={section}
             onDirtyChange={setDirty}
+            canManageAssistantProfilePolicy={isWorkspaceAdmin}
           />
         </main>
       </div>

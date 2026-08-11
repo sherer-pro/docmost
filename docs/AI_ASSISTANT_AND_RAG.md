@@ -64,7 +64,7 @@ The main components are:
 | `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback                 |
 | `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                |
 | `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                           |
-| `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history      |
+| `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history     |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
@@ -222,6 +222,14 @@ them, while built-ins remain available. No external rows means no external MCP
 for that profile. Names are unique case-insensitively among non-deleted profiles
 in one space, at most fifty active rows are allowed, updates require
 `expectedVersion`, and normal deletion is soft.
+
+The space-scoped profile-list response includes the effective
+`modelOverridesEnabled` policy. This lets a space manager edit overrides that
+workspace administrators have permitted without granting access to the
+workspace-level policy endpoint. Profile editors display localized tool names;
+capability IDs remain wire/storage identifiers and are not user-facing labels.
+The quick-command replacement editor preserves label, description, prompt,
+enabled state, and explicit order.
 
 A duplicate active name returns HTTP `409` with the stable
 `ai_profile_name_conflict` code. Clients should keep the editor open, reload the
@@ -697,7 +705,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts)                                   | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path.                                                                  | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead.                                              |
 | [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts)                                 | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities.                                                                                                          | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead.                                                  |
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
-| [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                   | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                               |
+| [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -967,7 +975,7 @@ described in JSON Schema.
 | `listPageAttachments`        | `pageId`, optional pagination                         | metadata/index status only; no path, bytes, extracted text, or token; maximum 100                                            |
 | `getPublicShareInfo`         | `pageId`                                              | effective direct/inherited share state, indexing flag, and public URL                                                        |
 | `listPageTemplates`          | optional `query`, `limit`                             | readable regular and synchronized templates in the key/run's current space; metadata only, maximum 50                        |
-| `getPageTemplateMetadata`    | `pageId`                                              | safe metadata, kind, and archive state for one readable regular or synchronized template in the current scoped space          |
+| `getPageTemplateMetadata`    | `pageId`                                              | safe metadata, kind, and archive state for one readable regular or synchronized template in the current scoped space         |
 | `listPageTemplateUsages`     | `pageId`, optional `limit`                            | readable pages created from the template, excluding detached pages; maximum 50                                               |
 
 Paginated built-in reads use opaque versioned keyset cursors bound to the tool
@@ -1253,21 +1261,21 @@ headers.
 
 ### Administrative UI routes
 
-| Route                            | Purpose                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                        |
-| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points           |
-| `/settings/ai/built-in-tools`    | workspace policy for built-in Agent and inbound MCP capabilities          |
-| `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch   |
-| `/settings/ai/guide`             | administrator-facing AI/RAG/MCP operation and risk guide                  |
+| Route                            | Purpose                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `/settings/ai`                   | redirects to `/settings/ai/spaces`                                           |
+| `/settings/ai/spaces`            | AI assistant overview with per-space configuration entry points              |
+| `/settings/ai/built-in-tools`    | workspace policy for built-in Agent and inbound MCP capabilities             |
+| `/settings/ai/external-tools`    | outbound external MCP catalog, tool approvals, and the workspace switch      |
+| `/settings/ai/guide`             | administrator-facing AI/RAG/MCP operation and risk guide                     |
 | `/settings/ai/spaces/:spaceSlug` | sectioned full-page configuration, including assistant profiles and RAG Sync |
-| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                                 |
-| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                       |
-| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration       |
-| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                            |
-| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                            |
-| `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members   |
-| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                            |
+| `/settings/keys`                 | "API keys" page; redirects to the MCP tab                                    |
+| `/settings/keys/mcp`             | MCP onboarding and workspace MCP-key administration                          |
+| `/settings/keys/rag`             | RAG synchronization onboarding and workspace RAG-key administration          |
+| `/settings/ai/mcp`               | compatibility redirect to `/settings/keys/mcp`                               |
+| `/settings/ai/rag`               | compatibility redirect to `/settings/keys/rag`                               |
+| `/settings/account/api-keys`     | compatibility redirect to the RAG tab for admins or profile for members      |
+| `/settings/api-keys`             | compatibility redirect to `/settings/keys/mcp`                               |
 
 The space settings modal contains only an AI status summary and a link to the
 full-page configuration. Workspace owners and administrators and space
@@ -1309,7 +1317,7 @@ CSRF contract.
 | `POST /api/spaces/:spaceId/ai/config/actions/test-retrieval`          | test external retrieval                                                                                                        |
 | `GET/PUT /api/spaces/:spaceId/ai/exclusions`                          | read or replace exclusion rules with optimistic revision                                                                       |
 | `GET /api/spaces/:spaceId/ai/exclusions/candidates`                   | search page candidates for exclusions                                                                                          |
-| `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, daily and last-7-calendar-day usage, active runs, and quick commands                       |
+| `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, daily and last-7-calendar-day usage, active runs, and quick commands                      |
 | `GET/POST /api/ai/conversations`                                      | list by required `pageId` or create a conversation                                                                             |
 | `GET/PATCH/DELETE /api/ai/conversations/:id`                          | read, update, or soft-delete an owned conversation                                                                             |
 | `POST /api/ai/conversations/:id/actions/open`                         | update the last-opened time                                                                                                    |
@@ -1343,7 +1351,7 @@ workspace `owner|admin`; the space routes require full space access, except
 | `POST /api/ai/mcp-servers/:serverId/actions/test`           | probe the connection without caching a client                                         |
 | `POST /api/ai/mcp-servers/:serverId/actions/discover`       | list remote tools and store a sanitized snapshot                                      |
 | `GET /api/spaces/:spaceId/ai/mcp-bindings`                  | read space bindings plus the bindable catalog                                         |
-| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId` | bind and narrow, fully replace optional group deny/tool rules, or remove the binding |
+| `PUT/DELETE /api/spaces/:spaceId/ai/mcp-bindings/:serverId` | bind and narrow, fully replace optional group deny/tool rules, or remove the binding  |
 | `GET/PUT /api/spaces/:spaceId/ai/mcp-preferences`           | read or fully replace the calling user's opt-in set; omitted bindings become disabled |
 
 ### Synchronization RAG API
