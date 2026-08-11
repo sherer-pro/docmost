@@ -96,3 +96,40 @@ export class FindPagesByLabelRequestDto extends PaginationOptions {
   @IsUUID()
   spaceId?: string;
 }
+
+export class ListLabelRegistryDto extends PaginationOptions {
+  @IsUUID()
+  spaceId: string;
+
+  @IsString()
+  @IsIn(SUPPORTED_LABEL_TYPES)
+  type: LabelType;
+}
+
+export class RenameLabelDto {
+  @IsUUID()
+  labelId: string;
+
+  @IsUUID()
+  spaceId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeLabelName(value) : value,
+  )
+  @MaxLength(100)
+  @Matches(/^[\p{L}\p{N}_-][\p{L}\p{N}\p{M}_~-]*$/u, {
+    message:
+      'Label names can only contain letters, numbers, hyphens, underscores, and tildes, and cannot start with a tilde',
+  })
+  name: string;
+}
+
+export class DeleteLabelDto {
+  @IsUUID()
+  labelId: string;
+
+  @IsUUID()
+  spaceId: string;
+}

@@ -78,15 +78,35 @@ export function DictionaryHighlightLayer({
       });
     };
 
-    const hideDefinition = () => setPopover(null);
+    const hideDefinition = () => {
+      setPopover(null);
+    };
     const handleMouseOver = (event: Event) => showDefinition(event.target);
     const handleFocusIn = (event: Event) => showDefinition(event.target);
     const handleClick = (event: Event) => showDefinition(event.target);
+    const handleLeave = (event: MouseEvent | FocusEvent) => {
+      const currentHighlight = getHighlightElement(event.target);
+      const nextHighlight = getHighlightElement(event.relatedTarget);
+
+      if (currentHighlight && currentHighlight === nextHighlight) {
+        return;
+      }
+
+      hideDefinition();
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !getHighlightElement(event.target) ||
-        !["Enter", " "].includes(event.key)
-      ) {
+      if (!getHighlightElement(event.target)) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        hideDefinition();
+        return;
+      }
+
+      if (!["Enter", " "].includes(event.key)) {
         return;
       }
 
@@ -95,20 +115,20 @@ export function DictionaryHighlightLayer({
       showDefinition(event.target);
     };
 
-    root.addEventListener("mouseover", handleMouseOver);
-    root.addEventListener("focusin", handleFocusIn);
-    root.addEventListener("click", handleClick);
-    root.addEventListener("keydown", handleKeyDown);
-    root.addEventListener("mouseout", hideDefinition);
-    root.addEventListener("focusout", hideDefinition);
+    root.addEventListener("mouseover", handleMouseOver, true);
+    root.addEventListener("focusin", handleFocusIn, true);
+    root.addEventListener("click", handleClick, true);
+    root.addEventListener("keydown", handleKeyDown, true);
+    root.addEventListener("mouseout", handleLeave, true);
+    root.addEventListener("focusout", handleLeave, true);
 
     return () => {
-      root.removeEventListener("mouseover", handleMouseOver);
-      root.removeEventListener("focusin", handleFocusIn);
-      root.removeEventListener("click", handleClick);
-      root.removeEventListener("keydown", handleKeyDown);
-      root.removeEventListener("mouseout", hideDefinition);
-      root.removeEventListener("focusout", hideDefinition);
+      root.removeEventListener("mouseover", handleMouseOver, true);
+      root.removeEventListener("focusin", handleFocusIn, true);
+      root.removeEventListener("click", handleClick, true);
+      root.removeEventListener("keydown", handleKeyDown, true);
+      root.removeEventListener("mouseout", handleLeave, true);
+      root.removeEventListener("focusout", handleLeave, true);
     };
   }, [termsById]);
 
@@ -169,6 +189,7 @@ export function DictionaryHighlightLayer({
       {popover &&
         createPortal(
           <div
+            role="tooltip"
             className={classes.definitionPopover}
             style={{ top: popover.top, left: Math.max(12, popover.left) }}
           >

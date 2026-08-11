@@ -92,7 +92,7 @@ export function DictionaryTermModal({
       onClose={onClose}
       title={isEditing ? t("Edit dictionary term") : t("Add dictionary term")}
       size="lg"
-      closeButtonProps={{ "aria-label": t("Close") }}
+      closeButtonProps={{ "aria-label": t("Close"), size: 32 }}
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>

@@ -15,6 +15,8 @@ describe('LabelService', () => {
       deleteLabel: jest.fn(),
       findLabelsByPageId: jest.fn(),
       findLabels: jest.fn(),
+      findLabelRegistry: jest.fn(),
+      renameLabel: jest.fn(),
       findPagesByLabelId: jest.fn(),
     };
     const db = {
@@ -26,6 +28,7 @@ describe('LabelService', () => {
     };
     const pageAccessService = {
       getEffectiveAccess: jest.fn(),
+      getSidebarAccessSnapshot: jest.fn(),
     };
 
     return {
@@ -139,6 +142,155 @@ describe('LabelService', () => {
       'space-1',
       trx,
     );
+    expect(labelRepo.deleteLabel).toHaveBeenCalledWith(
+      'label-1',
+      'workspace-1',
+      'space-1',
+      trx,
+    );
+  });
+
+  it('lists labels only from pages readable by the current user', async () => {
+    const { service, labelRepo, pageAccessService } = createService();
+    const readablePageIds = new Set(['page-1']);
+    const user = {
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any;
+    const pagination = { limit: 20 } as any;
+    const result = { items: [], meta: { limit: 20 } };
+    pageAccessService.getSidebarAccessSnapshot.mockResolvedValue({
+      readablePageIds,
+    });
+    labelRepo.findLabels.mockResolvedValue(result);
+
+    await expect(
+      service.getLabels(
+        'workspace-1',
+        user,
+        'space-1',
+        LabelType.PAGE,
+        pagination,
+      ),
+    ).resolves.toBe(result);
+
+    expect(pageAccessService.getSidebarAccessSnapshot).toHaveBeenCalledWith(
+      user,
+      'space-1',
+    );
+    expect(labelRepo.findLabels).toHaveBeenCalledWith(
+      'workspace-1',
+      'space-1',
+      LabelType.PAGE,
+      readablePageIds,
+      pagination,
+    );
+  });
+
+  it('applies readable page ids before paginating label page results', async () => {
+    const { service, labelRepo, pageAccessService } = createService();
+    const readablePageIds = new Set(['page-2']);
+    const user = {
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any;
+    const pagination = { limit: 20 } as any;
+    const result = { items: [{ id: 'page-2' }], meta: { limit: 20 } };
+    pageAccessService.getSidebarAccessSnapshot.mockResolvedValue({
+      readablePageIds,
+    });
+    labelRepo.findPagesByLabelId.mockResolvedValue(result);
+
+    await expect(
+      service.findPagesByLabel('label-1', user, {
+        spaceId: 'space-1',
+        pagination,
+      }),
+    ).resolves.toBe(result);
+
+    expect(labelRepo.findPagesByLabelId).toHaveBeenCalledWith(
+      'label-1',
+      'user-1',
+      {
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        pagination,
+        readablePageIds,
+      },
+    );
+    expect(pageAccessService.getEffectiveAccess).not.toHaveBeenCalled();
+  });
+
+  it('renames a normalized label in its own space', async () => {
+    const { service, labelRepo } = createService();
+    const label = {
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    };
+    const renamed = { ...label, name: 'new-name' };
+    labelRepo.findById.mockResolvedValue(label);
+    labelRepo.renameLabel.mockResolvedValue(renamed);
+
+    await expect(
+      service.renameLabel('label-1', ' New Name ', 'workspace-1', 'space-1'),
+    ).resolves.toEqual(renamed);
+
+    expect(labelRepo.renameLabel).toHaveBeenCalledWith(
+      'label-1',
+      'new-name',
+      'workspace-1',
+      'space-1',
+      trx,
+    );
+  });
+
+  it('rejects renaming a label from another space', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-2',
+      type: LabelType.PAGE,
+    });
+
+    await expect(
+      service.renameLabel('label-1', 'new-name', 'workspace-1', 'space-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(labelRepo.renameLabel).not.toHaveBeenCalled();
+  });
+
+  it('maps concurrent duplicate label renames to a conflict', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    });
+    labelRepo.renameLabel.mockRejectedValue({ code: '23505' });
+
+    await expect(
+      service.renameLabel('label-1', 'duplicate', 'workspace-1', 'space-1'),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('deletes a managed label and relies on the page-label cascade', async () => {
+    const { service, labelRepo } = createService();
+    labelRepo.findById.mockResolvedValue({
+      id: 'label-1',
+      name: 'old-name',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      type: LabelType.PAGE,
+    });
+
+    await service.deleteLabel('label-1', 'workspace-1', 'space-1');
+
     expect(labelRepo.deleteLabel).toHaveBeenCalledWith(
       'label-1',
       'workspace-1',

@@ -52,6 +52,7 @@ interface DictionaryDecorationBatch {
 
 const FULL_REBUILD_MIN_CHANGED_SIZE = 5_000;
 const FULL_REBUILD_CHANGED_RATIO = 0.5;
+const EXCLUDED_MARK_NAMES = new Set(["code", "link"]);
 
 export const dictionaryHighlightPluginKey =
   new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
@@ -65,6 +66,11 @@ function collectTextNodes(
 
   node.descendants((child, pos) => {
     if (child.isText) {
+      if (child.marks.some((mark) => EXCLUDED_MARK_NAMES.has(mark.type.name))) {
+        index += 1;
+        return;
+      }
+
       if (textNodesWithPosition[index]) {
         textNodesWithPosition[index] = {
           text: textNodesWithPosition[index].text + child.text,
@@ -246,6 +252,7 @@ function buildDecorationsForTextBlocks(
           Decoration.inline(from, to, {
             class: "dictionary-highlight",
             "data-dictionary-term-id": match.term.id,
+            "aria-description": match.term.definitionMarkdown,
             role: "button",
             tabindex: "0",
           }),
@@ -264,8 +271,12 @@ function collectTextBlocks(doc: PMNode): NodeWithPos[] {
   const textBlocks: NodeWithPos[] = [];
 
   doc.descendants((node, pos) => {
-    if (node.isTextblock) {
+    if (isHighlightableTextBlock(node)) {
       textBlocks.push({ node, pos });
+      return false;
+    }
+
+    if (node.isTextblock) {
       return false;
     }
 
@@ -273,6 +284,10 @@ function collectTextBlocks(doc: PMNode): NodeWithPos[] {
   });
 
   return textBlocks;
+}
+
+function isHighlightableTextBlock(node: PMNode): boolean {
+  return node.isTextblock && node.type.spec.code !== true;
 }
 
 function collectChangedTextBlocks(
@@ -288,7 +303,7 @@ function collectChangedTextBlocks(
     const from = Math.max(0, Math.min(newRange.from - 1, doc.content.size));
     const to = Math.max(from, Math.min(newRange.to + 1, doc.content.size));
 
-    findChildrenInRange(doc, { from, to }, (node) => node.isTextblock).forEach(
+    findChildrenInRange(doc, { from, to }, isHighlightableTextBlock).forEach(
       addTextBlock,
     );
 
@@ -298,7 +313,7 @@ function collectChangedTextBlocks(
       for (let depth = resolvedPosition.depth; depth > 0; depth -= 1) {
         const node = resolvedPosition.node(depth);
 
-        if (node.isTextblock) {
+        if (isHighlightableTextBlock(node)) {
           addTextBlock({ node, pos: resolvedPosition.before(depth) });
           break;
         }

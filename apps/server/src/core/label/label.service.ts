@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Label } from '@docmost/db/types/entity.types';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Label, User } from '@docmost/db/types/entity.types';
 import { LabelRepo, LabelType } from '@docmost/db/repos/label/label.repo';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { PageAccessService } from '../page-access/page-access.service';
@@ -81,55 +85,129 @@ export class LabelService {
     return this.labelRepo.findLabelsByPageId(pageId, pagination);
   }
 
-  async getLabels(
+  async getLabelRegistry(
     workspaceId: string,
-    userId: string,
     spaceId: string,
     type: LabelType,
     pagination: PaginationOptions,
   ) {
-    return this.labelRepo.findLabels(
+    return this.labelRepo.findLabelRegistry(
       workspaceId,
-      userId,
       spaceId,
       type,
       pagination,
     );
   }
 
+  async renameLabel(
+    labelId: string,
+    name: string,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<Label> {
+    try {
+      return await executeTx(this.db, async (trx) => {
+        const label = await this.findManagedPageLabel(
+          labelId,
+          workspaceId,
+          spaceId,
+          trx,
+        );
+        const updated = await this.labelRepo.renameLabel(
+          label.id,
+          normalizeLabelName(name),
+          workspaceId,
+          spaceId,
+          trx,
+        );
+        if (!updated) {
+          throw new NotFoundException('Label not found');
+        }
+        return updated;
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === '23505') {
+        throw new ConflictException('A label with this name already exists');
+      }
+      throw error;
+    }
+  }
+
+  async deleteLabel(
+    labelId: string,
+    workspaceId: string,
+    spaceId: string,
+  ): Promise<void> {
+    await executeTx(this.db, async (trx) => {
+      const label = await this.findManagedPageLabel(
+        labelId,
+        workspaceId,
+        spaceId,
+        trx,
+      );
+      await this.labelRepo.deleteLabel(label.id, workspaceId, spaceId, trx);
+    });
+  }
+
+  async getLabels(
+    workspaceId: string,
+    user: User,
+    spaceId: string,
+    type: LabelType,
+    pagination: PaginationOptions,
+  ) {
+    const accessSnapshot =
+      await this.pageAccessService.getSidebarAccessSnapshot(user, spaceId);
+
+    return this.labelRepo.findLabels(
+      workspaceId,
+      spaceId,
+      type,
+      accessSnapshot.readablePageIds,
+      pagination,
+    );
+  }
+
   async findPagesByLabel(
     labelId: string,
-    user: { id: string; workspaceId: string },
+    user: User,
     opts: {
       spaceId?: string;
       query?: string;
       pagination: PaginationOptions;
     },
   ) {
+    const readablePageIds = opts.spaceId
+      ? (
+          await this.pageAccessService.getSidebarAccessSnapshot(
+            user,
+            opts.spaceId,
+          )
+        ).readablePageIds
+      : undefined;
     const result = await this.labelRepo.findPagesByLabelId(labelId, user.id, {
       ...opts,
       workspaceId: user.workspaceId,
+      readablePageIds,
     });
-    if (result.items.length === 0) {
-      return result;
-    }
-
-    result.items = (
-      await Promise.all(
-        result.items.map(async (page) => {
-          const access = await this.pageAccessService.getEffectiveAccess(
-            {
-              ...page,
-              workspaceId: user.workspaceId,
-              deletedAt: null,
-            } as any,
-            user as any,
-          );
-          return access.capabilities.canRead ? page : null;
-        }),
-      )
-    ).filter((page): page is NonNullable<typeof page> => !!page);
-
     return result;
+  }
+
+  private async findManagedPageLabel(
+    labelId: string,
+    workspaceId: string,
+    spaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<Label> {
+    const label = await this.labelRepo.findById(labelId, trx);
+    if (
+      !label ||
+      label.workspaceId !== workspaceId ||
+      label.spaceId !== spaceId ||
+      label.type !== LabelType.PAGE
+    ) {
+      throw new NotFoundException('Label not found');
+    }
+    return label;
   }
 }

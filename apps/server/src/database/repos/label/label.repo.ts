@@ -8,6 +8,7 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { normalizeLabelName } from '../../../core/label/utils';
+import { sql } from 'kysely';
 
 export const LabelType = {
   PAGE: 'page',
@@ -95,7 +96,9 @@ export class LabelRepo {
       perPage: pagination.limit,
       cursor: pagination.cursor,
       beforeCursor: pagination.beforeCursor,
-      fields: [{ expression: 'pageLabels.id', direction: 'asc', key: 'joinId' }],
+      fields: [
+        { expression: 'pageLabels.id', direction: 'asc', key: 'joinId' },
+      ],
       parseCursor: (cursor) => ({
         joinId: cursor.joinId,
       }),
@@ -109,9 +112,9 @@ export class LabelRepo {
 
   async findLabels(
     workspaceId: string,
-    userId: string,
     spaceId: string,
     type: LabelType,
+    readablePageIds: ReadonlySet<string>,
     pagination: PaginationOptions,
   ) {
     let query = this.db
@@ -137,15 +140,20 @@ export class LabelRepo {
           .select('pageLabels.labelId')
           .where('pages.deletedAt', 'is', null)
           .where('pages.spaceId', '=', spaceId)
-          .where(
-            'pages.spaceId',
-            'in',
-            this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+          .$if(readablePageIds.size > 0, (qb) =>
+            qb.where('pages.id', 'in', Array.from(readablePageIds)),
+          )
+          .$if(readablePageIds.size === 0, (qb) =>
+            qb.where(sql<boolean>`false`),
           ),
       );
 
     if (pagination.query) {
-      query = query.where('name', 'like', `%${pagination.query.toLowerCase()}%`);
+      query = query.where(
+        'name',
+        'like',
+        `%${pagination.query.toLowerCase()}%`,
+      );
     }
 
     return executeWithCursorPagination(query, {
@@ -161,6 +169,88 @@ export class LabelRepo {
         id: cursor.id,
       }),
     });
+  }
+
+  async findLabelRegistry(
+    workspaceId: string,
+    spaceId: string,
+    type: LabelType,
+    pagination: PaginationOptions,
+  ) {
+    let query = this.db
+      .selectFrom('labels')
+      .leftJoin('pageLabels', 'pageLabels.labelId', 'labels.id')
+      .select((eb) => [
+        'labels.id',
+        'labels.name',
+        'labels.type',
+        'labels.createdAt',
+        'labels.updatedAt',
+        'labels.workspaceId',
+        'labels.spaceId',
+        eb.fn.count('pageLabels.id').as('pageCount'),
+      ])
+      .where('labels.workspaceId', '=', workspaceId)
+      .where('labels.spaceId', '=', spaceId)
+      .where('labels.type', '=', type)
+      .groupBy([
+        'labels.id',
+        'labels.name',
+        'labels.type',
+        'labels.createdAt',
+        'labels.updatedAt',
+        'labels.workspaceId',
+        'labels.spaceId',
+      ]);
+
+    if (pagination.query) {
+      query = query.where(
+        'labels.name',
+        'like',
+        `%${pagination.query.toLowerCase()}%`,
+      );
+    }
+
+    const result = await executeWithCursorPagination(query, {
+      perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'labels.name', direction: 'asc', key: 'name' },
+        { expression: 'labels.id', direction: 'asc', key: 'id' },
+      ],
+      parseCursor: (cursor) => ({
+        name: cursor.name,
+        id: cursor.id,
+      }),
+    });
+
+    return {
+      ...result,
+      items: result.items.map((item) => ({
+        ...item,
+        pageCount: Number(item.pageCount),
+      })),
+    };
+  }
+
+  async renameLabel(
+    labelId: string,
+    name: string,
+    workspaceId: string,
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<Label | undefined> {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .updateTable('labels')
+      .set({ name: normalizeLabelName(name), updatedAt: new Date() })
+      .where('id', '=', labelId)
+      .where('workspaceId', '=', workspaceId)
+      .where('spaceId', '=', spaceId)
+      .where('type', '=', LabelType.PAGE)
+      .returningAll()
+      .executeTakeFirst();
   }
 
   async addLabelToPage(
@@ -242,13 +332,18 @@ export class LabelRepo {
       workspaceId: string;
       spaceId?: string;
       query?: string;
+      readablePageIds?: ReadonlySet<string>;
       pagination: PaginationOptions;
     },
   ) {
     let query = this.db
       .selectFrom('pages')
       .innerJoin('pageLabels', 'pageLabels.pageId', 'pages.id')
-      .innerJoin('labels as filterLabel', 'filterLabel.id', 'pageLabels.labelId')
+      .innerJoin(
+        'labels as filterLabel',
+        'filterLabel.id',
+        'pageLabels.labelId',
+      )
       .select((eb) => [
         'pages.id',
         'pages.slugId',
@@ -294,6 +389,16 @@ export class LabelRepo {
         'in',
         this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
       );
+    }
+
+    if (opts.readablePageIds) {
+      query = query
+        .$if(opts.readablePageIds.size > 0, (qb) =>
+          qb.where('pages.id', 'in', Array.from(opts.readablePageIds!)),
+        )
+        .$if(opts.readablePageIds.size === 0, (qb) =>
+          qb.where(sql<boolean>`false`),
+        );
     }
 
     if (opts.query) {
