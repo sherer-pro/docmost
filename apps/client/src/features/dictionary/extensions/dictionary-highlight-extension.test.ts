@@ -227,6 +227,64 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
+  it("does not highlight terms inside links or code", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content:
+        '<p><a href="https://example.com">Alpha</a> plain Alpha <code>Alpha</code></p><pre><code>Alpha</code></pre>',
+    });
+
+    try {
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("keeps incremental decorations correct across undo and redo", () => {
+    const editor = createEditor();
+
+    try {
+      editor.view.dispatch(
+        editor.state.tr.setMeta(dictionaryHighlightPluginKey, {
+          enabled: true,
+          terms: [term],
+        }),
+      );
+
+      editor.commands.insertContentAt(
+        editor.state.doc.content.size - 1,
+        " Alpha",
+      );
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(3);
+
+      editor.commands.undo();
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+
+      editor.commands.redo();
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(3);
+      expect(getDictionaryHighlightScanCount(editor.state)).toBeLessThanOrEqual(
+        2,
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
   it("updates phrase decorations across block splits and joins", () => {
     const editor = new Editor({
       extensions: [

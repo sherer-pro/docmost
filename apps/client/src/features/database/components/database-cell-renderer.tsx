@@ -265,12 +265,7 @@ export function DatabaseCellRenderer({
 
       return codeValue ? (
         <Text component="div" ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
-          <DictionaryTextHighlighter
-            text={codeValue}
-            terms={activeDictionaryTerms}
-            matcherIndex={activeDictionaryMatcherIndex}
-            withLayer={false}
-          />
+          {codeValue}
         </Text>
       ) : (
         <Text c="dimmed">{t('Empty value')}</Text>
