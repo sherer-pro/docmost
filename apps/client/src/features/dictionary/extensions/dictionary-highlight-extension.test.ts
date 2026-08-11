@@ -45,6 +45,11 @@ describe("DictionaryHighlightExtension", () => {
       expect(
         dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
       ).toHaveLength(2);
+      expect(
+        editor.view.dom
+          .querySelector(".dictionary-highlight")
+          ?.getAttribute("aria-description"),
+      ).toBe("Definition");
     } finally {
       editor.destroy();
     }

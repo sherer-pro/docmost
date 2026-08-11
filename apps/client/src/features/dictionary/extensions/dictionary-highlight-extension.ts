@@ -252,6 +252,7 @@ function buildDecorationsForTextBlocks(
           Decoration.inline(from, to, {
             class: "dictionary-highlight",
             "data-dictionary-term-id": match.term.id,
+            "aria-description": match.term.definitionMarkdown,
             role: "button",
             tabindex: "0",
           }),
