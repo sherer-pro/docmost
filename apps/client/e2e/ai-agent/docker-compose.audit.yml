@@ -1,6 +1,10 @@
 services:
   docmost:
     environment:
+      APP_SECRET_FILE: null
+      DATABASE_URL_FILE: null
+      REDIS_URL_FILE: null
+      APP_SECRET: "${APP_SECRET}"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-docmost}:${POSTGRES_PASSWORD:-audit_password}@toxiproxy:15432/${POSTGRES_DB:-docmost}"
       REDIS_URL: "redis://toxiproxy:16379"
       AI_PROVIDER_ALLOWED_ORIGINS: "http://host.docker.internal:${DOCMOST_AI_AGENT_MODEL_PORT:-1180}"
@@ -10,6 +14,15 @@ services:
       DISABLE_TELEMETRY: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  collab:
+    environment:
+      APP_SECRET_FILE: null
+      DATABASE_URL_FILE: null
+      REDIS_URL_FILE: null
+      APP_SECRET: "${APP_SECRET}"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-docmost}:${POSTGRES_PASSWORD:-audit_password}@toxiproxy:15432/${POSTGRES_DB:-docmost}"
+      REDIS_URL: "redis://toxiproxy:16379"
 
   toxiproxy:
     image: "ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e"
