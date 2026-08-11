@@ -393,7 +393,7 @@ jobs:
         run: |
           mkdir -p ci-artifacts
           capture_log() {
-            docker logs "$1" 2>&1 | node scripts/sanitize-ci-log-stream.mjs >"ci-artifacts/$2" || true
+            { docker logs "$1" 2>&1 || true; } | node scripts/sanitize-ci-log-stream.mjs >"ci-artifacts/$2"
           }
           capture_log docmost-app server.log
           capture_log docmost-app-replica server-replica.log

@@ -37,6 +37,13 @@ export function sanitizeLogLine(input) {
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----/gu, "[REDACTED_PRIVATE_KEY]");
 }
 
+export function sanitizeLogText(input) {
+  return input
+    .split(/\r?\n/u)
+    .map((line) => sanitizeLogLine(line))
+    .join("\n");
+}
+
 if (process.argv[1]?.endsWith("sanitize-ci-log-stream.mjs")) {
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   for await (const line of lines) {

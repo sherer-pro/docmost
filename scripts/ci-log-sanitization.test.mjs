@@ -3,7 +3,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { sanitizeLogLine } from "./sanitize-ci-log-stream.mjs";
+import {
+  sanitizeLogLine,
+  sanitizeLogText,
+} from "./sanitize-ci-log-stream.mjs";
 import { scanArtifacts } from "./scan-ci-artifacts.mjs";
 
 test("redacts credential shapes before artifact persistence", async () => {
@@ -23,4 +26,14 @@ test("redacts credential shapes before artifact persistence", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("redacts every line in captured external service logs", () => {
+  const sanitized = sanitizeLogText(
+    "startup ok\r\nAuthorization: Bearer generated-token\npassword=compat-secret",
+  );
+  assert.equal(sanitized.split("\n").length, 3);
+  assert.doesNotMatch(sanitized, /generated-token|compat-secret/u);
+  assert.match(sanitized, /Bearer \[REDACTED\]/u);
+  assert.match(sanitized, /password=\[REDACTED\]/u);
 });

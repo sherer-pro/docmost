@@ -26,16 +26,23 @@ jobs:
           node-version: 22
 
       - name: Run pinned Open WebUI compatibility suite
+        env:
+          CI_LOG_CANARIES: "isolated-rag-audit-secret-at-least-32-characters;docmost-test-password;isolated-open-webui-test-secret;Open-WebUI-compat-password-123!"
         run: node scripts/run-rag-open-webui-compat.mjs
 
       - name: Capture Open WebUI logs
         if: failure()
+        env:
+          CI_LOG_CANARIES: "isolated-rag-audit-secret-at-least-32-characters;docmost-test-password;isolated-open-webui-test-secret;Open-WebUI-compat-password-123!"
         run: |
           mkdir -p output/audit
-          docker compose -f tests/rag-sync/compose.yml --profile real-open-webui logs --no-color open-webui > output/audit/open-webui.log 2>&1 || true
+          { docker compose -f tests/rag-sync/compose.yml --profile real-open-webui logs --no-color open-webui 2>&1 || true; } |
+            node scripts/sanitize-ci-log-stream.mjs > output/audit/open-webui.log
+          node scripts/scan-ci-artifacts.mjs output/audit
+          touch output/audit/.sanitized
 
       - name: Upload compatibility artifacts
-        if: failure()
+        if: failure() && hashFiles('output/audit/.sanitized') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rag-open-webui-compatibility
