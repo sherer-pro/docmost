@@ -22,8 +22,11 @@ import {
 } from '../casl/interfaces/space-ability.type';
 import { LabelService } from './label.service';
 import {
+  DeleteLabelDto,
   FindPagesByLabelRequestDto,
+  ListLabelRegistryDto,
   ListLabelsRequestDto,
+  RenameLabelDto,
 } from './dto/label.dto';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
@@ -56,7 +59,7 @@ export class LabelController {
 
     return this.labelService.getLabels(
       workspace.id,
-      user.id,
+      user,
       dto.spaceId,
       dto.type,
       dto,
@@ -120,9 +123,65 @@ export class LabelController {
     });
   }
 
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  @Post('registry')
+  async getLabelRegistry(
+    @Body() dto: ListLabelRegistryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.assertCanManageSettings(user, dto.spaceId);
+    return this.labelService.getLabelRegistry(
+      workspace.id,
+      dto.spaceId,
+      dto.type,
+      dto,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  @Post('rename')
+  async renameLabel(
+    @Body() dto: RenameLabelDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    await this.assertCanManageSettings(user, dto.spaceId);
+    return this.labelService.renameLabel(
+      dto.labelId,
+      dto.name,
+      workspace.id,
+      dto.spaceId,
+    );
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  @Post('delete')
+  async deleteLabel(
+    @Body() dto: DeleteLabelDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ): Promise<void> {
+    await this.assertCanManageSettings(user, dto.spaceId);
+    await this.labelService.deleteLabel(dto.labelId, workspace.id, dto.spaceId);
+  }
+
   private async assertCanReadSpace(user: User, spaceId: string): Promise<void> {
     const ability = await this.spaceAbility.createForUser(user, spaceId);
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+  }
+
+  private async assertCanManageSettings(
+    user: User,
+    spaceId: string,
+  ): Promise<void> {
+    const ability = await this.spaceAbility.createForUser(user, spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
       throw new ForbiddenException();
     }
   }

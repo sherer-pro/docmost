@@ -317,17 +317,21 @@ export default function PageDetailsModal({
                           <Badge
                             color={getLabelColor(label.name)}
                             variant="light"
+                            style={{
+                              color:
+                                "light-dark(var(--mantine-color-dark-9), var(--mantine-color-gray-0))",
+                            }}
                           >
                             {label.name}
                           </Badge>
                           {!readOnly && (
                             <ActionIcon
-                              size="xs"
+                              size={32}
                               variant="subtle"
                               aria-label={t("Remove label")}
                               onClick={() => removeLabel.mutate(label.id)}
                             >
-                              <IconX size={12} />
+                              <IconX size={16} />
                             </ActionIcon>
                           )}
                         </Group>

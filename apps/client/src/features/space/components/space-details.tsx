@@ -46,6 +46,7 @@ import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 import { PageTemplateSpacePolicySettings } from "@/features/page-template/components/page-template-policy-settings";
+import SpaceLabelsSettings from "@/features/label/components/space-labels-settings";
 
 interface SpaceDetailsProps {
   spaceId: string;
@@ -218,6 +219,10 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
           )}
 
           <Divider my="lg" />
+
+          {!readOnly && <SpaceLabelsSettings spaceId={spaceId} />}
+
+          {!readOnly && <Divider my="lg" />}
 
           <ResponsiveSettingsRow>
             <ResponsiveSettingsContent>

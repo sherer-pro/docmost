@@ -432,6 +432,152 @@ describe('DocmostArchiveImportService reference rewriting', () => {
   });
 });
 
+describe('DocmostArchiveImportService label import', () => {
+  it('uses the same canonical label name as the page label API', async () => {
+    const insertedLabels: Array<Record<string, unknown>> = [];
+    const selectQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue([]),
+    };
+    const trx = {
+      selectFrom: jest.fn().mockReturnValue(selectQuery),
+      insertInto: jest.fn((table: string) => {
+        const query = {
+          values: jest.fn((values: Record<string, unknown>) => {
+            if (table === 'labels') insertedLabels.push(values);
+            return query;
+          }),
+          onConflict: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        };
+        return query;
+      }),
+    };
+    const service = new DocmostArchiveImportService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).insertLabels({
+      data: {
+        labels: [
+          {
+            id: 'source-label',
+            name: '  Mixed Case Label  ',
+            pageIds: [],
+          },
+        ],
+      },
+      fileTask: {
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+      },
+      pageIdMap: new Map(),
+      report: {
+        created: { labels: 0 },
+      },
+      trx,
+    });
+
+    expect(insertedLabels).toHaveLength(1);
+    expect(insertedLabels[0]).toEqual(
+      expect.objectContaining({ name: 'mixed-case-label' }),
+    );
+  });
+});
+
+describe('DocmostArchiveImportService dictionary import', () => {
+  it('deduplicates aliases after Unicode and case normalization', async () => {
+    let insertedAliases: Array<Record<string, unknown>> = [];
+    const spacesQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      executeTakeFirstOrThrow: jest.fn().mockResolvedValue({ settings: {} }),
+    };
+    const aliasesQuery = {
+      innerJoin: jest.fn().mockReturnThis(),
+      selectAll: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue([]),
+    };
+    const trx = {
+      selectFrom: jest.fn((table: string) =>
+        table === 'spaces' ? spacesQuery : aliasesQuery,
+      ),
+      updateTable: jest.fn(() => ({
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue(undefined),
+      })),
+      insertInto: jest.fn((table: string) => {
+        const query = {
+          values: jest.fn((values: Array<Record<string, unknown>>) => {
+            if (table === 'dictionaryTermAliases') insertedAliases = values;
+            return query;
+          }),
+          execute: jest.fn().mockResolvedValue(undefined),
+        };
+        return query;
+      }),
+    };
+    const service = new DocmostArchiveImportService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).applySettingsAndDictionary({
+      data: {
+        sourceSpace: { settings: {} },
+        dictionary: [
+          {
+            term: 'Foo',
+            forms: [' foo ', '\uff26\uff4f\uff4f'],
+            definitionMarkdown: 'definition',
+          },
+        ],
+      },
+      fileTask: {
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        creatorId: 'user-1',
+      },
+      options: {
+        applyDictionary: true,
+        applyDocumentFields: false,
+        applyHeadingNumbering: false,
+        cleanupLegacyHeadingNumbers: true,
+      },
+      report: {
+        created: { dictionaryTerms: 0 },
+        updated: { dictionaryTerms: 0 },
+        skipped: { dictionaryTerms: 0 },
+        warnings: [],
+      },
+      trx,
+    });
+
+    expect(insertedAliases).toHaveLength(1);
+    expect(insertedAliases[0]).toEqual(
+      expect.objectContaining({ alias: 'Foo', normalizedAlias: 'foo' }),
+    );
+  });
+});
+
 describe('DocmostArchiveImportService import durability', () => {
   const createService = (db: any, storageService: any) =>
     new DocmostArchiveImportService(
