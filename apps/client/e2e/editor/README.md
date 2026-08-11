@@ -18,9 +18,10 @@ API requests must retain the backend's trusted origin for CSRF validation.
 The harness also aligns the HTTP `Host` header with that origin, so a separate
 IPv4 transport address remains compatible with request-host-bound CSRF checks.
 WebKit uses `DOCMOST_WEBKIT_BASE_URL`, defaulting to the IPv4 loopback.
-Set `DOCMOST_DRAWIO_AUDIT_URL` to a locally served synthetic Draw.io iframe URL
-when the deployment intentionally leaves `DRAWIO_URL` empty. The browser
-harness serves only an empty local document and keeps diagram data on the host.
+Set `DOCMOST_DRAWIO_AUDIT_URL` to the same URL exposed by the deployment's
+`DRAWIO_URL`. The browser harness intercepts that URL and serves an empty local
+document, so diagram data stays on the host. The production-image CI job uses
+`https://embed.diagrams.net` for both values but never contacts that service.
 Set `DOCMOST_EDITOR_AUDIT_VIDEO=1` to retain videos for passing scenarios; by
 default Playwright retains video only for failures.
 For focused iteration, `DOCMOST_EDITOR_AUDIT_FILES` accepts a comma-separated

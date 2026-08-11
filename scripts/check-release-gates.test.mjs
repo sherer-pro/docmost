@@ -74,6 +74,15 @@ test("AI browser acceptance isolates and restores the admin panel preference", (
   );
 });
 
+test("AI browser API setup binds the transport host to the CSRF origin", () => {
+  assert.match(aiAuditSource, /const apiHost = new URL\(apiOrigin\)\.host/u);
+  assert.equal(
+    aiAuditSource.match(/Host: apiHost,/gu)?.length,
+    2,
+    "admin and invited-member setup must use the trusted API host",
+  );
+});
+
 test("AI browser acceptance opens the off-screen assistant before use", () => {
   assert.match(aiSupportSource, /openButton\.or\(composer\)\.first\(\)/u);
   assert.match(aiSupportSource, /if \(asideIsOpen\) \{/u);
@@ -175,20 +184,31 @@ test("production migrations resolve file-backed secrets before connecting", () =
 
 const workflowMutations = [
   ["community boundary", "ciSource", "pnpm check:no-ee"],
+  ["community boundary tests", "ciSource", "pnpm test:no-ee"],
+  ["architecture contract", "ciSource", "pnpm check:architecture"],
+  ["release gate self-check", "ciSource", "pnpm check:release-gates"],
   ["build", "ciSource", "pnpm build"],
   ["route inventory", "ciSource", "pnpm routes:inventory:check"],
   ["RAG docs", "ciSource", "pnpm check:rag-docs"],
   ["AI docs", "ciSource", "pnpm check:ai-docs"],
+  ["text contracts", "ciSource", "pnpm test:text-contracts"],
   ["environment", "ciSource", "pnpm check:env"],
   ["lint", "ciSource", "pnpm lint"],
   ["client unit", "ciSource", "pnpm --filter ./apps/client test"],
   ["server unit", "ciSource", "pnpm --filter ./apps/server test"],
+  ["RAG Sync contract", "ciSource", "pnpm test:rag-sync:contract"],
   ["security", "ciSource", "pnpm test:security"],
+  ["comment language", "ciSource", "pnpm check:comments:en"],
   ["audit exceptions", "ciSource", "pnpm check:audit-exceptions"],
   [
     "production dependency audit",
     "ciSource",
     "pnpm audit --prod --audit-level high",
+  ],
+  [
+    "integration build",
+    "ciSource",
+    "pnpm server:build",
   ],
   [
     "empty database migrations",
@@ -197,11 +217,26 @@ const workflowMutations = [
   ],
   ["server integration", "ciSource", "pnpm --filter ./apps/server test:e2e"],
   [
+    "production image build",
+    "ciSource",
+    "docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .",
+  ],
+  [
     "compiled production smoke",
     "ciSource",
     "node scripts/ci-production-smoke.mjs",
   ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
+  [
+    "production Draw.io runtime",
+    "ciSource",
+    "-e DRAWIO_URL=https://embed.diagrams.net",
+  ],
+  [
+    "local Draw.io browser shim",
+    "ciSource",
+    "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",
+  ],
   ["AI browser", "ciSource", "pnpm test:ai:e2e"],
   ["AI context browser", "ciSource", "pnpm test:ai-context:e2e"],
   [
@@ -219,11 +254,41 @@ const workflowMutations = [
     "ciSource",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
   ],
+  [
+    "release image build",
+    "dockerSource",
+    "docker build --build-arg PNPM_OFFLINE=0",
+  ],
+  [
+    "versioned image publish",
+    "dockerSource",
+    'docker push "shererpro/docmost:${VERSION}"',
+  ],
+  [
+    "latest image publish",
+    "dockerSource",
+    "docker push shererpro/docmost:latest",
+  ],
+  [
+    "Open WebUI artifact sanitizer",
+    "ragSource",
+    "node scripts/sanitize-ci-log-stream.mjs",
+  ],
+  [
+    "Open WebUI artifact scan",
+    "ragSource",
+    "node scripts/scan-ci-artifacts.mjs output/audit",
+  ],
+  [
+    "Open WebUI sanitized artifact marker",
+    "ragSource",
+    "if: failure() && hashFiles('output/audit/.sanitized') != ''",
+  ],
 ];
 
 for (const [name, sourceName, command] of workflowMutations) {
   test(`rejects removal of the ${name} gate`, () => {
-    const source = sourceName === "ciSource" ? ciSource : dockerSource;
+    const source = { ciSource, dockerSource, ragSource }[sourceName];
     assert.ok(source.includes(command), `${command} fixture must exist`);
     const mutated = source.replace(
       command,
@@ -278,11 +343,52 @@ test("rejects a required command that exists only in a comment", () => {
   assert.ok(errors.includes("validate must run pnpm test:security"));
 });
 
+test("rejects a required workflow command with fail-open handling", () => {
+  const mutated = ciSource.replace(
+    "        run: pnpm test:security",
+    "        run: pnpm test:security || true",
+  );
+  assert.notEqual(mutated, ciSource, "security command fixture must exist");
+  const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+  assert.ok(
+    errors.includes(
+      "validate must not mask failures from pnpm test:security",
+    ),
+  );
+});
+
+test("rejects a required workflow command in a disabled step", () => {
+  const mutated = ciSource.replace(
+    /      - name: Security regression tests\r?\n        run: pnpm test:security/u,
+    "      - name: Security regression tests\n        if: false\n        run: pnpm test:security",
+  );
+  assert.notEqual(mutated, ciSource, "security step fixture must exist");
+  const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+  assert.ok(errors.includes("validate must run pnpm test:security"));
+});
+
+test("rejects fail-open command chaining in root verification scripts", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["verify:quick"] = mutatedPackage.scripts[
+    "verify:quick"
+  ].replace(
+    "&& corepack pnpm run test:security",
+    "|| corepack pnpm run test:security",
+  );
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes("verify:quick must include run test:security"),
+  );
+});
+
 for (const [scriptName, command] of [
   ["verify:quick", "run test:security"],
   ["verify:full", "run build"],
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run test:ai:e2e"],
+  ["verify:release", "run test:ai-agent:e2e"],
 ]) {
   test(`rejects ${scriptName} without ${command}`, () => {
     const mutatedPackage = structuredClone(packageJson);

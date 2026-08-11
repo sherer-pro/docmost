@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { sanitizeLogText } from "./sanitize-ci-log-stream.mjs";
+import { scanArtifacts } from "./scan-ci-artifacts.mjs";
 
 const composeArgs = [
   "compose",
@@ -45,7 +47,15 @@ try {
 } catch (error) {
   await mkdir("output/audit", { recursive: true });
   const logs = await capture("docker", [...composeArgs, "logs", "--no-color", "open-webui"]);
-  await writeFile("output/audit/open-webui.log", logs);
+  await writeFile("output/audit/open-webui.log", sanitizeLogText(logs));
+  const exactSecrets = (process.env.CI_LOG_CANARIES ?? "").split(";");
+  const findings = await scanArtifacts("output/audit", exactSecrets);
+  if (findings.length > 0) {
+    throw new Error(
+      `Open WebUI compatibility artifacts failed the credential scan (${findings.length} finding(s))`,
+      { cause: error },
+    );
+  }
   throw error;
 } finally {
   await run("docker", [...composeArgs, "down", "--volumes", "--remove-orphans"]).catch(

@@ -133,7 +133,8 @@ Baseline local verification:
 
 1. `pnpm install --frozen-lockfile`
 2. `pnpm verify:quick`
-3. `pnpm verify:full` before release or broad architectural changes
+3. `pnpm verify:full` before broad architectural changes
+4. `pnpm verify:release` against the documented production-like runtime before a release candidate
 
 Root composite scripts call `corepack pnpm` internally. If the local `pnpm` shim is missing, run root/package checks with `corepack pnpm ...`; enable Corepack first only when a direct `pnpm` command is required.
 
@@ -148,8 +149,9 @@ each CI job and root `verify:*` target, least-privilege workflow permissions,
 concurrency policy, and immutable commit pins for third-party actions. It also
 includes a negative smoke execution that must return non-zero and tests stream
 redaction plus the exact-secret/credential-pattern artifact scan.
-Production-smoke logs are sanitized before they are written and can be uploaded
-only after that scan creates its success marker.
+Production-smoke and Open WebUI compatibility logs are sanitized before they
+are written and can be uploaded only after that scan creates its success
+marker.
 
 Typesense remains the selected external search projection; there is no hidden
 PostgreSQL fallback when that driver is enabled. Lifecycle jobs provide low
