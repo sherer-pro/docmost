@@ -11,6 +11,9 @@ const [
   aiAuditSource,
   aiSupportSource,
   aiProviderSettingsSource,
+  aiAgentAuditSource,
+  aiAgentComposeSource,
+  migrationSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -19,6 +22,9 @@ const [
   readFile("apps/client/e2e/ai/run-ai-audit.mjs", "utf8"),
   readFile("apps/client/e2e/ai/support.ts", "utf8"),
   readFile("apps/client/e2e/ai/specs/provider-settings.spec.ts", "utf8"),
+  readFile("apps/client/e2e/ai-agent/run-ai-agent-audit.mjs", "utf8"),
+  readFile("apps/client/e2e/ai-agent/docker-compose.audit.yml", "utf8"),
+  readFile("apps/server/src/database/migrate.ts", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -82,6 +88,46 @@ test("AI provider acceptance follows the configured mock origin", () => {
     aiProviderSettingsSource,
     /toHaveValue\(\/host\\\.docker\\\.internal:1080\//u,
   );
+});
+
+test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => {
+  assert.match(
+    aiAgentAuditSource,
+    /DATABASE_URL: databaseUrl,[\s\S]*REDIS_URL: redisUrl,/u,
+  );
+  assert.match(aiAgentAuditSource, /@toxiproxy:15432\/docmost/u);
+  assert.match(
+    aiAgentAuditSource,
+    /composeArgs\("up", "-d", "docmost", "collab"\)/u,
+  );
+  assert.match(aiAgentAuditSource, /"isolated collaboration server"/u);
+  assert.match(aiAgentAuditSource, /DOCMOST_AI_AGENT_COLLAB_PORT/u);
+  assert.match(
+    aiAgentAuditSource,
+    /createRequire\(import\.meta\.url\)\.resolve\("@playwright\/test\/cli"\)/u,
+  );
+  assert.doesNotMatch(
+    aiAgentAuditSource,
+    /shell:\s*process\.platform\s*===\s*"win32"/u,
+  );
+  assert.match(
+    aiAgentAuditSource,
+    /process\.env\.DOCMOST_AI_AGENT_AUDIT_ROOT/u,
+  );
+  assert.doesNotMatch(aiAgentComposeSource, /^\s+DATABASE_URL:/mu);
+  assert.doesNotMatch(aiAgentComposeSource, /^\s+REDIS_URL:/mu);
+});
+
+test("production migrations resolve file-backed secrets before connecting", () => {
+  const resolve = migrationSource.indexOf(
+    "resolveEnvironmentFileSecrets(process.env)",
+  );
+  const connect = migrationSource.indexOf(
+    "normalizePostgresUrl(process.env.DATABASE_URL)",
+  );
+  assert.ok(resolve >= 0, "migration CLI must resolve Compose file secrets");
+  assert.ok(connect > resolve, "migration CLI must resolve secrets before use");
+  assert.match(migrationSource, /if \(fileSecretErrors\.length > 0\)/u);
 });
 
 const workflowMutations = [
