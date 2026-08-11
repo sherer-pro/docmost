@@ -117,7 +117,10 @@ import { AiContextPicker } from "./ai-context-picker.tsx";
 import { AiComposerShell } from "./ai-composer-shell.tsx";
 import {
   AI_LEGACY_SPACE_PROFILE_VALUE,
+  resolveActiveAiComposerProfileOptionLabel,
   resolveAiComposerProfileLabel,
+  shouldShowHiddenActiveAiComposerProfileOption,
+  shouldShowUnavailableAiComposerProfileOption,
 } from "./ai-profile-display.ts";
 import AiExternalMcpOptInControl from "@/features/ai-external-mcp/components/ai-external-mcp-opt-in-control.tsx";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
@@ -1322,13 +1325,31 @@ export function AiPanel() {
       .includes(historyQuery.trim().toLocaleLowerCase(i18n.language)),
   );
   const activeConversationTitle = activeConversation?.title || t("ai.newChat");
+  const activeHiddenProfile = shouldShowHiddenActiveAiComposerProfileOption(
+    activeConversation?.assistantProfile.id,
+    allAvailableProfiles.map((profile) => profile.id),
+    availableProfiles.map((profile) => profile.id),
+  )
+    ? allAvailableProfiles.find(
+        (profile) => profile.id === activeConversation?.assistantProfile.id,
+      )
+    : null;
+  const activeHiddenProfileOption = activeHiddenProfile
+    ? {
+        value: activeHiddenProfile.id,
+        label: resolveActiveAiComposerProfileOptionLabel(
+          activeConversation?.assistantProfile ?? {},
+          activeHiddenProfile,
+        ),
+      }
+    : null;
   const activeSnapshotProfileOption =
-    activeConversation?.assistantProfile.id &&
-    !availableProfiles.some(
-      (profile) => profile.id === activeConversation.assistantProfile.id,
+    shouldShowUnavailableAiComposerProfileOption(
+      activeConversation?.assistantProfile.id,
+      allAvailableProfiles.map((profile) => profile.id),
     )
       ? {
-          value: activeConversation.assistantProfile.id,
+          value: activeConversation!.assistantProfile.id!,
           label: `${activeConversation.assistantProfile.name ?? t("ai.profiles.unavailable")} · v${activeConversation.assistantProfile.version ?? "?"} · ${t("ai.profiles.unavailable")}`,
           disabled: true,
         }
@@ -1346,6 +1367,7 @@ export function AiPanel() {
       value: profile.id,
       label: `${profile.name} · v${profile.version}`,
     })),
+    ...(activeHiddenProfileOption ? [activeHiddenProfileOption] : []),
     ...(activeSnapshotProfileOption ? [activeSnapshotProfileOption] : []),
   ];
   const currentProfileValue =
@@ -2132,7 +2154,7 @@ export function AiPanel() {
                           />
                         )}
                         {visibleComposerProfileOptions.map((option) => {
-                          const profile = availableProfiles.find(
+                          const profile = allAvailableProfiles.find(
                             (item) => item.id === option.value,
                           );
 
@@ -2159,9 +2181,11 @@ export function AiPanel() {
                                 option.value === currentProfileValue
                               }
                               className={classes.composerProfileMenuItem}
-                              onClick={() =>
-                                chooseAssistantProfile(option.value)
-                              }
+                              onClick={() => {
+                                if (option.value !== currentProfileValue) {
+                                  chooseAssistantProfile(option.value);
+                                }
+                              }}
                             >
                               {option.label}
                             </Menu.Item>
@@ -2607,6 +2631,48 @@ export function AiPanel() {
           >
             {t("ai.profiles.spaceAssistant")}
           </Button>
+          {activeHiddenProfileOption &&
+            activeHiddenProfileOption.label
+              .toLocaleLowerCase(i18n.language)
+              .includes(
+                profileQuery.trim().toLocaleLowerCase(i18n.language),
+              ) && (
+              <Button
+                variant={
+                  assistantProfileId === activeHiddenProfileOption.value
+                    ? "light"
+                    : "subtle"
+                }
+                justify="flex-start"
+                leftSection={
+                  <AssistantProfileIcon
+                    icon={activeHiddenProfile?.icon}
+                    size={16}
+                  />
+                }
+                onClick={() => {
+                  chooseAssistantProfile(activeHiddenProfileOption.value);
+                  setProfilePickerOpened(false);
+                }}
+              >
+                {activeHiddenProfileOption.label}
+              </Button>
+            )}
+          {activeSnapshotProfileOption &&
+            activeSnapshotProfileOption.label
+              .toLocaleLowerCase(i18n.language)
+              .includes(
+                profileQuery.trim().toLocaleLowerCase(i18n.language),
+              ) && (
+              <Button
+                variant="subtle"
+                justify="flex-start"
+                leftSection={<IconRobot size={16} />}
+                disabled
+              >
+                {activeSnapshotProfileOption.label}
+              </Button>
+            )}
           {availableProfiles
             .filter((profile) =>
               `${profile.name} ${profile.description ?? ""}`
