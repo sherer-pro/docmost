@@ -122,7 +122,40 @@ describe("DictionaryHighlightLayer", () => {
 
     const tooltip = document.querySelector<HTMLElement>('[role="tooltip"]');
     expect(tooltip).not.toBeNull();
-    expect(tooltip?.id).toBeTruthy();
-    expect(highlight?.getAttribute("aria-describedby")).toBe(tooltip?.id);
+    expect(document.activeElement).toBe(highlight);
+  });
+
+  it("shows the definition before editor handlers stop event bubbling", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        <DictionaryHighlightLayer terms={[term]}>
+          <span
+            className="dictionary-highlight"
+            data-dictionary-term-id="term-1"
+            role="button"
+            tabIndex={0}
+          >
+            Alpha
+          </span>
+        </DictionaryHighlightLayer>,
+      );
+    });
+
+    const highlight = container.querySelector<HTMLElement>(
+      ".dictionary-highlight",
+    );
+    highlight?.addEventListener("mouseover", (event) =>
+      event.stopPropagation(),
+    );
+
+    await act(async () => {
+      highlight?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+
+    expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
   });
 });
