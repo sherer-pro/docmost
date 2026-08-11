@@ -339,7 +339,11 @@ Docmost Compose `.env`. The default local values create an isolated
 For each space, open its AI settings and configure the pre-created Knowledge
 Base URL, Knowledge ID, and a dedicated writer API key. The writer key is
 encrypted in PostgreSQL and is separate from the Open WebUI query key. Use Test,
-then Enable. Test is available only while the binding is clean and disabled;
+then Enable. The UI disables Enable and the API returns
+`rag_sync_target_not_tested` until the current saved target and writer key have
+passed Test. Changing either clears the saved non-secret `lastTestedAt`
+evidence. Existing bindings are not backfilled and require a fresh Test before
+their next Enable. Test is available only while the binding is clean and disabled;
 an interrupted probe leaves a durable cleanup requirement instead of an
 untracked remote marker. A single Knowledge Base cannot be assigned to two
 spaces. Saving a complete target reserves it immediately, so only trusted space
@@ -380,7 +384,7 @@ When upgrading from the retired standalone worker, stop that worker before the
 new server starts so two writers cannot target the same Knowledge Base. Back up
 PostgreSQL, apply the migration, and first deploy with `RAG_SYNC_ENABLED=false`.
 Then configure the writer allowlist, enable the deployment switch, and use Save,
-Test, and Enable separately for each space. Legacy per-space environment values
+Test, and Enable separately for each space; the API enforces that order. Legacy per-space environment values
 and secrets are intentionally not imported; remove them and revoke the old
 space-scoped Docmost RAG keys only after the embedded binding is healthy. The
 first reconciliation can adopt schema-v1 Docmost metadata, but every new write

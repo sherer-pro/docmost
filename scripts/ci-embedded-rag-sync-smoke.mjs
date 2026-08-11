@@ -227,10 +227,31 @@ async function prepare() {
   if (JSON.stringify(configOne).includes("ci-writer-one")) {
     fail("writer API key was returned by the space configuration API");
   }
+  if (configOne.target.lastTestedAt !== null) {
+    fail("a new writer target was reported as already tested");
+  }
+  const untestedEnable = await rawApi(
+    `api/spaces/${spaceOne.id}/ai/rag-sync/actions/enable`,
+    {
+      method: "POST",
+      body: { expectedVersion: configOne.configVersion },
+    },
+  );
+  if (
+    untestedEnable.status !== 409 ||
+    !JSON.stringify(untestedEnable.rawPayload).includes(
+      "rag_sync_target_not_tested",
+    )
+  ) {
+    fail("an untested writer target could be enabled");
+  }
   await api(`api/spaces/${spaceOne.id}/ai/rag-sync/actions/test`, {
     method: "POST",
   });
   configOne = await api(`api/spaces/${spaceOne.id}/ai/rag-sync`);
+  if (!configOne.target.lastTestedAt) {
+    fail("a successful writer test did not persist verification evidence");
+  }
   await waitFor("target-test marker cleanup", async () => {
     const state = await mockState();
     return !state.files.some(
@@ -271,17 +292,7 @@ async function prepare() {
     method: "POST",
   });
   configTwo = await api(`api/spaces/${spaceTwo.id}/ai/rag-sync`);
-  configTwo = await api(`api/spaces/${spaceTwo.id}/ai/rag-sync`, {
-    method: "PATCH",
-    body: {
-      expectedVersion: configTwo.configVersion,
-      target: { writerApiKey: "ci-invalid-writer" },
-    },
-  });
-  if (JSON.stringify(configTwo).includes("ci-invalid-writer")) {
-    fail("rotated writer API key was returned by the space configuration API");
-  }
-  await Promise.all([
+  const [, enabledTwo] = await Promise.all([
     api(`api/spaces/${spaceOne.id}/ai/rag-sync/actions/enable`, {
       method: "POST",
       body: { expectedVersion: configOne.configVersion },
@@ -291,6 +302,19 @@ async function prepare() {
       body: { expectedVersion: configTwo.configVersion },
     }),
   ]);
+  configTwo = await api(`api/spaces/${spaceTwo.id}/ai/rag-sync`, {
+    method: "PATCH",
+    body: {
+      expectedVersion: enabledTwo.configVersion,
+      target: { writerApiKey: "ci-invalid-writer" },
+    },
+  });
+  if (
+    JSON.stringify(configTwo).includes("ci-invalid-writer") ||
+    configTwo.target.lastTestedAt !== null
+  ) {
+    fail("writer-key rotation was returned or remained verified");
+  }
 
   await waitFor("bad-key isolation and first import quantum", async () => {
     const [state, secondConfig] = await Promise.all([

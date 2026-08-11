@@ -1382,6 +1382,8 @@
       "targetMismatchDescription": "허용되지만 검색용 Open WebUI 대상이 동기화 대상과 일치하지 않습니다.",
       "cleanupRequiredTitle": "원격 정리가 완료되지 않음",
       "cleanupRequiredDescription": "정리를 완료하거나 명시적으로 포기할 때까지 대상을 변경할 수 없습니다.",
+      "targetTestRequiredTitle": "활성화하기 전에 대상을 테스트하세요",
+      "targetTestRequiredDescription": "저장된 대상과 자격 증명으로 writer 테스트를 성공적으로 완료하세요. 테스트가 완료될 때까지 활성화할 수 없습니다.",
       "bindingState": "바인딩 상태",
       "health": "런타임 상태",
       "lastSuccess": "마지막 성공 동기화",
@@ -1440,6 +1442,7 @@
       "error": {
         "deploymentDisabled": "이 배포에서 RAG 동기화가 비활성화되어 있습니다.",
         "notConfigured": "먼저 대상과 writer 키를 설정하세요.",
+        "targetNotTested": "동기화를 활성화하기 전에 현재 대상의 writer 테스트를 성공적으로 완료하세요.",
         "targetInUse": "이 Knowledge Base는 다른 공간에 이미 할당되었습니다.",
         "configConflict": "다른 세션에서 설정이 변경되었습니다. 다시 불러오세요.",
         "cleanupRequired": "먼저 정리를 완료하거나 명시적으로 포기하세요.",
@@ -1481,7 +1484,7 @@
       "operationsTitle": "관리자 체크리스트",
       "operationsSetup": "각 스페이스에서 모델과 선택적 검색을 구성하고 테스트하세요. 먼저 배포 수준에서 주소를 허용하고 어댑터가 준비되기 전에는 검색을 활성화하지 말며 내장 및 외부 도구 정책으로 접근 범위를 좁히세요. 이미지 또는 이미지만 있는 PDF를 보내기 전에 이미지 이해를 활성화하세요. 비활성화된 경우 서버는 입력을 조용히 생략하지 않고 거부합니다.",
       "operationsProfileNames": "어시스턴트 프로필 이름은 스페이스 내에서 고유해야 합니다. 중복이면 ai_profile_name_conflict가 포함된 409가 반환됩니다. 필요하면 목록을 다시 불러오고 다른 이름을 선택하세요.",
-      "operationsRagMigration": "독립형 RAG worker를 교체할 때는 먼저 중지하고 RAG_SYNC_ENABLED=false로 마이그레이션한 다음 각 스페이스를 구성하고 Test와 Enable을 수행하세요. 이전 환경 비밀은 가져오지 않습니다. 롤백에는 migration down이 아니라 배포 스위치를 사용하세요.",
+      "operationsRagMigration": "독립형 RAG worker를 교체할 때는 먼저 중지하고 RAG_SYNC_ENABLED=false로 마이그레이션한 다음 각 스페이스를 구성하고 Test와 Enable을 수행하세요. 현재 대상이 Test를 통과할 때까지 API는 Enable을 거부합니다. 이전 환경 비밀은 가져오지 않습니다. 롤백에는 migration down이 아니라 배포 스위치를 사용하세요.",
       "operationsRecovery": "장애 후에는 먼저 종속성을 복구하고 PostgreSQL을 신뢰할 수 있는 기준으로 유지하며 매핑 복구 중에는 Knowledge Base를 보존하세요. 동일한 Idempotency-Key로 비공개 파일 업로드를 반복하면 프로세스 장애 후에도 새 파일 행을 만들지 않고 예약된 배치를 재개합니다. RAG Sync를 긴급 롤백하려면 RAG_SYNC_ENABLED=false로 설정하고 Docmost를 다시 시작하세요. AI_EXTERNAL_MCP_ENABLED는 아웃바운드 MCP만 제어합니다.",
       "templateExportScope": "템플릿 카탈로그 항목은 제외됩니다. 템플릿에서 만든 페이지는 일반적인 구체화된 페이지로 내보내집니다."
     },

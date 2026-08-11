@@ -18,6 +18,7 @@ export interface RagSyncBindingValues {
   writerApiKeyEncrypted?: string | null;
   targetClaimId?: string | null;
   cleanupRequired?: boolean;
+  lastTestedAt?: Date | null;
   targetVersion?: number;
   configVersion?: number;
   updatedById?: string | null;
@@ -265,6 +266,7 @@ export class RagSyncAdminRepo {
       .set({
         cleanupRequired: false,
         configVersion: expectedConfigVersion + 1,
+        lastTestedAt: sql`clock_timestamp()`,
         updatedAt: sql`clock_timestamp()`,
       })
       .where('id', '=', bindingId)

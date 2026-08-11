@@ -38,6 +38,7 @@ import {
   useUpdateRagSyncSpaceConfigMutation,
 } from "@/features/ai/queries/rag-sync-query.ts";
 import type { RagSyncAction } from "@/features/ai/services/rag-sync-service.ts";
+import { canEnableRagSync } from "./rag-sync-settings.utils.ts";
 import classes from "./rag-sync-settings.module.css";
 
 type RagSyncForm = {
@@ -53,17 +54,24 @@ const EMPTY_FORM: RagSyncForm = {
 };
 
 const HEALTH_COLORS: Record<RagSyncHealthState, string> = {
-  disabled: "gray",
-  idle: "gray",
-  syncing: "blue",
-  healthy: "green",
-  degraded: "yellow",
-  error: "red",
+  disabled: "gray.8",
+  idle: "gray.8",
+  syncing: "blue.8",
+  healthy: "green.8",
+  degraded: "orange.9",
+  error: "red.8",
+};
+
+const BINDING_COLORS: Record<RagSyncSpaceConfig["state"], string> = {
+  disabled: "gray.8",
+  enabled: "green.8",
+  draining: "orange.9",
 };
 
 const ERROR_KEYS: Record<RagSyncErrorCode, string> = {
   rag_sync_deployment_disabled: "ai.ragSync.error.deploymentDisabled",
   rag_sync_not_configured: "ai.ragSync.error.notConfigured",
+  rag_sync_target_not_tested: "ai.ragSync.error.targetNotTested",
   rag_sync_target_in_use: "ai.ragSync.error.targetInUse",
   rag_sync_config_conflict: "ai.ragSync.error.configConflict",
   rag_sync_cleanup_required: "ai.ragSync.error.cleanupRequired",
@@ -117,6 +125,7 @@ function configIdentity(config: RagSyncSpaceConfig) {
     config.target.baseUrl,
     config.target.knowledgeId,
     config.target.writerApiKeyConfigured,
+    config.target.lastTestedAt,
   ].join(":");
 }
 
@@ -340,6 +349,7 @@ export function RagSyncSettings({
                 color="yellow"
                 icon={<IconServerOff size={18} />}
                 title={t("ai.ragSync.deploymentDisabled")}
+                classNames={{ label: classes.alertLabel }}
               >
                 {t("ai.ragSync.deploymentDisabledDescription")}
               </Alert>
@@ -349,21 +359,44 @@ export function RagSyncSettings({
               color="orange"
               icon={<IconAlertTriangle size={18} />}
               title={t("ai.ragSync.privacyTitle")}
+              classNames={{ label: classes.alertLabel }}
             >
               {t("ai.ragSync.privacyDescription")}
             </Alert>
 
             {targetMismatch && (
-              <Alert color="yellow" title={t("ai.ragSync.targetMismatchTitle")}>
+              <Alert
+                color="yellow"
+                title={t("ai.ragSync.targetMismatchTitle")}
+                classNames={{ label: classes.alertLabel }}
+              >
                 {t("ai.ragSync.targetMismatchDescription")}
               </Alert>
             )}
 
             {config.cleanupRequired && (
-              <Alert color="red" title={t("ai.ragSync.cleanupRequiredTitle")}>
+              <Alert
+                color="red"
+                title={t("ai.ragSync.cleanupRequiredTitle")}
+                classNames={{ label: classes.alertLabel }}
+              >
                 {t("ai.ragSync.cleanupRequiredDescription")}
               </Alert>
             )}
+
+            {hasSavedTarget &&
+              !config.target.lastTestedAt &&
+              state === "disabled" &&
+              !config.cleanupRequired && (
+                <Alert
+                  color="yellow"
+                  icon={<IconAlertTriangle size={18} />}
+                  title={t("ai.ragSync.targetTestRequiredTitle")}
+                  classNames={{ label: classes.alertLabel }}
+                >
+                  {t("ai.ragSync.targetTestRequiredDescription")}
+                </Alert>
+              )}
 
             <div className={classes.statusGrid}>
               <Paper
@@ -375,7 +408,7 @@ export function RagSyncSettings({
                 <Text size="xs" c="dimmed">
                   {t("ai.ragSync.bindingState")}
                 </Text>
-                <Badge mt={4} variant="light">
+                <Badge mt={4} variant="filled" color={BINDING_COLORS[state]}>
                   {t(`ai.ragSync.state.${state}`)}
                 </Badge>
               </Paper>
@@ -390,7 +423,7 @@ export function RagSyncSettings({
                 </Text>
                 <Badge
                   mt={4}
-                  variant="light"
+                  variant="filled"
                   color={HEALTH_COLORS[config.status.health]}
                 >
                   {t(`ai.ragSync.healthState.${config.status.health}`)}
@@ -442,7 +475,11 @@ export function RagSyncSettings({
             </div>
 
             {config.status.errorCode && (
-              <Alert color="red" title={t("ai.ragSync.lastError")}>
+              <Alert
+                color="red"
+                title={t("ai.ragSync.lastError")}
+                classNames={{ label: classes.alertLabel }}
+              >
                 {t(ERROR_KEYS[config.status.errorCode])}
               </Alert>
             )}
@@ -491,6 +528,7 @@ export function RagSyncSettings({
                 size="xs"
                 leftSection={<IconKeyOff size={15} />}
                 className={classes.keyAction}
+                data-contrast-action={clearWriterApiKey ? "danger" : "neutral"}
                 onClick={() =>
                   clearWriterApiKey
                     ? setClearWriterApiKey(false)
@@ -574,11 +612,13 @@ export function RagSyncSettings({
               <Button
                 type="button"
                 color="teal"
+                className={classes.enableAction}
                 disabled={
-                  isBusy ||
-                  !config.deploymentEnabled ||
-                  !hasSavedTarget ||
-                  hasUnsavedChanges
+                  !canEnableRagSync(config, {
+                    isBusy,
+                    hasSavedTarget,
+                    hasUnsavedChanges,
+                  })
                 }
                 onClick={() =>
                   void runAction("enable", "ai.ragSync.enabledNotification")
@@ -591,8 +631,9 @@ export function RagSyncSettings({
             {state === "enabled" && (
               <Button
                 type="button"
-                variant="light"
+                variant="filled"
                 color="orange"
+                className={classes.disableAction}
                 disabled={isBusy || hasUnsavedChanges}
                 onClick={() =>
                   confirmAction(
@@ -610,8 +651,9 @@ export function RagSyncSettings({
             {(state === "enabled" || state === "draining") && (
               <Button
                 type="button"
-                variant="light"
+                variant="filled"
                 color="red"
+                className={classes.dangerAction}
                 disabled={isBusy}
                 onClick={() =>
                   confirmAction(

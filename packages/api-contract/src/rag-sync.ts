@@ -21,6 +21,7 @@ export type RagSyncAdapter = (typeof RAG_SYNC_ADAPTERS)[number];
 export const RAG_SYNC_ERROR_CODES = [
   "rag_sync_deployment_disabled",
   "rag_sync_not_configured",
+  "rag_sync_target_not_tested",
   "rag_sync_target_in_use",
   "rag_sync_config_conflict",
   "rag_sync_cleanup_required",
@@ -64,6 +65,7 @@ export interface RagSyncSpaceConfig {
     baseUrl: string | null;
     knowledgeId: string | null;
     writerApiKeyConfigured: boolean;
+    lastTestedAt: string | null;
   };
   cleanupRequired: boolean;
   status: RagSyncStatus;

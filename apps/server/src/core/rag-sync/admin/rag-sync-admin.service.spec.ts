@@ -19,6 +19,7 @@ describe('RagSyncAdminService', () => {
     baseUrl: 'https://open-webui.example',
     knowledgeId: 'knowledge-1',
     writerApiKeyEncrypted: 'enc:v1:test',
+    lastTestedAt: new Date('2026-08-11T12:00:00.000Z'),
     configVersion: 3,
     targetVersion: 1,
     targetClaimId: 'claim-1',
@@ -63,6 +64,7 @@ describe('RagSyncAdminService', () => {
         ...binding,
         cleanupRequired: false,
         configVersion: expectedConfigVersion + 1,
+        lastTestedAt: new Date('2026-08-11T12:01:00.000Z'),
         updatedAt: new Date(),
       })),
     };
@@ -103,6 +105,7 @@ describe('RagSyncAdminService', () => {
       baseUrl: 'https://open-webui.example',
       knowledgeId: 'knowledge-1',
       writerApiKeyConfigured: true,
+      lastTestedAt: '2026-08-11T12:00:00.000Z',
     });
     expect(JSON.stringify(result)).not.toContain('enc:v1:test');
   });
@@ -270,6 +273,23 @@ describe('RagSyncAdminService', () => {
     expect(result.state).toBe('enabled');
   });
 
+  it('rejects enabling a target that has not passed a successful test', async () => {
+    const { service } = setup({
+      binding: { ...baseBinding, lastTestedAt: null },
+    });
+
+    await expect(
+      service.enable(
+        'space-1',
+        { expectedVersion: baseBinding.configVersion },
+        user,
+        workspace,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'rag_sync_target_not_tested' }),
+    });
+  });
+
   it('resumes cleanup only while the deployment runtime is enabled', async () => {
     const binding = {
       ...baseBinding,
@@ -319,6 +339,11 @@ describe('RagSyncAdminService', () => {
       repo.updateBinding.mock.calls.at(-1)?.[1].writerApiKeyEncrypted;
     expect(decryptProtectedValue(stored, 'test-app-secret')).toBe(
       'rotated-writer-secret',
+    );
+    expect(repo.updateBinding).toHaveBeenLastCalledWith(
+      binding.id,
+      expect.objectContaining({ lastTestedAt: null }),
+      expect.anything(),
     );
 
     await expect(
@@ -393,6 +418,7 @@ describe('RagSyncAdminService', () => {
       binding.id,
       expect.objectContaining({
         cleanupRequired: true,
+        lastTestedAt: null,
         configVersion: binding.configVersion + 1,
       }),
       expect.anything(),
