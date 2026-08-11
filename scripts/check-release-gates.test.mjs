@@ -243,7 +243,7 @@ const workflowMutations = [
   [
     "versioned image publish",
     "dockerSource",
-    "docker push shererpro/docmost:${VERSION}",
+    'docker push "shererpro/docmost:${VERSION}"',
   ],
   [
     "latest image publish",
