@@ -67,6 +67,34 @@ function streamCompletion(response, proof) {
   response.end("data: [DONE]\n\n");
 }
 
+function forcedToolCompletion(body, proof) {
+  const toolName = body.tool_choice?.function?.name;
+  if (!toolName) return null;
+  return {
+    choices: [
+      {
+        finish_reason: "tool_calls",
+        message: {
+          content: null,
+          role: "assistant",
+          tool_calls: [
+            {
+              id: "call_profile_capability_probe",
+              type: "function",
+              function: {
+                name: toolName,
+                arguments: JSON.stringify({ value: "ok" }),
+              },
+            },
+          ],
+        },
+      },
+    ],
+    model: proof.model,
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  };
+}
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
   if (request.method === "GET" && url.pathname === "/healthz") {
@@ -96,6 +124,8 @@ const server = createServer(async (request, response) => {
     const proof = proofFor(body);
     record(body, proof);
     if (body.stream === true) return streamCompletion(response, proof);
+    const toolCompletion = forcedToolCompletion(body, proof);
+    if (toolCompletion) return json(response, 200, toolCompletion);
     return json(response, 200, {
       choices: [
         {
