@@ -36,11 +36,11 @@ separately and are recorded below.
 - Work started from local `main`
   `7ad7a4d0d34efc11974d9a31fbd04cdc54069500`
   (`v1.0.0-234-g7ad7a4d0`).
-- Current branch after merging the later local `main`:
-  `44a9af1f12007a0a3266032da1723aad43eaaa3b`
-  (`v1.0.0-268-g44a9af1f`).
+- Latest local-main merge point on the G15 branch:
+  `57c1e39b544dd196f3558bb26ce057fb9f523444`
+  (`v1.0.0-271-g57c1e39b`).
 - Local `main` had advanced to
-  `0deb46ed8d570d26eaa9d257edbf41de14f70af5` before integration.
+  `466aff91aae0ff69cf96228ae4d3f8dac4d186e1` before integration.
 - The final local-main integration commit is recorded in the task handoff,
   because a committed Markdown file cannot contain the hash of its own final
   containing commit.
