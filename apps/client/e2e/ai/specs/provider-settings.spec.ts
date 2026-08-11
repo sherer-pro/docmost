@@ -24,7 +24,10 @@ test("owner configures, tests, disables and restores the provider through the UI
   const baseUrl = page.getByLabel("Базовый URL провайдера");
   const model = page.getByLabel("Модель чата");
   const temperature = page.getByLabel("Температура");
-  await expect(baseUrl).toHaveValue(/host\.docker\.internal:1080/);
+  await expect(baseUrl).toHaveValue(
+    process.env.DOCMOST_AI_PROVIDER_BASE_URL ??
+      "http://host.docker.internal:1080/v1",
+  );
   await expect(model).toHaveValue("docmost-audit-model");
 
   await page

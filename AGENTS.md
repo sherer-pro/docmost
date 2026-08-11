@@ -266,7 +266,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-  - `.github/workflows/ci.yml` — PR validation (`install`, `build`, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical).
+- `.github/workflows/ci.yml` — PR validation (`install`, `build`, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
