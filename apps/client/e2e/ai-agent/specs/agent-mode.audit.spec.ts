@@ -514,10 +514,11 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
       await memberPage.getByRole("radiogroup").getByText(/Edit|Редактировать/i).click();
     }
     await expect(memberEditor).toHaveAttribute("contenteditable", "true");
-    await memberEditor.click();
-    await memberPage.keyboard.press("Control+End");
-    await memberPage.keyboard.type(" concurrent-writer-change");
+    await memberEditor.fill(`STALE_${runId} concurrent-writer-change`);
     await expect(memberEditor).toContainText("concurrent-writer-change");
+    await waitFor("concurrent writer change to persist", async () =>
+      textOf((await pageInfo(admin, stalePage.id)).content).includes("concurrent-writer-change"),
+    );
     const staleDecision = await api(admin, "POST", `/api/ai/runs/${stale.run.id}/steps/${staleStep.id}/actions/approve`, {}, true);
     expect(staleDecision.ok).toBe(true);
     const staleDone = await waitRun(admin, stale.run.id, ["completed"]);
