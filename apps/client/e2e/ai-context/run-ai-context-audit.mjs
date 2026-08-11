@@ -349,7 +349,13 @@ async function createMember(admin, workspaceId, label = "reader") {
   await parseResponse(accepted);
   const storageState = await acceptApi.storageState();
   await acceptApi.dispose();
-  const members = (await api(admin, "GET", "/api/workspace/members?limit=100")).payload;
+  const members = (
+    await api(
+      admin,
+      "GET",
+      `/api/workspace/members?limit=100&query=${encodeURIComponent(email)}`,
+    )
+  ).payload;
   const member = (members.items ?? members).find((item) => item.email === email);
   assert(member?.id && member.workspaceId === workspaceId, "Accepted member was not listed in the workspace");
   return { member, storageState, email };
