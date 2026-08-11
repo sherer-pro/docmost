@@ -16,7 +16,7 @@ This is not an unconditional PASS because two requested depth items remain only 
   - `c728ca7b` — `fix(ai): enforce approval expiry after admission wait`.
   - `f6a95f8c` — `fix(ai): recheck profile policy before approved writes`.
   - `7c017c02` — `test(ai): repair isolated agent audit runtime` (test-only).
-- Local `main` after merge: `MAIN_HEAD_AFTER_MERGE` (filled after final integration).
+- The exact local `main` merge commit and final head are recorded in the final handoff because embedding the current commit hash inside that same commit is not stable.
 
 The complete diffs, stats, tests, migrations, contracts, and documentation were inspected for `1dda5764`, `9452e245`, `d285c7c6`, `ac79826e`, and `d2896fbc`. Post-audit changes touching the same paths were inspected before findings were classified, including `aa5b92e5`, `77bfe89f`, `2f420cbb`, and `e9caa6ee`; no previous fix was reverted or reopened as G04 work.
 
