@@ -36,10 +36,7 @@ import {
   User,
   Workspace,
 } from '@docmost/db/types/entity.types';
-import {
-  KyselyDB,
-  KyselyTransaction,
-} from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -172,11 +169,7 @@ export class AiAssistantProfileService {
 
     const summaries: AiAssistantProfileSummary[] = [];
     for (const row of rows) {
-      const groupAllowed = await this.isGroupAllowed(
-        row.id,
-        user.id,
-        this.db,
-      );
+      const groupAllowed = await this.isGroupAllowed(row.id, user.id, this.db);
       const availability = this.availabilityForRow({
         row,
         deploymentEnabled,
@@ -196,6 +189,7 @@ export class AiAssistantProfileService {
     );
     return {
       enabled: deploymentEnabled && settings.enabled,
+      modelOverridesEnabled: settings.modelOverridesEnabled,
       defaultProfileId:
         config?.defaultAssistantProfileId &&
         availableIds.has(config.defaultAssistantProfileId)
@@ -416,7 +410,9 @@ export class AiAssistantProfileService {
         .updateTable('aiAssistantProfileUserPreferences')
         .set({
           preferredProfileId: null,
-          hiddenProfileIds: sql<string[]>`array_remove(hidden_profile_ids, ${row.id}::uuid)`,
+          hiddenProfileIds: sql<
+            string[]
+          >`array_remove(hidden_profile_ids, ${row.id}::uuid)`,
           updatedAt: now,
         })
         .where('spaceId', '=', spaceId)
@@ -478,9 +474,7 @@ export class AiAssistantProfileService {
       }
       if (
         dto.preferredProfileId &&
-        !rows.find(
-          (row) => row.id === dto.preferredProfileId && row.enabled,
-        )
+        !rows.find((row) => row.id === dto.preferredProfileId && row.enabled)
       ) {
         throw new BadRequestException({
           code: 'ai_profile_disabled',
@@ -489,11 +483,7 @@ export class AiAssistantProfileService {
       }
       if (
         dto.preferredProfileId &&
-        !(await this.isGroupAllowed(
-          dto.preferredProfileId,
-          user.id,
-          this.db,
-        ))
+        !(await this.isGroupAllowed(dto.preferredProfileId, user.id, this.db))
       ) {
         throw new ForbiddenException({
           code: 'ai_profile_not_allowed',
@@ -615,14 +605,12 @@ export class AiAssistantProfileService {
     if (
       snapshot.schemaVersion !== 1 ||
       !['assistant_profile', 'legacy_space'].includes(snapshot.source) ||
-      (!Array.isArray(snapshot.quickCommands) && snapshot.quickCommands !== null)
+      (!Array.isArray(snapshot.quickCommands) &&
+        snapshot.quickCommands !== null)
     ) {
       return null;
     }
-    if (
-      expectedFingerprint &&
-      expectedFingerprint !== fingerprint(snapshot)
-    ) {
+    if (expectedFingerprint && expectedFingerprint !== fingerprint(snapshot)) {
       return null;
     }
     return snapshot;
@@ -752,9 +740,7 @@ export class AiAssistantProfileService {
       const allowed = this.readCapabilities(policy.allowedBuiltinCapabilities);
       if (policy.allowedBuiltinCapabilities !== null) {
         const set = new Set(allowed);
-        capabilities = capabilities.filter((capability) =>
-          set.has(capability),
-        );
+        capabilities = capabilities.filter((capability) => set.has(capability));
       }
     }
     return {
@@ -786,21 +772,21 @@ export class AiAssistantProfileService {
       this.db,
     );
     const allowed = new Set(current.maximumBuiltinCapabilities ?? []);
-    const runSnapshot = run.builtinToolPolicySnapshot as
-      | { capabilities?: unknown }
-      | null;
+    const runSnapshot = run.builtinToolPolicySnapshot as {
+      capabilities?: unknown;
+    } | null;
     const runCapabilities = Array.isArray(runSnapshot?.capabilities)
       ? (runSnapshot.capabilities as string[])
       : [];
-    if (runCapabilities.some((capability) => !allowed.has(capability as never))) {
+    if (
+      runCapabilities.some((capability) => !allowed.has(capability as never))
+    ) {
       throw this.profileRunError(
         'agent_profile_policy_changed',
         'A group or profile policy revoked a built-in tool',
       );
     }
-    const frozenMcpSnapshot = run.mcpPolicySnapshot as
-      | AiMcpRunSnapshot
-      | null;
+    const frozenMcpSnapshot = run.mcpPolicySnapshot as AiMcpRunSnapshot | null;
     if (frozenMcpSnapshot) {
       if (
         !run.mcpPolicyFingerprint ||
@@ -812,14 +798,17 @@ export class AiAssistantProfileService {
           'The external MCP policy snapshot failed its integrity check',
         );
       }
-      const currentMcpSnapshot = await this.mcpPolicy.buildRunSnapshot(this.db, {
-        workspaceId: run.workspaceId,
-        spaceId: run.spaceId,
-        userId: run.userId,
-        executionMode: run.executionMode,
-        profileKey: snapshot.profileId!,
-        profileAllowedTools: snapshot.allowedExternalTools ?? [],
-      });
+      const currentMcpSnapshot = await this.mcpPolicy.buildRunSnapshot(
+        this.db,
+        {
+          workspaceId: run.workspaceId,
+          spaceId: run.spaceId,
+          userId: run.userId,
+          executionMode: run.executionMode,
+          profileKey: snapshot.profileId!,
+          profileAllowedTools: snapshot.allowedExternalTools ?? [],
+        },
+      );
       this.assertFrozenExternalPolicyCurrent(
         frozenMcpSnapshot,
         currentMcpSnapshot,
@@ -914,7 +903,8 @@ export class AiAssistantProfileService {
     const snapshot = value as unknown as AiAssistantProfileProviderSnapshot;
     if (
       snapshot.schemaVersion !== 1 ||
-      run.providerConfigFingerprint !== this.providerSnapshotFingerprint(snapshot)
+      run.providerConfigFingerprint !==
+        this.providerSnapshotFingerprint(snapshot)
     ) {
       throw this.profileRunError(
         'agent_provider_config_changed',
@@ -1030,7 +1020,10 @@ export class AiAssistantProfileService {
       modelsAvailable = false;
     }
     const completion = await this.provider.complete(
-      { ...providerConfig, maxOutputTokens: Math.min(512, providerConfig.maxOutputTokens) },
+      {
+        ...providerConfig,
+        maxOutputTokens: Math.min(512, providerConfig.maxOutputTokens),
+      },
       [{ role: 'user', content: 'Reply with OK.' }],
     );
     this.metrics.observeProfileOutcome('test_model_ok');
@@ -1077,7 +1070,10 @@ export class AiAssistantProfileService {
     const startedAt = Date.now();
     const toolName = 'capabilityProbe';
     const completion = await this.provider.completeWithTools(
-      { ...providerConfig, maxOutputTokens: Math.min(256, providerConfig.maxOutputTokens) },
+      {
+        ...providerConfig,
+        maxOutputTokens: Math.min(256, providerConfig.maxOutputTokens),
+      },
       [
         {
           role: 'user',
@@ -1271,9 +1267,7 @@ export class AiAssistantProfileService {
       ),
     );
     if (
-      allowedBuiltinCapabilities.some(
-        (capability) => !maximum.has(capability),
-      )
+      allowedBuiltinCapabilities.some((capability) => !maximum.has(capability))
     ) {
       throw new BadRequestException(
         'An assistant profile can only narrow the space tool policy',
@@ -1373,16 +1367,18 @@ export class AiAssistantProfileService {
     const allowedBuiltinCapabilities = this.readCapabilities(
       row.allowedBuiltinCapabilities,
     );
-    const [allowedExternalTools, builtinSnapshot, settings] = await Promise.all([
-      this.loadExternalSelections(row.id, db),
-      this.builtinTools.buildRunSnapshot(db, {
-        workspaceId: row.workspaceId,
-        spaceId: row.spaceId,
-        executionMode: 'agent',
-        maximumCapabilities: allowedBuiltinCapabilities,
-      }),
-      this.readWorkspaceSettings(row.workspaceId, db),
-    ]);
+    const [allowedExternalTools, builtinSnapshot, settings] = await Promise.all(
+      [
+        this.loadExternalSelections(row.id, db),
+        this.builtinTools.buildRunSnapshot(db, {
+          workspaceId: row.workspaceId,
+          spaceId: row.spaceId,
+          executionMode: 'agent',
+          maximumCapabilities: allowedBuiltinCapabilities,
+        }),
+        this.readWorkspaceSettings(row.workspaceId, db),
+      ],
+    );
     const toolPolicyFingerprint = fingerprint({
       workspacePolicyVersion: builtinSnapshot?.workspacePolicyVersion ?? 0,
       spacePolicyVersion: builtinSnapshot?.spacePolicyVersion ?? 0,
@@ -1485,17 +1481,15 @@ export class AiAssistantProfileService {
     db: Db,
   ): Promise<VerificationParts> {
     const providerSnapshot = this.buildProviderSnapshot(config, snapshot);
-    const providerFingerprint = this.effectiveProviderFingerprint(
-      providerSnapshot,
-    );
+    const providerFingerprint =
+      this.effectiveProviderFingerprint(providerSnapshot);
     const builtinSnapshot = await this.builtinTools.buildRunSnapshot(db, {
       workspaceId: config.workspaceId,
       spaceId: config.spaceId,
       executionMode: 'agent',
       maximumCapabilities: snapshot.allowedBuiltinCapabilities ?? undefined,
     });
-    const effectiveBuiltinCapabilities =
-      builtinSnapshot?.capabilities ?? [];
+    const effectiveBuiltinCapabilities = builtinSnapshot?.capabilities ?? [];
     const externalPolicyFingerprint =
       await this.mcpPolicy.maximumProfilePolicyFingerprint(db, {
         workspaceId: config.workspaceId,
@@ -1547,8 +1541,8 @@ export class AiAssistantProfileService {
       toolPolicyFingerprint,
       verificationFingerprint,
       effectiveBuiltinCapabilities,
-      externalToolCount: effectiveExternalTools.filter(
-        (tool) => Boolean(tool.schemaFingerprint),
+      externalToolCount: effectiveExternalTools.filter((tool) =>
+        Boolean(tool.schemaFingerprint),
       ).length,
     };
   }
@@ -1586,8 +1580,7 @@ export class AiAssistantProfileService {
         : null;
     let agent: AiAssistantProfileAgentStatus = verification
       ? {
-          available:
-            availability === 'available' && verification.verified,
+          available: availability === 'available' && verification.verified,
           reason:
             availability === 'available'
               ? verification.reason
@@ -1714,11 +1707,7 @@ export class AiAssistantProfileService {
       .selectFrom('aiAssistantProfileMcpTools as pt')
       .innerJoin('aiMcpSpaceBindings as b', 'b.id', 'pt.bindingId')
       .innerJoin('aiMcpServers as s', 's.id', 'b.serverId')
-      .select([
-        'pt.bindingId',
-        'pt.toolName',
-        's.approvedTools',
-      ])
+      .select(['pt.bindingId', 'pt.toolName', 's.approvedTools'])
       .where('pt.profileId', '=', profileId)
       .orderBy('pt.bindingId', 'asc')
       .orderBy('pt.toolName', 'asc')
@@ -1818,11 +1807,7 @@ export class AiAssistantProfileService {
     return applicable.length > 0 && applicable.every((row) => row.available);
   }
 
-  private applicableGroupPolicies(
-    profileId: string,
-    userId: string,
-    db: Db,
-  ) {
+  private applicableGroupPolicies(profileId: string, userId: string, db: Db) {
     return db
       .selectFrom('aiAssistantProfileGroupPolicies as gp')
       .innerJoin('groupUsers as gu', 'gu.groupId', 'gp.groupId')
@@ -1869,10 +1854,7 @@ export class AiAssistantProfileService {
     return params.groupAllowed ? 'available' : 'not_allowed';
   }
 
-  private async readWorkspaceSettings(
-    workspaceId: string,
-    db: Db = this.db,
-  ) {
+  private async readWorkspaceSettings(workspaceId: string, db: Db = this.db) {
     const row = await db
       .selectFrom('aiAssistantProfileWorkspaceSettings')
       .select([
@@ -1984,7 +1966,9 @@ export class AiAssistantProfileService {
       const label = command.label.trim();
       const prompt = command.prompt.trim();
       if (!id || !label || !prompt || ids.has(id)) {
-        throw new BadRequestException('Invalid assistant profile quick command');
+        throw new BadRequestException(
+          'Invalid assistant profile quick command',
+        );
       }
       ids.add(id);
       return {
@@ -2003,15 +1987,14 @@ export class AiAssistantProfileService {
   private readQuickCommands(value: unknown): AiQuickCommand[] | null {
     if (!Array.isArray(value)) return null;
     return value
-      .filter(
-        (item): item is AiQuickCommand =>
-          Boolean(
-            item &&
-              typeof item === 'object' &&
-              typeof (item as any).id === 'string' &&
-              typeof (item as any).label === 'string' &&
-              typeof (item as any).prompt === 'string',
-          ),
+      .filter((item): item is AiQuickCommand =>
+        Boolean(
+          item &&
+            typeof item === 'object' &&
+            typeof (item as any).id === 'string' &&
+            typeof (item as any).label === 'string' &&
+            typeof (item as any).prompt === 'string',
+        ),
       )
       .map((item, position) => ({
         id: item.id,
@@ -2040,7 +2023,9 @@ export class AiAssistantProfileService {
   private readStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return [
-      ...new Set(value.filter((item): item is string => typeof item === 'string')),
+      ...new Set(
+        value.filter((item): item is string => typeof item === 'string'),
+      ),
     ];
   }
 
@@ -2050,14 +2035,13 @@ export class AiAssistantProfileService {
   }> {
     if (!Array.isArray(value)) return [];
     return value
-      .filter(
-        (item): item is { toolName: string; schemaFingerprint: string } =>
-          Boolean(
-            item &&
-              typeof item === 'object' &&
-              typeof (item as any).toolName === 'string' &&
-              typeof (item as any).schemaFingerprint === 'string',
-          ),
+      .filter((item): item is { toolName: string; schemaFingerprint: string } =>
+        Boolean(
+          item &&
+            typeof item === 'object' &&
+            typeof (item as any).toolName === 'string' &&
+            typeof (item as any).schemaFingerprint === 'string',
+        ),
       )
       .map((item) => ({
         toolName: item.toolName,

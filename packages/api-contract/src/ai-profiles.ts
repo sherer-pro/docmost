@@ -137,6 +137,7 @@ export interface UpdateAiAssistantProfilePreferencesRequest {
 
 export interface AiAssistantProfilesView {
   enabled: boolean;
+  modelOverridesEnabled: boolean;
   defaultProfileId: string | null;
   preferredProfileId: string | null;
   items: AiAssistantProfileSummary[];
