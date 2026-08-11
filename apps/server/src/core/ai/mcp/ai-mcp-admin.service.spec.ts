@@ -419,6 +419,36 @@ describe('AiMcpAdminService header update semantics', () => {
     expect(pool.publishInvalidation).toHaveBeenCalledWith('server-1', 'config');
   });
 
+  it('revokes saved consent when the outbound destination changes', async () => {
+    const { service, writes } = build({ server });
+
+    await service.updateServer(
+      'server-1',
+      { url: 'https://mcp.example.test/next' },
+      USER,
+      WORKSPACE,
+    );
+
+    expect(
+      writes.find((write) => write.table === 'aiMcpUserPreferences')?.values,
+    ).toMatchObject({ enabled: false });
+  });
+
+  it('keeps saved consent when headers change without changing the destination', async () => {
+    const { service, writes } = build({ server });
+
+    await service.updateServer(
+      'server-1',
+      { headers: { authorization: 'Bearer replacement' } },
+      USER,
+      WORKSPACE,
+    );
+
+    expect(
+      writes.some((write) => write.table === 'aiMcpUserPreferences'),
+    ).toBe(false);
+  });
+
   it('does not bump the config version for a rename alone', async () => {
     const { service, writes, pool } = build({ server });
 
