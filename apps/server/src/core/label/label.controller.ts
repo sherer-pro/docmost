@@ -56,7 +56,7 @@ export class LabelController {
 
     return this.labelService.getLabels(
       workspace.id,
-      user.id,
+      user,
       dto.spaceId,
       dto.type,
       dto,

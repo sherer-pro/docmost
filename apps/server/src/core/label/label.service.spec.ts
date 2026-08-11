@@ -26,6 +26,7 @@ describe('LabelService', () => {
     };
     const pageAccessService = {
       getEffectiveAccess: jest.fn(),
+      getSidebarAccessSnapshot: jest.fn(),
     };
 
     return {
@@ -145,5 +146,76 @@ describe('LabelService', () => {
       'space-1',
       trx,
     );
+  });
+
+  it('lists labels only from pages readable by the current user', async () => {
+    const { service, labelRepo, pageAccessService } = createService();
+    const readablePageIds = new Set(['page-1']);
+    const user = {
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any;
+    const pagination = { limit: 20 } as any;
+    const result = { items: [], meta: { limit: 20 } };
+    pageAccessService.getSidebarAccessSnapshot.mockResolvedValue({
+      readablePageIds,
+    });
+    labelRepo.findLabels.mockResolvedValue(result);
+
+    await expect(
+      service.getLabels(
+        'workspace-1',
+        user,
+        'space-1',
+        LabelType.PAGE,
+        pagination,
+      ),
+    ).resolves.toBe(result);
+
+    expect(pageAccessService.getSidebarAccessSnapshot).toHaveBeenCalledWith(
+      user,
+      'space-1',
+    );
+    expect(labelRepo.findLabels).toHaveBeenCalledWith(
+      'workspace-1',
+      'space-1',
+      LabelType.PAGE,
+      readablePageIds,
+      pagination,
+    );
+  });
+
+  it('applies readable page ids before paginating label page results', async () => {
+    const { service, labelRepo, pageAccessService } = createService();
+    const readablePageIds = new Set(['page-2']);
+    const user = {
+      id: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any;
+    const pagination = { limit: 20 } as any;
+    const result = { items: [{ id: 'page-2' }], meta: { limit: 20 } };
+    pageAccessService.getSidebarAccessSnapshot.mockResolvedValue({
+      readablePageIds,
+    });
+    labelRepo.findPagesByLabelId.mockResolvedValue(result);
+
+    await expect(
+      service.findPagesByLabel('label-1', user, {
+        spaceId: 'space-1',
+        pagination,
+      }),
+    ).resolves.toBe(result);
+
+    expect(labelRepo.findPagesByLabelId).toHaveBeenCalledWith(
+      'label-1',
+      'user-1',
+      {
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+        pagination,
+        readablePageIds,
+      },
+    );
+    expect(pageAccessService.getEffectiveAccess).not.toHaveBeenCalled();
   });
 });

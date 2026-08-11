@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Label } from '@docmost/db/types/entity.types';
+import { Label, User } from '@docmost/db/types/entity.types';
 import { LabelRepo, LabelType } from '@docmost/db/repos/label/label.repo';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -83,53 +83,45 @@ export class LabelService {
 
   async getLabels(
     workspaceId: string,
-    userId: string,
+    user: User,
     spaceId: string,
     type: LabelType,
     pagination: PaginationOptions,
   ) {
+    const accessSnapshot =
+      await this.pageAccessService.getSidebarAccessSnapshot(user, spaceId);
+
     return this.labelRepo.findLabels(
       workspaceId,
-      userId,
       spaceId,
       type,
+      accessSnapshot.readablePageIds,
       pagination,
     );
   }
 
   async findPagesByLabel(
     labelId: string,
-    user: { id: string; workspaceId: string },
+    user: User,
     opts: {
       spaceId?: string;
       query?: string;
       pagination: PaginationOptions;
     },
   ) {
+    const readablePageIds = opts.spaceId
+      ? (
+          await this.pageAccessService.getSidebarAccessSnapshot(
+            user,
+            opts.spaceId,
+          )
+        ).readablePageIds
+      : undefined;
     const result = await this.labelRepo.findPagesByLabelId(labelId, user.id, {
       ...opts,
       workspaceId: user.workspaceId,
+      readablePageIds,
     });
-    if (result.items.length === 0) {
-      return result;
-    }
-
-    result.items = (
-      await Promise.all(
-        result.items.map(async (page) => {
-          const access = await this.pageAccessService.getEffectiveAccess(
-            {
-              ...page,
-              workspaceId: user.workspaceId,
-              deletedAt: null,
-            } as any,
-            user as any,
-          );
-          return access.capabilities.canRead ? page : null;
-        }),
-      )
-    ).filter((page): page is NonNullable<typeof page> => !!page);
-
     return result;
   }
 }
