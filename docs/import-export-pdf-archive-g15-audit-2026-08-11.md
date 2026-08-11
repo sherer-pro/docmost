@@ -154,7 +154,7 @@ all exited 0 unless explicitly noted below. The material execution log is:
 | final `corepack pnpm --filter ./apps/server test -- --runInBand integrations/import integrations/export` | 0 | 10 suites, 84 tests after merging the current `main` into the audit branch |
 | targeted archive, durability, processor, file-task ACL tests during fixes | 0 | all selected suites passed |
 | final `corepack pnpm run test:security` | 0 | server 66 suites/791 tests; client 6 files/74 tests |
-| client unit suite after import-modal fixes | 0 | 132 files/634 tests |
+| client unit suite after import-modal fixes | 0 | 132 files/634 tests on the branch; post-integration rerun 133 files/640 tests |
 | targeted server/client ESLint | 0 | no findings |
 | `corepack pnpm server:build` and `corepack pnpm client:build` | 0 | passed sequentially |
 | one earlier parallel Nx build | 1 | baseline tooling race: concurrent WASM context; sequential retry passed |
@@ -345,8 +345,16 @@ Production/documentation commits owned by G15:
 5. `81bbcc60 fix(import): keep archive action label visible`
 6. `e3f1ca28 fix(import): meter archive data before CRC validation`
 7. `179c92e2 docs: document hardened archive lifecycle`
+8. `993eb543 docs: record G15 portability audit`
+9. `89f724db docs: finalize G15 audit scope`
 
 All harness scripts, generated fixtures, traces, screenshots, ZIPs, PDFs, and
 runtime JSON under the evidence root are test-only and ignored. They are not
 staged or committed. No credential value is present in the report. The
 pre-existing `graphify-out/*` modifications were preserved and never staged.
+
+After the final post-integration checks, `docker compose ... down -v` removed
+the four `docmost-g15` containers and the isolated PostgreSQL, Redis, and local
+storage volumes. The temporary Compose override was deleted. The exact local
+application image is retained for reproducibility; no port, container, network,
+or test volume remains active.
