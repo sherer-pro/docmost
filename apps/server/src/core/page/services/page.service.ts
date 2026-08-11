@@ -52,7 +52,10 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { EventName } from '../../../common/events/event.contants';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CollaborationGateway } from '../../../collaboration/collaboration.gateway';
-import { markdownToHtml } from '@docmost/editor-ext';
+import {
+  markdownToHtml,
+  validateTemplateInstanceMutation,
+} from '@docmost/editor-ext';
 import { WatcherService } from '../../watcher/watcher.service';
 import { RecipientResolverService } from '../../notification/services/recipient-resolver.service';
 import {
@@ -971,6 +974,11 @@ export class PageService {
     user: User,
   ): Promise<void> {
     const prosemirrorJson = await this.parseProsemirrorContent(content, format);
+    await this.assertTemplateInstanceContentMutation(
+      pageId,
+      prosemirrorJson,
+      operation,
+    );
 
     const documentName = `page.${pageId}`;
     await this.collaborationGateway.handleYjsEvent(
@@ -978,6 +986,53 @@ export class PageService {
       documentName,
       { operation, prosemirrorJson, user },
     );
+  }
+
+  private async assertTemplateInstanceContentMutation(
+    pageId: string,
+    prosemirrorJson: any,
+    operation: ContentOperation,
+  ): Promise<void> {
+    const instance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .select('id')
+      .where('childPageId', '=', pageId)
+      .where('instanceKind', '=', 'synced')
+      .where('status', 'in', ['active', 'syncing', 'error'])
+      .executeTakeFirst();
+    if (!instance) return;
+
+    const page = await this.pageRepo.findById(pageId, {
+      includeContent: true,
+    });
+    if (!page) return;
+
+    const current = getProsemirrorContent(page.content) as any;
+    const incoming = getProsemirrorContent(prosemirrorJson) as any;
+    const currentNodes = Array.isArray(current?.content)
+      ? current.content
+      : [];
+    const incomingNodes = Array.isArray(incoming?.content)
+      ? incoming.content
+      : [];
+    const next =
+      operation === 'replace'
+        ? incoming
+        : {
+            ...current,
+            content:
+              operation === 'prepend'
+                ? [...incomingNodes, ...currentNodes]
+                : [...currentNodes, ...incomingNodes],
+          };
+
+    if (!validateTemplateInstanceMutation(current, next)) {
+      throw new ConflictException({
+        code: 'page_template_managed_content_read_only',
+        message:
+          'Template-managed blocks can only be changed in the source template',
+      });
+    }
   }
 
   /**

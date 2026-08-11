@@ -316,6 +316,52 @@ describe('ExportService PDF export', () => {
     expect(exported).not.toContain('Secret source content');
   });
 
+  it('materializes synchronized template containers before presentation export', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Linked page',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'templateManagedBlock',
+          attrs: { templateBlockId: 'managed-1', locked: true },
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Managed text' }],
+            },
+          ],
+        },
+        {
+          type: 'templateField',
+          attrs: { fieldId: 'field-1', label: 'Owner' },
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Local value' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const exported = await service.exportPage(
+      ExportFormat.HTML,
+      page as any,
+      true,
+    );
+
+    expect(exported).toContain('Managed text');
+    expect(exported).toContain('Local value');
+    expect(exported).not.toContain('templateManagedBlock');
+    expect(exported).not.toContain('templateField');
+  });
+
   it('exports a page as PDF through HTML renderer', async () => {
     const page = createPage({
       id: 'page-1',
@@ -990,6 +1036,50 @@ describe('ExportService PDF export', () => {
     expect(zip.file('Root.pdf')).toBeDefined();
     expect(zip.file('Root/Child.pdf')).toBeDefined();
     expect(zip.file('docmost-metadata.json')).toBeDefined();
+  });
+
+  it('excludes template catalog pages from a space export query', async () => {
+    const whereCalls: unknown[][] = [];
+    db.selectFrom.mockImplementation((tableName: string) => {
+      if (tableName === 'spaces') {
+        const query: any = {
+          selectAll: () => query,
+          where: (...args: unknown[]) => {
+            whereCalls.push(args);
+            return query;
+          },
+          executeTakeFirst: async () => ({
+            id: 'space-1',
+            name: 'Space',
+            settings: {},
+          }),
+        };
+        return query;
+      }
+
+      if (tableName === 'pages') {
+        const query: any = {
+          select: () => query,
+          where: (...args: unknown[]) => {
+            whereCalls.push(args);
+            return query;
+          },
+          execute: async () => [],
+        };
+        return query;
+      }
+
+      throw new Error(`Unexpected table: ${tableName}`);
+    });
+
+    const result = await service.exportSpace(
+      'space-1',
+      ExportFormat.HTML,
+      false,
+    );
+    await streamToBuffer(result.fileStream);
+
+    expect(whereCalls).toContainEqual(['templateKind', 'is', null]);
   });
 
   it('excludes descendants the authorized user may not read', async () => {
