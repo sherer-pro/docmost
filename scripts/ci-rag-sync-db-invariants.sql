@@ -5,6 +5,8 @@ declare
   first_binding rag_sync_bindings%rowtype;
   second_binding rag_sync_bindings%rowtype;
   claimed_fingerprint varchar;
+  tested_binding_count integer;
+  untested_binding_count integer;
   state_default text;
   cleanup_default text;
   config_version_default text;
@@ -24,6 +26,17 @@ begin
 
   if first_binding.id is null or second_binding.id is null then
     raise exception 'RAG sync invariant smoke requires two enabled bindings';
+  end if;
+
+  select
+    count(*) filter (where last_tested_at is not null),
+    count(*) filter (where last_tested_at is null)
+  into tested_binding_count, untested_binding_count
+  from rag_sync_bindings
+  where state = 'enabled';
+
+  if tested_binding_count <> 1 or untested_binding_count <> 1 then
+    raise exception 'RAG sync target-test invalidation smoke state was not preserved';
   end if;
 
   select target_fingerprint into claimed_fingerprint

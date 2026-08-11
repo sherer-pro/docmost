@@ -6,6 +6,10 @@
   flex: 0 0 auto;
 }
 
+.alertLabel {
+  color: var(--mantine-color-text);
+}
+
 .statusGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -22,6 +26,34 @@
 
 .keyAction {
   align-self: flex-start;
+}
+
+.keyAction[data-contrast-action="neutral"] {
+  color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-gray-0));
+}
+
+.enableAction {
+  background: var(--mantine-color-teal-9);
+}
+
+.enableAction:hover {
+  background: light-dark(#066649, #0b6b50);
+}
+
+.disableAction {
+  background: var(--mantine-color-orange-9);
+}
+
+.disableAction:hover {
+  background: var(--mantine-color-orange-8);
+}
+
+.dangerAction {
+  background: var(--mantine-color-red-9);
+}
+
+.dangerAction:hover {
+  background: var(--mantine-color-red-8);
 }
 
 .actionBar {

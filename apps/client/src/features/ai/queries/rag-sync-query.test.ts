@@ -13,6 +13,7 @@ function config(state: RagSyncSpaceConfig["state"]): RagSyncSpaceConfig {
       baseUrl: "https://open-webui.example.com",
       knowledgeId: "knowledge-id",
       writerApiKeyConfigured: true,
+      lastTestedAt: "2026-08-11T12:00:00.000Z",
     },
     cleanupRequired: false,
     status: {

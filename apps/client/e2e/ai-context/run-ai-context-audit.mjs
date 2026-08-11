@@ -509,7 +509,33 @@ async function browserEvidenceV2(storageState, state, citedCase) {
     const asideIsOpen =
       (await aside.getAttribute("aria-hidden").catch(() => "true")) !== "true";
     if (!asideIsOpen) {
-      await targetPage.getByRole("button", { name: openAssistantName }).click();
+      const defaultOpenButton = targetPage.getByRole("button", {
+        name: openAssistantName,
+      });
+      const namedOpenButton = targetPage
+        .locator("header button")
+        .filter({
+          has: targetPage.locator("svg.tabler-icon-sparkles"),
+        })
+        .first();
+      const readyTarget = await Promise.race([
+        composer
+          .waitFor({ state: "visible", timeout: 20_000 })
+          .then(() => "composer"),
+        defaultOpenButton
+          .waitFor({ state: "visible", timeout: 20_000 })
+          .then(() => "default-button"),
+        namedOpenButton
+          .waitFor({ state: "visible", timeout: 20_000 })
+          .then(() => "named-button"),
+      ]);
+      if (readyTarget === "composer") {
+        return composer;
+      }
+      await (readyTarget === "default-button"
+        ? defaultOpenButton
+        : namedOpenButton
+      ).click();
     }
     await composer.waitFor({ state: "visible", timeout: 20_000 });
     return composer;

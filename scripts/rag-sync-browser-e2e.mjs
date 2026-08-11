@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 
 const baseUrl = new URL(process.env.RAG_SYNC_E2E_BASE_URL ?? "http://127.0.0.1:3200");
@@ -318,8 +319,11 @@ try {
   await page.getByRole("link", { name: /RAG source page|C1/ }).first().waitFor();
   await page.screenshot({ path: `${outputDir}/citation.png`, fullPage: true });
 
+  const accessInvalidationReload = page.waitForNavigation({
+    waitUntil: "domcontentloaded",
+  });
   await revokeSource();
-  await page.reload();
+  await accessInvalidationReload;
   await page.getByRole("button", { name: "Open AI assistant" }).click();
   await page
     .getByText(
@@ -361,6 +365,216 @@ try {
   if (!fixtureState.files.some((file) => file.meta?.data?.docmost?.sourceId === sourcePage.id)) {
     throw new Error("Personal ACL revoke removed shared Knowledge content");
   }
+
+  const adminContext = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+  });
+  const adminCookies = admin.cookie.split("; ").map((pair) => {
+    const index = pair.indexOf("=");
+    return {
+      name: pair.slice(0, index),
+      value: pair.slice(index + 1),
+      url: baseUrl.origin,
+    };
+  });
+  await adminContext.addCookies(adminCookies);
+  const adminPage = await adminContext.newPage();
+  const browserErrors = [];
+  adminPage.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  adminPage.on("pageerror", (error) => browserErrors.push(error.message));
+
+  const settingsUrl = new URL(
+    `/settings/ai/spaces/${space.slug}`,
+    baseUrl,
+  ).toString();
+  await Promise.all([adminPage.goto(settingsUrl), page.goto(settingsUrl)]);
+  await page.getByText("No access", { exact: true }).waitFor();
+  if (await page.getByText("Open WebUI writer API key").isVisible()) {
+    throw new Error("A reader could open the RAG Sync settings UI");
+  }
+  let memberApiDenied = false;
+  try {
+    await member.api(`api/spaces/${space.id}/ai/rag-sync`);
+  } catch (error) {
+    memberApiDenied = String(error).includes("returned 403");
+  }
+  if (!memberApiDenied) {
+    throw new Error(
+      "A reader could bypass RAG Sync authorization through the API",
+    );
+  }
+  await page.screenshot({
+    path: `${outputDir}/rag-sync-member-denied.png`,
+    fullPage: true,
+  });
+
+  await adminPage
+    .getByRole("button", { name: "RAG synchronization", exact: true })
+    .click();
+  await adminPage
+    .getByRole("heading", { name: "Open WebUI synchronization" })
+    .waitFor();
+  await adminPage
+    .getByRole("textbox", { name: "Open WebUI base URL", exact: true })
+    .fill("http://open-webui-fixture:8080");
+  await adminPage
+    .getByRole("textbox", { name: "Knowledge Base ID", exact: true })
+    .fill("knowledge-two");
+  await adminPage
+    .getByRole("textbox", {
+      name: "Open WebUI writer API key",
+      exact: true,
+    })
+    .fill("ci-writer-two");
+  await adminPage.getByRole("button", { name: "Save", exact: true }).click();
+  await adminPage
+    .getByText("RAG synchronization settings saved.", { exact: true })
+    .waitFor();
+  const keyInput = adminPage.getByRole("textbox", {
+    name: "Open WebUI writer API key",
+    exact: true,
+  });
+  if ((await keyInput.getAttribute("type")) !== "password") {
+    throw new Error("Writer credential input was not password-protected");
+  }
+  if ((await keyInput.evaluate((element) => element.value)) !== "") {
+    throw new Error("Writer credential remained in the browser after save");
+  }
+  if (
+    (await adminPage.locator("body").textContent()).includes("ci-writer-two")
+  ) {
+    throw new Error("Writer credential was rendered back into the settings UI");
+  }
+
+  const enableButton = adminPage.getByRole("button", {
+    name: "Enable synchronization",
+    exact: true,
+  });
+  await adminPage
+    .getByRole("alert")
+    .filter({ hasText: "Test the target before enabling" })
+    .waitFor();
+  if (await enableButton.isEnabled()) {
+    throw new Error(
+      "Enable was available before the writer target passed Test",
+    );
+  }
+  await adminPage.screenshot({
+    path: `${outputDir}/rag-sync-untested.png`,
+    fullPage: true,
+  });
+
+  await adminPage
+    .getByRole("button", { name: "Test writer", exact: true })
+    .click();
+  await adminPage.getByText(/Writer test succeeded in \d+ ms\./).waitFor();
+  await waitFor("tested target to become enableable", () =>
+    enableButton.isEnabled(),
+  );
+  const axeResult = await new AxeBuilder({ page: adminPage })
+    .include("form")
+    .analyze();
+  const severeAccessibilityViolations = axeResult.violations.filter(
+    (violation) =>
+      violation.impact === "critical" || violation.impact === "serious",
+  );
+  if (severeAccessibilityViolations.length > 0) {
+    await writeFile(
+      `${outputDir}/rag-sync-accessibility-violations.json`,
+      JSON.stringify(severeAccessibilityViolations, null, 2),
+    );
+    await adminPage.screenshot({
+      path: `${outputDir}/rag-sync-accessibility-failure.png`,
+      fullPage: true,
+    });
+    throw new Error(
+      `RAG Sync settings have serious accessibility violations: ${severeAccessibilityViolations
+        .map((violation) => violation.id)
+        .join(", ")}`,
+    );
+  }
+  await adminPage.screenshot({
+    path: `${outputDir}/rag-sync-tested-desktop.png`,
+    fullPage: true,
+  });
+
+  await adminPage.setViewportSize({ width: 390, height: 844 });
+  await adminPage
+    .getByRole("navigation", { name: "Settings section" })
+    .waitFor({ state: "hidden" });
+  await waitFor("mobile sidebar transition", () =>
+    adminPage.evaluate(() => {
+      const sidebar = document.querySelector("#docmost-primary-sidebar");
+      const rect = sidebar?.getBoundingClientRect();
+      return !rect || rect.right <= 0;
+    }),
+  );
+  const mobileLayout = await adminPage.evaluate(() => {
+    const sidebar = document.querySelector("#docmost-primary-sidebar");
+    const main = document.querySelector("#docmost-main-content");
+    const sidebarRect = sidebar?.getBoundingClientRect();
+    const mainRect = main?.getBoundingClientRect();
+    return {
+      viewportWidth: window.innerWidth,
+      devicePixelRatio: window.devicePixelRatio,
+      mobileMediaMatches: window.matchMedia("(max-width: 48em)").matches,
+      documentWidth: document.documentElement.scrollWidth,
+      sidebarAriaHidden: sidebar?.getAttribute("aria-hidden") ?? null,
+      sidebarRect: sidebarRect
+        ? { x: sidebarRect.x, width: sidebarRect.width }
+        : null,
+      mainRect: mainRect ? { x: mainRect.x, width: mainRect.width } : null,
+    };
+  });
+  await writeFile(
+    `${outputDir}/rag-sync-mobile-layout.json`,
+    JSON.stringify(mobileLayout, null, 2),
+  );
+  const horizontalOverflow = await adminPage.evaluate(
+    () =>
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth,
+  );
+  if (horizontalOverflow) {
+    throw new Error("RAG Sync settings overflow horizontally at 390px");
+  }
+  await adminPage.screenshot({
+    path: `${outputDir}/rag-sync-tested-mobile.png`,
+    fullPage: true,
+  });
+  await adminPage.setViewportSize({ width: 1440, height: 1000 });
+  await enableButton.click();
+  await adminPage.getByText("Enabled", { exact: true }).first().waitFor();
+  await adminPage.screenshot({
+    path: `${outputDir}/rag-sync-enabled.png`,
+    fullPage: true,
+  });
+
+  if (browserErrors.length > 0) {
+    throw new Error(`RAG Sync browser errors: ${browserErrors.join(" | ")}`);
+  }
+  await writeFile(
+    `${outputDir}/rag-sync-ui-audit.json`,
+    JSON.stringify(
+      {
+        roles: ["workspace owner", "space reader"],
+        simultaneousBrowserContexts: 2,
+        readerUiDenied: true,
+        readerApiDenied: true,
+        enableBlockedBeforeTest: true,
+        enableAllowedAfterTest: true,
+        secretRendered: false,
+        horizontalOverflowAt390px: false,
+        seriousAccessibilityViolations: [],
+        browserErrors: [],
+      },
+      null,
+      2,
+    ),
+  );
+  await adminContext.close();
 } finally {
   await browser.close();
 }

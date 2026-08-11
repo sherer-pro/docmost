@@ -307,6 +307,7 @@ const server = createServer(async (request, response) => {
         );
       }
       counters.uploads += 1;
+      if (await applyFault("upload-response", request, response)) return;
       send(response, 200, publicFile(files.get(id)));
       return;
     }

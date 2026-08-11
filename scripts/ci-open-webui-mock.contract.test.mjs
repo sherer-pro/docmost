@@ -158,6 +158,52 @@ test("preserves PDF and DOCX attachment identity, MIME and content hash", async 
   assert.equal(docxState.meta.data.docmost.contentHash, "66".padStart(64, "0"));
 });
 
+test("can drop an upload response after persisting the remote side effect", async () => {
+  const sourceId = randomUUID();
+  const operationId = "contract-lost-upload-response";
+  const form = new FormData();
+  form.set("file", new Blob(["lost response fixture"]), "lost-response.md");
+  form.set(
+    "metadata",
+    JSON.stringify({
+      knowledge_id: "knowledge-one",
+      docmost: {
+        schemaVersion: 2,
+        bindingId: "contract-binding",
+        targetVersion: 1,
+        workspaceId: randomUUID(),
+        spaceId: randomUUID(),
+        sourceType: "page",
+        sourceId,
+        pageId: sourceId,
+        sourceUpdatedAtMs: Date.now(),
+        contentHash: "67".padStart(64, "0"),
+        operationId,
+      },
+    }),
+  );
+  await control({
+    fault: { operation: "upload-response", mode: "disconnect", count: 1 },
+  });
+  await assert.rejects(() =>
+    fetch(`${baseUrl}/api/v1/files/`, {
+      method: "POST",
+      headers: writerHeaders(),
+      body: form,
+    }),
+  );
+
+  const state = await fetch(`${baseUrl}/__state`).then((response) =>
+    response.json(),
+  );
+  assert.equal(state.operationRequests[operationId], 1);
+  assert.ok(
+    state.files.some(
+      (file) => file.meta?.data?.docmost?.operationId === operationId,
+    ),
+  );
+});
+
 test("programs 429, malformed JSON, disconnect and abort-observable timeout", async () => {
   await control({
     fault: { operation: "list", mode: "status", status: 429, count: 1 },
