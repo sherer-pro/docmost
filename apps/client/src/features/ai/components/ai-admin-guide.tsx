@@ -112,6 +112,7 @@ const SECURITY_ITEMS = [
   "ai.adminGuide.securityInbound",
   "ai.adminGuide.securityOutbound",
   "ai.adminGuide.securityOutboundGroups",
+  "ai.adminGuide.securityOutboundConsent",
   "ai.adminGuide.securitySecrets",
   "ai.adminGuide.securityRemote",
 ];

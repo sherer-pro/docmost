@@ -96,6 +96,21 @@ export function countAiExternalMcpOptedIn(
   return items.filter((item) => isAiExternalMcpActive(item)).length;
 }
 
+/**
+ * Consent can always be narrowed. While a run is active, or while another
+ * policy gate is closed, the UI blocks new opt-ins but still permits revoking
+ * a previously stored opt-in.
+ */
+export function canChangeAiExternalMcpPreference(
+  preference: Pick<AiExternalMcpUserPreference, "available" | "optedIn">,
+  revocationOnly: boolean,
+): boolean {
+  if (preference.optedIn === true) {
+    return true;
+  }
+  return preference.available === true && !revocationOnly;
+}
+
 const UNAVAILABLE_REASON_KEYS: Record<AiExternalMcpUnavailableReason, string> = {
   deployment: "ai.externalTools.unavailableDeployment",
   workspace: "ai.externalTools.unavailableWorkspace",

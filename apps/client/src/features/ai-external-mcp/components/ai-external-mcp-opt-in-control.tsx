@@ -18,14 +18,14 @@ import {
   usePutAiExternalMcpPreferencesMutation,
 } from "@/features/ai-external-mcp/queries/ai-external-mcp-query.ts";
 import {
+  canChangeAiExternalMcpPreference,
   countAiExternalMcpOptedIn,
   getAiExternalMcpUnavailableLabel,
-  isAiExternalMcpActive,
 } from "@/features/ai-external-mcp/utils/ai-external-mcp-policies.ts";
 
 type Props = {
   spaceId: string;
-  disabled?: boolean;
+  revocationOnly?: boolean;
 };
 
 function hostOf(url: string): string {
@@ -44,7 +44,7 @@ function hostOf(url: string): string {
  */
 export default function AiExternalMcpOptInControl({
   spaceId,
-  disabled,
+  revocationOnly = false,
 }: Props) {
   const { t } = useTranslation();
   const [opened, setOpened] = useState(false);
@@ -98,7 +98,6 @@ export default function AiExternalMcpOptInControl({
           onClick={() => setOpened((current) => !current)}
           aria-expanded={opened}
           aria-label={t("ai.externalTools.composerToggle")}
-          disabled={disabled}
         >
           <Group gap={6} wrap="nowrap">
             <Text size="xs">{t("ai.externalTools.composerToggle")}</Text>
@@ -142,7 +141,7 @@ export default function AiExternalMcpOptInControl({
               return (
                 <Stack key={item.serverId} gap={2}>
                   <Switch
-                    checked={isAiExternalMcpActive(item)}
+                    checked={item.optedIn === true}
                     onChange={(event) =>
                       toggle(item.serverId, event.currentTarget.checked)
                     }
@@ -154,7 +153,10 @@ export default function AiExternalMcpOptInControl({
                       { count: item.toolNames.length },
                     )}`}
                     disabled={
-                      !item.available || disabled || putPreferences.isPending
+                      !canChangeAiExternalMcpPreference(
+                        item,
+                        revocationOnly,
+                      ) || putPreferences.isPending
                     }
                   />
                   {unavailableLabel && (
@@ -167,6 +169,7 @@ export default function AiExternalMcpOptInControl({
                       <Button
                         variant="subtle"
                         size="compact-xs"
+                        aria-expanded={Boolean(expanded[item.serverId])}
                         onClick={() =>
                           setExpanded((current) => ({
                             ...current,
