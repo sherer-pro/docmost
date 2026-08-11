@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canChangeAiExternalMcpPreference,
   countAiExternalMcpOptedIn,
   getAiToolStepLabel,
   isAiExternalMcpActive,
@@ -109,6 +110,44 @@ describe("isAiExternalMcpActive", () => {
         { available: true } as never,
       ]),
     ).toBe(1);
+  });
+});
+
+describe("canChangeAiExternalMcpPreference", () => {
+  it("allows a saved opt-in to be revoked during an active run", () => {
+    expect(
+      canChangeAiExternalMcpPreference(
+        { available: true, optedIn: true },
+        true,
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks a new opt-in during an active run", () => {
+    expect(
+      canChangeAiExternalMcpPreference(
+        { available: true, optedIn: false },
+        true,
+      ),
+    ).toBe(false);
+  });
+
+  it("allows stale consent to be revoked while another gate is closed", () => {
+    expect(
+      canChangeAiExternalMcpPreference(
+        { available: false, optedIn: true },
+        false,
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks a new opt-in while another gate is closed", () => {
+    expect(
+      canChangeAiExternalMcpPreference(
+        { available: false, optedIn: false },
+        false,
+      ),
+    ).toBe(false);
   });
 });
 
