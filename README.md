@@ -830,10 +830,13 @@ Before release candidates or broad architecture changes, run:
 
 ```bash
 pnpm verify:full
-pnpm routes:inventory:check
-pnpm check:rag-docs
-pnpm check:env
-pnpm check:comments:en
+```
+
+For a release candidate, run the complete release contract against the
+documented production-like PostgreSQL, Redis, API, and collaboration runtime:
+
+```bash
+pnpm verify:release
 ```
 
 For backend changes:
