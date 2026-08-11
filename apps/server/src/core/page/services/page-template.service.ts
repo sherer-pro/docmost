@@ -2405,6 +2405,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         item.id,
         instance.id,
         'page_template_child_missing',
+        run.revision,
       );
       return;
     }
@@ -2431,27 +2432,22 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         const baseHash = hashProseMirrorJson(current as any);
         const nextHash = hashProseMirrorJson(next as any);
         if (baseHash === nextHash) {
-          await this.db
-            .updateTable('pageTemplateInstances')
-            .set({
-              appliedRevision: run.revision,
-              status: 'active',
-              lastErrorCode: null,
-              updatedAt: new Date(),
-            })
-            .where('id', '=', instance.id)
-            .where('status', '!=', 'detached')
-            .execute();
+          const revisionApplied = await this.markInstanceRevisionApplied(
+            instance.id,
+            run.revision,
+          );
           await this.markSyncItemCompleted(item.id);
-          await this.pageHistoryRecorder.enqueuePageEvent({
-            pageId: page.id,
-            changeType: 'page.template.synced',
-            changeData: {
-              templateId: run.templatePageId,
-              templateRevision: run.revision,
-            },
-            actorId: actor.id,
-          });
+          if (revisionApplied) {
+            await this.pageHistoryRecorder.enqueuePageEvent({
+              pageId: page.id,
+              changeType: 'page.template.synced',
+              changeData: {
+                templateId: run.templatePageId,
+                templateRevision: run.revision,
+              },
+              actorId: actor.id,
+            });
+          }
           return;
         }
         const operation = await this.beginOperation(
@@ -2480,17 +2476,6 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           actor,
           run.revision,
         );
-        await this.db
-          .updateTable('pageTemplateInstances')
-          .set({
-            appliedRevision: run.revision,
-            status: 'active',
-            lastErrorCode: null,
-            updatedAt: new Date(),
-          })
-          .where('id', '=', instance.id)
-          .where('status', '!=', 'detached')
-          .execute();
         await this.markSyncItemCompleted(item.id);
         await this.pageHistoryRecorder.enqueuePageEvent({
           pageId: page.id,
@@ -2504,14 +2489,45 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
         return;
       } catch (error) {
         lastError = error;
-        if (this.errorCode(error) !== 'page_embed_stale') break;
+        const errorCode = this.errorCode(error);
+        if (errorCode === 'page_template_revision_stale') {
+          await this.markSyncItemCompleted(item.id);
+          return;
+        }
+        if (errorCode !== 'page_embed_stale') break;
       }
     }
     await this.markSyncItemFailed(
       item.id,
       instance.id,
       this.errorCode(lastError),
+      run.revision,
     );
+  }
+
+  private async markInstanceRevisionApplied(
+    instanceId: string,
+    revision: number,
+  ): Promise<boolean> {
+    const applied = await this.db
+      .updateTable('pageTemplateInstances')
+      .set({
+        appliedRevision: revision,
+        status: 'active',
+        lastErrorCode: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', instanceId)
+      .where('status', 'in', ['active', 'syncing', 'error'])
+      .where((eb) =>
+        eb.or([
+          eb('appliedRevision', 'is', null),
+          eb('appliedRevision', '<', revision),
+        ]),
+      )
+      .returning('id')
+      .executeTakeFirst();
+    return Boolean(applied);
   }
 
   private async markSyncItemCompleted(itemId: string): Promise<void> {
@@ -2599,6 +2615,7 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
     itemId: string,
     instanceId: string,
     errorCode: string,
+    revision: number,
   ): Promise<void> {
     await executeTx(this.db, async (trx) => {
       await trx
@@ -2614,7 +2631,13 @@ export class PageTemplateService implements OnModuleInit, OnModuleDestroy {
           updatedAt: new Date(),
         })
         .where('id', '=', instanceId)
-        .where('status', '!=', 'detached')
+        .where('status', 'in', ['active', 'syncing', 'error'])
+        .where((eb) =>
+          eb.or([
+            eb('appliedRevision', 'is', null),
+            eb('appliedRevision', '<', revision),
+          ]),
+        )
         .execute();
     });
   }

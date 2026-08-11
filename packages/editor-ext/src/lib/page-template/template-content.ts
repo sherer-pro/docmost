@@ -28,15 +28,21 @@ export function normalizeTemplateDraft(
   createId: () => string = defaultId,
 ): JSONContent {
   const document = asDocument(input);
+  const usedIds = new Set<string>();
   const normalizedContent = (document.content ?? []).map((node) => {
     if (node.type === TEMPLATE_MANAGED_BLOCK_TYPE) {
       return {
         ...clone(node),
         attrs: {
           ...(node.attrs ?? {}),
-          templateBlockId: node.attrs?.templateBlockId ?? createId(),
+          templateBlockId: takeUniqueId(
+            node.attrs?.templateBlockId,
+            usedIds,
+            createId,
+          ),
           locked: false,
         },
+        content: unwrapTemplateContainers(node.content ?? []),
       };
     }
     if (node.type === TEMPLATE_FIELD_TYPE) {
@@ -44,14 +50,18 @@ export function normalizeTemplateDraft(
         ...clone(node),
         attrs: {
           ...(node.attrs ?? {}),
-          fieldId: node.attrs?.fieldId ?? createId(),
+          fieldId: takeUniqueId(node.attrs?.fieldId, usedIds, createId),
         },
+        content: unwrapTemplateContainers(node.content ?? []),
       };
     }
     return {
       type: TEMPLATE_MANAGED_BLOCK_TYPE,
-      attrs: { templateBlockId: createId(), locked: false },
-      content: [clone(node)],
+      attrs: {
+        templateBlockId: takeUniqueId(null, usedIds, createId),
+        locked: false,
+      },
+      content: unwrapTemplateContainers([node]),
     };
   });
   const meaningfulContent = normalizedContent.filter(
@@ -94,17 +104,7 @@ export function createTemplateInstanceContent(
 
 export function detachTemplateContent(input: unknown): JSONContent {
   const document = asDocument(input);
-  const content: JSONContent[] = [];
-  for (const node of document.content ?? []) {
-    if (
-      node.type === TEMPLATE_MANAGED_BLOCK_TYPE ||
-      node.type === TEMPLATE_FIELD_TYPE
-    ) {
-      content.push(...clone(node.content ?? []));
-    } else {
-      content.push(clone(node));
-    }
-  }
+  const content = unwrapTemplateContainers(document.content ?? []);
   return {
     ...document,
     content: content.length > 0 ? content : [{ type: 'paragraph' }],
@@ -137,8 +137,10 @@ export function validateTemplateInstanceMutation(
   const nextDocument = asDocument(next);
   if (!hasOnlyTemplateContainers(previousDocument)) return false;
   if (!hasOnlyTemplateContainers(nextDocument)) return false;
-  return stableJson(templateSkeleton(previousDocument)) ===
-    stableJson(templateSkeleton(nextDocument));
+  return (
+    stableJson(templateSkeleton(previousDocument)) ===
+    stableJson(templateSkeleton(nextDocument))
+  );
 }
 
 export function summarizeTemplateDiff(
@@ -167,8 +169,7 @@ export function summarizeTemplateDiff(
     removedBlockIds: missingKeys(previousManaged, nextManaged),
     movedBlockIds: [...previousOrder.entries()]
       .filter(
-        ([id, position]) =>
-          nextOrder.has(id) && nextOrder.get(id) !== position,
+        ([id, position]) => nextOrder.has(id) && nextOrder.get(id) !== position,
       )
       .map(([id]) => id),
     changedBlockIds: changedKeys(previousManaged, nextManaged),
@@ -203,11 +204,66 @@ function templateSkeleton(document: JSONContent): JSONContent {
 }
 
 function hasOnlyTemplateContainers(document: JSONContent): boolean {
-  return (document.content ?? []).every(
+  const usedIds = new Set<string>();
+  return (document.content ?? []).every((node) => {
+    const id =
+      node.type === TEMPLATE_MANAGED_BLOCK_TYPE
+        ? asString(node.attrs?.templateBlockId)
+        : node.type === TEMPLATE_FIELD_TYPE
+          ? asString(node.attrs?.fieldId)
+          : null;
+    if (!id || usedIds.has(id) || containsTemplateContainer(node.content)) {
+      return false;
+    }
+    usedIds.add(id);
+    return true;
+  });
+}
+
+function containsTemplateContainer(
+  content: JSONContent[] | undefined,
+): boolean {
+  return (content ?? []).some(
     (node) =>
       node.type === TEMPLATE_MANAGED_BLOCK_TYPE ||
-      node.type === TEMPLATE_FIELD_TYPE,
+      node.type === TEMPLATE_FIELD_TYPE ||
+      containsTemplateContainer(node.content),
   );
+}
+
+function unwrapTemplateContainers(content: JSONContent[]): JSONContent[] {
+  return content.flatMap((node) => {
+    if (
+      node.type === TEMPLATE_MANAGED_BLOCK_TYPE ||
+      node.type === TEMPLATE_FIELD_TYPE
+    ) {
+      return unwrapTemplateContainers(node.content ?? []);
+    }
+    const next = clone(node);
+    if (Array.isArray(next.content)) {
+      next.content = unwrapTemplateContainers(next.content);
+    }
+    return [next];
+  });
+}
+
+function takeUniqueId(
+  preferred: unknown,
+  usedIds: Set<string>,
+  createId: () => string,
+): string {
+  const preferredId = asString(preferred);
+  if (preferredId && !usedIds.has(preferredId)) {
+    usedIds.add(preferredId);
+    return preferredId;
+  }
+
+  let candidate = asString(createId()) ?? defaultId();
+  while (usedIds.has(candidate)) {
+    candidate = asString(createId()) ?? defaultId();
+  }
+  usedIds.add(candidate);
+  return candidate;
 }
 
 function keyedNodes(
@@ -319,6 +375,8 @@ function clone<T>(value: T): T {
 }
 
 function defaultId(): string {
-  return globalThis.crypto?.randomUUID?.() ??
-    `template-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `template-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }
