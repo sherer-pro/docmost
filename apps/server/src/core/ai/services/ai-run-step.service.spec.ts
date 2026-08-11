@@ -54,6 +54,15 @@ describe('AiRunStepService approval lifecycle', () => {
       toRun: jest.fn((value) => value),
       enqueue: jest.fn(async () => true),
     };
+    const builtinToolPolicy = {
+      assertRunToolAllowed: jest.fn(async () => ({
+        writeClass: 'write',
+        approvalMode: 'current_page_hash',
+      })),
+    };
+    const profiles = {
+      assertRunProfileCurrent: jest.fn(async () => undefined),
+    };
     const service = new AiRunStepService(
       {} as any,
       runs as any,
@@ -62,10 +71,11 @@ describe('AiRunStepService approval lifecycle', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
+      builtinToolPolicy as any,
+      profiles as any,
     );
     jest.spyOn(service as any, 'getPendingStep').mockResolvedValue(pendingStep);
-    return { service, runs };
+    return { service, runs, builtinToolPolicy, profiles };
   }
 
   it('checks run ownership before reading an approval step', async () => {
@@ -107,6 +117,94 @@ describe('AiRunStepService approval lifecycle', () => {
       }),
     );
     expect(runs.withProviderAdmission).not.toHaveBeenCalled();
+  });
+
+  it('rechecks expiry after waiting for provider admission', async () => {
+    jest.useFakeTimers();
+    const startedAt = new Date('2026-08-11T00:00:00.000Z');
+    jest.setSystemTime(startedAt);
+    const expiringStep = {
+      ...pendingStep,
+      expiresAt: new Date(startedAt.getTime() + 1_000),
+    };
+    const { service, runs } = createService();
+    (service as any).getPendingStep.mockResolvedValue(expiringStep);
+    const decide = jest
+      .spyOn(service as any, 'decideAndResume')
+      .mockResolvedValue({
+        run: { ...run, status: 'queued' },
+        step: { ...expiringStep, status: 'expired' },
+      });
+    const whereClauses: unknown[][] = [];
+    const updateQuery: any = {
+      set: jest.fn(() => updateQuery),
+      where: jest.fn((...args: unknown[]) => {
+        whereClauses.push(args);
+        return updateQuery;
+      }),
+      returningAll: jest.fn(() => updateQuery),
+      executeTakeFirst: jest.fn(async () => {
+        const expiryClause = whereClauses.find(
+          ([column, operator]) => column === 'expiresAt' && operator === '>',
+        );
+        if (expiryClause) {
+          return undefined;
+        }
+        return {
+          ...expiringStep,
+          status: 'approved',
+          decidedById: user.id,
+        };
+      }),
+    };
+    (runs.withProviderAdmission as jest.Mock).mockImplementation(
+      async (_run: unknown, operation: (trx: any) => unknown) => {
+        jest.setSystemTime(new Date(startedAt.getTime() + 2_000));
+        return operation({ updateTable: jest.fn(() => updateQuery) });
+      },
+    );
+    const recover = jest
+      .spyOn(service as any, 'recoverApprovedStep')
+      .mockResolvedValue({
+        run: { ...run, status: 'queued' },
+        step: { ...expiringStep, status: 'approved' },
+      });
+
+    try {
+      await expect(
+        service.approve(run.id, expiringStep.id, user, workspace),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'agent_write_expired' }),
+      });
+      expect(decide).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'expired',
+          errorCode: 'agent_write_expired',
+        }),
+      );
+      expect(recover).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('rechecks profile and group policy before resolving an approved write tool', async () => {
+    const { service, builtinToolPolicy, profiles } = createService();
+    profiles.assertRunProfileCurrent.mockRejectedValueOnce(
+      new ConflictException({
+        code: 'agent_profile_policy_changed',
+        message: 'A group or profile policy revoked a built-in tool',
+      }),
+    );
+
+    await expect(
+      (service as any).assertApprovedStepPolicyCurrent(run, 'editPageText'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'agent_profile_policy_changed',
+      }),
+    });
+    expect(builtinToolPolicy.assertRunToolAllowed).not.toHaveBeenCalled();
   });
 
   it('claims and recovers one approval while a duplicate fails closed', async () => {

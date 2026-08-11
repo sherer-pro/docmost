@@ -6,6 +6,7 @@ import {
   isCommentInThread,
   shouldCollapseCommentBodyLineCount,
   shouldCollapseCommentThread,
+  shouldRevealResolvedComments,
 } from "./comment-collapse";
 
 const comments = [
@@ -24,9 +25,9 @@ describe("comment collapse helpers", () => {
   });
 
   it("collapses comment bodies only after the line threshold", () => {
-    expect(shouldCollapseCommentBodyLineCount(COMMENT_BODY_COLLAPSE_LINES)).toBe(
-      false,
-    );
+    expect(
+      shouldCollapseCommentBodyLineCount(COMMENT_BODY_COLLAPSE_LINES),
+    ).toBe(false);
     expect(
       shouldCollapseCommentBodyLineCount(COMMENT_BODY_COLLAPSE_LINES + 1),
     ).toBe(true);
@@ -46,5 +47,22 @@ describe("comment collapse helpers", () => {
     expect(isCommentInThread(comments, "root-1", "nested-reply-1")).toBe(true);
     expect(isCommentInThread(comments, "root-1", "reply-3")).toBe(false);
     expect(isCommentInThread(comments, "root-1", null)).toBe(false);
+  });
+
+  it("reveals resolved threads when a nested reply is active", () => {
+    expect(
+      shouldRevealResolvedComments(
+        comments,
+        [{ id: "root-1", parentCommentId: null }],
+        "nested-reply-1",
+      ),
+    ).toBe(true);
+    expect(
+      shouldRevealResolvedComments(
+        comments,
+        [{ id: "root-2", parentCommentId: null }],
+        "nested-reply-1",
+      ),
+    ).toBe(false);
   });
 });

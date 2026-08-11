@@ -44,6 +44,7 @@ import {
   type TransclusionPresentationStrings,
   htmlToMarkdown,
   collectPageEmbedPresentationReferences,
+  detachTemplateContent,
   materializePageEmbedsForPresentation,
 } from '@docmost/editor-ext';
 import { getAppVersion } from '../../common/helpers/get-app-version';
@@ -386,6 +387,7 @@ export class ExportService {
     locale?: string,
     referencePageId?: string,
   ): Promise<{ content: unknown; attachmentPageIds: Set<string> }> {
+    const materializedTemplateContent = detachTemplateContent(prosemirrorJson);
     const attachmentPageIds = new Set<string>();
     if (referencePageId) attachmentPageIds.add(referencePageId);
     const pageResolutions = new Map<
@@ -393,7 +395,9 @@ export class ExportService {
       { content?: unknown; status?: string }
     >();
     if (authorizedUser) {
-      let frontier = collectPageEmbedPresentationReferences(prosemirrorJson);
+      let frontier = collectPageEmbedPresentationReferences(
+        materializedTemplateContent,
+      );
       for (
         let depth = 0;
         depth < this.environmentService.getMaxPageEmbedDepth();
@@ -427,7 +431,7 @@ export class ExportService {
     }
 
     const pageMaterialized = materializePageEmbedsForPresentation(
-      prosemirrorJson,
+      materializedTemplateContent,
       pageResolutions,
       this.resolveTransclusionPresentationStrings(locale).unavailable,
       this.environmentService.getMaxPageEmbedDepth(),
@@ -700,7 +704,8 @@ export class ExportService {
             attachment.filePath,
           );
           const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
-          for (const image of imageNodesByAttachmentId.get(attachment.id) ?? []) {
+          for (const image of imageNodesByAttachmentId.get(attachment.id) ??
+            []) {
             image.attr('src', dataUrl);
           }
         } catch (err) {
@@ -1992,6 +1997,7 @@ export class ExportService {
       ])
       .where('spaceId', '=', spaceId)
       .where('deletedAt', 'is', null)
+      .where('templateKind', 'is', null)
       .execute();
     if (allowedPageIds) {
       pages = pages.filter((page) => allowedPageIds.has(page.id));
@@ -2189,7 +2195,7 @@ export class ExportService {
         !pageIdSet.has(page.parentPageId)
           ? null
           : page.parentPageId,
-      content: getProsemirrorContent(page.content),
+      content: detachTemplateContent(getProsemirrorContent(page.content)),
       settings: normalizePageSettings(page.settings),
       templateKind:
         page.templateKind === 'regular' || page.templateKind === 'synced'

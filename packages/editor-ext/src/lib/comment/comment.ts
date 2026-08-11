@@ -2,6 +2,11 @@ import { Mark, mergeAttributes } from "@tiptap/core";
 import { commentDecoration } from "./comment-decoration";
 import { Plugin } from "@tiptap/pm/state";
 import {
+  Fragment,
+  Node as ProseMirrorNode,
+  Slice,
+} from "@tiptap/pm/model";
+import {
   commentDecorationMetaKey,
   commentMarkClass,
 } from "./comment.constants";
@@ -14,6 +19,40 @@ export interface ICommentOptions {
 
 export interface ICommentStorage {
   activeCommentId: string | null;
+}
+
+function stripCommentMarksFromNode(
+  node: ProseMirrorNode,
+  markName: string,
+): ProseMirrorNode {
+  const children: ProseMirrorNode[] = [];
+  node.content.forEach((child) => {
+    children.push(stripCommentMarksFromNode(child, markName));
+  });
+
+  const nodeWithMappedContent = node.isLeaf
+    ? node
+    : node.copy(Fragment.fromArray(children));
+
+  return nodeWithMappedContent.mark(
+    nodeWithMappedContent.marks.filter((mark) => mark.type.name !== markName),
+  );
+}
+
+function stripCommentMarksFromSlice(
+  slice: Slice,
+  markName: string,
+): Slice {
+  const children: ProseMirrorNode[] = [];
+  slice.content.forEach((child) => {
+    children.push(stripCommentMarksFromNode(child, markName));
+  });
+
+  return new Slice(
+    Fragment.fromArray(children),
+    slice.openStart,
+    slice.openEnd,
+  );
 }
 
 declare module "@tiptap/core" {
@@ -215,6 +254,14 @@ export const Comment = Mark.create<ICommentOptions, ICommentStorage>({
   },
 
   addProseMirrorPlugins(): Plugin[] {
-    return [commentDecoration()];
+    return [
+      commentDecoration(),
+      new Plugin({
+        props: {
+          transformPasted: (slice) =>
+            stripCommentMarksFromSlice(slice, this.name),
+        },
+      }),
+    ];
   },
 });
