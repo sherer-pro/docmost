@@ -42,10 +42,19 @@ const REQUIRED_JOB_COMMANDS = {
     "node scripts/sanitize-ci-log-stream.mjs",
     "node scripts/scan-ci-artifacts.mjs ci-artifacts",
     "touch ci-artifacts/.sanitized",
+  ],
+};
+
+const REQUIRED_JOB_METADATA = {
+  "production-smoke": [
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
     "retention-days: 7",
   ],
 };
+
+const FAILURE_TOLERANT_COMMANDS = new Set([
+  "node scripts/sanitize-ci-log-stream.mjs",
+]);
 
 const REQUIRED_VERIFICATION_COMMANDS = {
   "verify:quick": [
@@ -120,15 +129,95 @@ function executableWorkflowText(block) {
     .join("\n");
 }
 
+function workflowStepBlocks(block) {
+  const lines = block.split(/\r?\n/u);
+  const starts = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^ {6}-\s+/u.test(lines[index])) {
+      starts.push(index);
+    }
+  }
+  return starts.map((start, index) =>
+    lines.slice(start, starts[index + 1] ?? lines.length).join("\n"),
+  );
+}
+
+function runLines(step) {
+  const lines = step.split(/\r?\n/u);
+  const runIndex = lines.findIndex((line) => /^\s+run:\s*/u.test(line));
+  if (runIndex < 0) {
+    return [];
+  }
+  const match = /^(\s+)run:\s*(.*)$/u.exec(lines[runIndex]);
+  const value = match?.[2]?.trim() ?? "";
+  if (!/^\|[-+]?$/u.test(value) && !/^>[-+]?$/u.test(value)) {
+    return value ? [value] : [];
+  }
+
+  const indentation = match?.[1]?.length ?? 0;
+  const result = [];
+  for (let index = runIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() === "") {
+      result.push("");
+      continue;
+    }
+    const currentIndentation = /^\s*/u.exec(line)?.[0].length ?? 0;
+    if (currentIndentation <= indentation) {
+      break;
+    }
+    result.push(line.trimStart());
+  }
+  return result;
+}
+
+function stepIsDisabled(step) {
+  return /^\s+if:\s*(?:false|\$\{\{\s*false\s*\}\})\s*$/imu.test(step);
+}
+
+function executableCommandLines(step, command) {
+  if (stepIsDisabled(step)) {
+    return [];
+  }
+  return runLines(step).filter((line) => {
+    const trimmed = line.trim();
+    const commandIndex = trimmed.indexOf(command);
+    if (commandIndex < 0 || trimmed.startsWith("#")) {
+      return false;
+    }
+    const prefix = trimmed.slice(0, commandIndex).trim();
+    return !/^(?:echo|printf)\b/u.test(prefix);
+  });
+}
+
+function requireWorkflowCommand(errors, block, jobName, command) {
+  const matches = workflowStepBlocks(block).flatMap((step) =>
+    executableCommandLines(step, command),
+  );
+  if (matches.length === 0) {
+    errors.push(`${jobName} must run ${command}`);
+    return;
+  }
+  if (
+    !FAILURE_TOLERANT_COMMANDS.has(command) &&
+    matches.every((line) => line.slice(line.indexOf(command)).includes("||"))
+  ) {
+    errors.push(`${jobName} must not mask failures from ${command}`);
+  }
+}
+
 function requireJobCommands(errors, block, jobName) {
   if (!block) {
     errors.push(`ci.yml must define the ${jobName} job`);
     return;
   }
-  const executableText = executableWorkflowText(block);
   for (const command of REQUIRED_JOB_COMMANDS[jobName]) {
-    if (!executableText.includes(command)) {
-      errors.push(`${jobName} must run ${command}`);
+    requireWorkflowCommand(errors, block, jobName, command);
+  }
+  const executableText = executableWorkflowText(block);
+  for (const metadata of REQUIRED_JOB_METADATA[jobName] ?? []) {
+    if (!executableText.includes(metadata)) {
+      errors.push(`${jobName} must define ${metadata}`);
     }
   }
   if (/^\s+continue-on-error:\s*true\s*$/mu.test(block)) {
@@ -145,8 +234,12 @@ function validateVerificationScripts(errors, packageJson) {
       errors.push(`package.json must define ${scriptName}`);
       continue;
     }
+    const segments = script.split(/\s+&&\s+/u).map((segment) => segment.trim());
     for (const command of commands) {
-      if (!script.includes(command)) {
+      const expected = command.startsWith("pnpm ")
+        ? `corepack ${command}`
+        : `corepack pnpm ${command}`;
+      if (!segments.includes(expected)) {
         errors.push(`${scriptName} must include ${command}`);
       }
     }
@@ -222,9 +315,7 @@ export function validateReleaseGateContract({
     "docker push shererpro/docmost:${VERSION}",
     "docker push shererpro/docmost:latest",
   ]) {
-    if (!executableWorkflowText(publish).includes(command)) {
-      errors.push(`publish must run ${command}`);
-    }
+    requireWorkflowCommand(errors, publish, "publish", command);
   }
 
   for (const jobName of Object.keys(REQUIRED_JOB_COMMANDS)) {
