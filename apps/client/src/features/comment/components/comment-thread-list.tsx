@@ -1,17 +1,17 @@
-import { memo, useCallback, useRef, useState } from 'react';
-import { Button, Divider, Paper } from '@mantine/core';
-import { useFocusWithin } from '@mantine/hooks';
-import { useTranslation } from 'react-i18next';
-import CommentActions from './comment-actions';
-import CommentEditor from './comment-editor';
-import CommentListItem from './comment-list-item';
-import { IComment } from '../types/comment.types';
-import { IPagination } from '@/lib/types';
+import { memo, useCallback, useRef, useState } from "react";
+import { Button, Divider, Paper } from "@mantine/core";
+import { useFocusWithin } from "@mantine/hooks";
+import { useTranslation } from "react-i18next";
+import CommentActions from "./comment-actions";
+import CommentEditor from "./comment-editor";
+import CommentListItem from "./comment-list-item";
+import { IComment } from "../types/comment.types";
+import { IPagination } from "@/lib/types";
 import {
   countCommentThreadReplies,
   isCommentInThread,
   shouldCollapseCommentThread,
-} from '../utils/comment-collapse';
+} from "../utils/comment-collapse";
 
 interface CommentThreadListProps {
   comments: IPagination<IComment>;
@@ -43,10 +43,14 @@ export function CommentThreadList({
     () => new Set(),
   );
 
-  const expandThread = useCallback((commentId: string) => {
+  const toggleThread = useCallback((commentId: string) => {
     setExpandedThreadIds((currentThreadIds) => {
       const nextThreadIds = new Set(currentThreadIds);
-      nextThreadIds.add(commentId);
+      if (nextThreadIds.has(commentId)) {
+        nextThreadIds.delete(commentId);
+      } else {
+        nextThreadIds.add(commentId);
+      }
       return nextThreadIds;
     });
   }, []);
@@ -54,7 +58,10 @@ export function CommentThreadList({
   return (
     <>
       {rootComments.map((comment) => {
-        const replyCount = countCommentThreadReplies(comments.items, comment.id);
+        const replyCount = countCommentThreadReplies(
+          comments.items,
+          comment.id,
+        );
         const isActiveThread = isCommentInThread(
           comments.items,
           comment.id,
@@ -64,6 +71,8 @@ export function CommentThreadList({
           shouldCollapseCommentThread(replyCount) &&
           !expandedThreadIds.has(comment.id) &&
           !isActiveThread;
+        const hasCollapsibleReplies = shouldCollapseCommentThread(replyCount);
+        const repliesId = `comment-thread-${comment.id}-replies`;
 
         return (
           <Paper
@@ -84,28 +93,32 @@ export function CommentThreadList({
                 userSpaceRole={userSpaceRole}
               />
 
-              {!isThreadCollapsed && (
-                <MemoizedChildComments
-                  comments={comments}
-                  parentId={comment.id}
-                  pageId={pageId}
-                  canComment={canComment}
-                  canResolve={canResolve}
-                  userSpaceRole={userSpaceRole}
-                  includesComment={includesComment}
-                />
-              )}
+              <div id={repliesId} hidden={isThreadCollapsed}>
+                {!isThreadCollapsed && (
+                  <MemoizedChildComments
+                    comments={comments}
+                    parentId={comment.id}
+                    pageId={pageId}
+                    canComment={canComment}
+                    canResolve={canResolve}
+                    userSpaceRole={userSpaceRole}
+                    includesComment={includesComment}
+                  />
+                )}
+              </div>
             </div>
 
-            {isThreadCollapsed && (
+            {hasCollapsibleReplies && !isActiveThread && (
               <Button
                 variant="subtle"
                 color="gray"
                 size="compact-sm"
                 px={0}
-                onClick={() => expandThread(comment.id)}
+                aria-controls={repliesId}
+                aria-expanded={!isThreadCollapsed}
+                onClick={() => toggleThread(comment.id)}
               >
-                {t('More')}
+                {isThreadCollapsed ? t("More") : t("Collapse")}
               </Button>
             )}
 
@@ -189,13 +202,13 @@ function CommentReplyEditor({
   onSave,
   isLoading,
 }: CommentReplyEditorProps) {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const { ref, focused } = useFocusWithin();
   const commentEditorRef = useRef<any>(null);
 
   const handleSave = useCallback(() => {
     void onSave(commentId, content);
-    setContent('');
+    setContent("");
     commentEditorRef.current?.clearContent?.();
   }, [commentId, content, onSave]);
 
