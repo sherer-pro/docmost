@@ -1,5 +1,9 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { IApiKey, ICreatedApiKey } from "./api-key.types";
+import type {
+  ApiKeyQueryParams,
+  IApiKey,
+  ICreatedApiKey,
+} from "./api-key.types";
 
 describe("API key response types", () => {
   it("keeps the one-time token out of list and update metadata", () => {
@@ -20,5 +24,9 @@ describe("API key response types", () => {
       "creator",
     ];
     expect(metadataKeys).not.toContain("token");
+  });
+
+  it("does not send the retired adminView list parameter", () => {
+    expectTypeOf<ApiKeyQueryParams>().not.toHaveProperty("adminView");
   });
 });
