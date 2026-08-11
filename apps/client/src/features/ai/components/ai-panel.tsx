@@ -2056,7 +2056,7 @@ export function AiPanel() {
             agentMode && spaceId && availability.externalMcp?.available ? (
               <AiExternalMcpOptInControl
                 spaceId={spaceId}
-                disabled={Boolean(pendingRun)}
+                revocationOnly={Boolean(pendingRun)}
               />
             ) : null
           }

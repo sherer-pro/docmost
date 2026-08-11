@@ -1098,6 +1098,10 @@ profile-aware runs do not inherit it.
    compatibility. A deny wins, while `toolSelection: "all"` adds no narrowing
    and a non-empty selected list is intersected with higher-scope allowlists.
 7. Each user opts in per binding. Absence of a stored preference is opt-out.
+   Changing a server URL atomically revokes every saved opt-in for that server,
+   because the consent disclosure names the recipient host. Users must review
+   and opt in to the new destination again. During an active run the composer
+   permits revocation but does not permit a new opt-in.
 
 ### Why remote text is untrusted
 
