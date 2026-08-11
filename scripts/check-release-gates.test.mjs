@@ -218,6 +218,16 @@ const workflowMutations = [
     "node scripts/ci-production-smoke.mjs",
   ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
+  [
+    "production Draw.io runtime",
+    "ciSource",
+    "-e DRAWIO_URL=https://embed.diagrams.net",
+  ],
+  [
+    "local Draw.io browser shim",
+    "ciSource",
+    "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",
+  ],
   ["AI browser", "ciSource", "pnpm test:ai:e2e"],
   ["AI context browser", "ciSource", "pnpm test:ai-context:e2e"],
   [

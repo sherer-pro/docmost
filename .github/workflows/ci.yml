@@ -236,6 +236,7 @@ jobs:
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
             -e PAGE_TEMPLATES_ENABLED=true \
+            -e DRAWIO_URL=https://embed.diagrams.net \
             -e AI_PROVIDER_ALLOWED_ORIGINS=http://host.docker.internal:1080 \
             -e AI_RETRIEVAL_ALLOWED_ORIGINS=http://host.docker.internal:1080 \
             -e RAG_SYNC_ENABLED=true \
@@ -317,6 +318,7 @@ jobs:
           DOCMOST_COLLAB_URL: http://127.0.0.1:3001
           DOCMOST_ADMIN_EMAIL: ci-admin@example.test
           DOCMOST_ADMIN_PASSWORD: CI-smoke-password-123!
+          DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net
         run: pnpm test:editor:e2e
 
       - name: AI browser acceptance against the production image
