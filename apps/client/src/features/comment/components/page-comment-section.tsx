@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import {
-  Badge,
-  Button,
-  Collapse,
-  Paper,
-  Text,
-} from "@mantine/core";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Badge, Button, Collapse, Paper, Text } from "@mantine/core";
 import { useFocusWithin } from "@mantine/hooks";
 import CommentActions from "@/features/comment/components/comment-actions";
 import CommentEditor from "@/features/comment/components/comment-editor";
@@ -29,6 +29,7 @@ import { useAtomValue } from "jotai";
 import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 import { CommentThreadList } from "./comment-thread-list";
+import { shouldRevealResolvedComments } from "../utils/comment-collapse";
 
 interface PageCommentSectionProps {
   pageId: string;
@@ -88,6 +89,19 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
 
     return { activeComments: active, resolvedComments: resolved };
   }, [comments]);
+
+  useEffect(() => {
+    if (
+      comments?.items &&
+      shouldRevealResolvedComments(
+        comments.items,
+        resolvedComments,
+        activeCommentId,
+      )
+    ) {
+      setShowResolved(true);
+    }
+  }, [activeCommentId, comments?.items, resolvedComments]);
 
   const emitInvalidate = useCallback(
     (workspaceId?: string, spaceId?: string) => {
@@ -165,7 +179,14 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
       </Text>
 
       {canComment && (
-        <Paper shadow="sm" radius="md" p="sm" mb="sm" withBorder ref={rootComposerFocusRef}>
+        <Paper
+          shadow="sm"
+          radius="md"
+          p="sm"
+          mb="sm"
+          withBorder
+          ref={rootComposerFocusRef}
+        >
           <CommentEditor
             ref={rootEditorRef}
             onUpdate={setRootContent}
@@ -174,7 +195,10 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
             editable={true}
           />
           {rootComposerFocused && (
-            <CommentActions onSave={handleAddRootComment} isLoading={isRootLoading} />
+            <CommentActions
+              onSave={handleAddRootComment}
+              isLoading={isRootLoading}
+            />
           )}
         </Paper>
       )}
@@ -189,10 +213,10 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
         !isError &&
         activeComments.length === 0 &&
         resolvedComments.length === 0 && (
-        <Text size="sm" c="dimmed" py="sm">
-          {t("No comments yet.")}
-        </Text>
-      )}
+          <Text size="sm" c="dimmed" py="sm">
+            {t("No comments yet.")}
+          </Text>
+        )}
 
       {comments && (
         <CommentThreadList
@@ -215,6 +239,8 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
             variant="default"
             color="gray"
             size="xs"
+            aria-controls="page-resolved-comments"
+            aria-expanded={showResolved}
             onClick={() => setShowResolved((prev) => !prev)}
             style={{
               marginTop: "15px",
@@ -227,7 +253,7 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
             </Badge>
           </Button>
 
-          <Collapse in={showResolved}>
+          <Collapse id="page-resolved-comments" in={showResolved}>
             <Text size="sm" fw={600} mb="sm">
               {t("Resolved comments")}
             </Text>

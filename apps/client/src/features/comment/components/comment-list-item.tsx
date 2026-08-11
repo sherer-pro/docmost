@@ -1,4 +1,4 @@
-import { Button, Group, Text, Box } from "@mantine/core";
+import { Button, Group, Text, Box, UnstyledButton } from "@mantine/core";
 import React, { useEffect, useRef, useState } from "react";
 import classes from "./comment.module.css";
 import { useAtom, useAtomValue } from "jotai";
@@ -21,6 +21,7 @@ import { scrollCommentMarkIntoView } from "@/features/comment/utils/comment-dom"
 import { COMMENT_BODY_COLLAPSE_LINES } from "@/features/comment/utils/comment-collapse";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
+import { getCommentActionPermissions } from "@/features/comment/utils/comment-permissions";
 
 interface CommentListItemProps {
   comment: IComment;
@@ -103,10 +104,13 @@ function CommentListItem({
       }
       setIsEditing(false);
 
-      emit({
-        operation: "invalidateComment",
-        pageId: pageId,
-      }, { workspaceId: comment.workspaceId });
+      emit(
+        {
+          operation: "invalidateComment",
+          pageId: pageId,
+        },
+        { workspaceId: comment.workspaceId },
+      );
     } catch (error) {
       console.error("Failed to update comment:", error);
     } finally {
@@ -122,10 +126,13 @@ function CommentListItem({
         editor?.commands.unsetComment(comment.id);
       }
 
-      emit({
-        operation: "invalidateComment",
-        pageId: pageId,
-      }, { workspaceId: comment.workspaceId });
+      emit(
+        {
+          operation: "invalidateComment",
+          pageId: pageId,
+        },
+        { workspaceId: comment.workspaceId },
+      );
     } catch (error) {
       console.error("Failed to delete comment:", error);
     }
@@ -136,7 +143,7 @@ function CommentListItem({
     // This keeps resolved discussions separated from open ones in the main list.
     try {
       const isResolved = comment.resolvedAt != null;
-      
+
       await resolveCommentMutation.mutateAsync({
         commentId: comment.id,
         pageId: comment.pageId,
@@ -147,10 +154,13 @@ function CommentListItem({
         editor.commands.setCommentResolved(comment.id, !isResolved);
       }
 
-      emit({
-        operation: "invalidateComment",
-        pageId: pageId,
-      }, { workspaceId: comment.workspaceId });
+      emit(
+        {
+          operation: "invalidateComment",
+          pageId: pageId,
+        },
+        { workspaceId: comment.workspaceId },
+      );
     } catch (error) {
       console.error("Failed to toggle resolved state:", error);
     }
@@ -176,13 +186,23 @@ function CommentListItem({
 
   const isOwner = currentUser?.user?.id === comment.creatorId;
   const isAdmin = userSpaceRole === "admin";
-  const canEditComment = isOwner;
-  const canDeleteComment = isOwner || isAdmin;
-  const canResolveComment = canResolve && !comment.parentCommentId;
-  const shouldShowMenu = canEditComment || canDeleteComment || canResolveComment;
+  const {
+    canEdit: canEditComment,
+    canDelete: canDeleteComment,
+    canResolve: canResolveComment,
+  } = getCommentActionPermissions({
+    isOwner,
+    isAdmin,
+    canComment,
+    canResolve,
+    isReply: Boolean(comment.parentCommentId),
+  });
+  const shouldShowMenu =
+    canEditComment || canDeleteComment || canResolveComment;
   const commentBodyCollapseStyle = {
     "--comment-body-collapse-lines": COMMENT_BODY_COLLAPSE_LINES,
   } as React.CSSProperties;
+  const commentBodyId = `comment-${comment.id}-body`;
 
   return (
     <Box ref={ref} pb="xs">
@@ -225,35 +245,37 @@ function CommentListItem({
 
       <div>
         {!comment.parentCommentId && comment?.selection && (
-          <Box
+          <UnstyledButton
             className={classes.textSelection}
             onClick={() => handleCommentClick(comment)}
+            aria-label={`${t("Comment")}: ${comment.selection}`}
           >
             <Text size="sm">{comment?.selection}</Text>
-          </Box>
+          </UnstyledButton>
         )}
 
         {!isEditing ? (
           <>
             <div
+              id={commentBodyId}
               ref={bodyContentRef}
-              className={clsx(
-                !isBodyExpanded && classes.commentBodyCollapsed,
-              )}
+              className={clsx(!isBodyExpanded && classes.commentBodyCollapsed)}
               style={commentBodyCollapseStyle}
             >
               <CommentEditor defaultContent={content} editable={false} />
             </div>
 
-            {!isBodyExpanded && isBodyCollapsible && (
+            {(isBodyCollapsible || isBodyExpanded) && (
               <Button
                 className={classes.commentMoreButton}
                 size="compact-sm"
                 variant="subtle"
                 color="gray"
-                onClick={() => setIsBodyExpanded(true)}
+                aria-controls={commentBodyId}
+                aria-expanded={isBodyExpanded}
+                onClick={() => setIsBodyExpanded((expanded) => !expanded)}
               >
-                {t("More")}
+                {isBodyExpanded ? t("Collapse") : t("More")}
               </Button>
             )}
           </>
@@ -262,7 +284,9 @@ function CommentListItem({
             <CommentEditor
               defaultContent={content}
               editable={true}
-              onUpdate={(newContent: any) => { editContentRef.current = newContent; }}
+              onUpdate={(newContent: any) => {
+                editContentRef.current = newContent;
+              }}
               onSave={handleUpdateComment}
               autofocus={true}
             />

@@ -38,6 +38,16 @@ export function isCommentInThread(
   return hasNestedComment(childrenByParentId, parentId, commentId);
 }
 
+export function shouldRevealResolvedComments(
+  comments: Pick<IComment, "id" | "parentCommentId">[],
+  resolvedRootComments: Pick<IComment, "id" | "parentCommentId">[],
+  activeCommentId?: string | null,
+): boolean {
+  return resolvedRootComments.some((comment) =>
+    isCommentInThread(comments, comment.id, activeCommentId),
+  );
+}
+
 function createChildrenByParentId(
   comments: Pick<IComment, "id" | "parentCommentId">[],
 ) {

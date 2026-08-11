@@ -255,7 +255,112 @@ export class CopyMarkdownWithCommentsService {
       this.visitMarkdownBlock(child, state);
     }
 
+    const exactLines = this.buildExactMarkdownLineMap(doc, page, pageMarkdown);
+    for (const [commentId, markdownLine] of exactLines) {
+      const context = state.contexts.get(commentId);
+      if (context) {
+        context.markdownLine = markdownLine;
+      }
+    }
+
     return state.contexts;
+  }
+
+  private buildExactMarkdownLineMap(
+    doc: ProseMirrorJsonNode,
+    page: Page,
+    pageMarkdown: string,
+  ): Map<string, number> {
+    const markerByCommentId = new Map<string, string>();
+    let markerPrefix = 'DOCMOSTCOMMENTANCHOR';
+    const documentText = this.extractNodeText(doc);
+    while (documentText.includes(markerPrefix)) {
+      markerPrefix += 'X';
+    }
+
+    const markedDoc = this.cloneWithCommentLineMarkers(
+      doc,
+      markerPrefix,
+      markerByCommentId,
+    );
+    if (markerByCommentId.size === 0) {
+      return new Map();
+    }
+
+    try {
+      const markedMarkdown = jsonToMarkdown(markedDoc);
+      const markedLines = markedMarkdown.split(/\r?\n/);
+      const firstContentLine = this.getFirstContentMarkdownLine(
+        page,
+        pageMarkdown,
+      );
+      const lineByCommentId = new Map<string, number>();
+
+      for (const [commentId, marker] of markerByCommentId) {
+        const lineIndex = markedLines.findIndex((line) =>
+          line.includes(marker),
+        );
+        if (lineIndex >= 0) {
+          lineByCommentId.set(commentId, firstContentLine + lineIndex);
+        }
+      }
+
+      return lineByCommentId;
+    } catch {
+      return new Map();
+    }
+  }
+
+  private cloneWithCommentLineMarkers(
+    node: ProseMirrorJsonNode,
+    markerPrefix: string,
+    markerByCommentId: Map<string, string>,
+  ): ProseMirrorJsonNode {
+    let text = node.text;
+    if (node.type === 'text' && text && Array.isArray(node.marks)) {
+      const markers: string[] = [];
+      for (const mark of node.marks) {
+        const commentId =
+          mark.type === 'comment' && typeof mark.attrs?.commentId === 'string'
+            ? mark.attrs.commentId.trim()
+            : '';
+        if (!commentId || markerByCommentId.has(commentId)) {
+          continue;
+        }
+
+        const marker = `${markerPrefix}${markerByCommentId.size + 1}Z`;
+        markerByCommentId.set(commentId, marker);
+        markers.push(marker);
+      }
+      if (markers.length > 0) {
+        text = `${markers.join('')} ${text}`;
+      }
+    }
+
+    return {
+      ...node,
+      ...(node.attrs ? { attrs: { ...node.attrs } } : {}),
+      ...(node.marks
+        ? {
+            marks: node.marks.map((mark) => ({
+              ...mark,
+              ...(mark.attrs ? { attrs: { ...mark.attrs } } : {}),
+            })),
+          }
+        : {}),
+      ...(typeof text === 'string' ? { text } : {}),
+      ...(node.content
+        ? {
+            content: node.content.map((child) =>
+              this.cloneWithCommentLineMarkers(
+                child,
+                markerPrefix,
+                markerByCommentId,
+              ),
+            ),
+          }
+        : {}),
+    };
   }
 
   private toProseMirrorJsonNode(content: unknown): ProseMirrorJsonNode {

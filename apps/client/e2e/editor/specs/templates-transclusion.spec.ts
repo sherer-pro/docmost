@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import JSZip from "jszip";
 import {
   apiDelete,
   apiGet,
@@ -287,6 +288,77 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     ];
     await updatePageContent(api, syncedInstance.page.id, filledInstance);
 
+    const managedMutation = structuredClone(filledInstance);
+    const managedBlock = (managedMutation.content as any[]).find(
+      (node) => node.type === "templateManagedBlock",
+    );
+    managedBlock.content = [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: `Bypass managed value ${suffix}` }],
+      },
+    ];
+    expect(
+      await responseStatus(
+        api.post("/api/pages/actions/update", {
+          data: {
+            pageId: syncedInstance.page.id,
+            content: managedMutation,
+            format: "json",
+            operation: "replace",
+          },
+        }),
+      ),
+    ).toBe(409);
+
+    const nestedServiceMutation = structuredClone(filledInstance);
+    const nestedField = (nestedServiceMutation.content as any[]).find(
+      (node) => node.type === "templateField",
+    );
+    nestedField.content = [
+      {
+        type: "templateManagedBlock",
+        attrs: { templateBlockId: randomUUID(), locked: true },
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: `Nested bypass ${suffix}` }],
+          },
+        ],
+      },
+    ];
+    expect(
+      await responseStatus(
+        api.post("/api/pages/actions/update", {
+          data: {
+            pageId: syncedInstance.page.id,
+            content: nestedServiceMutation,
+            format: "json",
+            operation: "replace",
+          },
+        }),
+      ),
+    ).toBe(409);
+
+    const contentAfterBypasses = (
+      await apiGet<Page>(
+        api,
+        `/api/pages/info?pageId=${syncedInstance.page.id}`,
+      )
+    ).content;
+    expect(documentText(contentAfterBypasses)).toContain(
+      `Managed v1 ${suffix}`,
+    );
+    expect(documentText(contentAfterBypasses)).toContain(
+      `Member value ${suffix}`,
+    );
+    expect(documentText(contentAfterBypasses)).not.toContain(
+      `Bypass managed value ${suffix}`,
+    );
+    expect(documentText(contentAfterBypasses)).not.toContain(
+      `Nested bypass ${suffix}`,
+    );
+
     const syncedV2 = {
       ...syncedV1,
       content: [
@@ -334,6 +406,36 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     expect(documentText(synchronizedContent)).toContain(
       `Member value ${suffix}`,
     );
+
+    const exportResponse = await api.post("/api/pages/actions/export", {
+      data: {
+        pageId: syncedInstance.page.id,
+        format: "docmost",
+        includeChildren: false,
+        includeAttachments: false,
+      },
+    });
+    expect(exportResponse.ok(), "synchronized Docmost export status").toBe(
+      true,
+    );
+    const exportZip = await JSZip.loadAsync(await exportResponse.body());
+    const exportData = JSON.parse(
+      await exportZip.file("docmost-data.json")!.async("string"),
+    );
+    const exportedInstance = exportData.pages.find(
+      (exportedPage: Page) => exportedPage.id === syncedInstance.page.id,
+    );
+    expect(exportedInstance).toBeTruthy();
+    expect(documentText(exportedInstance.content)).toContain(
+      `Managed v2 ${suffix}`,
+    );
+    expect(documentText(exportedInstance.content)).toContain(
+      `Member value ${suffix}`,
+    );
+    expect(nodeTypes(exportedInstance.content)).not.toContain(
+      "templateManagedBlock",
+    );
+    expect(nodeTypes(exportedInstance.content)).not.toContain("templateField");
 
     const revisions = await apiGet<any>(
       api,

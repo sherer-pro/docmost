@@ -1453,7 +1453,7 @@
       "title": "How AI, RAG, and MCP work",
       "description": "An operational guide to the assistant, external search, synchronization, and MCP security boundaries.",
       "overviewTitle": "What each part does",
-      "assistantDescription": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them.",
+      "assistantDescription": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies.",
       "retrievalDescription": "Space search runs while an answer is generated. It asks an external index for candidates, then Docmost rechecks every source against the database, current access rules, and AI exclusions. Retrieval failure does not fail the chat.",
       "ragDescription": "The read-only /api/rag/* API exports full and incremental content feeds to an external indexer. It does not perform search or answer questions, and every RAG key is restricted to one space.",
       "inboundMcpDescription": "External assistants connect to Docmost at the root /mcp endpoint with a scoped MCP key. The endpoint is stateless and exposes only read tools allowed by the key's exact capability policy.",
