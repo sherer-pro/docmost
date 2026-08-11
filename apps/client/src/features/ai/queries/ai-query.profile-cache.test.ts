@@ -5,6 +5,7 @@ const queryClient = vi.hoisted(() => ({
   removeQueries: vi.fn(),
   setQueryData: vi.fn(),
 }));
+const emit = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", async () => {
   const actual = await vi.importActual<typeof import("@tanstack/react-query")>(
@@ -17,10 +18,15 @@ vi.mock("@tanstack/react-query", async () => {
   };
 });
 
+vi.mock("@/features/websocket/use-query-emit.ts", () => ({
+  useQueryEmit: () => emit,
+}));
+
 import {
   AI_QUERY_KEYS,
   useCreateAiAssistantProfileMutation,
   useDeleteAiAssistantProfileMutation,
+  useUpdateAiAssistantProfileMutation,
   useUpdateAiAssistantProfilePreferencesMutation,
 } from "./ai-query.ts";
 
@@ -46,6 +52,11 @@ describe("assistant profile query cache", () => {
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: AI_QUERY_KEYS.profiles("space"),
     });
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profiles("space")],
+    });
   });
 
   it("evicts deleted profile details and refreshes assignments", async () => {
@@ -64,6 +75,34 @@ describe("assistant profile query cache", () => {
     });
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: AI_QUERY_KEYS.config("space"),
+    });
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profile("space", "profile")],
+    });
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profilePreferences("space")],
+    });
+  });
+
+  it("broadcasts updated profile list and detail invalidations", async () => {
+    const mutation = useUpdateAiAssistantProfileMutation("space") as any;
+    const profile = { id: "profile", spaceId: "space", name: "Updated" };
+
+    await mutation.onSuccess(profile);
+
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profile("space", "profile")],
+    });
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profiles("space")],
     });
   });
 
@@ -85,6 +124,11 @@ describe("assistant profile query cache", () => {
     );
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: AI_QUERY_KEYS.profiles("space"),
+    });
+    expect(emit).toHaveBeenCalledWith({
+      operation: "invalidate",
+      spaceId: "space",
+      entity: [...AI_QUERY_KEYS.profilePreferences("space")],
     });
   });
 });
