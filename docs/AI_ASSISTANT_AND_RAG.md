@@ -343,9 +343,11 @@ proposal and the approval read the live Yjs document, and the hash is computed
 from a key-order independent serialization, so the persisted `pages.content`
 snapshot and the live document cannot disagree. The run
 enters `awaiting_approval`; only its initiating user may approve or reject that
-specific proposal, and the proposal expires after one hour. Approval rechecks
-ACL and the live Yjs document hash, validates the resulting ProseMirror
-document against the editor schema, applies one transaction, and records
+specific proposal, and the proposal expires after one hour. Immediately before
+applying an approved proposal, the server rechecks the current page write ACL,
+the deployment/workspace/space/profile/group tool-policy cascade, and the live
+Yjs document hash. It validates the resulting ProseMirror document against the
+editor schema, applies one transaction, and records
 `Changed by AI agent` in page history. A stale or rejected proposal is returned
 to the model as a tool result so the bounded loop can continue.
 
@@ -360,9 +362,9 @@ other hash. Legacy approved steps without recovery metadata fail safely and
 resume without another page mutation.
 
 Approval also resolves the stored `toolName` through the built-in registry and
-requires `writeClass=write` plus `approvalMode=current_page_hash`. Live policy
-is checked again before recovery; this does not turn the strict four-operation
-page proposal union into a generic callback mechanism.
+requires `writeClass=write` plus `approvalMode=current_page_hash`. Every live
+policy layer is checked again before recovery; this does not turn the strict
+four-operation page proposal union into a generic callback mechanism.
 
 Pending proposals have a separate admission limit of six per user and thirty
 per space. Approval obtains the same PostgreSQL admission locks as a new run.

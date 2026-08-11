@@ -145,13 +145,15 @@ async function scanArtifacts(root, exactSecrets) {
 
 await fs.mkdir(auditRoot, { recursive: true });
 const appPort = Number(process.env.DOCMOST_AI_AGENT_APP_PORT ?? await reservePort(0));
+const collabPort = Number(process.env.DOCMOST_AI_AGENT_COLLAB_PORT ?? await reservePort(0));
 const modelPort = Number(process.env.DOCMOST_AI_AGENT_MODEL_PORT ?? await reservePort(0));
 const toxiproxyPort = Number(process.env.DOCMOST_AI_AGENT_TOXIPROXY_PORT ?? await reservePort(0));
-for (const [name, port] of [["app", appPort], ["model", modelPort], ["toxiproxy", toxiproxyPort]]) {
+for (const [name, port] of [["app", appPort], ["collab", collabPort], ["model", modelPort], ["toxiproxy", toxiproxyPort]]) {
   assert(Number.isInteger(port) && port > 0 && port <= 65535, `${name} port is invalid`);
 }
 
 const baseURL = `http://127.0.0.1:${appPort}`;
+const collabURL = `http://127.0.0.1:${collabPort}`;
 const modelControlUrl = `http://127.0.0.1:${modelPort}`;
 const modelProviderUrl = `http://host.docker.internal:${modelPort}/v1`;
 const toxiproxyUrl = `http://127.0.0.1:${toxiproxyPort}`;
@@ -165,10 +167,14 @@ const composeEnv = {
   COMPOSE_PROJECT_NAME: composeProject,
   PORT: String(appPort),
   APP_URL: baseURL,
+  COLLAB_PORT: String(collabPort),
+  COLLAB_URL: collabURL,
   APP_SECRET: appSecret,
   POSTGRES_USER: "docmost",
   POSTGRES_DB: "docmost",
   POSTGRES_PASSWORD: databasePassword,
+  DATABASE_URL: `postgresql://docmost:${databasePassword}@toxiproxy:15432/docmost`,
+  REDIS_URL: "redis://toxiproxy:16379",
   EDGE_NETWORK_NAME: `${composeProject}_edge`,
   EDGE_NETWORK_EXTERNAL: "false",
   DOCMOST_AI_AGENT_MODEL_PORT: String(modelPort),
@@ -223,8 +229,9 @@ try {
     "apps/server/dist/apps/server/src/database/migrate.js",
     "latest",
   ), { env: composeEnv, timeout: 5 * 60_000 });
-  run("docker", composeArgs("up", "-d", "docmost"), { env: composeEnv, timeout: 5 * 60_000 });
+  run("docker", composeArgs("up", "-d", "docmost", "collab"), { env: composeEnv, timeout: 5 * 60_000 });
   await waitFor("isolated Docmost", () => fetch(`${baseURL}/api/health`).then((response) => response.ok).catch(() => false), 4 * 60_000);
+  await waitFor("isolated collaboration server", () => fetch(`${collabURL}/api/health`).then((response) => response.ok).catch(() => false), 4 * 60_000);
 
   ({ authToken, csrfToken } = await setupAdmin(baseURL, adminEmail, adminPassword));
   const playwrightEnv = {
@@ -312,7 +319,7 @@ try {
     startedAt,
     failedAt: new Date().toISOString(),
     baseURL,
-    ports: { app: appPort, model: modelPort, toxiproxy: toxiproxyPort },
+    ports: { app: appPort, collab: collabPort, model: modelPort, toxiproxy: toxiproxyPort },
     status: "failed",
     error: error instanceof Error ? error.message : String(error),
     retainedVolumes: true,
