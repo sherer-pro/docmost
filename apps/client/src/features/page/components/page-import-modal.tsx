@@ -588,7 +588,11 @@ function ImportFormatSelection({
                 resetRef={docmostFileRef}
               >
                 {(props) => (
-                  <Button {...props} loading={isInspecting}>
+                  <Button
+                    {...props}
+                    loading={isInspecting}
+                    style={{ flexShrink: 0 }}
+                  >
                     {t("Choose archive")}
                   </Button>
                 )}
