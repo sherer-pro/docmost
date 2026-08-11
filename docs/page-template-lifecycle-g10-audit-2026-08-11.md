@@ -10,6 +10,8 @@
 - Fixed audit head: `e955a0c8d13be6384a08988f40b4331b9b686ce8`.
 - Current-main base used for the isolated worktree: `7ad7a4d0d34efc11974d9a31fbd04cdc54069500` (`v1.0.0-234-g7ad7a4d0`).
 - Audit branch final pre-integration head: `26345df53e540c88f7ead0528b04bb417500de73` (`v1.0.0-240-g26345df5`).
+- Documentation commit on the audit branch: `58b952c1e`.
+- Local-main integration merge: `af5c5a99066620f5336a8195e00acecd6f92802d` (`v1.0.0-242-gaf5c5a99`). The merge used `--no-ff`; no conflict occurred and unrelated `graphify-out/*` changes remained untouched.
 - History reviewed in `v1.0.0^..e955a0c8`, plus path-relevant changes in `e955a0c8..7ad7a4d0`.
 - Required commits inspected with `git show --stat --summary` and their diffs, tests, migrations, contracts, and documentation: `3584bd67`, `bd7fb04e`, `bf795ad1`, `1e339e65`, and `6cb638eb`.
 - Later path-relevant fixes reviewed before opening findings: `6dfdea64`, `583eb96f`, `07d66b19`, `ce3438c2`, `f5bb6b40`, `e68110f3`, and merge head `7ad7a4d0`.
@@ -107,6 +109,9 @@ The targeted browser run was `0/2` on `a5375098`, remained `0/2` after only the 
 | `corepack pnpm --filter ./apps/server test -- --runInBand page-template` | 0 | Baseline 3 suites / 21 tests; final focused set 8 suites / 80 tests. |
 | `corepack pnpm --filter ./apps/client test -- page-template` | 0 | Vitest forwarding ran the full client suite: 131 files / 632 tests. |
 | `corepack pnpm run test:editor-ext` | 0 | Final: 15 files / 66 tests. |
+| Post-merge page-template server subset on local `main` | 0 | 3 suites / 22 tests. |
+| Post-merge collaboration/persistence/page-service/export subset on local `main` | 0 | 4 suites / 37 tests. |
+| Post-merge `corepack pnpm run test:editor-ext` on local `main` | 0 | 15 files / 66 tests. |
 | Targeted template E2E before API fence | 1 | Chromium and Firefox both reproduced G10-04. This was expected defect evidence. |
 | Targeted template E2E after API fence | 0 | Chromium and Firefox: 2/2. |
 | Initial full `corepack pnpm run test:editor:e2e` | 1 | 18/23. G10 passed; four Draw.io tests lacked the local shim and one unrelated mobile WebKit click was intercepted. These environment/baseline failures were not treated as G10 defects. |
