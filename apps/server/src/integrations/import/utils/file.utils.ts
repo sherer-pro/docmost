@@ -176,6 +176,7 @@ export function validateZipArchiveBuffer(
           entryCount: 0,
           totalUncompressedBytes: 0,
         };
+        let actualTotalUncompressedBytes = 0;
         const entryNames = new Set<string>();
         let settled = false;
         const fail = (reason: string, entryName: string, cause: Error) => {
@@ -223,7 +224,39 @@ export function validateZipArchiveBuffer(
             fail('quota-exceeded', rawName, limitError as Error);
             return;
           }
-          zipfile.readEntry();
+
+          if (/\/$/.test(normalizedName)) {
+            zipfile.readEntry();
+            return;
+          }
+
+          zipfile.openReadStream(entry, (streamError, stream) => {
+            if (streamError) {
+              fail('invalid-entry-data', rawName, streamError);
+              return;
+            }
+
+            let actualEntryBytes = 0;
+            stream.on('data', (chunk: Buffer) => {
+              actualEntryBytes += chunk.length;
+              actualTotalUncompressedBytes += chunk.length;
+              if (
+                actualEntryBytes > limits.maxEntryUncompressedBytes ||
+                actualTotalUncompressedBytes > limits.maxTotalUncompressedBytes
+              ) {
+                stream.destroy(
+                  new Error('ZIP uncompressed data exceeds the allowed limit'),
+                );
+              }
+            });
+            stream.once('error', (readError) => {
+              fail('invalid-entry-data', rawName, readError);
+            });
+            stream.once('end', () => {
+              if (!settled) zipfile.readEntry();
+            });
+            stream.resume();
+          });
         });
         zipfile.once('end', () => {
           if (!settled) {
