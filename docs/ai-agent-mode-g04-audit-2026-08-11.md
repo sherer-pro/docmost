@@ -152,6 +152,7 @@ Material commands are listed with their observed exit codes. Read-only `rg`, `gi
 | `corepack pnpm run test:ai:e2e` with expected mock port 1080 | 0 | 24/24 passed across Chromium, Firefox, Pixel 7, and narrow panel. |
 | `corepack pnpm run test:ai-context:e2e` | 0 | Deterministic context/citation/ACL audit passed. |
 | `corepack pnpm run test:security` | 0 | Server 66/66 suites and 790/790 tests; client 6/6 files and 74/74 tests. |
+| `corepack pnpm verify:quick` | 0 | Final branch-wide env, architecture, release-gate, lint, full server (224 suites/1766 tests), client production build, and security checks passed. Jest reported its existing forced-exit/leaked-worker warning after the green full server run. |
 | `corepack pnpm server:build`, complete image build, and monorepo image build | 0 | Fixed server/client code built into the isolated image after each production fix. |
 | `corepack pnpm check:comments:en` and focused lint/format checks | 0 | No source comment/lint regression. |
 | live deployment-off/on and space null/empty/subset policy harness | 0 | Counts were 11/26 and 26/0/2 as expected; configuration restored to deployment on + space inherit. |
