@@ -1,8 +1,6 @@
 services:
   docmost:
     environment:
-      DATABASE_URL: "postgresql://${POSTGRES_USER:-docmost}:${POSTGRES_PASSWORD:-audit_password}@toxiproxy:15432/${POSTGRES_DB:-docmost}"
-      REDIS_URL: "redis://toxiproxy:16379"
       AI_PROVIDER_ALLOWED_ORIGINS: "http://host.docker.internal:${DOCMOST_AI_AGENT_MODEL_PORT:-1180}"
       AI_RETRIEVAL_ALLOWED_ORIGINS: ""
       AI_EXTERNAL_MCP_ENABLED: "false"

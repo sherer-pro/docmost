@@ -6,8 +6,13 @@ import * as dotenv from 'dotenv';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { postgres } from './postgres-client';
+import { resolveEnvironmentFileSecrets } from '../integrations/environment/environment-file-secrets';
 
 dotenv.config({ path: envPath });
+const fileSecretErrors = resolveEnvironmentFileSecrets(process.env);
+if (fileSecretErrors.length > 0) {
+  throw new Error(`Invalid environment file secrets: ${fileSecretErrors.join('; ')}`);
+}
 
 const migrationFolder = path.join(__dirname, './migrations');
 

@@ -508,6 +508,7 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
     if ((await memberEditor.getAttribute("contenteditable")) !== "true") {
       await memberPage.getByRole("radiogroup").getByText(/Edit|Редактировать/i).click();
     }
+    await expect(memberEditor).toHaveAttribute("contenteditable", "true");
     await memberEditor.click();
     await memberPage.keyboard.press("Control+End");
     await memberPage.keyboard.type(" concurrent-writer-change");
