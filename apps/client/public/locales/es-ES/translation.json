@@ -1382,6 +1382,8 @@
       "targetMismatchDescription": "Se permite, pero el destino de búsqueda de Open WebUI no coincide con el destino de sincronización.",
       "cleanupRequiredTitle": "La limpieza remota está incompleta",
       "cleanupRequiredDescription": "El destino no puede cambiar hasta completar o abandonar explícitamente la limpieza.",
+      "targetTestRequiredTitle": "Pruebe el destino antes de habilitarlo",
+      "targetTestRequiredDescription": "Ejecute correctamente «Probar writer» para el destino y las credenciales guardados. La habilitación permanece bloqueada hasta completar la prueba.",
       "bindingState": "Estado de vinculación",
       "health": "Estado del proceso",
       "lastSuccess": "Última sincronización correcta",
@@ -1440,6 +1442,7 @@
       "error": {
         "deploymentDisabled": "La sincronización RAG está deshabilitada en este despliegue.",
         "notConfigured": "Configure primero el destino y la clave.",
+        "targetNotTested": "Pruebe correctamente el writer del destino actual antes de habilitar la sincronización.",
         "targetInUse": "Esta Knowledge Base ya pertenece a otro espacio.",
         "configConflict": "La configuración cambió en otra sesión. Recargue la página.",
         "cleanupRequired": "Complete o abandone explícitamente la limpieza.",
@@ -1481,7 +1484,7 @@
       "operationsTitle": "Lista de comprobación del administrador",
       "operationsSetup": "Configure y pruebe el modelo y la recuperación opcional en cada espacio. Apruebe primero los orígenes del despliegue, mantenga deshabilitada la búsqueda hasta que haya un adaptador preparado y restrinja el acceso mediante las políticas de herramientas integradas y externas. Active la comprensión de imágenes antes de enviar imágenes o PDF que solo contengan imágenes; de lo contrario, el servidor rechazará esos datos en vez de omitirlos silenciosamente.",
       "operationsProfileNames": "Los nombres de perfiles del asistente deben ser únicos en cada espacio. Un duplicado devuelve 409 con ai_profile_name_conflict; vuelva a cargar la lista si es necesario y elija otro nombre.",
-      "operationsRagMigration": "Al sustituir el worker RAG independiente, deténgalo primero, migre con RAG_SYNC_ENABLED=false y después configure, pruebe y habilite cada espacio. Los secretos antiguos del entorno no se importan. Para revertir, use el interruptor de despliegue y no migration down.",
+      "operationsRagMigration": "Al sustituir el worker RAG independiente, deténgalo primero, migre con RAG_SYNC_ENABLED=false y después configure, pruebe y habilite cada espacio. La API rechaza la habilitación hasta que el destino actual supere la prueba. Los secretos antiguos del entorno no se importan. Para revertir, use el interruptor de despliegue y no migration down.",
       "operationsRecovery": "Después de un fallo, restaure primero las dependencias, mantenga PostgreSQL como fuente autoritativa y conserve la Knowledge Base durante la recuperación de correspondencias. Repetir la carga de un archivo privado con el mismo Idempotency-Key reanuda el lote reservado tras un fallo del proceso sin crear otra fila de archivo. Para una reversión de emergencia de RAG Sync, establezca RAG_SYNC_ENABLED=false y reinicie Docmost; AI_EXTERNAL_MCP_ENABLED controla únicamente el MCP saliente.",
       "templateExportScope": "Las entradas del catálogo de plantillas se excluyen. Las páginas creadas a partir de plantillas se exportan como páginas materializadas normales."
     },

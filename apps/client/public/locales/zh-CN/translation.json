@@ -1382,6 +1382,8 @@
       "targetMismatchDescription": "这是允许的，但搜索所用的 Open WebUI 目标与同步目标不一致。",
       "cleanupRequiredTitle": "远程清理尚未完成",
       "cleanupRequiredDescription": "完成清理或明确放弃清理之前不能更改目标。",
+      "targetTestRequiredTitle": "启用前请先测试目标",
+      "targetTestRequiredDescription": "请使用已保存的目标和凭据成功执行“测试 writer”。测试完成前无法启用同步。",
       "bindingState": "绑定状态",
       "health": "运行状态",
       "lastSuccess": "上次成功同步",
@@ -1440,6 +1442,7 @@
       "error": {
         "deploymentDisabled": "此部署已禁用 RAG 同步。",
         "notConfigured": "请先配置目标和 writer 密钥。",
+        "targetNotTested": "启用同步前，请先成功测试当前目标的 writer。",
         "targetInUse": "此 Knowledge Base 已分配给其他空间。",
         "configConflict": "其他会话已更改配置，请重新加载。",
         "cleanupRequired": "请先完成或明确放弃清理。",
@@ -1481,7 +1484,7 @@
       "operationsTitle": "管理员检查清单",
       "operationsSetup": "为每个空间配置并测试模型和可选搜索。先在部署层允许地址，在适配器就绪前不要启用搜索，并通过内置和外部工具策略收窄访问范围。发送图片或仅含图片的 PDF 前请启用图像理解；否则服务器会拒绝该输入，而不会静默忽略。",
       "operationsProfileNames": "助手配置文件名称在每个空间内必须唯一。重复名称会返回带有 ai_profile_name_conflict 的 409；如有需要，请重新加载列表并选择其他名称。",
-      "operationsRagMigration": "替换独立 RAG worker 时，请先停止它，使用 RAG_SYNC_ENABLED=false 完成迁移，然后逐个空间配置、Test 并 Enable。旧的环境秘密不会导入。回滚应使用部署开关，而不是 migration down。",
+      "operationsRagMigration": "替换独立 RAG worker 时，请先停止它，使用 RAG_SYNC_ENABLED=false 完成迁移，然后逐个空间配置、Test 并 Enable。当前目标通过 Test 之前，API 会拒绝 Enable。旧的环境秘密不会导入。回滚应使用部署开关，而不是 migration down。",
       "operationsRecovery": "发生故障后，请先恢复依赖项，将 PostgreSQL 作为权威数据源，并在恢复映射时保留 Knowledge Base。进程故障后，使用相同 Idempotency-Key 重复上传私有文件会继续预留的批次，而不会创建新的文件行。要紧急回滚 RAG Sync，请设置 RAG_SYNC_ENABLED=false 并重启 Docmost；AI_EXTERNAL_MCP_ENABLED 仅控制出站 MCP。",
       "templateExportScope": "模板目录条目不会导出。从模板创建的页面会作为普通的实体化页面导出。"
     },

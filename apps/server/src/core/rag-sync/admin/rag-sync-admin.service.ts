@@ -136,6 +136,9 @@ export class RagSyncAdminService {
             dto,
             targetChanged,
           );
+          const writerKeyChanged =
+            dto.target?.writerApiKey !== undefined ||
+            dto.target?.clearWriterApiKey === true;
           if (!existing) {
             existing = await this.repo.insertBinding(
               workspace.id,
@@ -190,6 +193,10 @@ export class RagSyncAdminService {
               writerApiKeyEncrypted: encryptedKey,
               targetClaimId,
               cleanupRequired: existing.cleanupRequired || resumedCleanup,
+              lastTestedAt:
+                targetChanged || writerKeyChanged
+                  ? null
+                  : existing.lastTestedAt,
               targetVersion: existing.targetVersion + (targetChanged ? 1 : 0),
               configVersion:
                 existing.configVersion + (dto.expectedVersion ? 1 : 0),
@@ -269,6 +276,7 @@ export class RagSyncAdminService {
               {
                 targetClaimId: targetClaim.id,
                 cleanupRequired: true,
+                lastTestedAt: null,
                 configVersion: current.configVersion + 1,
                 updatedById: user.id,
               },
@@ -335,6 +343,13 @@ export class RagSyncAdminService {
           });
         }
         this.assertConfigured(current);
+        if (!current.lastTestedAt) {
+          throw new ConflictException({
+            code: 'rag_sync_target_not_tested',
+            message:
+              'Test the current Open WebUI target before enabling RAG sync',
+          });
+        }
         const targetClaim = await this.ensureTargetClaim(
           workspace.id,
           spaceId,
@@ -824,6 +839,7 @@ export class RagSyncAdminService {
         baseUrl: binding?.baseUrl ?? null,
         knowledgeId: binding?.knowledgeId ?? null,
         writerApiKeyConfigured: Boolean(binding?.writerApiKeyEncrypted),
+        lastTestedAt: binding?.lastTestedAt?.toISOString() ?? null,
       },
       cleanupRequired: binding?.cleanupRequired ?? false,
       status,

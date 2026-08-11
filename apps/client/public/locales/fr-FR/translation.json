@@ -1382,6 +1382,8 @@
       "targetMismatchDescription": "Cela est permis, mais la cible Open WebUI de recherche diffère de celle de synchronisation.",
       "cleanupRequiredTitle": "Le nettoyage distant est incomplet",
       "cleanupRequiredDescription": "La cible ne peut pas changer avant la fin ou l’abandon explicite du nettoyage.",
+      "targetTestRequiredTitle": "Testez la cible avant l’activation",
+      "targetTestRequiredDescription": "Exécutez avec succès « Tester le writer » pour la cible et les identifiants enregistrés. L’activation reste indisponible jusqu’à la fin du test.",
       "bindingState": "État de la liaison",
       "health": "État du service",
       "lastSuccess": "Dernière synchronisation réussie",
@@ -1440,6 +1442,7 @@
       "error": {
         "deploymentDisabled": "La synchronisation RAG est désactivée pour ce déploiement.",
         "notConfigured": "Configurez d’abord la cible et la clé.",
+        "targetNotTested": "Testez avec succès le writer de la cible actuelle avant d’activer la synchronisation.",
         "targetInUse": "Cette Knowledge Base est déjà affectée à un autre espace.",
         "configConflict": "La configuration a changé dans une autre session. Rechargez.",
         "cleanupRequired": "Terminez ou abandonnez explicitement le nettoyage.",
@@ -1481,7 +1484,7 @@
       "operationsTitle": "Liste de contrôle de l’administrateur",
       "operationsSetup": "Configurez et testez le modèle et la récupération facultative pour chaque espace. Approuvez d’abord les origines de déploiement, laissez la recherche désactivée tant qu’un adaptateur n’est pas prêt et utilisez les politiques des outils intégrés et externes pour restreindre l’accès. Activez la compréhension des images avant l’envoi d’images ou de PDF contenant uniquement des images ; sinon, le serveur rejettera ces données au lieu de les omettre silencieusement.",
       "operationsProfileNames": "Les noms de profils d’assistant doivent être uniques dans chaque espace. Un doublon renvoie 409 avec ai_profile_name_conflict ; rechargez la liste si nécessaire et choisissez un autre nom.",
-      "operationsRagMigration": "Pour remplacer le worker RAG autonome, arrêtez-le d’abord, migrez avec RAG_SYNC_ENABLED=false, puis configurez, testez et activez chaque espace. Les anciens secrets d’environnement ne sont pas importés. Pour revenir en arrière, utilisez l’interrupteur de déploiement, pas migration down.",
+      "operationsRagMigration": "Pour remplacer le worker RAG autonome, arrêtez-le d’abord, migrez avec RAG_SYNC_ENABLED=false, puis configurez, testez et activez chaque espace. L’API refuse l’activation tant que la cible actuelle n’a pas réussi le test. Les anciens secrets d’environnement ne sont pas importés. Pour revenir en arrière, utilisez l’interrupteur de déploiement, pas migration down.",
       "operationsRecovery": "Après un échec, restaurez d’abord les dépendances, conservez PostgreSQL comme source faisant autorité et préservez la Knowledge Base pendant la récupération des correspondances. La répétition de l’envoi d’un fichier privé avec le même Idempotency-Key reprend le lot réservé après l’arrêt du processus sans créer une autre ligne de fichier. Pour un retour arrière d’urgence de RAG Sync, définissez RAG_SYNC_ENABLED=false et redémarrez Docmost ; AI_EXTERNAL_MCP_ENABLED contrôle uniquement le MCP sortant.",
       "templateExportScope": "Les entrées du catalogue de modèles sont exclues. Les pages créées à partir de modèles sont exportées comme des pages matérialisées ordinaires."
     },
