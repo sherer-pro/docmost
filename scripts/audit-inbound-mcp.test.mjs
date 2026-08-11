@@ -18,6 +18,11 @@ test('the audit client exercises protocol failures without returning secrets', a
       response.end(JSON.stringify({ error: 'unauthorized' }));
       return;
     }
+    if (raw.includes('"id":101')) {
+      response.writeHead(429, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'concurrency limited' }));
+      return;
+    }
     if (request.method === 'GET') {
       response.writeHead(401, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ error: 'wrong key type' }));
@@ -90,11 +95,24 @@ test('the audit client exercises protocol failures without returning secrets', a
       ragEndpoint: `${endpoint}/rag`,
       mcpToken: expectedToken,
       ragToken: 'wrong-rag-token',
+      concurrency: 2,
+      requireConcurrencyLimit: true,
     });
 
     assert.equal(result.passed, true);
     assert.equal(JSON.stringify(result).includes(expectedToken), false);
     assert.equal(result.checks.some((check) => check.name === 'write tool denied'), true);
+    assert.deepEqual(
+      result.checks.find(
+        (check) => check.name === 'concurrency limit enforcement',
+      ),
+      {
+        name: 'concurrency limit enforcement',
+        passed: true,
+        enforcementObserved: true,
+        statuses: [200, 429],
+      },
+    );
   } finally {
     server.close();
     await once(server, 'close');
