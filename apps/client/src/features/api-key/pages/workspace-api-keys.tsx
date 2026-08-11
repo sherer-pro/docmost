@@ -35,7 +35,6 @@ export function WorkspaceApiKeysPanel({ keyType }: WorkspaceApiKeysPanelProps) {
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
   const keysQuery = useGetApiKeysQuery({
     cursor,
-    adminView: true,
     keyType,
   });
   const description = t(
