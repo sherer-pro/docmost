@@ -12,8 +12,9 @@ The residual risks are external to the G12 implementation: the isolated deployme
 - Fixed audit head: `e955a0c8d13be6384a08988f40b4331b9b686ce8`.
 - Current-main base used for the isolated worktree: `b13bee7d8602c60e314c79961ca2dc24a412dc9d` (`v1.0.0-282-gb13bee7d`).
 - Audit branch final production-code head before this report: `3c68c855786a09721dcebd2c95c5d488d4f91315` (`v1.0.0-290-g3c68c855`).
+- Audit report commit on the branch: `32860ae640b76c2fc538e7ec7b8acc8d1cb5fd17` (`v1.0.0-291-g32860ae6`).
 - Local `main` advanced concurrently to `71019061bebb28d85f21dda4db9b884fade43e1b` before integration. Its unrelated changes were preserved.
-- Final audit/report and local-main integration heads are recorded in the final section after merge.
+- Local-main integration merge: `00c8447a3ebcbc44fe4047bcbe2d7257c8d91701` (`v1.0.0-305-g00c8447a`). The `--no-ff` merge completed without conflicts, and the pre-existing `graphify-out/*` changes remained untouched.
 - The fixed history window `v1.0.0^..e955a0c8` and path-relevant changes in `e955a0c8..b13bee7d` were reviewed.
 - Required commits were inspected with `git show --stat --summary`, full diffs, tests, migrations, contracts, and documentation: `694b47be49e3ac99f2d053655d48ab700fffa669` and `e800f87a3b3d69224e23c6d99bb5be0a74bae4a7`.
 - Later path-relevant commits inspected before opening findings: `3ec4591e`, `ca49d464`, `bd9061ce`, `f35408e5`, `175953bd`, `c49a63ac`, and `6f65ae26`. Existing fixes were not reopened or reverted.
@@ -151,7 +152,11 @@ No new package, MCP server, remote browser, public service, proxy, or external l
 | Label registry API harness | 0 | 30/30 checks passed: admin/reader/writer, cross-space, normalization, conflict, concurrent rename, cascade. Removed after use. |
 | `corepack pnpm --filter ./apps/server test:security` | 0 | 66 suites / 791 tests. |
 | `corepack pnpm routes:inventory:check` | 0 | 315 routes. |
-| `corepack pnpm check:comments:en` | 0 | Source/docs language contract before report. Re-run after report and merge. |
+| `corepack pnpm check:comments:en` | 0 | Source/docs language contract before report and after merge. |
+| Post-merge focused server test on local `main` | 0 | 4 suites / 24 dictionary and label tests. |
+| Post-merge focused client Vitest on local `main` | 0 | 10 files / 40 dictionary, label, tag, and database-renderer tests. |
+| Post-merge `corepack pnpm run test:editor-ext` on local `main` | 0 | 15 files / 66 tests. |
+| Post-merge route inventory and `git diff --check` | 0 | 315 routes; no whitespace error. |
 | `docker compose build docmost` / isolated tagged rebuilds | 0 | Full image build after each production-code fix; final digest recorded above. |
 | Redis stop/start and probes | 0 | G12 API remained available and recovered. |
 | PostgreSQL stop/start and in-flight probe | interrupted after more than 90 s | Reproduced DEP-01. Fresh recovery probe returned `200` and 5,002 terms. |
@@ -230,4 +235,4 @@ Production commits:
 
 Test-only commits: none. Temporary audit scaffolding was removed instead. No push, pull request, tag, or release was created.
 
-Final report commit and local-main merge head: pending integration.
+Audit report commit: `32860ae640b76c2fc538e7ec7b8acc8d1cb5fd17`. Local-main integration merge: `00c8447a3ebcbc44fe4047bcbe2d7257c8d91701`.
