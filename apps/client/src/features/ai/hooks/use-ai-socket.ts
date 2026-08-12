@@ -50,6 +50,7 @@ export function useAiSocket() {
 
     let deltaFrame: number | undefined;
     let pendingDeltas: AiRunDeltaEvent[] = [];
+    let hasConnected = socket.connected;
 
     const flushPendingDeltas = () => {
       deltaFrame = undefined;
@@ -266,6 +267,10 @@ export function useAiSocket() {
     };
 
     const handleReconnect = () => {
+      if (!hasConnected) {
+        hasConnected = true;
+        return;
+      }
       setRuns(
         (current) => reduceAiRunState(current, { type: "reconnect" }).runs,
       );

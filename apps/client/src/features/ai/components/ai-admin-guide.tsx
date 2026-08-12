@@ -469,6 +469,17 @@ export default function AiAdminGuide() {
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
+        <Alert
+          color="orange"
+          variant="light"
+          icon={<IconShieldCheck size={18} />}
+          mt="md"
+        >
+          <Stack gap={4}>
+            <Text size="sm">{t("ai.adminGuide.securityOutboundGroups")}</Text>
+            <Text size="sm">{t("ai.adminGuide.securityOutboundConsent")}</Text>
+          </Stack>
+        </Alert>
       </section>
 
       <section aria-labelledby="ai-guide-reference-title">

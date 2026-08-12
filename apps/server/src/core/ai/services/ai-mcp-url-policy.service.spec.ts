@@ -50,12 +50,14 @@ describe('AiMcpUrlPolicyService dual allowlist', () => {
 
   it('rejects an origin missing from the deployment allowlist', async () => {
     await expect(
-      buildService({ deploymentOrigins: 'https://other.example.test' })
-        .assertAllowedForWorkspace(
-          'https://mcp.example.test/mcp',
-          WORKSPACE_ORIGINS,
-        ),
+      buildService({
+        deploymentOrigins: 'https://other.example.test',
+      }).assertAllowedForWorkspace(
+        'https://mcp.example.test/mcp',
+        WORKSPACE_ORIGINS,
+      ),
     ).rejects.toThrow(/AI_MCP_ALLOWED_ORIGINS/);
+    expect(lookupMock).not.toHaveBeenCalled();
   });
 
   it('rejects an origin missing from the workspace allowlist', async () => {
@@ -65,6 +67,7 @@ describe('AiMcpUrlPolicyService dual allowlist', () => {
         'https://unrelated.example.test',
       ),
     ).rejects.toThrow(/workspace external MCP allowlist/);
+    expect(lookupMock).not.toHaveBeenCalled();
   });
 
   it('rejects every origin when the workspace allowlist is empty', async () => {
@@ -74,6 +77,7 @@ describe('AiMcpUrlPolicyService dual allowlist', () => {
         '',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(lookupMock).not.toHaveBeenCalled();
   });
 
   it('does not treat a shared substring as allowlist membership', async () => {
@@ -87,6 +91,7 @@ describe('AiMcpUrlPolicyService dual allowlist', () => {
         'https://mcp.example.test:8443',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(lookupMock).not.toHaveBeenCalled();
   });
 
   it('preserves a trailing slash because MCP endpoints may distinguish it', async () => {
@@ -105,22 +110,25 @@ describe('AiMcpUrlPolicyService loopback handling', () => {
   it('rejects a dual-allowlisted loopback origin in production', async () => {
     resolvesTo({ address: '127.0.0.1', family: 4 });
     await expect(
-      buildService({ deploymentOrigins: LOOPBACK_ORIGINS })
-        .assertAllowedForWorkspace(
-          'http://localhost:8931/mcp',
-          LOOPBACK_ORIGINS,
-        ),
+      buildService({
+        deploymentOrigins: LOOPBACK_ORIGINS,
+      }).assertAllowedForWorkspace(
+        'http://localhost:8931/mcp',
+        LOOPBACK_ORIGINS,
+      ),
     ).rejects.toThrow(/loopback/);
   });
 
   it('accepts a dual-allowlisted loopback origin in development', async () => {
     resolvesTo({ address: '127.0.0.1', family: 4 });
     await expect(
-      buildService({ development: true, deploymentOrigins: LOOPBACK_ORIGINS })
-        .assertAllowedForWorkspace(
-          'http://localhost:8931/mcp',
-          LOOPBACK_ORIGINS,
-        ),
+      buildService({
+        development: true,
+        deploymentOrigins: LOOPBACK_ORIGINS,
+      }).assertAllowedForWorkspace(
+        'http://localhost:8931/mcp',
+        LOOPBACK_ORIGINS,
+      ),
     ).resolves.toMatchObject({ origin: 'http://localhost:8931' });
   });
 
@@ -128,15 +136,22 @@ describe('AiMcpUrlPolicyService loopback handling', () => {
     // The provider policy allows this through its development escape hatch.
     // requireExplicitOrigin makes that hatch unreachable for external MCP.
     await expect(
-      buildService({ development: true, deploymentOrigins: '' })
-        .assertAllowedForWorkspace('http://127.0.0.1:8931/mcp', ''),
+      buildService({
+        development: true,
+        deploymentOrigins: '',
+      }).assertAllowedForWorkspace('http://127.0.0.1:8931/mcp', ''),
     ).rejects.toThrow(/AI_MCP_ALLOWED_ORIGINS/);
+    expect(lookupMock).not.toHaveBeenCalled();
   });
 
   it('rejects an IPv6 loopback literal in production', async () => {
     await expect(
-      buildService({ deploymentOrigins: 'http://[::1]:8931' })
-        .assertAllowedForWorkspace('http://[::1]:8931/mcp', 'http://[::1]:8931'),
+      buildService({
+        deploymentOrigins: 'http://[::1]:8931',
+      }).assertAllowedForWorkspace(
+        'http://[::1]:8931/mcp',
+        'http://[::1]:8931',
+      ),
     ).rejects.toThrow(/loopback/);
   });
 

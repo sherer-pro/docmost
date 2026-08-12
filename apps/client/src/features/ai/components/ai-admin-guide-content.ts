@@ -222,8 +222,9 @@ export function buildAiAdminGuideDiagrams(
     spaceBinding,
     groupPolicy,
     userConsent,
+    originAllowlists,
     dnsPinnedCall,
-  ] = nodes("ai.adminGuide.diagram.outboundNodes", 6);
+  ] = nodes("ai.adminGuide.diagram.outboundNodes", 7);
 
   return {
     overview: {
@@ -288,7 +289,8 @@ export function buildAiAdminGuideDiagrams(
   Workspace --> Space["${spaceBinding}"]
   Space --> Group["${groupPolicy}"]
   Group --> Consent["${userConsent}"]
-  Consent --> DNS["${dnsPinnedCall}"]
+  Consent --> Origin["${originAllowlists}"]
+  Origin --> DNS["${dnsPinnedCall}"]
   DNS --> Remote["${remoteMcp}"]`,
     },
   };

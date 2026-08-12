@@ -1577,7 +1577,7 @@
         "overviewNodes": "Gedeeld AI-toolregister|Externe systemen|Externe MCP-server",
         "ragNodes": "Chat-query|Referentie opvragen|Externe index|Externe indexeerder|Live ACL en inhoudsbeleid|Schrijverreferentie|belt niet",
         "inboundNodes": "API-sleutelinstellingen|Live-sleutel, werkruimte, gebruiker en ruimtebereik|Redis-tarief en gelijktijdigheidstoelating|Toolbeleid, pagina-ACL en inhoudsbeleid",
-        "outboundNodes": "Implementatiecontrole|Controle van de werkruimte|Ruimte bindend|Groepsbeleid eerst weigeren|Toestemming van de gebruiker|DNS-pinned verzoek op afstand"
+        "outboundNodes": "Implementatiecontrole|Controle van de werkruimte|Ruimte bindend|Groepsbeleid eerst weigeren|Toestemming van de gebruiker|Exacte origin-toelatingslijsten|DNS-pinned verzoek op afstand"
       },
       "securityOwner": {
         "spaceAdmin": "Ruimtebeheerder; exploitant keurt de oorsprong goed",

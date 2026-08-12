@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 1 -->
+<!-- ai-admin-guide-contract-version: 2 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -1220,7 +1220,9 @@ constraints:
 
 - **Dual allowlist.** The origin must appear in `AI_MCP_ALLOWED_ORIGINS` _and_ in
   the workspace allowlist. Membership is decided per parsed origin, never by
-  string comparison.
+  string comparison. Docmost rejects an origin missing from either explicit
+  allowlist before DNS resolution, so a denied hostname never causes an
+  outbound DNS lookup.
 - **No development escape hatch.** An unlisted origin is rejected even in
   development, unlike the provider and retrieval policies.
 - **Loopback.** Rejected unconditionally in production. In development it is

@@ -1577,7 +1577,7 @@
         "overviewNodes": "공유 AI 도구 레지스트리|외부 시스템|원격 MCP 서버",
         "ragNodes": "Chat 쿼리|자격 증명 쿼리|외부 인덱스|외부 인덱서|라이브 ACL 및 콘텐츠 정책|작가 자격증|전화하지 않는다",
         "inboundNodes": "API 키 설정|라이브 키, 작업 공간, 사용자 및 공간 범위|Redis 속도 및 동시성 허용|도구 정책, 페이지 ACL 및 콘텐츠 정책",
-        "outboundNodes": "배포 제어|작업 공간 제어|공간 바인딩|거부 우선 그룹 정책|사용자 동의|DNS-pinned 원격 요청"
+        "outboundNodes": "배포 제어|작업 공간 제어|공간 바인딩|거부 우선 그룹 정책|사용자 동의|정확한 출처 허용 목록|DNS-pinned 원격 요청"
       },
       "securityOwner": {
         "spaceAdmin": "공간 관리자; 운영자가 원산지를 승인합니다.",

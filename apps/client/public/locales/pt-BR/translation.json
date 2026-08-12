@@ -1577,7 +1577,7 @@
         "overviewNodes": "Registro de ferramenta AI compartilhado|Sistemas externos|Servidor MCP remoto",
         "ragNodes": "Consulta Chat|Credencial de consulta|Índice externo|Indexador externo|ACL ativa e política de conteúdo|Credencial de escritor|não liga",
         "inboundNodes": "Configurações de chave de API|Chave ativa, espaço de trabalho, usuário e escopo de espaço|Taxa Redis e admissão simultânea|Política de ferramenta, ACL de página e política de conteúdo",
-        "outboundNodes": "Controle de implantação|Controle do espaço de trabalho|Encadernação de espaço|Política de grupo negar primeiro|Consentimento do usuário|Solicitação remota DNS-pinned"
+        "outboundNodes": "Controle de implantação|Controle do espaço de trabalho|Encadernação de espaço|Política de grupo negar primeiro|Consentimento do usuário|Listas exatas de origens permitidas|Solicitação remota DNS-pinned"
       },
       "securityOwner": {
         "spaceAdmin": "Administrador do espaço; operador aprova a origem",

@@ -1577,7 +1577,7 @@
         "overviewNodes": "Общий реестр AI tools|Внешние системы|Удалённый MCP-сервер",
         "ragNodes": "Запрос Chat|Query credential|Внешний индекс|Внешний индексатор|Live ACL и content policy|Writer credential|не вызывает",
         "inboundNodes": "Настройки API-ключей|Live scope ключа, workspace, пользователя и пространства|Redis-допуск по rate и concurrency|Tool policy, ACL страниц и content policy",
-        "outboundNodes": "Deployment gate|Workspace gate|Space binding|Deny-first group policy|Consent пользователя|DNS-pinned удалённый вызов"
+        "outboundNodes": "Deployment gate|Workspace gate|Space binding|Deny-first group policy|Consent пользователя|Точные allowlist origin|DNS-pinned удалённый вызов"
       },
       "securityOwner": {
         "spaceAdmin": "Администратор пространства; оператор разрешает origin",

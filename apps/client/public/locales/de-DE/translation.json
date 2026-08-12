@@ -1577,7 +1577,7 @@
         "overviewNodes": "Gemeinsame AI-Tool-Registrierung|Externe Systeme|Remote-MCP-Server",
         "ragNodes": "Chat-Abfrage|Anmeldeinformationen abfragen|Externer Index|Externer Indexer|Live-ACL und Inhaltsrichtlinie|Autorisierungsnachweis|ruft nicht an",
         "inboundNodes": "API-Schlüsseleinstellungen|Live-Schlüssel, Arbeitsbereich, Benutzer und Bereichsbereich|Redis-Rate und Parallelitätszulassung|Tool-Richtlinie, Seiten-ACL und Inhaltsrichtlinie",
-        "outboundNodes": "Bereitstellungskontrolle|Arbeitsplatzkontrolle|Raumbindung|Deny-First-Gruppenrichtlinie|Einwilligung des Nutzers|DNS-pinned Remote-Anfrage"
+        "outboundNodes": "Bereitstellungskontrolle|Arbeitsplatzkontrolle|Raumbindung|Deny-First-Gruppenrichtlinie|Einwilligung des Nutzers|Exakte Origin-Allowlists|DNS-pinned Remote-Anfrage"
       },
       "securityOwner": {
         "spaceAdmin": "Raumadministrator; Der Betreiber genehmigt die Herkunft",
