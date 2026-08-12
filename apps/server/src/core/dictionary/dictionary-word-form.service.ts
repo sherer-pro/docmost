@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
 } from '@nestjs/common';
 import { AiSpaceConfig } from '@docmost/db/types/entity.types';
@@ -154,7 +155,7 @@ export class DictionaryWordFormService {
       }
     }
 
-    if (lastError instanceof BadGatewayException) {
+    if (lastError instanceof HttpException) {
       throw lastError;
     }
     throw new BadGatewayException({
