@@ -158,6 +158,8 @@ export function AiPanel() {
   const queryClient = useQueryClient();
   const reduceMotion = useReducedMotion();
   const isCompactMobile = useMediaQuery("(max-width: 30em)");
+  const hasCoarsePointer = useMediaQuery("(pointer: coarse)");
+  const useLargeComposerTargets = isCompactMobile || hasCoarsePointer;
   const documentContext = useAtomValue(aiDocumentContextAtom);
   const user = useAtomValue(userAtom);
   const workspace = useAtomValue(workspaceAtom);
@@ -2068,45 +2070,63 @@ export function AiPanel() {
             gap="xs"
             wrap="nowrap"
             className={classes.composerFooter}
+            data-testid="ai-composer-footer"
+            data-busy={pendingRun ? "true" : undefined}
           >
-            {showComposerProfileControl && (
-              <Group
-                gap={4}
-                wrap="nowrap"
-                className={classes.composerProfileGroup}
-              >
-                {isCompactMobile ? (
-                  <Button
-                    variant="default"
-                    size="compact-sm"
-                    leftSection={
-                      selectedProfile ? (
-                        <AssistantProfileIcon
-                          icon={selectedProfile.icon}
-                          size={16}
-                        />
-                      ) : (
-                        <IconRobot size={16} />
-                      )
-                    }
-                    disabled={Boolean(pendingRun)}
-                    aria-label={t("ai.profiles.selectorLabel")}
-                    onClick={() => setProfilePickerOpened(true)}
-                    className={classes.composerProfileButton}
+            {pendingRun ? (
+              <>
+                <Text
+                  size="sm"
+                  c="dimmed"
+                  lineClamp={1}
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className={classes.composerRunStatus}
+                  data-testid="ai-composer-run-status"
+                >
+                  {pendingRun.status === "awaiting_approval"
+                    ? t("ai.agent.awaitingApproval")
+                    : t("ai.generating")}
+                </Text>
+                <Button
+                  size="compact-sm"
+                  color="red"
+                  variant="light"
+                  leftSection={<IconPlayerStop size={15} />}
+                  loading={cancelRun.isPending}
+                  disabled={Boolean(pendingRun.cancelRequestedAt)}
+                  className={classes.composerStopButton}
+                  onClick={() =>
+                    cancelRun.mutate(pendingRun.runId, {
+                      onError: (error) => {
+                        notifications.show({
+                          message: resolveAiErrorMessage(
+                            t,
+                            i18n,
+                            error?.["response"]?.data?.code,
+                          ),
+                          color: "red",
+                        });
+                      },
+                    })
+                  }
+                >
+                  {cancelRun.isPending || pendingRun.cancelRequestedAt
+                    ? t("ai.stopping")
+                    : t("ai.stop")}
+                </Button>
+              </>
+            ) : (
+              <>
+                {showComposerProfileControl && (
+                  <Group
+                    gap={4}
+                    wrap="nowrap"
+                    className={classes.composerProfileGroup}
                   >
-                    <span className={classes.composerResponsiveLabel}>
-                      {currentProfileLabel}
-                    </span>
-                  </Button>
-                ) : (
-                  <>
-                    <Menu
-                      position="top-start"
-                      withinPortal
-                      offset={8}
-                      onOpen={() => setComposerProfileQuery("")}
-                    >
-                      <Menu.Target>
+                    {isCompactMobile ? (
+                      <Tooltip label={currentProfileLabel} withArrow>
                         <Button
                           variant="default"
                           size="compact-sm"
@@ -2116,415 +2136,416 @@ export function AiPanel() {
                                 icon={selectedProfile.icon}
                                 size={16}
                               />
-                            ) : activeConversation?.assistantProfile.icon ? (
-                              <AssistantProfileIcon
-                                icon={activeConversation.assistantProfile.icon}
-                                size={16}
-                              />
                             ) : (
                               <IconRobot size={16} />
                             )
                           }
-                          rightSection={<IconChevronDown size={13} />}
-                          disabled={Boolean(pendingRun)}
                           aria-label={t("ai.profiles.selectorLabel")}
+                          onClick={() => setProfilePickerOpened(true)}
                           className={classes.composerProfileButton}
                         >
-                          <span className={classes.composerProfileLabel}>
+                          <span className={classes.composerResponsiveLabel}>
                             {currentProfileLabel}
                           </span>
                         </Button>
-                      </Menu.Target>
-                      <Menu.Dropdown className={classes.composerProfileMenu}>
-                        <Menu.Label>
-                          {t("ai.profiles.selectorLabel")}
-                        </Menu.Label>
-                        {profileOptions.length > 6 && (
-                          <TextInput
-                            value={composerProfileQuery}
-                            onChange={(event) =>
-                              setComposerProfileQuery(event.currentTarget.value)
-                            }
-                            placeholder={t("ai.profiles.search")}
-                            leftSection={<IconSearch size={14} />}
-                            size="xs"
-                            mx="xs"
-                            mb="xs"
-                            onKeyDown={(event) => event.stopPropagation()}
-                          />
-                        )}
-                        {visibleComposerProfileOptions.map((option) => {
-                          const profile = allAvailableProfiles.find(
-                            (item) => item.id === option.value,
-                          );
-
-                          return (
-                            <Menu.Item
-                              key={option.value}
+                      </Tooltip>
+                    ) : (
+                      <Menu
+                        position="top-start"
+                        withinPortal
+                        offset={8}
+                        onOpen={() => setComposerProfileQuery("")}
+                      >
+                        <Menu.Target>
+                          <Tooltip label={currentProfileLabel} withArrow>
+                            <Button
+                              variant="default"
+                              size="compact-sm"
                               leftSection={
-                                profile ? (
+                                selectedProfile ? (
                                   <AssistantProfileIcon
-                                    icon={profile.icon}
+                                    icon={selectedProfile.icon}
+                                    size={16}
+                                  />
+                                ) : activeConversation?.assistantProfile
+                                    .icon ? (
+                                  <AssistantProfileIcon
+                                    icon={
+                                      activeConversation.assistantProfile.icon
+                                    }
                                     size={16}
                                   />
                                 ) : (
                                   <IconRobot size={16} />
                                 )
                               }
-                              rightSection={
-                                option.value === currentProfileValue ? (
-                                  <IconCheck size={15} />
-                                ) : null
-                              }
-                              disabled={option.disabled}
-                              data-selected={
-                                option.value === currentProfileValue
-                              }
-                              className={classes.composerProfileMenuItem}
-                              onClick={() => {
-                                if (option.value !== currentProfileValue) {
-                                  chooseAssistantProfile(option.value);
-                                }
-                              }}
+                              rightSection={<IconChevronDown size={13} />}
+                              disabled={Boolean(pendingRun)}
+                              aria-label={t("ai.profiles.selectorLabel")}
+                              className={classes.composerProfileButton}
                             >
-                              {option.label}
-                            </Menu.Item>
-                          );
-                        })}
-                        {visibleComposerProfileOptions.length === 0 && (
-                          <Text size="xs" c="dimmed" ta="center" py="sm">
-                            {t("ai.profiles.noneFound")}
-                          </Text>
-                        )}
-                      </Menu.Dropdown>
-                    </Menu>
+                              <span className={classes.composerProfileLabel}>
+                                {currentProfileLabel}
+                              </span>
+                            </Button>
+                          </Tooltip>
+                        </Menu.Target>
+                        <Menu.Dropdown className={classes.composerProfileMenu}>
+                          <Menu.Label>
+                            {t("ai.profiles.selectorLabel")}
+                          </Menu.Label>
+                          {profileOptions.length > 6 && (
+                            <TextInput
+                              value={composerProfileQuery}
+                              onChange={(event) =>
+                                setComposerProfileQuery(
+                                  event.currentTarget.value,
+                                )
+                              }
+                              placeholder={t("ai.profiles.search")}
+                              leftSection={<IconSearch size={14} />}
+                              size="xs"
+                              mx="xs"
+                              mb="xs"
+                              onKeyDown={(event) => event.stopPropagation()}
+                            />
+                          )}
+                          {visibleComposerProfileOptions.map((option) => {
+                            const profile = allAvailableProfiles.find(
+                              (item) => item.id === option.value,
+                            );
 
-                    <Menu position="top-end" withinPortal>
-                      <Menu.Target>
-                        <AccessibleActionIcon
-                          variant="default"
-                          size={32}
-                          label={t("ai.profiles.preferences")}
-                          disabled={updateProfilePreferences.isPending}
-                          className={classes.composerProfilePreferences}
-                        >
-                          <IconDots size={16} />
-                        </AccessibleActionIcon>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        {selectedProfile && (
-                          <>
+                            return (
+                              <Menu.Item
+                                key={option.value}
+                                leftSection={
+                                  profile ? (
+                                    <AssistantProfileIcon
+                                      icon={profile.icon}
+                                      size={16}
+                                    />
+                                  ) : (
+                                    <IconRobot size={16} />
+                                  )
+                                }
+                                rightSection={
+                                  option.value === currentProfileValue ? (
+                                    <IconCheck size={15} />
+                                  ) : null
+                                }
+                                disabled={option.disabled}
+                                data-selected={
+                                  option.value === currentProfileValue
+                                }
+                                className={classes.composerProfileMenuItem}
+                                onClick={() => {
+                                  if (option.value !== currentProfileValue) {
+                                    chooseAssistantProfile(option.value);
+                                  }
+                                }}
+                              >
+                                {option.label}
+                              </Menu.Item>
+                            );
+                          })}
+                          {visibleComposerProfileOptions.length === 0 && (
+                            <Text size="xs" c="dimmed" ta="center" py="sm">
+                              {t("ai.profiles.noneFound")}
+                            </Text>
+                          )}
+                          {(selectedProfile ||
+                            (profilePreferencesQuery.data?.hiddenProfileIds
+                              .length ?? 0) > 0) && (
+                            <>
+                              <Menu.Divider />
+                              <Menu.Label>
+                                {t("ai.profiles.preferences")}
+                              </Menu.Label>
+                            </>
+                          )}
+                          {selectedProfile && (
+                            <>
+                              <Menu.Item
+                                leftSection={<IconStar size={15} />}
+                                disabled={updateProfilePreferences.isPending}
+                                onClick={() =>
+                                  togglePreferredProfile(selectedProfile.id)
+                                }
+                              >
+                                {profilePreferencesQuery.data
+                                  ?.preferredProfileId === selectedProfile.id
+                                  ? t("ai.profiles.clearPreferred")
+                                  : t("ai.profiles.makePreferred")}
+                              </Menu.Item>
+                              <Menu.Item
+                                leftSection={<IconEyeOff size={15} />}
+                                disabled={updateProfilePreferences.isPending}
+                                onClick={() => hideProfile(selectedProfile.id)}
+                              >
+                                {t("ai.profiles.hide")}
+                              </Menu.Item>
+                            </>
+                          )}
+                          {(profilePreferencesQuery.data?.hiddenProfileIds
+                            .length ?? 0) > 0 && (
                             <Menu.Item
-                              leftSection={<IconStar size={15} />}
-                              onClick={() =>
-                                togglePreferredProfile(selectedProfile.id)
-                              }
+                              leftSection={<IconEye size={15} />}
+                              disabled={updateProfilePreferences.isPending}
+                              onClick={showHiddenProfiles}
                             >
-                              {profilePreferencesQuery.data
-                                ?.preferredProfileId === selectedProfile.id
-                                ? t("ai.profiles.clearPreferred")
-                                : t("ai.profiles.makePreferred")}
+                              {t("ai.profiles.showHidden")}
                             </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconEyeOff size={15} />}
-                              onClick={() => hideProfile(selectedProfile.id)}
-                            >
-                              {t("ai.profiles.hide")}
-                            </Menu.Item>
-                          </>
-                        )}
-                        {(profilePreferencesQuery.data?.hiddenProfileIds
-                          .length ?? 0) > 0 && (
-                          <Menu.Item
-                            leftSection={<IconEye size={15} />}
-                            onClick={showHiddenProfiles}
-                          >
-                            {t("ai.profiles.showHidden")}
-                          </Menu.Item>
-                        )}
-                      </Menu.Dropdown>
-                    </Menu>
-                  </>
+                          )}
+                        </Menu.Dropdown>
+                      </Menu>
+                    )}
+                  </Group>
                 )}
 
-                <Box
-                  className={classes.composerFooterDivider}
-                  aria-hidden="true"
-                />
-              </Group>
-            )}
-
-            {isCompactMobile ? (
-              <Tooltip label={t("ai.composer.templates")} withArrow>
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconSparkles size={16} />}
-                  disabled={Boolean(pendingRun)}
-                  className={classes.composerFooterButton}
-                  aria-label={t("ai.composer.templates")}
-                  onClick={() => setQuickCommandsOpened(true)}
-                >
-                  <span className={classes.composerResponsiveLabel}>
-                    {t("ai.composer.templates")}
-                  </span>
-                </Button>
-              </Tooltip>
-            ) : (
-              <Menu position="top-start" withinPortal>
-                <Menu.Target>
+                {isCompactMobile ? (
                   <Tooltip label={t("ai.composer.templates")} withArrow>
                     <Button
                       variant="subtle"
                       size="compact-sm"
                       leftSection={<IconSparkles size={16} />}
-                      rightSection={<IconChevronDown size={13} />}
                       disabled={Boolean(pendingRun)}
                       className={classes.composerFooterButton}
                       aria-label={t("ai.composer.templates")}
+                      onClick={() => setQuickCommandsOpened(true)}
                     >
                       <span className={classes.composerResponsiveLabel}>
                         {t("ai.composer.templates")}
                       </span>
                     </Button>
                   </Tooltip>
-                </Menu.Target>
-                <Menu.Dropdown className={classes.quickCommandsMenu}>
-                  <TextInput
-                    value={quickCommandQuery}
-                    onChange={(event) =>
-                      setQuickCommandQuery(event.currentTarget.value)
-                    }
-                    placeholder={t("ai.ux.searchCommands")}
-                    leftSection={<IconSearch size={14} />}
-                    size="xs"
-                    mb="xs"
-                    onKeyDown={(event) => event.stopPropagation()}
-                  />
-                  {visibleQuickCommands.map((command) => (
-                    <Tooltip
-                      key={command.id}
-                      label={command.description || command.prompt}
-                      position="right"
-                      withArrow
-                    >
-                      <Menu.Item
-                        leftSection={<IconSparkles size={15} />}
-                        rightSection={
-                          <Badge size="xs" variant="light" color="gray">
-                            {customQuickCommandIds.has(command.id)
-                              ? t("ai.ux.customCommand")
-                              : t("ai.ux.builtInCommand")}
-                          </Badge>
+                ) : (
+                  <Menu position="top-start" withinPortal>
+                    <Menu.Target>
+                      <Tooltip label={t("ai.composer.templates")} withArrow>
+                        <Button
+                          variant="subtle"
+                          size="compact-sm"
+                          leftSection={<IconSparkles size={16} />}
+                          rightSection={<IconChevronDown size={13} />}
+                          disabled={Boolean(pendingRun)}
+                          className={classes.composerFooterButton}
+                          aria-label={t("ai.composer.templates")}
+                        >
+                          <span className={classes.composerResponsiveLabel}>
+                            {t("ai.composer.templates")}
+                          </span>
+                        </Button>
+                      </Tooltip>
+                    </Menu.Target>
+                    <Menu.Dropdown className={classes.quickCommandsMenu}>
+                      <TextInput
+                        value={quickCommandQuery}
+                        onChange={(event) =>
+                          setQuickCommandQuery(event.currentTarget.value)
                         }
-                        onClick={() => handleQuickCommand(command.prompt)}
-                        aria-description={command.description || command.prompt}
-                      >
-                        {command.label}
-                      </Menu.Item>
-                    </Tooltip>
-                  ))}
-                  {visibleQuickCommands.length === 0 && (
-                    <Text size="xs" c="dimmed" ta="center" py="sm">
-                      {t("ai.ux.noCommandsFound")}
+                        placeholder={t("ai.ux.searchCommands")}
+                        leftSection={<IconSearch size={14} />}
+                        size="xs"
+                        mb="xs"
+                        onKeyDown={(event) => event.stopPropagation()}
+                      />
+                      {visibleQuickCommands.map((command) => (
+                        <Tooltip
+                          key={command.id}
+                          label={command.description || command.prompt}
+                          position="right"
+                          withArrow
+                        >
+                          <Menu.Item
+                            leftSection={<IconSparkles size={15} />}
+                            rightSection={
+                              <Badge size="xs" variant="light" color="gray">
+                                {customQuickCommandIds.has(command.id)
+                                  ? t("ai.ux.customCommand")
+                                  : t("ai.ux.builtInCommand")}
+                              </Badge>
+                            }
+                            onClick={() => handleQuickCommand(command.prompt)}
+                            aria-description={
+                              command.description || command.prompt
+                            }
+                          >
+                            {command.label}
+                          </Menu.Item>
+                        </Tooltip>
+                      ))}
+                      {visibleQuickCommands.length === 0 && (
+                        <Text size="xs" c="dimmed" ta="center" py="sm">
+                          {t("ai.ux.noCommandsFound")}
+                        </Text>
+                      )}
+                    </Menu.Dropdown>
+                  </Menu>
+                )}
+
+                <Menu position="top-end" withinPortal>
+                  <Menu.Target>
+                    <AccessibleActionIcon
+                      label={t("ai.composer.formatting")}
+                      variant="subtle"
+                      size={useLargeComposerTargets ? 44 : 32}
+                      minTargetSize={useLargeComposerTargets ? 44 : 32}
+                      className={classes.composerInlineAction}
+                    >
+                      <IconCode size={17} />
+                    </AccessibleActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown className={classes.composerMenu}>
+                    <Menu.Label>{t("ai.composer.formatting")}</Menu.Label>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleBold().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.bold")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleItalic().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.italic")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleStrike().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.strikethrough")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleCode().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.inlineCode")}
+                    </Menu.Item>
+                    <Menu.Item onClick={openMarkdownLink}>
+                      {t("ai.composer.addLink")}
+                    </Menu.Item>
+                    <Menu.Divider />
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor
+                            .chain()
+                            .focus()
+                            .toggleHeading({ level: 1 })
+                            .run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.heading")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleBulletList().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.bulletList")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleOrderedList().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.orderedList")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleTaskList().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.taskList")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleBlockquote().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.quote")}
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() =>
+                        runComposerCommand((editor) =>
+                          editor.chain().focus().toggleCodeBlock().run(),
+                        )
+                      }
+                    >
+                      {t("ai.composer.codeBlock")}
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+
+                <Box className={classes.composerStatus}>
+                  {draftStatus === "error" ? (
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      size="compact-xs"
+                      onClick={() => void retryDraftSave()}
+                    >
+                      {t("ai.ux.draftSaveFailed")}
+                    </Button>
+                  ) : (
+                    <Text size="xs" c="dimmed" lineClamp={1} role="status">
+                      {draftStatus === "saving" ? (
+                        t("ai.ux.draftSaving")
+                      ) : draftStatus === "saved" ? (
+                        t("ai.ux.draftSaved")
+                      ) : (
+                        <>
+                          <span className={classes.sendShortcutFull}>
+                            {t("ai.composer.sendShortcut")}
+                          </span>
+                          <span className={classes.sendShortcutShort}>
+                            {t("ai.composer.sendShortcutShort")}
+                          </span>
+                        </>
+                      )}
                     </Text>
                   )}
-                </Menu.Dropdown>
-              </Menu>
-            )}
+                </Box>
 
-            <Menu position="top-end" withinPortal>
-              <Menu.Target>
                 <AccessibleActionIcon
-                  label={t("ai.composer.formatting")}
-                  variant="subtle"
-                  size={32}
-                  className={classes.composerInlineAction}
+                  label={t("ai.send")}
+                  size={useLargeComposerTargets ? 44 : 40}
+                  minTargetSize={useLargeComposerTargets ? 44 : 40}
+                  radius="xl"
+                  variant="filled"
+                  className={classes.sendButton}
+                  disabled={
+                    !draft.trim() ||
+                    sendMessage.isPending ||
+                    !selectedFilesAreReady
+                  }
+                  loading={sendMessage.isPending}
+                  onClick={() => void submit(draft)}
                 >
-                  <IconCode size={17} />
+                  <IconSend size={18} />
                 </AccessibleActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown className={classes.composerMenu}>
-                <Menu.Label>{t("ai.composer.formatting")}</Menu.Label>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleBold().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.bold")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleItalic().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.italic")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleStrike().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.strikethrough")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleCode().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.inlineCode")}
-                </Menu.Item>
-                <Menu.Item onClick={openMarkdownLink}>
-                  {t("ai.composer.addLink")}
-                </Menu.Item>
-                <Menu.Divider />
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleHeading({ level: 1 }).run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.heading")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleBulletList().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.bulletList")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleOrderedList().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.orderedList")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleTaskList().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.taskList")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleBlockquote().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.quote")}
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() =>
-                    runComposerCommand((editor) =>
-                      editor.chain().focus().toggleCodeBlock().run(),
-                    )
-                  }
-                >
-                  {t("ai.composer.codeBlock")}
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-
-            <Box className={classes.composerStatus}>
-              {pendingRun ? (
-                <Text size="xs" c="dimmed" lineClamp={1}>
-                  {pendingRun.status === "awaiting_approval"
-                    ? t("ai.agent.awaitingApproval")
-                    : t("ai.generating")}
-                </Text>
-              ) : draftStatus === "error" ? (
-                <Button
-                  variant="subtle"
-                  color="red"
-                  size="compact-xs"
-                  onClick={() => void retryDraftSave()}
-                >
-                  {t("ai.ux.draftSaveFailed")}
-                </Button>
-              ) : (
-                <Text size="xs" c="dimmed" lineClamp={1} role="status">
-                  {draftStatus === "saving" ? (
-                    t("ai.ux.draftSaving")
-                  ) : draftStatus === "saved" ? (
-                    t("ai.ux.draftSaved")
-                  ) : (
-                    <>
-                      <span className={classes.sendShortcutFull}>
-                        {t("ai.composer.sendShortcut")}
-                      </span>
-                      <span className={classes.sendShortcutShort}>
-                        {t("ai.composer.sendShortcutShort")}
-                      </span>
-                    </>
-                  )}
-                </Text>
-              )}
-            </Box>
-
-            {pendingRun ? (
-              <Button
-                size="compact-sm"
-                color="red"
-                variant="light"
-                leftSection={<IconPlayerStop size={15} />}
-                loading={cancelRun.isPending}
-                disabled={Boolean(pendingRun.cancelRequestedAt)}
-                onClick={() =>
-                  cancelRun.mutate(pendingRun.runId, {
-                    onError: (error) => {
-                      notifications.show({
-                        message: resolveAiErrorMessage(
-                          t,
-                          i18n,
-                          error?.["response"]?.data?.code,
-                        ),
-                        color: "red",
-                      });
-                    },
-                  })
-                }
-              >
-                {cancelRun.isPending || pendingRun.cancelRequestedAt
-                  ? t("ai.stopping")
-                  : t("ai.stop")}
-              </Button>
-            ) : (
-              <AccessibleActionIcon
-                label={t("ai.send")}
-                size={40}
-                minTargetSize={40}
-                radius="xl"
-                variant="filled"
-                className={classes.sendButton}
-                disabled={
-                  !draft.trim() ||
-                  sendMessage.isPending ||
-                  !selectedFilesAreReady ||
-                  Boolean(pendingRun)
-                }
-                loading={sendMessage.isPending}
-                onClick={() => void submit(draft)}
-              >
-                <IconSend size={18} />
-              </AccessibleActionIcon>
+              </>
             )}
           </Group>
         </AiComposerShell>

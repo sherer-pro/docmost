@@ -37,7 +37,7 @@ export default defineConfig({
     },
     {
       name: "chromium-en-desktop",
-      testMatch: /localization-responsive\.spec\.ts/,
+      testMatch: /(?:localization-responsive|streaming-recovery)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, locale: "en-US" },
     },
     {
