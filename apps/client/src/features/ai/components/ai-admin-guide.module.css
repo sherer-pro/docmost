@@ -7,28 +7,86 @@
   );
 }
 
-.surfaceCard {
-  height: 100%;
-}
-
-.heroContent {
+.heroContent,
+.copyValue {
   min-width: 0;
 }
 
-.settingsLink {
-  min-height: rem(42px);
-  height: auto;
-  padding-block: rem(9px);
+.navLink {
+  padding: rem(7px) rem(11px);
+  color: var(--mantine-color-text);
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-6)
+  );
+  border-radius: var(--mantine-radius-xl);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.settingsLink :global(.mantine-Button-label) {
-  white-space: normal;
-  line-height: 1.25;
-  text-align: start;
+.navLink:hover,
+.navLink[aria-current="location"] {
+  color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-3));
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    var(--mantine-color-dark-5)
+  );
 }
 
-.stepNumber {
-  flex: 0 0 auto;
-  font-size: var(--mantine-font-size-xs);
-  font-weight: 700;
+.taskCard {
+  height: 100%;
+}
+
+.taskFacts {
+  display: grid;
+  grid-template-columns: minmax(rem(78px), auto) minmax(0, 1fr);
+  gap: rem(7px) var(--mantine-spacing-sm);
+  align-items: start;
+}
+
+.anchorSection {
+  scroll-margin-top: calc(var(--mantine-spacing-xl) * 2);
+}
+
+.diagramCard {
+  overflow: hidden;
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.instructionBlock {
+  display: grid;
+  gap: var(--mantine-spacing-xs);
+  align-content: start;
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+  border-radius: var(--mantine-radius-sm);
+}
+
+.copyValue code {
+  display: block;
+  max-width: 100%;
+  margin-top: rem(3px);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 36em) {
+  .hero > div {
+    align-items: flex-start;
+  }
+
+  .taskFacts {
+    grid-template-columns: 1fr;
+    gap: rem(4px);
+  }
+
+  .taskFacts p:nth-of-type(even) {
+    margin-bottom: var(--mantine-spacing-xs);
+  }
 }

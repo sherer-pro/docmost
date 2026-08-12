@@ -1,0 +1,105 @@
+.figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.frame {
+  position: relative;
+  min-width: 0;
+}
+
+.diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.scrollOnNarrow svg {
+  min-width: rem(560px);
+}
+
+.interactive {
+  cursor: zoom-in;
+}
+
+.expandButton {
+  position: absolute;
+  inset-block-start: var(--mantine-spacing-xs);
+  inset-inline-end: var(--mantine-spacing-xs);
+  z-index: 1;
+  box-shadow: var(--mantine-shadow-xs);
+}
+
+.caption {
+  margin-top: var(--mantine-spacing-xs);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  line-height: var(--mantine-line-height-sm);
+}
+
+.textAlternative {
+  margin-top: var(--mantine-spacing-sm);
+}
+
+.error {
+  width: 100%;
+  padding: var(--mantine-spacing-md);
+  color: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-4));
+  background: light-dark(
+    var(--mantine-color-red-0),
+    var(--mantine-color-dark-6)
+  );
+  border-radius: var(--mantine-radius-sm);
+  text-align: center;
+}
+
+.modalDiagram[role="img"] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start !important;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.modalDiagram.modalDiagram svg {
+  flex: 0 0 rem(880px);
+  width: rem(880px) !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+@media (min-width: 48em) {
+  .scrollOnNarrow svg {
+    min-width: 0;
+  }
+
+  .modalDiagram[role="img"] {
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .modalDiagram.modalDiagram svg {
+    flex: 0 1 auto;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+  }
+}
+
+@media print {
+  .expandButton {
+    display: none;
+  }
+}

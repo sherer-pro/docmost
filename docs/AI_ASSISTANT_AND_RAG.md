@@ -1,5 +1,7 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
+<!-- ai-admin-guide-contract-version: 1 -->
+
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
 with external RAG indexes and assistants. It also separates six related but
@@ -32,13 +34,36 @@ setup guide, while `RAG_API.md` is the external synchronization wire contract;
 those documents should link here instead of copying changing implementation
 details.
 
-The administrator-facing summary of this document is embedded in Docmost at
-`/settings/ai/guide` and implemented in
-`apps/client/src/features/ai/components/ai-admin-guide.tsx` with the
-`ai.adminGuide.*` locale keys. A change to AI/RAG/MCP behavior, configuration,
-contracts, routes, limits, security boundaries, tools, or recovery procedures
-must update both the applicable Markdown documentation and that embedded guide
-in the same change.
+The administrator and operator projection of this document is embedded in
+Docmost at `/settings/ai/guide`. It provides stable deep links for the
+assistant (`#assistant`), query-time retrieval (`#retrieval`), external RAG API
+clients (`#rag-api`), built-in Open WebUI synchronization (`#rag-sync`),
+inbound MCP (`#inbound-mcp`), outbound MCP (`#outbound-mcp`), security
+boundaries (`#security`), and recovery (`#troubleshooting`). Each scenario has
+a short task card plus expandable setup, success, and rollback instructions.
+The guide also includes copyable public routes and deployment controls, a
+credential matrix, and four sanitized, strict-mode Mermaid diagrams with
+semantic step-by-step alternatives.
+
+The structured UI contract lives in
+`apps/client/src/features/ai/components/ai-admin-guide-content.ts`; stable
+anchors, the explicit `ai.adminGuide.*` locale manifest, and the shared contract
+version live in `ai-admin-guide-contract.json`. The version in that manifest
+must match the `ai-admin-guide-contract-version` marker above. A change to
+production AI/RAG/RAG Sync/MCP/API-key logic, API contracts, related migrations,
+or environment contracts must update this document, the structured guide, the
+manifest version, and all supported locales in the same pull request. The
+`check:ai-docs` gate enforces that coupling when CI supplies
+`AI_GUIDE_BASE_SHA` and `AI_GUIDE_HEAD_SHA`; without Git history it still checks
+routes, flags, anchors, manifest coverage, localized field structure, and the
+matching contract version.
+
+The guide deliberately keeps the paths separate: query-time retrieval is an
+answer-time search adapter, `/api/rag/*` is an API-key-only export surface for
+external indexers, and built-in RAG Sync reads through internal Docmost services
+and never calls that public API. The RAG API may stream an attachment only after
+repeating its access and policy checks; inbound `/mcp` exposes attachment
+metadata tools but never returns binary attachment bodies.
 
 ## 1. System components and boundaries
 

@@ -9,7 +9,12 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconArrowLeft, IconLock, IconMapOff } from "@tabler/icons-react";
+import {
+  IconArrowLeft,
+  IconBook2,
+  IconLock,
+  IconMapOff,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -40,6 +45,15 @@ const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
   "ragSync",
   "limits",
 ];
+
+function getAiGuideAnchorForSpaceSection(
+  section: Exclude<AiSpaceSettingsSection, "all">,
+): string {
+  if (section === "retrieval") return "retrieval";
+  if (section === "ragSync") return "rag-sync";
+  if (section === "externalTools") return "outbound-mcp";
+  return "assistant";
+}
 
 export default function AiSpaceSettingsPage() {
   const { t } = useTranslation();
@@ -150,14 +164,37 @@ export default function AiSpaceSettingsPage() {
               : "ai.integrations.backToSpace",
           )}
         </Button>
-        <Group mt="xs" gap="xs">
-          <Title order={1} size="h2">
-            {space.name}
-          </Title>
-          {dirty && (
-            <Badge color="orange" variant="light">
-              {t("ai.integrations.unsaved")}
-            </Badge>
+        <Group mt="xs" gap="sm" justify="space-between" align="flex-start">
+          <Group gap="xs">
+            <Title order={1} size="h2">
+              {space.name}
+            </Title>
+            {dirty && (
+              <Badge color="orange" variant="light">
+                {t("ai.integrations.unsaved")}
+              </Badge>
+            )}
+          </Group>
+          {isWorkspaceAdmin && (
+            <Button
+              component={Link}
+              to={`/settings/ai/guide#${getAiGuideAnchorForSpaceSection(
+                section,
+              )}`}
+              variant="light"
+              size="sm"
+              leftSection={<IconBook2 size={16} />}
+              onClick={(event) => {
+                if (
+                  dirty &&
+                  !window.confirm(t("ai.integrations.unsavedNavigationConfirm"))
+                ) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              {t("ai.adminGuide.openRelevantGuide")}
+            </Button>
           )}
         </Group>
         <Text size="sm" c="dimmed">
