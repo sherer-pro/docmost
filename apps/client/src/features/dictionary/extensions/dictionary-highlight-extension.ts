@@ -52,7 +52,7 @@ interface DictionaryDecorationBatch {
 
 const FULL_REBUILD_MIN_CHANGED_SIZE = 5_000;
 const FULL_REBUILD_CHANGED_RATIO = 0.5;
-const EXCLUDED_MARK_NAMES = new Set(["code", "link"]);
+const EXCLUDED_INLINE_MARK_NAMES = new Set(["code", "link"]);
 
 export const dictionaryHighlightPluginKey =
   new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
@@ -66,7 +66,11 @@ function collectTextNodes(
 
   node.descendants((child, pos) => {
     if (child.isText) {
-      if (child.marks.some((mark) => EXCLUDED_MARK_NAMES.has(mark.type.name))) {
+      if (
+        child.marks.some((mark) =>
+          EXCLUDED_INLINE_MARK_NAMES.has(mark.type.name),
+        )
+      ) {
         index += 1;
         return;
       }
@@ -287,7 +291,7 @@ function collectTextBlocks(doc: PMNode): NodeWithPos[] {
 }
 
 function isHighlightableTextBlock(node: PMNode): boolean {
-  return node.isTextblock && node.type.spec.code !== true;
+  return node.isTextblock;
 }
 
 function collectChangedTextBlocks(

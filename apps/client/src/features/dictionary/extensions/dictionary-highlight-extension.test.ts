@@ -232,7 +232,7 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
-  it("does not highlight terms inside links or code", () => {
+  it("highlights code blocks while excluding links and inline code", () => {
     const editor = new Editor({
       extensions: [
         StarterKit,
@@ -248,6 +248,12 @@ describe("DictionaryHighlightExtension", () => {
     try {
       expect(
         dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(2);
+      expect(
+        editor.view.dom.querySelectorAll("p .dictionary-highlight"),
+      ).toHaveLength(1);
+      expect(
+        editor.view.dom.querySelectorAll("pre code .dictionary-highlight"),
       ).toHaveLength(1);
     } finally {
       editor.destroy();
@@ -337,6 +343,41 @@ describe("DictionaryHighlightExtension", () => {
         type: "doc",
         content: Array.from({ length: 1_001 }, () => ({
           type: "paragraph",
+          content: [{ type: "text", text: "Alpha" }],
+        })),
+      },
+    });
+
+    try {
+      expect(getDictionaryHighlightScanCount(editor.state)).toBe(1_001);
+
+      editor.commands.insertContentAt(2, "x");
+
+      expect(getDictionaryHighlightScanCount(editor.state)).toBeLessThanOrEqual(
+        2,
+      );
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1_000);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scans only the edited code block in a large code document", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: {
+        type: "doc",
+        content: Array.from({ length: 1_001 }, () => ({
+          type: "codeBlock",
+          attrs: { language: null },
           content: [{ type: "text", text: "Alpha" }],
         })),
       },
