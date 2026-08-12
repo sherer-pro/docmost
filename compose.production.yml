@@ -1,7 +1,10 @@
+name: "${COMPOSE_PROJECT_NAME:-docmost}"
+
 x-docmost-environment: &docmost-environment
-  APP_URL: "${APP_URL:-http://localhost:3000}"
+  NODE_ENV: production
+  APP_URL: "${APP_URL:?Set APP_URL to the public HTTPS origin}"
   APP_SECRET_FILE: /run/secrets/docmost_app_secret
-  TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
+  TRUSTED_PROXIES: "${TRUSTED_PROXIES:?Set TRUSTED_PROXIES to the controlled ingress addresses}"
   EMBED_ALLOWED_ORIGINS: "${EMBED_ALLOWED_ORIGINS:-}"
   AI_PROVIDER_ALLOWED_ORIGINS: "${AI_PROVIDER_ALLOWED_ORIGINS:-}"
   AI_RETRIEVAL_ALLOWED_ORIGINS: "${AI_RETRIEVAL_ALLOWED_ORIGINS:-}"
@@ -32,16 +35,16 @@ x-docmost-environment: &docmost-environment
   MCP_MAX_CONCURRENT: "${MCP_MAX_CONCURRENT:-4}"
   DATABASE_URL_FILE: /run/secrets/docmost_database_url
   DATABASE_MAX_POOL: "${DATABASE_MAX_POOL:-10}"
-  DATABASE_MIGRATION_MODE: "${DATABASE_MIGRATION_MODE:-auto}"
+  DATABASE_MIGRATION_MODE: external
   REDIS_URL_FILE: /run/secrets/docmost_redis_url
   JWT_TOKEN_EXPIRES_IN: "${JWT_TOKEN_EXPIRES_IN:-30d}"
-  COLLAB_URL: "${COLLAB_URL:-http://localhost:3001}"
-  COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:3001}"
+  COLLAB_URL: "${COLLAB_URL:?Set COLLAB_URL to the public collaboration origin}"
+  COLLAB_INTERNAL_URL: http://collab:3001
   COLLAB_INTERNAL_SECRET_FILE: /run/secrets/docmost_collab_internal_secret
   COLLAB_PORT: "${COLLAB_PORT:-3001}"
   COLLAB_DISABLE_REDIS: "${COLLAB_DISABLE_REDIS:-false}"
   COLLAB_SHOW_STATS: "${COLLAB_SHOW_STATS:-false}"
-  AUTH_RATE_LIMIT_STORAGE: "${AUTH_RATE_LIMIT_STORAGE:-redis}"
+  AUTH_RATE_LIMIT_STORAGE: redis
   STORAGE_DRIVER: "${STORAGE_DRIVER:-local}"
   FILE_UPLOAD_SIZE_LIMIT: "${FILE_UPLOAD_SIZE_LIMIT:-50mb}"
   FILE_IMPORT_SIZE_LIMIT: "${FILE_IMPORT_SIZE_LIMIT:-200mb}"
@@ -61,7 +64,7 @@ x-docmost-environment: &docmost-environment
   SMTP_IGNORETLS: "${SMTP_IGNORETLS:-false}"
   WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"
   WEB_PUSH_SUBJECT: "${WEB_PUSH_SUBJECT:-}"
-  DRAWIO_URL: "${DRAWIO_URL:-}"
+  DRAWIO_URL: "${DRAWIO_URL:?Set DRAWIO_URL to an approved absolute HTTPS URL}"
   CLOUD: "${CLOUD:-false}"
   SUBDOMAIN_HOST: "${SUBDOMAIN_HOST:-}"
   DISABLE_TELEMETRY: "${DISABLE_TELEMETRY:-true}"
@@ -70,7 +73,7 @@ x-docmost-environment: &docmost-environment
   SEARCH_DRIVER: "${SEARCH_DRIVER:-database}"
   TYPESENSE_URL: "${TYPESENSE_URL:-http://localhost:8108}"
   TYPESENSE_LOCALE: "${TYPESENSE_LOCALE:-en}"
-  PDF_CHROMIUM_EXECUTABLE_PATH: "${PDF_CHROMIUM_EXECUTABLE_PATH:-/usr/bin/chromium}"
+  PDF_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
   PDF_RENDER_TIMEOUT_MS: "${PDF_RENDER_TIMEOUT_MS:-60000}"
   DEBUG_MODE: "${DEBUG_MODE:-false}"
   DEBUG_DB: "${DEBUG_DB:-false}"
@@ -82,66 +85,19 @@ x-docmost-secrets: &docmost-secrets
   - docmost_database_url
   - docmost_redis_url
 
-services:
-  docmost:
-    image: docmost-local:dev
-    build:
-      context: .
-      dockerfile: Dockerfile
-    pull_policy: never
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment: *docmost-environment
-    secrets: *docmost-secrets
-    ports:
-      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    restart: unless-stopped
-    networks:
-      - default
-      - edge
-    volumes:
-      - docmost:/app/data/storage
+x-app-image: &app-image
+  image: "${DOCMOST_IMAGE:?Set DOCMOST_IMAGE to image@sha256:digest}"
+  pull_policy: always
 
-  collab:
-    image: docmost-local:dev
-    pull_policy: never
+services:
+  image-preflight:
+    <<: *app-image
     command:
       - node
-      - apps/server/dist/apps/server/src/collaboration/server/collab-main.js
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment: *docmost-environment
-    secrets: *docmost-secrets
-    ports:
-      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${COLLAB_PORT:-3001}:${COLLAB_PORT:-3001}"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:$${COLLAB_PORT:-3001}/api/health",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    restart: unless-stopped
-    networks:
-      - default
-      - edge
-    volumes:
-      - docmost:/app/data/storage
+      - apps/server/dist/apps/server/src/database/production-image-preflight.js
+    environment:
+      DOCMOST_IMAGE_REF: "${DOCMOST_IMAGE:?Set DOCMOST_IMAGE to image@sha256:digest}"
+    restart: "no"
 
   db:
     image: postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
@@ -160,7 +116,8 @@ services:
         ]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 20s
     volumes:
       - db_data:/var/lib/postgresql
 
@@ -179,19 +136,114 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
     volumes:
       - redis_data:/data
 
-volumes:
+  db-preflight:
+    <<: *app-image
+    command:
+      - node
+      - apps/server/dist/apps/server/src/database/preflight.js
+    environment:
+      DATABASE_URL_FILE: /run/secrets/docmost_database_url
+      POSTGRES_EXPECTED_MAJOR: "18"
+      POSTGRES_EXPECTED_RUNTIME: linux-gnu
+    secrets:
+      - docmost_database_url
+    depends_on:
+      image-preflight:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  db-migrate:
+    <<: *app-image
+    command:
+      - node
+      - apps/server/dist/apps/server/src/database/migrate-latest.js
+    environment:
+      DATABASE_URL_FILE: /run/secrets/docmost_database_url
+      APP_SECRET_FILE: /run/secrets/docmost_app_secret
+    secrets:
+      - docmost_database_url
+      - docmost_app_secret
+    depends_on:
+      db-preflight:
+        condition: service_completed_successfully
+    restart: "no"
+
+  collab:
+    <<: *app-image
+    command:
+      - node
+      - apps/server/dist/apps/server/src/collaboration/server/collab-main.js
+    environment: *docmost-environment
+    secrets: *docmost-secrets
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${COLLAB_PORT:-3001}:${COLLAB_PORT:-3001}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:$${COLLAB_PORT:-3001}/api/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - default
+      - edge
+    volumes:
+      - docmost_storage:/app/data/storage
+
   docmost:
+    <<: *app-image
+    environment: *docmost-environment
+    secrets: *docmost-secrets
+    depends_on:
+      collab:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "${DOCMOST_BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - default
+      - edge
+    volumes:
+      - docmost_storage:/app/data/storage
+
+volumes:
   db_data:
+    external: true
+    name: "${POSTGRES_VOLUME_NAME:?Set POSTGRES_VOLUME_NAME in the deployment state file}"
+  docmost_storage:
+    external: true
+    name: "${DOCMOST_STORAGE_VOLUME_NAME:?Set DOCMOST_STORAGE_VOLUME_NAME in the deployment state file}"
   redis_data:
 
 networks:
   edge:
-    name: "${EDGE_NETWORK_NAME:-docmost_edge}"
-    external: "${EDGE_NETWORK_EXTERNAL:-false}"
+    name: "${EDGE_NETWORK_NAME:?Set EDGE_NETWORK_NAME to the production ingress network}"
+    external: true
 
 secrets:
   docmost_app_secret:
@@ -204,13 +256,3 @@ secrets:
     environment: REDIS_URL
   docmost_postgres_password:
     environment: POSTGRES_PASSWORD
-  docmost_aws_s3_secret_access_key:
-    environment: AWS_S3_SECRET_ACCESS_KEY
-  docmost_smtp_password:
-    environment: SMTP_PASSWORD
-  docmost_postmark_token:
-    environment: POSTMARK_TOKEN
-  docmost_typesense_api_key:
-    environment: TYPESENSE_API_KEY
-  docmost_web_push_vapid_private_key:
-    environment: WEB_PUSH_VAPID_PRIVATE_KEY

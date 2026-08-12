@@ -30,7 +30,8 @@ const REQUIRED_JOB_COMMANDS = {
   ],
   "production-smoke": [
     "docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .",
-    "apps/server/dist/apps/server/src/database/migrate.js latest",
+    "node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci",
+    "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
     "pnpm test:editor:e2e",
     "pnpm test:ai:e2e",

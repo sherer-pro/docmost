@@ -32,6 +32,18 @@ describe('EnvironmentService', () => {
     expect(service.getAiStreamIdleTimeoutMs()).toBe(120000);
   });
 
+  it('defaults database migrations to auto mode', () => {
+    expect(service.getDatabaseMigrationMode()).toBe('auto');
+  });
+
+  it('supports an external one-shot database migration job', () => {
+    configGet.mockImplementation((key: string, defaultValue: unknown) =>
+      key === 'DATABASE_MIGRATION_MODE' ? 'external' : defaultValue,
+    );
+
+    expect(service.getDatabaseMigrationMode()).toBe('external');
+  });
+
   it('returns a configured AI stream idle timeout in range', () => {
     configGet.mockImplementation((key: string, defaultValue: unknown) =>
       key === 'AI_STREAM_IDLE_TIMEOUT_MS' ? '300000' : defaultValue,

@@ -56,4 +56,25 @@ describe('Environment validation', () => {
       POSTHOG_HOST: '',
     });
   });
+
+  it.each(['auto', 'external'])(
+    'accepts database migration mode %s',
+    (value) => {
+      expect(
+        validate({
+          ...validConfig,
+          DATABASE_MIGRATION_MODE: value,
+        }),
+      ).toMatchObject({ DATABASE_MIGRATION_MODE: value });
+    },
+  );
+
+  it('rejects an unknown database migration mode', () => {
+    expect(() =>
+      validate({
+        ...validConfig,
+        DATABASE_MIGRATION_MODE: 'unsafe',
+      }),
+    ).toThrow(StartupConfigurationError);
+  });
 });

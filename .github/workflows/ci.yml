@@ -194,6 +194,9 @@ jobs:
       - name: Build the production image once
         run: docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .
 
+      - name: PostgreSQL runtime migration negative and positive smoke
+        run: node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci
+
       - name: Start PostgreSQL, Redis, and mock Open WebUI
         run: |
           docker network create docmost-ci
@@ -226,7 +229,7 @@ jobs:
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             --entrypoint node docmost:ci \
-            apps/server/dist/apps/server/src/database/migrate.js latest
+            apps/server/dist/apps/server/src/database/migrate-latest.js
 
       - name: Start API and collaboration processes from the same image
         run: |
@@ -240,6 +243,7 @@ jobs:
             -e COLLAB_INTERNAL_SECRET=ci-only-collab-secret-at-least-32-characters \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e DATABASE_MIGRATION_MODE=external \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
             -e PAGE_TEMPLATES_ENABLED=true \
@@ -269,6 +273,7 @@ jobs:
             -e COLLAB_INTERNAL_SECRET=ci-only-collab-secret-at-least-32-characters \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e DATABASE_MIGRATION_MODE=external \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
             -e PAGE_TEMPLATES_ENABLED=true \
@@ -297,6 +302,7 @@ jobs:
             -e COLLAB_PORT=3001 \
             -e APP_SECRET=ci-only-app-secret-at-least-32-characters \
             -e DATABASE_URL=postgresql://docmost:docmost-ci-password@docmost-db:5432/docmost \
+            -e DATABASE_MIGRATION_MODE=external \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
             -e DISABLE_TELEMETRY=true \

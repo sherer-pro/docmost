@@ -163,6 +163,11 @@
 - Redo: `pnpm --filter ./apps/server migration:redo`
 - Full reset: `pnpm --filter ./apps/server migration:reset`
 - Generate DB types: `pnpm --filter ./apps/server migration:codegen`
+- Production read-only database check: `corepack pnpm production:db -- preflight`
+- Production capacity/downtime plan: `corepack pnpm production:db -- plan`
+- Production logical volume migration: `corepack pnpm production:db -- migrate --yes`
+- Pre-ingress rollback: `corepack pnpm production:db -- rollback --yes`
+- Acceptance and rollback-boundary seal: `corepack pnpm production:db -- accept --yes`
 
 ### Containers
 
@@ -214,7 +219,7 @@
 
 - Node.js: target **22.x** (from Dockerfile: `node:22-slim`).
 - pnpm: **10.4.0** (pinned in `packageManager` and Dockerfile).
-- PostgreSQL in compose: `postgres:18-alpine`.
+- PostgreSQL in local, production, and CI Compose paths: the same pinned Debian/glibc `postgres:18` digest. Alpine/musl is an unsupported runtime for persistent volumes.
 - Redis in compose: `redis:8-alpine`.
 
 ### Required env for local backend startup

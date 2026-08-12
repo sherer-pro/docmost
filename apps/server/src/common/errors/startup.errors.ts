@@ -23,6 +23,17 @@ export class DatabaseMigrationError extends StartupError {
   }
 }
 
+export class DatabasePreflightError extends StartupError {
+  constructor(
+    public readonly exitCode: number,
+    public readonly issueCodes: readonly string[],
+  ) {
+    super(
+      `Database preflight failed with exit code ${exitCode}: ${issueCodes.join(', ')}`,
+    );
+  }
+}
+
 export function terminateStartup(error: unknown): void {
   if (error instanceof StartupError) {
     console.error(error.message);
