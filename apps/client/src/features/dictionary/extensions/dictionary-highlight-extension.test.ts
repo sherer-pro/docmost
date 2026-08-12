@@ -21,6 +21,13 @@ const term: IDictionaryTerm = {
   updatedAt: "2026-05-09T00:00:00.000Z",
 };
 
+const thinSliceTerm: IDictionaryTerm = {
+  ...term,
+  id: "term-thin-slice",
+  term: "thin-slice",
+  forms: ["Thin-slice MVP"],
+};
+
 function createEditor() {
   return new Editor({
     extensions: [StarterKit, DictionaryHighlightExtension],
@@ -232,25 +239,28 @@ describe("DictionaryHighlightExtension", () => {
     }
   });
 
-  it("highlights code blocks while excluding links and inline code", () => {
+  it("highlights inline code and code blocks while excluding links", () => {
     const editor = new Editor({
       extensions: [
         StarterKit,
         DictionaryHighlightExtension.configure({
           enabled: true,
-          terms: [term],
+          terms: [thinSliceTerm],
         }),
       ],
       content:
-        '<p><a href="https://example.com">Alpha</a> plain Alpha <code>Alpha</code></p><pre><code>Alpha</code></pre>',
+        '<p><a href="https://example.com">thin-slice</a> plain thin-slice <code>Thin-slice MVP</code></p><pre><code>thin-slice</code></pre>',
     });
 
     try {
       expect(
         dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
-      ).toHaveLength(2);
+      ).toHaveLength(3);
       expect(
         editor.view.dom.querySelectorAll("p .dictionary-highlight"),
+      ).toHaveLength(2);
+      expect(
+        editor.view.dom.querySelectorAll("p code .dictionary-highlight"),
       ).toHaveLength(1);
       expect(
         editor.view.dom.querySelectorAll("pre code .dictionary-highlight"),
@@ -379,6 +389,46 @@ describe("DictionaryHighlightExtension", () => {
           type: "codeBlock",
           attrs: { language: null },
           content: [{ type: "text", text: "Alpha" }],
+        })),
+      },
+    });
+
+    try {
+      expect(getDictionaryHighlightScanCount(editor.state)).toBe(1_001);
+
+      editor.commands.insertContentAt(2, "x");
+
+      expect(getDictionaryHighlightScanCount(editor.state)).toBeLessThanOrEqual(
+        2,
+      );
+      expect(
+        dictionaryHighlightPluginKey.getState(editor.state)?.decorations.find(),
+      ).toHaveLength(1_000);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scans only the edited block in a large inline-code document", () => {
+    const editor = new Editor({
+      extensions: [
+        StarterKit,
+        DictionaryHighlightExtension.configure({
+          enabled: true,
+          terms: [term],
+        }),
+      ],
+      content: {
+        type: "doc",
+        content: Array.from({ length: 1_001 }, () => ({
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              marks: [{ type: "code" }],
+              text: "Alpha",
+            },
+          ],
         })),
       },
     });
