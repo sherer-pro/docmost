@@ -418,7 +418,7 @@ If a change is not reflected in `AGENTS.md`, the automation task is considered i
 - When the user confirms the update, keep both language versions equivalent in structure and factual coverage.
 - This confirmation is not required for small fixes, internal refactoring, or technical changes without a material user-facing effect.
 
-## graphify
+## Graphify and AgentMemory
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
@@ -431,3 +431,41 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+Use Graphify for:
+
+- the current repository structure;
+- current symbol definitions and relationships;
+- code, documentation, PDF and other repository artifacts;
+- call paths and change-impact analysis;
+- verification of current implementation details.
+
+Use AgentMemory for:
+
+- decisions made in previous sessions;
+- previously attempted and rejected approaches;
+- recurring errors and their fixes;
+- user preferences and project conventions;
+- session history and unfinished work.
+
+For tasks involving both:
+
+1. Recall relevant history through AgentMemory.
+2. Verify current-state claims through Graphify or the source code.
+3. Prefer the current Graphify graph and source code when memory conflicts with them.
+4. After rebuilding or updating Graphify, re-import `graphify-out/graph.json` into AgentMemory.
+5. Treat the Graphify graph imported into AgentMemory as a retrieval cache, not as the canonical current graph.
+
+Use memory selectively:
+
+- query AgentMemory when prior decisions or prior work are relevant;
+- do not call memory tools repeatedly without a concrete reason;
+- save durable decisions, constraints and verified lessons;
+- do not save secrets, temporary logs or large raw tool outputs.
+
+Local commands:
+
+- `pnpm context:memory:start` / `pnpm context:memory:stop` manage the loopback-only AgentMemory service.
+- `pnpm context:memory:status` and `pnpm context:memory:doctor` inspect it without changing application runtime dependencies.
+- `pnpm context:graph-import` imports the current Graphify graph.
+- `pnpm context:refresh` runs the existing `graphify update .` workflow and imports only after a successful, valid update.
