@@ -5,9 +5,19 @@ import path from "node:path";
 import { chromium, request } from "@playwright/test";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..");
-const runId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-const auditRoot = path.join(repoRoot, "output", "audit", `ai-external-mcp-${runId}`);
-const baseURL = (process.env.DOCMOST_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const runId = new Date()
+  .toISOString()
+  .replace(/[-:.TZ]/g, "")
+  .slice(0, 14);
+const auditRoot = path.join(
+  repoRoot,
+  "output",
+  "audit",
+  `ai-external-mcp-${runId}`,
+);
+const baseURL = (
+  process.env.DOCMOST_BASE_URL ?? "http://localhost:3000"
+).replace(/\/$/, "");
 const appOrigin = new URL(baseURL).origin;
 const network = process.env.DOCMOST_AI_MCP_NETWORK ?? "docmost_default";
 const appContainer = process.env.DOCMOST_CONTAINER_NAME ?? "docmost-docmost-1";
@@ -38,11 +48,13 @@ const referencePackage = {
 const matrix = [];
 const traces = [];
 const createdServerIds = [];
+const createdInvitationIds = [];
 let createdSpace;
 let createdGroup;
 let createdMember;
 let originalSettings;
 let originalLocale;
+let originalEmailDomains;
 let apiContext;
 let originalContainerEnv;
 let runtimeMutated = false;
@@ -58,7 +70,10 @@ function sha256(value) {
 }
 
 function unwrap(payload) {
-  return payload && typeof payload === "object" && "success" in payload && "data" in payload
+  return payload &&
+    typeof payload === "object" &&
+    "success" in payload &&
+    "data" in payload
     ? payload.data
     : payload;
 }
@@ -148,10 +163,14 @@ async function recreateApp(externalEnabled) {
     { env: environment },
   );
   runtimeMutated = true;
-  await waitFor("Docmost health", async () => {
-    const response = await fetch(`${baseURL}/api/health`).catch(() => null);
-    return response?.ok;
-  }, 120_000);
+  await waitFor(
+    "Docmost health",
+    async () => {
+      const response = await fetch(`${baseURL}/api/health`).catch(() => null);
+      return response?.ok;
+    },
+    120_000,
+  );
   if (apiContext) {
     await apiContext.dispose();
     apiContext = undefined;
@@ -170,10 +189,14 @@ async function restoreAppEnvironment() {
     ["compose", "up", "-d", "--no-deps", "--force-recreate", "docmost"],
     { env: environment },
   );
-  await waitFor("restored Docmost health", async () => {
-    const response = await fetch(`${baseURL}/api/health`).catch(() => null);
-    return response?.ok;
-  }, 120_000);
+  await waitFor(
+    "restored Docmost health",
+    async () => {
+      const response = await fetch(`${baseURL}/api/health`).catch(() => null);
+      return response?.ok;
+    },
+    120_000,
+  );
 }
 
 async function adminApi() {
@@ -212,17 +235,29 @@ async function api(method, url, data, { allowFailure = false } = {}) {
   if (!response.ok() && !allowFailure) {
     const code =
       payload && typeof payload === "object"
-        ? payload.code ?? payload.message ?? payload.error ?? "request_failed"
+        ? (payload.code ?? payload.message ?? payload.error ?? "request_failed")
         : "request_failed";
-    throw new Error(`${safePath(url)} returned ${response.status()}: ${String(code).slice(0, 240)}`);
+    throw new Error(
+      `${safePath(url)} returned ${response.status()}: ${String(code).slice(0, 240)}`,
+    );
   }
   return { ok: response.ok(), status: response.status(), payload };
 }
 
 function containerFetch(container, url, options = {}) {
-  const encodedBody = options.body === undefined ? "undefined" : JSON.stringify(JSON.stringify(options.body));
+  const encodedBody =
+    options.body === undefined
+      ? "undefined"
+      : JSON.stringify(JSON.stringify(options.body));
   const code = `const r=await fetch(${JSON.stringify(url)},{method:${JSON.stringify(options.method ?? "GET")},headers:${JSON.stringify(options.headers ?? {})},body:${encodedBody}});const t=await r.text();if(!r.ok)process.exitCode=2;process.stdout.write(t)`;
-  const output = docker(["exec", container, "node", "--input-type=module", "-e", code]);
+  const output = docker([
+    "exec",
+    container,
+    "node",
+    "--input-type=module",
+    "-e",
+    code,
+  ]);
   return output ? JSON.parse(output) : undefined;
 }
 
@@ -234,36 +269,47 @@ function hostileState(container = containers.hostile) {
 }
 
 function hostileControl(pathname, body) {
-  return containerFetch(containers.hostile, `http://127.0.0.1:3310${pathname}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-audit-control": controlToken,
+  return containerFetch(
+    containers.hostile,
+    `http://127.0.0.1:3310${pathname}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-audit-control": controlToken,
+      },
+      body,
     },
-    body,
-  });
+  );
 }
 
 function modelRequests() {
-  return containerFetch(containers.model, "http://127.0.0.1:3320/__audit/requests").requests;
+  return containerFetch(
+    containers.model,
+    "http://127.0.0.1:3320/__audit/requests",
+  ).requests;
 }
 
 async function waitContainer(name, url, timeoutMs = 60_000) {
-  await waitFor(`${name} container`, async () => {
-    try {
-      docker([
-        "exec",
-        name,
-        "node",
-        "--input-type=module",
-        "-e",
-        `const r=await fetch(${JSON.stringify(url)});if(r.status<100)process.exit(1)`,
-      ]);
-      return true;
-    } catch {
-      return false;
-    }
-  }, timeoutMs);
+  await waitFor(
+    `${name} container`,
+    async () => {
+      try {
+        docker([
+          "exec",
+          name,
+          "node",
+          "--input-type=module",
+          "-e",
+          `const r=await fetch(${JSON.stringify(url)});if(r.status<100)process.exit(1)`,
+        ]);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    timeoutMs,
+  );
 }
 
 function startFixtureContainers() {
@@ -382,7 +428,8 @@ async function createServer(name, namespace, url, headers) {
 }
 
 async function discover(serverId) {
-  return (await api("POST", `/api/ai/mcp-servers/${serverId}/actions/discover`)).payload;
+  return (await api("POST", `/api/ai/mcp-servers/${serverId}/actions/discover`))
+    .payload;
 }
 
 async function approve(serverId, approvedNames, discoverySnapshot) {
@@ -391,7 +438,8 @@ async function approve(serverId, approvedNames, discoverySnapshot) {
   const detailNames = detailTools.map((tool) => tool.remoteName).sort();
   const snapshotTools = discoverySnapshot?.tools ?? [];
   const snapshotNames = snapshotTools.map((tool) => tool.remoteName).sort();
-  const detailConsistent = JSON.stringify(detailNames) === JSON.stringify(snapshotNames);
+  const detailConsistent =
+    JSON.stringify(detailNames) === JSON.stringify(snapshotNames);
   addMatrix(
     "discovery_detail_consistency",
     "successful discovery is immediately visible through the server detail projection",
@@ -403,9 +451,16 @@ async function approve(serverId, approvedNames, discoverySnapshot) {
   );
   const candidateTools = detailConsistent ? detailTools : snapshotTools;
   const discovered = candidateTools
-    .map((tool) => `${tool.remoteName}:${tool.approvable ? "approvable" : "blocked"}`)
+    .map(
+      (tool) =>
+        `${tool.remoteName}:${tool.approvable ? "approvable" : "blocked"}`,
+    )
     .join(",");
-  if (!approvedNames.every((name) => candidateTools.some((tool) => tool.remoteName === name))) {
+  if (
+    !approvedNames.every((name) =>
+      candidateTools.some((tool) => tool.remoteName === name),
+    )
+  ) {
     traces.push({
       method: "AUDIT",
       path: "discovery_requested_tool_check",
@@ -425,20 +480,26 @@ async function approve(serverId, approvedNames, discoverySnapshot) {
 
 async function putBinding(serverId, patch = {}) {
   return (
-    await api("PUT", `/api/spaces/${createdSpace.id}/ai/mcp-bindings/${serverId}`, {
-      enabled: true,
-      toolSelection: "all",
-      toolNames: [],
-      instructions: null,
-      groupPolicies: [],
-      ...patch,
-    })
+    await api(
+      "PUT",
+      `/api/spaces/${createdSpace.id}/ai/mcp-bindings/${serverId}`,
+      {
+        enabled: true,
+        toolSelection: "all",
+        toolNames: [],
+        instructions: null,
+        groupPolicies: [],
+        ...patch,
+      },
+    )
   ).payload;
 }
 
 async function setPreferences(items) {
   return (
-    await api("PUT", `/api/spaces/${createdSpace.id}/ai/mcp-preferences`, { items })
+    await api("PUT", `/api/spaces/${createdSpace.id}/ai/mcp-preferences`, {
+      items,
+    })
   ).payload;
 }
 
@@ -459,7 +520,11 @@ async function configureAgent() {
     quickCommands: [],
   };
   await api("PATCH", `/api/spaces/${createdSpace.id}/ai/config`, provider);
-  await api("POST", `/api/spaces/${createdSpace.id}/ai/config/actions/test-agent`, {});
+  await api(
+    "POST",
+    `/api/spaces/${createdSpace.id}/ai/config/actions/test-agent`,
+    {},
+  );
   await api("PATCH", `/api/spaces/${createdSpace.id}/ai/config`, {
     agentEnabled: true,
   });
@@ -494,10 +559,16 @@ async function startAgentRun(scenario) {
 }
 
 async function waitRun(runId, timeoutMs = 90_000) {
-  return waitFor(`agent run ${runId}`, async () => {
-    const run = (await api("GET", `/api/ai/runs/${runId}`)).payload;
-    return ["completed", "failed", "cancelled"].includes(run.status) ? run : undefined;
-  }, timeoutMs);
+  return waitFor(
+    `agent run ${runId}`,
+    async () => {
+      const run = (await api("GET", `/api/ai/runs/${runId}`)).payload;
+      return ["completed", "failed", "cancelled"].includes(run.status)
+        ? run
+        : undefined;
+    },
+    timeoutMs,
+  );
 }
 
 async function gateAttempt(scenario, expectedHits) {
@@ -508,9 +579,14 @@ async function gateAttempt(scenario, expectedHits) {
   const hits = after - before;
   addMatrix(
     scenario,
-    expectedHits === 0 ? "closed gate prevents transport" : "all gates permit one read-only call",
+    expectedHits === 0
+      ? "closed gate prevents transport"
+      : "all gates permit one read-only call",
     hits === expectedHits ? "PASS" : "FAIL",
-    { transportHits: hits, evidence: `run:${run.status}:${run.errorCode ?? "none"}` },
+    {
+      transportHits: hits,
+      evidence: `run:${run.status}:${run.errorCode ?? "none"}`,
+    },
   );
   return { run, hits };
 }
@@ -557,11 +633,16 @@ async function browserEvidence() {
           : /^Space administrators manage group rules/;
       await page.getByText(expected).waitFor({ state: "visible" });
       await page.screenshot({
-        path: path.join(auditRoot, "screenshots", `security-guide-${locale}.png`),
+        path: path.join(
+          auditRoot,
+          "screenshots",
+          `security-guide-${locale}.png`,
+        ),
         fullPage: true,
       });
       const executed = await page.evaluate(() => globalThis.__mcpPwned);
-      if (executed !== undefined) throw new Error("unexpected hostile browser marker");
+      if (executed !== undefined)
+        throw new Error("unexpected hostile browser marker");
       await context.close();
     }
     await api("POST", "/api/users/update", { locale: "en-US" });
@@ -602,10 +683,14 @@ async function browserEvidence() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
-    await page.goto(`/s/${createdSpace.slug}/p/${pageSlug}-${createdSpace.page.slugId}`);
+    await page.goto(
+      `/s/${createdSpace.slug}/p/${pageSlug}-${createdSpace.page.slugId}`,
+    );
     const remoteText = page.getByText("remote markdown", { exact: false });
     if (!(await remoteText.isVisible().catch(() => false))) {
-      const open = page.getByRole("button", { name: /AI assistant|AI-помощник/i });
+      const open = page.getByRole("button", {
+        name: /AI assistant|AI-помощник/i,
+      });
       if (await open.isVisible().catch(() => false)) await open.click();
     }
     // Rendering safety is asserted from active DOM capabilities below. The
@@ -625,7 +710,11 @@ async function browserEvidence() {
       10_000,
     );
     await page.screenshot({
-      path: path.join(auditRoot, "screenshots", "malicious-result-sanitized.png"),
+      path: path.join(
+        auditRoot,
+        "screenshots",
+        "malicious-result-sanitized.png",
+      ),
       fullPage: true,
     });
     await context.close();
@@ -653,6 +742,13 @@ async function browserEvidence() {
 async function provisionMember() {
   const email = `g06-member-${runId}@audit.invalid`;
   const password = `G06-Member-${runId}!`;
+  const workspace = (await api("GET", "/api/workspace/info")).payload;
+  originalEmailDomains ??= [...(workspace.emailDomains ?? [])];
+  if (!originalEmailDomains.includes("audit.invalid")) {
+    await api("POST", "/api/workspace/update", {
+      emailDomains: [...originalEmailDomains, "audit.invalid"],
+    });
+  }
   await api("POST", "/api/workspace/invites/create", {
     emails: [email],
     groupIds: [],
@@ -666,6 +762,7 @@ async function provisionMember() {
   ).payload;
   const invitation = invitations.items.find((item) => item.email === email);
   if (!invitation?.id) throw new Error("Audit member invitation was not found");
+  createdInvitationIds.push(invitation.id);
   const link = (
     await api("POST", "/api/workspace/invites/link", {
       invitationId: invitation.id,
@@ -689,7 +786,10 @@ async function provisionMember() {
       },
     });
     if (!accepted.ok()) {
-      throw new Error(`Audit member acceptance returned ${accepted.status()}`);
+      const responseBody = (await accepted.text()).slice(0, 240);
+      throw new Error(
+        `Audit member acceptance returned ${accepted.status()}: ${responseBody}`,
+      );
     }
     const state = await acceptContext.storageState();
     const authToken = state.cookies.find(
@@ -703,7 +803,8 @@ async function provisionMember() {
     }
     const meResponse = await acceptContext.get("/api/users/me");
     const me = unwrap(await meResponse.json());
-    if (!me?.user?.id) throw new Error("Audit member identity was not returned");
+    if (!me?.user?.id)
+      throw new Error("Audit member identity was not returned");
     await api("POST", "/api/spaces/members/add", {
       spaceId: createdSpace.id,
       role: "writer",
@@ -741,11 +842,7 @@ async function memberApi(method, url, data) {
 }
 
 async function browserRevokeConsentDuringRun(conversationId) {
-  await api(
-    "POST",
-    `/api/ai/conversations/${conversationId}/actions/open`,
-    {},
-  );
+  await api("POST", `/api/ai/conversations/${conversationId}/actions/open`, {});
   const browser = await chromium.launch({ headless: true });
   const consoleErrors = [];
   const pageErrors = [];
@@ -977,7 +1074,9 @@ async function encryptionProof(serverId) {
   addMatrix(
     "encrypted_headers",
     "write-only API, non-plaintext AES envelope, hash-only transport proof",
-    proof.apiMasksValue && !proof.database.containsPlaintext && proof.fixtureHashMatch
+    proof.apiMasksValue &&
+      !proof.database.containsPlaintext &&
+      proof.fixtureHashMatch
       ? "PASS"
       : "FAIL",
     { severity: "critical", evidence: "header-encryption-proof.json" },
@@ -1004,7 +1103,9 @@ function discoveryDatabaseShape(serverId) {
 async function runLiveAudit() {
   originalContainerEnv = parseContainerEnv(appContainer);
   if (process.env.DOCMOST_AI_MCP_E2E_SKIP_APP_BUILD !== "1") {
-    command("docker", ["build", "-t", "docmost-local:dev", "."], { inherit: true });
+    command("docker", ["build", "-t", "docmost-local:dev", "."], {
+      inherit: true,
+    });
   }
   command(
     "docker",
@@ -1086,7 +1187,11 @@ async function runLiveAudit() {
     "ssrf_url_admission",
     "loopback/mapped/link-local/private/unspecified/multicast/scheme/credentials/query/fragment rejected",
     rejected === invalidUrls.length ? "PASS" : "FAIL",
-    { severity: "critical", transportHits: 0, evidence: `${rejected}/${invalidUrls.length}` },
+    {
+      severity: "critical",
+      transportHits: 0,
+      evidence: `${rejected}/${invalidUrls.length}`,
+    },
   );
 
   hostileControl("/__audit/reset");
@@ -1140,8 +1245,14 @@ async function runLiveAudit() {
   addMatrix(
     "immutable_namespace",
     "namespace cannot be patched",
-    !immutable.ok || immutableDetail.namespace === hostile.namespace ? "PASS" : "FAIL",
-    { severity: "high", transportHits: 0, evidence: immutable.ok ? "ignored" : "rejected" },
+    !immutable.ok || immutableDetail.namespace === hostile.namespace
+      ? "PASS"
+      : "FAIL",
+    {
+      severity: "high",
+      transportHits: 0,
+      evidence: immutable.ok ? "ignored" : "rejected",
+    },
   );
   await encryptionProof(hostile.id);
 
@@ -1157,9 +1268,13 @@ async function runLiveAudit() {
   const forbiddenAfter = hostileState(containers.forbidden).requests;
   const sinkRequestCount = (requests) =>
     Object.entries(requests)
-      .filter(([request]) => !request.includes("/__audit/") && request !== "GET /health")
+      .filter(
+        ([request]) =>
+          !request.includes("/__audit/") && request !== "GET /health",
+      )
       .reduce((sum, [, value]) => sum + value, 0);
-  const sinkHits = sinkRequestCount(forbiddenAfter) - sinkRequestCount(forbiddenBefore);
+  const sinkHits =
+    sinkRequestCount(forbiddenAfter) - sinkRequestCount(forbiddenBefore);
   addMatrix(
     "redirect_forbidden_origin",
     "manual redirect is rejected without contacting the sink",
@@ -1181,7 +1296,9 @@ async function runLiveAudit() {
     ).payload;
     addMatrix(
       label,
-      label.startsWith("chunked") ? "1 MiB streaming wire cap" : "probe absolute timeout",
+      label.startsWith("chunked")
+        ? "1 MiB streaming wire cap"
+        : "probe absolute timeout",
       result.status === "failed" ? "PASS" : "FAIL",
       { severity: "high", transportHits: 1, evidence: result.errorCode },
     );
@@ -1202,7 +1319,10 @@ async function runLiveAudit() {
       content: {
         type: "doc",
         content: [
-          { type: "paragraph", content: [{ type: "text", text: "Synthetic MCP audit" }] },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Synthetic MCP audit" }],
+          },
         ],
       },
       format: "json",
@@ -1227,11 +1347,15 @@ async function runLiveAudit() {
       },
     ],
   });
-  const projected = bindings.bindings.find((binding) => binding.serverId === hostile.id);
+  const projected = bindings.bindings.find(
+    (binding) => binding.serverId === hostile.id,
+  );
   addMatrix(
     "group_policy_management",
     "binding PUT fully replaces validated group policies atomically",
-    projected?.groupPolicies?.[0]?.groupId === createdGroup.id ? "FIXED" : "FAIL",
+    projected?.groupPolicies?.[0]?.groupId === createdGroup.id
+      ? "FIXED"
+      : "FAIL",
     { severity: "high", evidence: "baseline API/UI management was absent" },
   );
   await setPreferences([{ serverId: hostile.id, optedIn: true }]);
@@ -1295,7 +1419,9 @@ async function runLiveAudit() {
     await api("POST", `/api/ai/mcp-servers/${reference.id}/actions/test`)
   ).payload;
   const referenceDiscovery = await discover(reference.id);
-  const echo = referenceDiscovery.snapshot?.tools.find((tool) => tool.remoteName === "echo");
+  const echo = referenceDiscovery.snapshot?.tools.find(
+    (tool) => tool.remoteName === "echo",
+  );
   if (!echo) throw new Error("Pinned reference server did not expose echo");
   await approve(reference.id, ["echo"], referenceDiscovery.snapshot);
   await putBinding(hostile.id, { enabled: false });
@@ -1305,7 +1431,9 @@ async function runLiveAudit() {
     { serverId: reference.id, optedIn: true },
   ]);
   const beforeReferenceRequests = modelRequests().length;
-  const referenceRun = await startAgentRun("echo").then((sent) => waitRun(sent.run.id));
+  const referenceRun = await startAgentRun("echo").then((sent) =>
+    waitRun(sent.run.id),
+  );
   const referenceModelRows = modelRequests().slice(beforeReferenceRequests);
   const referenceOfferedOnlyEcho = referenceModelRows.every(
     (row) => !row.writeLikeToolOffered,
@@ -1334,7 +1462,11 @@ async function runLiveAudit() {
     { serverId: reference.id, optedIn: false },
   ]);
   const blockedSent = await startAgentRun("blocked");
-  await waitFor("blocked hostile call", async () => hostileState().blockedCalls > 0, 30_000);
+  await waitFor(
+    "blocked hostile call",
+    async () => hostileState().blockedCalls > 0,
+    30_000,
+  );
   const browserRevocation = await browserRevokeConsentDuringRun(
     blockedSent.conversation.id,
   );
@@ -1365,7 +1497,9 @@ async function runLiveAudit() {
     "revoke_during_blocked_call",
     "live recheck aborts and refuses stale result",
     blockedRun.status === "failed" &&
-      ["agent_mcp_access_revoked", "agent_mcp_config_changed"].includes(blockedRun.errorCode)
+      ["agent_mcp_access_revoked", "agent_mcp_config_changed"].includes(
+        blockedRun.errorCode,
+      )
       ? "PASS"
       : "FAIL",
     { severity: "critical", transportHits: 1, evidence: blockedRun.errorCode },
@@ -1380,8 +1514,11 @@ async function runLiveAudit() {
   });
   hostileControl("/__audit/version", { version: 2 });
   const changedDiscovery = await discover(hostile.id);
-  const changedEcho = changedDiscovery.snapshot.tools.find((tool) => tool.remoteName === "echo");
-  const changedDetail = (await api("GET", `/api/ai/mcp-servers/${hostile.id}`)).payload;
+  const changedEcho = changedDiscovery.snapshot.tools.find(
+    (tool) => tool.remoteName === "echo",
+  );
+  const changedDetail = (await api("GET", `/api/ai/mcp-servers/${hostile.id}`))
+    .payload;
   const changedApprovalRetained = changedDetail.approvedTools.some(
     (tool) => tool.remoteName === "echo",
   );
@@ -1403,7 +1540,9 @@ async function runLiveAudit() {
     csrfToken: logText.includes(required("DOCMOST_CSRF_TOKEN")) ? 1 : 0,
     argumentCanary: logText.includes("MCP_SAFE_ECHO_CANARY") ? 1 : 0,
     maliciousResult: logText.includes("globalThis.__mcpPwned") ? 1 : 0,
-    testedOrigins: Object.values(origins).filter((origin) => logText.includes(origin)).length,
+    testedOrigins: Object.values(origins).filter((origin) =>
+      logText.includes(origin),
+    ).length,
   };
   await fs.writeFile(
     path.join(auditRoot, "fixed", "log-and-metrics-leak-scan.json"),
@@ -1413,7 +1552,10 @@ async function runLiveAudit() {
     "operational_metrics_privacy",
     "closed vocabulary only; no URL/IDs/headers/args/results",
     Object.values(leakScan).every((count) => count === 0) ? "PASS" : "FAIL",
-    { severity: "critical", evidence: "metrics unit suite and runtime canary scan" },
+    {
+      severity: "critical",
+      evidence: "metrics unit suite and runtime canary scan",
+    },
   );
 
   const modelRows = modelRequests();
@@ -1421,13 +1563,19 @@ async function runLiveAudit() {
     "write_tool_absence",
     "false readOnlyHint tool never enters model definitions or invocation log",
     modelRows.every((row) => !row.writeLikeToolOffered) &&
-      !hostileState().callArgsHashes.some((entry) => entry.name === "claimed_readonly_write")
+      !hostileState().callArgsHashes.some(
+        (entry) => entry.name === "claimed_readonly_write",
+      )
       ? "PASS"
       : "FAIL",
     { severity: "critical", transportHits: 0 },
   );
 
-  const hostileV2 = await approve(hostile.id, ["echo"], changedDiscovery.snapshot);
+  const hostileV2 = await approve(
+    hostile.id,
+    ["echo"],
+    changedDiscovery.snapshot,
+  );
   await putBinding(hostile.id, {
     enabled: true,
     toolSelection: "selected",
@@ -1484,7 +1632,10 @@ async function runLiveAudit() {
     "dns_rebinding_two_sink",
     "dispatcher remains pinned to first approved DNS answer",
     "PASS",
-    { severity: "critical", evidence: "lower-level pinned-dispatcher regression suite" },
+    {
+      severity: "critical",
+      evidence: "lower-level pinned-dispatcher regression suite",
+    },
   );
 }
 
@@ -1496,18 +1647,39 @@ async function cleanup() {
     ) {
       await adminApi();
       if (originalLocale) {
-        await api("POST", "/api/users/update", { locale: originalLocale }).catch(() => undefined);
+        await api("POST", "/api/users/update", {
+          locale: originalLocale,
+        }).catch(() => undefined);
       }
       if (createdGroup?.id) {
-        await api("POST", "/api/groups/actions/delete", { groupId: createdGroup.id }).catch(
+        await api("POST", "/api/groups/actions/delete", {
+          groupId: createdGroup.id,
+        }).catch(() => undefined);
+      }
+      if (createdSpace?.id) {
+        await api("DELETE", `/api/spaces/${createdSpace.id}`).catch(
           () => undefined,
         );
       }
-      if (createdSpace?.id) {
-        await api("DELETE", `/api/spaces/${createdSpace.id}`).catch(() => undefined);
+      if (createdMember?.id) {
+        await api("POST", "/api/workspace/members/delete", {
+          userId: createdMember.id,
+        }).catch(() => undefined);
+      }
+      for (const invitationId of createdInvitationIds.reverse()) {
+        await api("POST", "/api/workspace/invites/revoke", {
+          invitationId,
+        }).catch(() => undefined);
+      }
+      if (originalEmailDomains) {
+        await api("POST", "/api/workspace/update", {
+          emailDomains: originalEmailDomains,
+        }).catch(() => undefined);
       }
       for (const serverId of createdServerIds.reverse()) {
-        await api("DELETE", `/api/ai/mcp-servers/${serverId}`).catch(() => undefined);
+        await api("DELETE", `/api/ai/mcp-servers/${serverId}`).catch(
+          () => undefined,
+        );
       }
       if (originalSettings) {
         await api("PATCH", "/api/ai/mcp-settings", {
@@ -1563,7 +1735,8 @@ async function writeArtifacts(exitError) {
         `| ${row.scenario} | ${row.expectedControl} | ${row.transportHits ?? "-"} | ${row.severity} | ${row.status} |`,
     )
     .join("\n");
-  const report = `# Outbound external MCP audit ${runId}\n\n` +
+  const report =
+    `# Outbound external MCP audit ${runId}\n\n` +
     `Reference: ${referencePackage.name}@${referencePackage.version}, gitHead ${referencePackage.gitHead}. Only echo was approved.\n\n` +
     `## Threat matrix\n\n| Scenario | Expected control | Hits | Severity | Status |\n| --- | --- | ---: | --- | --- |\n${rows}\n\n` +
     `## Residual protocol risk\n\nA remote implementation can lie about side effects. Docmost can keep write-like tools unapproved and expose only administrator-approved read-only classifications, but MCP metadata cannot prove the implementation is side-effect free.\n`;
@@ -1585,13 +1758,17 @@ async function scanArtifacts() {
       else if (!/\.(png|jpg|jpeg|webp)$/i.test(entry.name)) {
         const text = await fs.readFile(fullPath, "utf8");
         for (const secret of secrets) {
-          if (text.includes(secret)) findings.push(path.relative(auditRoot, fullPath));
+          if (text.includes(secret))
+            findings.push(path.relative(auditRoot, fullPath));
         }
       }
     }
   }
   await walk(auditRoot);
-  const summary = { scannedAt: new Date().toISOString(), findings: [...new Set(findings)] };
+  const summary = {
+    scannedAt: new Date().toISOString(),
+    findings: [...new Set(findings)],
+  };
   await fs.writeFile(
     path.join(auditRoot, "artifact-secret-scan.json"),
     `${JSON.stringify(summary, null, 2)}\n`,
@@ -1606,7 +1783,8 @@ await fs.writeFile(
   path.join(auditRoot, "baseline", "confirmed-defect.json"),
   `${JSON.stringify(
     {
-      defect: "group policy rows affected runtime authorization but had no supported binding API or UI management",
+      defect:
+        "group policy rows affected runtime authorization but had no supported binding API or UI management",
       status: "FAIL",
       redacted: true,
     },
@@ -1617,7 +1795,10 @@ await fs.writeFile(
 
 let exitError;
 try {
-  command("node", ["--test", "apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs"]);
+  command("node", [
+    "--test",
+    "apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
+  ]);
   if (process.env.DOCMOST_AI_MCP_E2E_SKIP_LIVE !== "1") {
     required("DOCMOST_AUTH_TOKEN");
     required("DOCMOST_CSRF_TOKEN");
@@ -1637,7 +1818,8 @@ try {
       )
       .map((line) => {
         const event = line.match(/external_mcp\.[a-z_]+/)?.[0] ?? "unknown";
-        const mode = line.match(/\\?"mode\\?":\\?"(test|discover)\\?"/)?.[1] ?? "unknown";
+        const mode =
+          line.match(/\\?"mode\\?":\\?"(test|discover)\\?"/)?.[1] ?? "unknown";
         const count = Number(line.match(/\\?"toolCount\\?":(\d+)/)?.[1] ?? -1);
         return { event, mode, toolCount: count };
       });

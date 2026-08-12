@@ -55,6 +55,20 @@ export default function ExternalMcpSettingsPanel() {
     () => settings?.allowedOrigins ?? [],
     [settings?.allowedOrigins],
   );
+  const deploymentOriginsConfigured =
+    (settings?.deploymentAllowedOrigins.length ?? 0) > 0;
+  const workspaceOriginsConfigured = allowedOrigins.length > 0;
+  const canEditWorkspaceOrigins =
+    deploymentEnabled &&
+    (deploymentOriginsConfigured || workspaceOriginsConfigured);
+  const canEnableWorkspace = deploymentEnabled && deploymentOriginsConfigured;
+  const canAddServer = canEnableWorkspace && workspaceOriginsConfigured;
+
+  const workspaceSetupDisabledReason = !deploymentEnabled
+    ? t("ai.externalTools.deploymentDisabledBody")
+    : !deploymentOriginsConfigured
+      ? t("ai.externalTools.allowedOriginsEmpty")
+      : t("ai.externalTools.workspaceAllowedOriginsDescription");
 
   useEffect(() => {
     setWorkspaceOrigins(settings?.allowedOrigins ?? []);
@@ -136,11 +150,22 @@ export default function ExternalMcpSettingsPanel() {
         </Alert>
       )}
 
+      {deploymentEnabled && !deploymentOriginsConfigured && (
+        <Alert
+          color="yellow"
+          variant="light"
+          icon={<IconAlertTriangle size={18} />}
+          title={t("ai.externalTools.deploymentAllowedOrigins")}
+        >
+          {t("ai.externalTools.allowedOriginsEmpty")}
+        </Alert>
+      )}
+
       <Paper withBorder radius="md" p="md">
         <Stack gap="sm">
           <Tooltip
-            label={t("ai.externalTools.deploymentDisabledBody")}
-            disabled={deploymentEnabled}
+            label={workspaceSetupDisabledReason}
+            disabled={canEnableWorkspace || workspaceEnabled}
           >
             <Switch
               checked={workspaceEnabled}
@@ -149,7 +174,11 @@ export default function ExternalMcpSettingsPanel() {
               }
               label={t("ai.externalTools.masterSwitch")}
               description={t("ai.externalTools.masterSwitchDescription")}
-              disabled={!deploymentEnabled || updateSettings.isPending}
+              disabled={
+                !deploymentEnabled ||
+                updateSettings.isPending ||
+                (!workspaceEnabled && !deploymentOriginsConfigured)
+              }
             />
           </Tooltip>
 
@@ -177,7 +206,7 @@ export default function ExternalMcpSettingsPanel() {
               onChange={setWorkspaceOrigins}
               placeholder="https://mcp.example.com"
               splitChars={[","]}
-              disabled={!deploymentEnabled || updateSettings.isPending}
+              disabled={!canEditWorkspaceOrigins || updateSettings.isPending}
             />
             <Group justify="flex-end">
               <Button
@@ -185,7 +214,7 @@ export default function ExternalMcpSettingsPanel() {
                 variant="light"
                 onClick={() => void saveWorkspaceOrigins()}
                 loading={updateSettings.isPending}
-                disabled={!deploymentEnabled}
+                disabled={!canEditWorkspaceOrigins || updateSettings.isPending}
               >
                 {t("ai.externalTools.saveAllowedOrigins")}
               </Button>
@@ -202,21 +231,26 @@ export default function ExternalMcpSettingsPanel() {
         <Text fw={600}>
           {t("ai.externalTools.serverCount", { count: servers.length })}
         </Text>
-        <Tooltip
-          label={t("ai.externalTools.deploymentDisabledBody")}
-          disabled={deploymentEnabled}
-        >
+        <Tooltip label={workspaceSetupDisabledReason} disabled={canAddServer}>
           <Button
             leftSection={<IconPlus size={16} />}
             onClick={() => setCreateOpen(true)}
-            disabled={!deploymentEnabled}
+            disabled={!canAddServer}
           >
             {t("ai.externalTools.addServer")}
           </Button>
         </Tooltip>
       </Group>
 
-      {serversQuery.isLoading ? (
+      {serversQuery.isError ? (
+        <Alert
+          color="red"
+          variant="light"
+          icon={<IconAlertTriangle size={18} />}
+        >
+          {resolveAiErrorMessage(t, i18n, null)}
+        </Alert>
+      ) : serversQuery.isLoading ? (
         <Group justify="center" py="xl" role="status">
           <Loader size="sm" />
         </Group>
@@ -244,7 +278,7 @@ export default function ExternalMcpSettingsPanel() {
           onClose={() => setCreateOpen(false)}
           server={null}
           allowedOrigins={allowedOrigins}
-          disabled={!deploymentEnabled}
+          disabled={!canAddServer}
         />
       )}
 

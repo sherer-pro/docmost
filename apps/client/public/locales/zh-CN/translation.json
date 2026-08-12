@@ -1577,7 +1577,7 @@
         "overviewNodes": "共享AI工具注册表|外部系统|远程MCP服务器",
         "ragNodes": "Chat 查询|查询凭证|外部索引|外部分度器|实时 ACL 和内容策略|作家资格证|不打电话",
         "inboundNodes": "API密钥设置|实时密钥、工作区、用户和空间范围|Redis 速率和并发接纳|工具策略、页面ACL和内容策略",
-        "outboundNodes": "部署控制|工作区控制|空间束缚|拒绝优先组策略|用户同意|DNS-pinned 远程请求"
+        "outboundNodes": "部署控制|工作区控制|空间束缚|拒绝优先组策略|用户同意|精确来源允许列表|DNS-pinned 远程请求"
       },
       "securityOwner": {
         "spaceAdmin": "空间管理员；运营商批准原产地",

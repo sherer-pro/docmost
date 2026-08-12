@@ -1577,7 +1577,7 @@
         "overviewNodes": "Registre d'outils partagé AI|Systèmes externes|Serveur distant MCP",
         "ragNodes": "Requête Chat|Requête d'informations d'identification|Index externe|Indexeur externe|Live ACL et politique de contenu|Titre d'écrivain|n'appelle pas",
         "inboundNodes": "Paramètres de la clé API|Clé active, espace de travail, utilisateur et étendue de l'espace|Tarif Redis et admission simultanée|Stratégie d'outil, ACL de page et stratégie de contenu",
-        "outboundNodes": "Contrôle du déploiement|Contrôle de l'espace de travail|Reliure spatiale|Politique de groupe Refuser en premier|Consentement de l'utilisateur|Demande à distance DNS-pinned"
+        "outboundNodes": "Contrôle du déploiement|Contrôle de l'espace de travail|Reliure spatiale|Politique de groupe Refuser en premier|Consentement de l'utilisateur|Listes exactes d'origines autorisées|Demande à distance DNS-pinned"
       },
       "securityOwner": {
         "spaceAdmin": "Administrateur d'espace ; l'opérateur approuve l'origine",

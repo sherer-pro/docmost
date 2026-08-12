@@ -114,17 +114,16 @@ function unwrapMappedIpv4(address: string): string {
   ) {
     return normalized;
   }
-  return [
-    words[6] >> 8,
-    words[6] & 0xff,
-    words[7] >> 8,
-    words[7] & 0xff,
-  ].join('.');
+  return [words[6] >> 8, words[6] & 0xff, words[7] >> 8, words[7] & 0xff].join(
+    '.',
+  );
 }
 
 export function isAiLoopbackAddress(address: string): boolean {
   const normalized = address.toLowerCase();
-  return normalized === '::1' || unwrapMappedIpv4(normalized).startsWith('127.');
+  return (
+    normalized === '::1' || unwrapMappedIpv4(normalized).startsWith('127.')
+  );
 }
 
 export function isAiLinkLocalAddress(address: string): boolean {
@@ -196,17 +195,10 @@ export class AiOutboundUrlPolicyService {
     const inSecondaryAllowlist =
       policy.secondaryAllowedOrigins === undefined ||
       this.parseOrigins(policy.secondaryAllowedOrigins).has(url.origin);
-    const addresses = await this.resolveAddresses(url.hostname, label);
-    const loopbackOnly =
-      addresses.length > 0 &&
-      addresses.every((entry) => isAiLoopbackAddress(entry.address));
 
-    if (
-      !inPrimaryAllowlist &&
-      (policy.requireExplicitOrigin ||
-        !this.environmentService.isDevelopment() ||
-        !loopbackOnly)
-    ) {
+    // Explicit allowlists are authorization boundaries, so reject a URL that
+    // cannot pass them before performing any attacker-influenced DNS lookup.
+    if (!inPrimaryAllowlist && policy.requireExplicitOrigin) {
       throw new BadRequestException(
         `${label} origin is not in ${this.allowlistName(policy.kind)}`,
       );
@@ -216,6 +208,20 @@ export class AiOutboundUrlPolicyService {
         `${label} origin is not in ${
           policy.secondaryAllowlistLabel ?? 'the secondary allowlist'
         }`,
+      );
+    }
+
+    const addresses = await this.resolveAddresses(url.hostname, label);
+    const loopbackOnly =
+      addresses.length > 0 &&
+      addresses.every((entry) => isAiLoopbackAddress(entry.address));
+
+    if (
+      !inPrimaryAllowlist &&
+      (!this.environmentService.isDevelopment() || !loopbackOnly)
+    ) {
+      throw new BadRequestException(
+        `${label} origin is not in ${this.allowlistName(policy.kind)}`,
       );
     }
     if (

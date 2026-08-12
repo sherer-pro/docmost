@@ -44,7 +44,7 @@ function translate(key: string, options?: { version?: number }) {
   }
   if (key.endsWith("inboundNodes")) return "Keys|Scope|Admission|Policy";
   if (key.endsWith("outboundNodes")) {
-    return "Deployment|Workspace|Space|Group|Consent|DNS request";
+    return "Deployment|Workspace|Space|Group|Consent|Origin allowlists|DNS request";
   }
   if (key === "ai.adminGuide.contractVersion") {
     return `Guide contract v${options?.version}`;
@@ -149,6 +149,8 @@ describe("AiAdminGuide", () => {
       view.textContent?.match(/ai\.adminGuide\.instructionsTitle/gu),
     ).toHaveLength(6);
     expect(view.textContent).toContain("Success signal");
+    expect(view.textContent).toContain("ai.adminGuide.securityOutboundGroups");
+    expect(view.textContent).toContain("ai.adminGuide.securityOutboundConsent");
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 });

@@ -272,7 +272,7 @@ async function validateStaticContract() {
       ["diagram.overviewNodes", 3],
       ["diagram.ragNodes", 7],
       ["diagram.inboundNodes", 4],
-      ["diagram.outboundNodes", 6],
+      ["diagram.outboundNodes", 7],
     ]) {
       if (guide[key].split("|").length !== count) {
         issues.push(`${locale} diagram node field has invalid arity: ${key}`);

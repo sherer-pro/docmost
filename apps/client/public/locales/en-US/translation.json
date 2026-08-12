@@ -1577,7 +1577,7 @@
         "overviewNodes": "Shared AI tool registry|External systems|Remote MCP server",
         "ragNodes": "Chat query|Query credential|External index|External indexer|Live ACL and content policy|Writer credential|does not call",
         "inboundNodes": "API key settings|Live key, workspace, user, and space scope|Redis rate and concurrency admission|Tool policy, page ACL, and content policy",
-        "outboundNodes": "Deployment control|Workspace control|Space binding|Deny-first group policy|User consent|DNS-pinned remote request"
+        "outboundNodes": "Deployment control|Workspace control|Space binding|Deny-first group policy|User consent|Exact origin allowlists|DNS-pinned remote request"
       },
       "securityOwner": {
         "spaceAdmin": "Space administrator; operator approves the origin",
