@@ -164,6 +164,13 @@ export class EnvironmentService {
     return parseInt(this.configService.get<string>('DATABASE_MAX_POOL', '10'));
   }
 
+  getDatabaseMigrationMode(): 'auto' | 'external' {
+    return this.configService.get<string>('DATABASE_MIGRATION_MODE', 'auto') ===
+      'external'
+      ? 'external'
+      : 'auto';
+  }
+
   getRedisUrl(): string {
     return this.configService.get<string>(
       'REDIS_URL',

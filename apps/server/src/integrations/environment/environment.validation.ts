@@ -193,6 +193,10 @@ export class EnvironmentVariables {
   DATABASE_MAX_POOL: string;
 
   @IsOptional()
+  @IsIn(['auto', 'external'])
+  DATABASE_MIGRATION_MODE: string;
+
+  @IsOptional()
   @IsString()
   JWT_TOKEN_EXPIRES_IN: string;
 

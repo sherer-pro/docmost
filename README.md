@@ -697,13 +697,20 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
 
-Docker Compose:
+Local/development Docker Compose:
 
 ```bash
 cp .env.compose.example .env
 # Replace both REPLACE_WITH_LONG_SECRET values and STRONG_DB_PASSWORD in .env.
 docker compose up -d --build
 ```
+
+Do not use the local Compose file as a production deployment definition.
+Production uses the separate `compose.production.yml`, immutable application
+and PostgreSQL image digests, external database/file volumes, an external
+one-shot schema migration, and fail-closed startup checks. Follow the
+[PostgreSQL production migration runbook](./apps/server/docs/postgresql-production-migration.md)
+before the first production deployment or any PostgreSQL runtime change.
 
 `pnpm dev` starts the frontend, API, and collaboration process separately.
 `COLLAB_URL` is the browser-visible collaboration origin, while

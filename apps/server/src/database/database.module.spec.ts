@@ -60,10 +60,18 @@ describe('DatabaseModule', () => {
           calls.push('migrate');
         }),
       } as never,
-      { getNodeEnv: jest.fn(() => 'production') } as never,
+      {
+        getNodeEnv: jest.fn(() => 'production'),
+        getDatabaseMigrationMode: jest.fn(() => 'auto'),
+      } as never,
       {
         markReady: jest.fn(() => {
           calls.push('ready');
+        }),
+      } as never,
+      {
+        assertSafe: jest.fn(async ({ requireLatest }) => {
+          calls.push(requireLatest ? 'preflight-latest' : 'preflight');
         }),
       } as never,
     );
@@ -73,6 +81,36 @@ describe('DatabaseModule', () => {
 
     await module.onModuleInit();
 
-    expect(calls).toEqual(['connect', 'migrate', 'ready']);
+    expect(calls).toEqual([
+      'connect',
+      'preflight',
+      'migrate',
+      'preflight-latest',
+      'ready',
+    ]);
+  });
+
+  it('requires current migrations without mutating schema in external mode', async () => {
+    const migrateToLatest = jest.fn();
+    const assertSafe = jest.fn(async () => undefined);
+    const markReady = jest.fn();
+    const module = new DatabaseModule(
+      {} as never,
+      { migrateToLatest } as never,
+      {
+        getNodeEnv: jest.fn(() => 'production'),
+        getDatabaseMigrationMode: jest.fn(() => 'external'),
+      } as never,
+      { markReady } as never,
+      { assertSafe } as never,
+    );
+    jest.spyOn(module, 'establishConnection').mockResolvedValue();
+
+    await module.onModuleInit();
+
+    expect(migrateToLatest).not.toHaveBeenCalled();
+    expect(assertSafe).toHaveBeenNthCalledWith(1, { requireLatest: false });
+    expect(assertSafe).toHaveBeenNthCalledWith(2, { requireLatest: true });
+    expect(markReady).toHaveBeenCalledTimes(1);
   });
 });

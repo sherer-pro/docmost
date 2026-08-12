@@ -43,6 +43,7 @@ import { FavoriteRepo } from './repos/favorite/favorite.repo';
 import { PageTransclusionsRepo } from './repos/page-transclusions/page-transclusions.repo';
 import { PageTransclusionReferencesRepo } from './repos/page-transclusions/page-transclusion-references.repo';
 import { DatabaseReadinessService } from '@docmost/db/services/database-readiness.service';
+import { DatabasePreflightService } from '@docmost/db/services/database-preflight.service';
 import { DatabaseConnectionError } from '../common/errors/startup.errors';
 import { GroupPersistenceModule } from './persistence/group-persistence.module';
 import { LabelPersistenceModule } from './persistence/label-persistence.module';
@@ -92,6 +93,7 @@ import { QueueOutboxPersistenceModule } from './persistence/queue-outbox-persist
   providers: [
     MigrationService,
     DatabaseReadinessService,
+    DatabasePreflightService,
     WorkspaceRepo,
     UserRepo,
     SpaceRepo,
@@ -164,13 +166,20 @@ export class DatabaseModule implements OnModuleInit, BeforeApplicationShutdown {
     private readonly migrationService: MigrationService,
     private readonly environmentService: EnvironmentService,
     private readonly readinessService: DatabaseReadinessService,
+    private readonly preflightService: DatabasePreflightService,
   ) {}
 
   async onModuleInit() {
     await this.establishConnection();
 
     if (this.environmentService.getNodeEnv() === 'production') {
-      await this.migrationService.migrateToLatest();
+      await this.preflightService.assertSafe({ requireLatest: false });
+
+      if (this.environmentService.getDatabaseMigrationMode() === 'auto') {
+        await this.migrationService.migrateToLatest();
+      }
+
+      await this.preflightService.assertSafe({ requireLatest: true });
     }
 
     this.readinessService.markReady();

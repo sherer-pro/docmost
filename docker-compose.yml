@@ -32,6 +32,7 @@ x-docmost-environment: &docmost-environment
   MCP_MAX_CONCURRENT: "${MCP_MAX_CONCURRENT:-4}"
   DATABASE_URL_FILE: /run/secrets/docmost_database_url
   DATABASE_MAX_POOL: "${DATABASE_MAX_POOL:-10}"
+  DATABASE_MIGRATION_MODE: "${DATABASE_MIGRATION_MODE:-auto}"
   REDIS_URL_FILE: /run/secrets/docmost_redis_url
   JWT_TOKEN_EXPIRES_IN: "${JWT_TOKEN_EXPIRES_IN:-30d}"
   COLLAB_URL: "${COLLAB_URL:-http://localhost:3001}"
@@ -143,7 +144,7 @@ services:
       - docmost:/app/data/storage
 
   db:
-    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    image: postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-docmost}"
       POSTGRES_USER: "${POSTGRES_USER:-docmost}"
@@ -153,7 +154,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test:
-        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+        [
+          "CMD-SHELL",
+          'test "$$(cat /proc/1/comm)" = postgres && pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 10

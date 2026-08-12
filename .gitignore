@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 !.env.compose.example
+!.env.production.example
 # Keep obsolete standalone-sync files local while operators remove them.
 rag-sync.config.json
 /.rag-sync
