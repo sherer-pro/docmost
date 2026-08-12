@@ -52,6 +52,31 @@ test("accepts the checked-in release gate contract", () => {
   assert.deepEqual(validateReleaseGateContract(inputs()), []);
 });
 
+test("AI documentation gate keeps full history and base/head revisions", () => {
+  for (const [needle, expectedError] of [
+    [
+      "          fetch-depth: 0",
+      "validate checkout must use fetch-depth: 0 for AI guide diff checks",
+    ],
+    [
+      "          AI_GUIDE_BASE_SHA:",
+      "AI documentation gate must receive AI_GUIDE_BASE_SHA",
+    ],
+    [
+      "          AI_GUIDE_HEAD_SHA:",
+      "AI documentation gate must receive AI_GUIDE_HEAD_SHA",
+    ],
+  ]) {
+    const mutated = ciSource.replace(
+      needle,
+      `          REMOVED_${needle.trim()}`,
+    );
+    assert.notEqual(mutated, ciSource, `fixture must contain ${needle}`);
+    const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+    assert.ok(errors.includes(expectedError));
+  }
+});
+
 test("AI browser acceptance isolates and restores the admin panel preference", () => {
   const snapshot = aiAuditSource.indexOf("originalAdminAiPanelOpen = Boolean(");
   const normalize = aiAuditSource.indexOf("data: { aiPanelOpen: false }");
@@ -134,7 +159,10 @@ test("AI context acceptance finds its member beyond the first page", () => {
     /await api\(admin, "DELETE", `\/api\/spaces\/\$\{space\.id\}`\)/u,
   );
   assert.match(aiContextAuditSource, /state\.retained = false/u);
-  assert.match(aiContextAuditSource, /state\.deletedAt = new Date\(\)\.toISOString\(\)/u);
+  assert.match(
+    aiContextAuditSource,
+    /state\.deletedAt = new Date\(\)\.toISOString\(\)/u,
+  );
 });
 
 test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => {
@@ -205,11 +233,7 @@ const workflowMutations = [
     "ciSource",
     "pnpm audit --prod --audit-level high",
   ],
-  [
-    "integration build",
-    "ciSource",
-    "pnpm server:build",
-  ],
+  ["integration build", "ciSource", "pnpm server:build"],
   [
     "empty database migrations",
     "ciSource",
@@ -351,9 +375,7 @@ test("rejects a required workflow command with fail-open handling", () => {
   assert.notEqual(mutated, ciSource, "security command fixture must exist");
   const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
   assert.ok(
-    errors.includes(
-      "validate must not mask failures from pnpm test:security",
-    ),
+    errors.includes("validate must not mask failures from pnpm test:security"),
   );
 });
 
@@ -378,9 +400,7 @@ test("rejects fail-open command chaining in root verification scripts", () => {
   const errors = validateReleaseGateContract(
     inputs({ packageJson: mutatedPackage }),
   );
-  assert.ok(
-    errors.includes("verify:quick must include run test:security"),
-  );
+  assert.ok(errors.includes("verify:quick must include run test:security"));
 });
 
 for (const [scriptName, command] of [

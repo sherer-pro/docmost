@@ -307,6 +307,26 @@ function validateWorkflowHygiene(errors, workflowSources) {
   }
 }
 
+function validateAiGuideGateMetadata(errors, ciSource) {
+  const validate = jobBlock(ciSource, "validate");
+  const steps = workflowStepBlocks(validate);
+  const checkout = steps.find((step) => /actions\/checkout@/u.test(step));
+  if (!checkout || !/^\s+fetch-depth:\s*0\s*$/mu.test(checkout)) {
+    errors.push(
+      "validate checkout must use fetch-depth: 0 for AI guide diff checks",
+    );
+  }
+
+  const guideStep = steps.find(
+    (step) => executableCommandLines(step, "pnpm check:ai-docs").length > 0,
+  );
+  for (const variable of ["AI_GUIDE_BASE_SHA", "AI_GUIDE_HEAD_SHA"]) {
+    if (!guideStep || !new RegExp(`^\\s+${variable}:`, "mu").test(guideStep)) {
+      errors.push(`AI documentation gate must receive ${variable}`);
+    }
+  }
+}
+
 export function validateReleaseGateContract({
   ciSource,
   dockerSource,
@@ -350,6 +370,7 @@ export function validateReleaseGateContract({
   }
   validateVerificationScripts(errors, packageJson);
   validateWorkflowHygiene(errors, workflowSources);
+  validateAiGuideGateMetadata(errors, ciSource);
 
   return errors;
 }
