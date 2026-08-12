@@ -52,7 +52,7 @@ interface DictionaryDecorationBatch {
 
 const FULL_REBUILD_MIN_CHANGED_SIZE = 5_000;
 const FULL_REBUILD_CHANGED_RATIO = 0.5;
-const EXCLUDED_INLINE_MARK_NAMES = new Set(["code", "link"]);
+const EXCLUDED_INLINE_MARK_NAMES = new Set(["link"]);
 
 export const dictionaryHighlightPluginKey =
   new PluginKey<DictionaryHighlightPluginState>("dictionaryHighlight");
