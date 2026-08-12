@@ -422,6 +422,8 @@ If a change is not reflected in `AGENTS.md`, the automation task is considered i
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
+The development-only setup, shared-machine impact, safe profile, MCP registration, diagnostics, import limits, update, and rollback runbook is [`docs/agentmemory-graphify.md`](docs/agentmemory-graphify.md). Its secret-free profile template is [`docs/development/agentmemory.env.example`](docs/development/agentmemory.env.example).
+
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
@@ -467,5 +469,10 @@ Local commands:
 
 - `pnpm context:memory:start` / `pnpm context:memory:stop` manage the loopback-only AgentMemory service.
 - `pnpm context:memory:status` and `pnpm context:memory:doctor` inspect it without changing application runtime dependencies.
-- `pnpm context:graph-import` imports the current Graphify graph.
+- `pnpm context:memory:smoke` compares the pinned MCP shim's autonomous and server-backed tool surfaces.
+- `pnpm context:memory:selftest` round-trips one uniquely marked memory and removes it.
+- `pnpm context:graph-import` imports the current Graphify graph; add `-- --assert-idempotent` to require a zero-new-entity repeated import.
 - `pnpm context:refresh` runs the existing `graphify update .` workflow and imports only after a successful, valid update.
+- `pnpm context:verify` performs the read-only health, profile, listener, MCP, hook, smoke, and graph contract checks.
+
+AgentMemory is a shared machine service: one database, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository. Merge shared user configuration with read -> merge -> atomic write, preserve unrelated entries, and create a backup only when content changes. This repository registers the pinned `@agentmemory/mcp@0.9.28` shim once through `.codex/config.toml`; do not enable a duplicate AgentMemory plugin. Preserve the project `.codex/hooks.json` Graphify hook and never bypass hook trust.

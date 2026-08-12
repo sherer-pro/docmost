@@ -1,56 +1,57 @@
 # AgentMemory and Graphify development setup
 
-## Purpose and responsibility boundary
+This document describes the development-only AgentMemory integration that complements the existing Graphify knowledge graph. It does not change Docmost application runtime dependencies or Graphify's model/backend configuration.
 
-Graphify is the canonical source for the repository's current structure, symbols, files, documentation, and relationships. Its canonical artifact remains `graphify-out/graph.json`; use `graphify query`, `graphify explain`, and `graphify path` for current-state questions.
+## Verified toolchain
 
-AgentMemory stores Codex session history, durable decisions, failed and successful approaches, recurring errors, project conventions, and unfinished work. The Graphify graph imported into AgentMemory is a bounded retrieval cache. It does not replace the current Graphify graph or source-code verification.
-
-The active profile deliberately gives the local LLM to Graphify only. AgentMemory uses `AGENTMEMORY_PROVIDER=noop` and local embeddings, so memory capture and retrieval do not compete with Graphify's semantic extraction.
-
-## Verified component versions
-
-| Component | Verified version | Installation |
+| Component | Version | Installation |
 | --- | --- | --- |
-| Codex CLI/Desktop CLI | `0.147.0` | Existing user installation |
-| Graphify | `0.9.33` | Existing `uv tool` installation (`graphifyy`) |
-| AgentMemory | `0.9.29` | Global user npm prefix, built from official commit `2973e4ec4c40d323a08daa34220118010e73a2c3` |
-| iii-engine | `0.11.2` | AgentMemory private user runtime under `~/.agentmemory/bin` |
-| Node.js | `24.16.0` | Existing user installation |
+| Codex CLI/Desktop CLI | `0.147.0` at initial setup | Existing user installation |
+| Graphify | `0.9.33` at initial setup | Existing `uv tool` installation (`graphifyy`) |
+| AgentMemory server | `0.9.29` | Global user npm prefix, built from official commit `2973e4ec4c40d323a08daa34220118010e73a2c3` |
+| AgentMemory MCP shim | `0.9.28` | Published package pinned in `.codex/config.toml` |
+| iii-engine worker | `0.11.2` | AgentMemory private user runtime under `~/.agentmemory/bin` |
 
-At setup time, the npm `latest` tag for `@agentmemory/agentmemory` was still `0.9.28`. That release does not include `POST /agentmemory/graph/import-graphify`; the endpoint first appears in the official `0.9.29` source. The installed `0.9.29` build is therefore pinned to the official commit above rather than silently falling back to an incompatible npm release.
+At setup time, the npm `latest` tag for `@agentmemory/agentmemory` was still `0.9.28`. That release does not include `POST /agentmemory/graph/import-graphify`; the endpoint first appears in the official `0.9.29` source. The installed server is therefore pinned to the official commit above. The separately published `@agentmemory/mcp` package has no `0.9.29` release, so the manual Codex registration pins the verified `0.9.28` shim.
 
-Graphify `0.9.33` remains unchanged because it is working. No Graphify rebuild, reinstall, model change, endpoint change, or backend change is part of this setup.
+Graphify remains unchanged because it is working. Do not alter its local LLM backend, endpoint, model, context window, token budget, `GRAPHIFY_MAX_RETRIES`, or `GRAPHIFY_API_TIMEOUT` as part of AgentMemory maintenance.
 
-## Detected Graphify configuration
-
-Graphify is installed as the `graphifyy` uv tool and exposes `graphify` plus `graphify-mcp`. Repository instructions use `graphify update .`; the project-scoped Codex hook invokes `graphify hook-check`. There is no separate Graphify MCP entry in the current Codex MCP list.
-
-The detected semantic backend is LM Studio listening on `http://127.0.0.1:56254/v1`. Graphify's selected model is `google/gemma-4-26b-a4b-qat`. The active Graphify-related process environment also contains `GRAPHIFY_MAX_RETRIES=0` and `GRAPHIFY_API_TIMEOUT=1800`; its `OPENAI_API_KEY` is set outside the repository and is never copied or displayed. LM Studio's `/v1/models` endpoint exposed three model IDs during the audit, but without the LM Studio CLI this is only the served model list, not proof that all three are simultaneously resident in VRAM.
-
-AgentMemory scripts do not alter any of these Graphify values. `context:refresh` removes AgentMemory variables from the Graphify child while preserving the existing backend, endpoint, model, timeouts, and retry policy.
-
-## Architecture
+## Architecture and authority
 
 ```text
-Codex
-|-- Graphify
-|   |-- graphify-out/graph.json (canonical current graph)
-|   |-- graphify query / explain / path / update
-|   `-- existing local LLM configuration
-`-- AgentMemory
-    |-- Codex plugin and 8-tool core MCP surface
-    |-- Codex lifecycle hooks
+repository source + graphify-out/graph.json
+    |
+    |  scripts/context-memory.mjs
+    |  validates, refreshes, imports, verifies, self-tests
+    v
+shared loopback AgentMemory service
+    |-- one database for all user repositories
+    |-- one set of ports and one user hook set
     |-- local embeddings, no LLM provider
-    |-- ~/.agentmemory data, logs, and iii-engine runtime
-    `-- bounded import of graphify-out/graph.json
+    `-- bounded copy of Graphify entities
+
+Codex in this trusted repository
+    |-- project .codex/config.toml
+    |-- pinned @agentmemory/mcp@0.9.28 shim
+    `-- shared ~/.codex/hooks.json plus project Graphify hook
 ```
 
-AgentMemory data and configuration remain outside the Git worktree. The repository contains only scripts, task-runner entries, instructions, and this document.
+Graphify and the repository source are authoritative. The AgentMemory graph import is a bounded retrieval cache. AgentMemory stores cross-session decisions and observations; it must not replace current source verification.
 
-## Active user configuration
+## Shared machine service
 
-The active file is `%USERPROFILE%\.agentmemory\.env` on Windows and `~/.agentmemory/.env` elsewhere. It contains no provider API keys.
+AgentMemory is one shared machine service for every repository used by this account. The repositories share:
+
+- one AgentMemory database and data directory;
+- REST, stream, viewer, and iii-engine ports;
+- one `~/.agentmemory/.env` profile;
+- one `~/.codex/hooks.json` lifecycle-hook set.
+
+Changing the shared profile or hooks can affect every repository. Always use read -> merge -> atomic write, preserve unrelated entries, and create a backup only when the content will actually change. `pnpm context:memory:stop` stops the service for every repository using it, not only Docmost.
+
+## Safe profile
+
+The versioned secret-free template is [`docs/development/agentmemory.env.example`](development/agentmemory.env.example). Copy it to `~/.agentmemory/.env` and review the shared-service impact before changing it. The active profile must keep:
 
 ```ini
 AGENTMEMORY_PROVIDER=noop
@@ -73,107 +74,111 @@ AGENTMEMORY_III_VERSION=0.11.2
 AGENTMEMORY_DATA_DIR=~/.agentmemory/data
 ```
 
-The repository launcher also removes inherited OpenAI, Anthropic, Gemini, OpenRouter, and MiniMax provider variables from the AgentMemory child process. It does not remove those variables from Graphify. The Graphify refresh child receives the existing Graphify environment with AgentMemory-specific variables removed.
+Before `start`, `status`, `doctor`, `graph-import`, and `refresh`, the repository launcher validates the shared profile. It fails closed for provider keys, a provider other than `noop`, a non-loopback HTTP URL, or a data directory inside the repository. Other differences emit warnings because the file is shared. `AGENTMEMORY_URL` can be overridden by the process environment, but both the file and override must be loopback HTTP. `~` in the data path is expanded before a child process receives it.
 
-## Ports and data
+The launcher removes inherited OpenAI, Anthropic, Gemini, OpenRouter, MiniMax, Voyage, and Cohere provider credentials from the AgentMemory child. The Graphify refresh child receives the existing Graphify environment with all `AGENTMEMORY_*` variables plus embedding/consolidation/graph-extraction/token-budget, iii port, and `OPENAI_API_KEY_FOR_LLM` variables removed. It does not modify Graphify configuration.
 
-| Port | Binding | Purpose |
+## Ports and service lifecycle
+
+| Port | Required bind | Purpose |
 | --- | --- | --- |
-| `3111` | `127.0.0.1` | REST API, health, and MCP HTTP |
-| `3112` | `127.0.0.1` | Internal streams |
+| `3111` | `127.0.0.1` | AgentMemory REST API |
+| `3112` | `127.0.0.1` | AgentMemory stream |
 | `3113` | `127.0.0.1` | Viewer |
 | `49134` | `127.0.0.1` | iii-engine WebSocket |
 
-The service is started on demand. No Windows startup task or service is created. AgentMemory stores its database, runtime state, logs, and backups under `~/.agentmemory`, outside this repository.
+The service starts on demand. No Windows startup task or service is created. When Docker is available, `context:memory:start` preserves the existing policy check: exactly one matching iii-engine container on port `3111`, `docker update --restart=no`, then confirmation through `docker inspect`. When Docker is not installed, only that policy check is skipped and the already-started native service remains successful.
+
+AgentMemory data, runtime state, logs, refresh backups, and the private iii executable stay under `~/.agentmemory`, outside this repository.
 
 ## Commands
 
-Run from the repository root:
+Run through Corepack from the repository root:
 
 ```bash
-pnpm context:memory:start
-pnpm context:memory:stop
-pnpm context:memory:status
-pnpm context:memory:doctor
-pnpm context:graph-import
-pnpm context:refresh
+corepack pnpm context:memory:start
+corepack pnpm context:memory:stop
+corepack pnpm context:memory:status
+corepack pnpm context:memory:doctor
+corepack pnpm context:memory:smoke
+corepack pnpm context:memory:selftest
+corepack pnpm context:graph-import
+corepack pnpm context:graph-import -- --assert-idempotent
+corepack pnpm context:refresh -- --dry-run
+corepack pnpm context:refresh
+corepack pnpm context:verify
 ```
 
-The underlying Node script resolves the Git root, so it can also be invoked from a nested directory using an absolute path to the script:
+- `context:memory:start` is idempotent. It reuses a healthy service, otherwise starts the global AgentMemory CLI with the validated child environment and writes logs under `~/.agentmemory/logs`.
+- `context:memory:status` and `context:memory:doctor` validate the profile before invoking the AgentMemory CLI.
+- `context:memory:smoke` starts the pinned MCP shim twice, measures the autonomous fallback and live-server tool surfaces, and requires a distinct server-backed surface containing `memory_smart_search`. It does not rely on a hard-coded tool count.
+- `context:memory:selftest` writes a unique `agentmemory-selftest-<timestamp>` memory, finds it with `/agentmemory/smart-search`, deletes it through the governance API, and verifies cleanup.
+- `context:graph-import` validates non-empty nodes and edges in `graphify-out/graph.json` before calling `/agentmemory/graph/import-graphify` with the absolute Git root, then waits for stable health after the heavy import. `--assert-idempotent` repeats the import, waits again, and requires zero `newNodes` and zero `newEdges`.
+- `context:refresh -- --dry-run` is read-only. A real refresh enumerates `git ls-files graphify-out`, backs up every tracked artifact under a repository-hash directory in `~/.agentmemory/graphify-backups`, runs the existing `graphify update .`, validates the graph, and imports it. A failed update/validation/import restores the complete tracked set and retains that single backup for inspection or retry. Re-running after a failure reuses it only when its hashes still match the current tracked artifacts, so backups do not accumulate. The backup is removed only after the full operation succeeds and only after its resolved path is verified beneath the expected backup parent.
+- `context:verify` is read-only and exits nonzero on any mismatch. It checks health and versions, the safe profile, four loopback listeners, the external data directory, exactly one AgentMemory MCP entry while preserving `node_repl`, six user hooks and their script paths, the project Graphify hook, MCP smoke, and the existing graph.
+
+Do not run a full `graphify .` merely to test this integration. Use the current valid graph and scoped `graphify query`/`graphify explain` commands.
+
+## Codex MCP and hooks
+
+The earlier setup documentation incorrectly claimed that `agentmemory@agentmemory 0.9.29` was installed as a Codex plugin. It was not present in `codex plugin list --json`, its marketplace was absent, and `codex mcp list` initially contained only `node_repl`.
+
+This repository now uses the supported project-scoped manual registration in `.codex/config.toml`:
+
+```toml
+[mcp_servers.agentmemory]
+command = "npx"
+args = ["-y", "@agentmemory/mcp@0.9.28"]
+env = { AGENTMEMORY_URL = "http://127.0.0.1:3111", AGENTMEMORY_TOOLS = "core" }
+enabled = true
+required = true
+startup_timeout_sec = 30
+```
+
+This choice avoids inventing a missing plugin/marketplace and pins the last published shim version that was tested against the live `0.9.29` server. Do not install or enable the plugin while this manual section is active; plugin plus manual registration would duplicate the server.
+
+The six existing AgentMemory hooks are user-level entries in `~/.codex/hooks.json`. They invoke scripts under the global npm package at `%APPDATA%\npm\node_modules\@agentmemory\agentmemory\plugin\scripts\*.mjs` for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`, and `Stop`. The repository's `.codex/hooks.json` remains separate and retains the existing `graphify.EXE hook-check` `PreToolUse` hook.
+
+After changing MCP configuration or hooks, fully restart Codex Desktop. A running task cannot acquire newly registered MCP tools retroactively. After restart:
 
 ```bash
-node <repo-root>/scripts/context-memory.mjs graph-import
-node <repo-root>/scripts/context-memory.mjs refresh --dry-run
-```
-
-`context:memory:start` is idempotent: a healthy existing service is reported and not duplicated. It starts AgentMemory from the user-level npm installation, writes logs only under `~/.agentmemory/logs`, uses the private iii-engine runtime, and waits for health.
-
-`context:graph-import` validates JSON and requires non-empty `nodes` and `links`/`edges` before sending only this body to the loopback API:
-
-```json
-{"cwd":"<absolute-git-root>"}
-```
-
-The endpoint reads `graphify-out/graph.json` itself. The script reports imported, new, skipped, and truncated entities and exits nonzero on validation, HTTP, or import failure.
-
-`context:refresh` preserves the existing Graphify command and environment. It backs up the current valid graph outside the repository, runs `graphify update .`, validates the result, and imports only after success. If Graphify exits unsuccessfully, the previous valid `graph.json` is restored and no import occurs. Use `pnpm context:refresh -- --dry-run` to verify routing without updating the graph.
-
-## Codex plugin, MCP, and hooks
-
-The enabled plugin is `agentmemory@agentmemory` version `0.9.29`. It registers the MCP server, so there is no project-level fallback section in `.codex/config.toml` and no second manual AgentMemory MCP server.
-
-After installation or update, fully restart Codex Desktop. The current task cannot acquire newly registered tools retroactively. Verify after restart:
-
-```bash
-codex plugin list --json
 codex mcp list
-node scripts/agentmemory-mcp-smoke.mjs
+corepack pnpm context:memory:smoke
+corepack pnpm context:verify
 ```
 
-The smoke check requests all tools from the shim but expects the server-enforced 8-tool `core` surface. The autonomous fallback exposes 7 tools; receiving 8 confirms that the shim reached the running full server.
-
-Codex Desktop plugin-local hooks are not relied on. A clean `codex exec` smoke with only plugin-local hooks left the AgentMemory session count unchanged. On Windows, AgentMemory `0.9.29` also reports that automated `agentmemory connect codex --with-hooks` is unsupported. The user-level workaround at `~/.codex/hooks.json` therefore contains one AgentMemory hook for each of these six Codex events: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`, and `Stop`. The repository's Graphify `PreToolUse` hook remains in `.codex/hooks.json` at project scope.
-
-After restarting Codex, open `/hooks` and inspect every command before trusting it. Each AgentMemory command must invoke `node` with a script under the installed `agentmemory/0.9.29/scripts` directory. There must be exactly one AgentMemory command per event and the existing Graphify hook must still be present. Do not bypass Codex hook trust prompts. Until that review is completed, a no-bypass `codex exec` smoke is expected to leave the AgentMemory session count unchanged.
+Then open `/hooks` and inspect each command. Never use `--dangerously-bypass-hook-trust`. Until restart and manual `/hooks` review, report the MCP integration as configured and CLI-visible, not as proven active in a new Codex session.
 
 ## Diagnostics
 
-1. Run `pnpm context:memory:status` and confirm `healthy`, provider `noop`, embeddings enabled, graph enabled, and compression/consolidation/context injection disabled.
-2. Run `pnpm context:memory:doctor`. In this intentional no-LLM profile, the doctor marks the absent LLM key and three disabled LLM features as failures even though they are required safety settings here. Do not apply those suggested fixes. AgentMemory `0.9.29` may additionally report `iii not on PATH` when doctor is launched as a nested Windows child process; verify `~/.agentmemory/bin/iii.exe --version` and the live worker executable before treating that diagnostic as real.
-3. Check `http://127.0.0.1:3111/agentmemory/health` and confirm the service and worker versions.
-4. Check listeners for `3111`, `3112`, `3113`, and `49134`; they must bind only to loopback.
-5. Run `node scripts/agentmemory-mcp-smoke.mjs` to distinguish the 8-tool server-backed core surface from the 7-tool fallback.
-6. Run `graphify --version` and a scoped `graphify query`/`graphify explain`; do not trigger a full extraction merely to test AgentMemory.
-7. Inspect `~/.agentmemory/logs` without copying logs into the repository.
+1. Run `corepack pnpm context:memory:status` and confirm a healthy service with provider `noop`, local embeddings, graph extraction enabled, and compression/consolidation/context injection disabled.
+2. Run `corepack pnpm context:memory:doctor`. In this intentional no-LLM profile, doctor marks the absent LLM key and three disabled LLM features as failures even though they are required safety settings here. Do not apply those suggested fixes.
+3. AgentMemory `0.9.29` may report `iii not on PATH` when doctor is launched as a nested Windows child. Verify `~/.agentmemory/bin/iii.exe --version` and the live worker executable before treating it as a real failure.
+4. Run `corepack pnpm context:verify` for the full integration contract and recovery hints.
+5. Inspect `~/.agentmemory/logs` without copying logs or secrets into the repository.
 
 ## Graph import limits
 
-AgentMemory `0.9.29` caps a Graphify import at a 32 MiB file, 5,000 nodes, and 20,000 input edges. The graph is valid and below the file-size cap, but larger than the entity caps. The first verified setup import read 14,741 nodes and 42,152 edges, imported 5,000 nodes and 12,786 edges, reported 9,741 nodes and 22,152 edges outside the cap, and skipped 7,214 edges whose endpoints were not in the retained node set. An immediate repeated import created zero new nodes and zero new edges. Counts will change as Graphify hooks update the canonical graph.
+AgentMemory `0.9.29` caps a Graphify import at a 32 MiB file, 5,000 nodes, and 20,000 input edges. During the initial verified import, it read 14,741 nodes and 42,152 edges, imported 5,000 nodes and 12,786 edges, reported 9,741 nodes and 22,152 edges outside the cap, and skipped 7,214 edges whose endpoints were not retained. The immediate repeated import created zero new nodes and zero new edges. Current graph counts can differ as Graphify hooks update the canonical graph; use `--assert-idempotent` to verify the current import programmatically.
 
 This truncation is why AgentMemory's copy is only a retrieval cache. Graphify and source code remain authoritative.
 
 ## Safe AgentMemory update
 
-1. Stop the service and record `agentmemory --version`, `iii --version`, `codex plugin list --json`, and `codex mcp list`.
-2. Back up `~/.agentmemory/.env`, `~/.codex/config.toml`, and `~/.codex/hooks.json` outside the repository. Preserve the AgentMemory data directory.
-3. Read the official AgentMemory README, changelog, `.env.example`, and pairing recipe for the target version.
-4. Prefer a published npm version that contains Graphify import:
-
-   ```bash
-   npm install -g @agentmemory/agentmemory@<verified-version>
-   ```
-
-5. If npm still lags and the official pinned commit is required, clone that commit to a temporary directory, install its development dependencies, build with `tsdown`, copy the package assets listed in `package.json`, run `npm pack`, and install the resulting tarball globally. Never install an unpinned fork or third-party binary.
-6. Update the Codex plugin only after reviewing its manifest and hooks. Do not create a manual MCP section when the plugin already registers one.
-7. Restart AgentMemory, run health/status/doctor/MCP checks, import the graph twice, and restart Codex.
+1. Stop the shared service only after confirming that no other repository needs it. Record the AgentMemory server/worker versions, `codex plugin list --json`, and `codex mcp list`.
+2. Read `~/.agentmemory/.env`, `~/.codex/config.toml`, and `~/.codex/hooks.json`; merge changes atomically and back up a file only when its content will change. Preserve AgentMemory data and unrelated Codex entries.
+3. Read the official AgentMemory README, changelog, `.env.example`, pairing recipe, and the published MCP shim versions for the target release.
+4. Prefer a published server package that contains Graphify import. If npm still lags and an official pinned commit is required, build only that reviewed commit and never install an unpinned fork or third-party binary.
+5. Keep exactly one Codex registration method. Update the pinned project shim only after testing its fallback and server-backed surfaces. Do not add the server package to any Docmost workspace dependency.
+6. Restart AgentMemory, run status/doctor/verify/selftest, import the graph with `--assert-idempotent`, restart Codex, and inspect `/hooks` without bypassing trust.
 
 ## Rollback
 
-1. Run `pnpm context:memory:stop`.
-2. Disable the plugin with `codex plugin remove agentmemory@agentmemory --json`. Remove the `agentmemory` marketplace only if no other plugin uses it.
-3. Restore the backed-up Codex config and merge hooks carefully; remove only AgentMemory commands, never the Graphify hook or unrelated user hooks.
-4. Restore the backed-up AgentMemory `.env` if configuration rollback is needed.
-5. Reinstall the previously recorded npm package version. Keep `~/.agentmemory` data unless intentional data deletion is separately approved.
+1. Stop the shared service only after coordinating with other repositories.
+2. Remove only `[mcp_servers.agentmemory]` and its env table from `.codex/config.toml`; preserve `.codex/hooks.json` and its Graphify hook.
+3. If user-level hooks or configuration must be rolled back, use read -> merge -> atomic write and remove only AgentMemory-owned entries. Preserve unrelated MCP servers, hooks, and settings.
+4. Restore a previous `~/.agentmemory/.env` only if the profile itself changed. Keep `~/.agentmemory/data` unless data deletion is separately approved.
+5. Reinstall the previously recorded global AgentMemory package and worker versions, then rerun the verification sequence.
 
 ## Data and security guidance
 
@@ -194,6 +199,6 @@ CONSOLIDATION_ENABLED=false
 AGENTMEMORY_INJECT_CONTEXT=false
 ```
 
-For Ollama, convert a verified Graphify base such as `http://127.0.0.1:11434` to `http://127.0.0.1:11434/v1` only after confirming the OpenAI-compatible endpoint. Never enable per-tool automatic compression while Graphify is using the same local model.
+For Ollama, convert a verified Graphify base such as `http://127.0.0.1:11434` to `http://127.0.0.1:11434/v1` only after confirming the OpenAI-compatible endpoint. Never enable per-tool automatic compression while Graphify uses the same local model.
 
-After any successful Graphify update or rebuild, run `pnpm context:graph-import` again, or use `pnpm context:refresh` to perform the update and import in order.
+After a successful Graphify update or rebuild, run `corepack pnpm context:graph-import -- --assert-idempotent`, or use `corepack pnpm context:refresh` to update, validate, and import in order.
