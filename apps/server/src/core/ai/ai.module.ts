@@ -134,6 +134,7 @@ import { AiSourceAccessService } from './services/ai-source-access.service';
   ],
   exports: [
     AiConfigService,
+    OpenAiCompatibleProviderService,
     AiOutboundUrlPolicyService,
     AiToolRegistryService,
     AiBuiltinToolPolicyService,

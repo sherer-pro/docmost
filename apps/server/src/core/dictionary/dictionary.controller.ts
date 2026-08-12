@@ -28,10 +28,13 @@ import { DictionaryService } from './dictionary.service';
 import {
   CreateDictionaryTermDto,
   ExportDictionaryTermsDto,
+  GenerateAllDictionaryWordFormsDto,
+  GenerateDictionaryWordFormsDto,
   ImportDictionaryTermsDto,
   ListDictionaryTermsQueryDto,
   UpdateDictionaryTermDto,
 } from './dto/dictionary-term.dto';
+import { DictionaryWordFormService } from './dictionary-word-form.service';
 import { FastifyReply } from 'fastify';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 
@@ -41,6 +44,7 @@ export class DictionaryController {
   constructor(
     private readonly dictionaryService: DictionaryService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly wordForms: DictionaryWordFormService,
   ) {}
 
   @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
@@ -50,16 +54,69 @@ export class DictionaryController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const ability = await this.spaceAbility.createForUser(
-      user,
-      query.spaceId,
-    );
+    const ability = await this.spaceAbility.createForUser(user, query.spaceId);
 
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
       throw new ForbiddenException();
     }
 
     return this.dictionaryService.listTerms(query.spaceId, workspace.id);
+  }
+
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
+  @Get('word-form-generation/status')
+  async getWordFormGenerationStatus(
+    @Query() query: ListDictionaryTermsQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (!this.isWorkspaceAdmin(user)) {
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        query.spaceId,
+      );
+      if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
+    }
+
+    return this.wordForms.getAvailability(query.spaceId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  @Post('actions/generate-word-forms')
+  async generateWordForms(
+    @Body() dto: GenerateDictionaryWordFormsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
+    if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+
+    return this.wordForms.generateForms(dto.spaceId, workspace.id, {
+      term: dto.term,
+      forms: dto.forms ?? [],
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
+  @Post('actions/generate-all-word-forms')
+  async generateAllWordForms(
+    @Body() dto: GenerateAllDictionaryWordFormsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (!this.isWorkspaceAdmin(user)) {
+      throw new ForbiddenException(
+        'Only workspace admins can generate word forms for all dictionary terms',
+      );
+    }
+
+    return this.wordForms.generateAndSaveAll(dto.spaceId, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -178,10 +235,14 @@ export class DictionaryController {
   }
 
   private assertCanImportExportDictionary(user: User) {
-    if (![UserRole.ADMIN, UserRole.OWNER].includes(user.role as UserRole)) {
+    if (!this.isWorkspaceAdmin(user)) {
       throw new ForbiddenException(
         'Only workspace admins can import or export dictionary terms',
       );
     }
+  }
+
+  private isWorkspaceAdmin(user: User): boolean {
+    return [UserRole.ADMIN, UserRole.OWNER].includes(user.role as UserRole);
   }
 }

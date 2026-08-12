@@ -2,7 +2,7 @@
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
-with external RAG indexes and assistants. It also separates five related but
+with external RAG indexes and assistants. It also separates six related but
 distinct paths:
 
 1. **Query-time retrieval** finds sources while the AI assistant is answering.
@@ -16,6 +16,8 @@ distinct paths:
 5. **Outbound external MCP** lets the internal agent call read-only tools on
    remote MCP servers after workspace approval, space binding, and per-user
    opt-in. Docmost is the MCP _client_ here.
+6. **Dictionary word-form generation** uses the configured space model to
+   propose inflections and abbreviations for one term or to update every term.
 
 Paths 4 and 5 are opposite directions. They share no configuration and no
 credentials: an inbound `keyType=mcp` API key has nothing to do with an outbound
@@ -67,6 +69,7 @@ The main components are:
 | `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history     |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
+| `DictionaryWordFormService`              | bounded structured word-form generation through the configured space provider               |
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
 | `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots             |
 | `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                |
@@ -579,6 +582,35 @@ lines, covering the requested transformation, preservation constraints, editing
 rules, unsupported-content guardrails, and the expected output-only response.
 Space administrators can replace these defaults with custom quick commands.
 
+### Dictionary word-form generation
+
+When the space provider is enabled and has both `baseUrl` and `chatModel`, the
+dictionary exposes two model-assisted commands. A user who can manage pages in
+the space can generate forms for the term currently open in the edit dialog.
+That command returns a normalized form list to the client but does not save it;
+the user reviews and saves it through the ordinary term update flow. Workspace
+`owner|admin` users can generate forms for every dictionary term, and that
+command saves the complete result immediately.
+
+Only term spellings are sent to the provider. Definitions and other space
+content are not included. Terms are JSON-encoded and treated as untrusted data;
+the system prompt rejects instructions embedded in a term. Generation asks for
+language-appropriate cases, declensions, conjugations where applicable,
+singular/plural forms, grammatical genders, and common abbreviations. Provider
+responses must match the expected indexed JSON shape and are retried once when
+invalid. Bulk work uses batches of eight with at most three provider requests
+in flight.
+
+Existing forms are retained. Results use the same NFKC, whitespace, case-folded
+deduplication, 255-character form limit, and 100-form-per-term limit as manual
+dictionary updates. The bulk operation generates every batch before opening a
+database transaction. It then verifies that the dictionary snapshot has not
+changed, skips aliases already owned by another term, and replaces all aliases
+atomically; concurrent edits return `409` without a partial save. A provider or
+validation failure likewise leaves the dictionary unchanged. These synchronous
+utility calls use the provider timeout and network policy from the space
+configuration but are not stored as chat conversations or assistant runs.
+
 The assistant's display identity is stored in the same space configuration:
 `assistantNameEnabled`, `assistantName` (up to eighty characters), and
 `assistantGender` (`masculine|feminine`). The name is trimmed and may contain
@@ -705,7 +737,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260805T100000-ai-assistant-profiles.ts`](../apps/server/src/database/migrations/20260805T100000-ai-assistant-profiles.ts)                                   | Adds disabled-by-default workspace/profile/group/user policy, exact external-tool selections, immutable conversation/run/provider snapshots, and Agent verification rows. Existing conversations keep the legacy no-profile path.                                                                  | Destroys profile configuration, preferences, verifications, and immutable profile/provider history; use deployment or workspace switches instead.                                              |
 | [`20260805T110000-ai-builtin-tool-policy.ts`](../apps/server/src/database/migrations/20260805T110000-ai-builtin-tool-policy.ts)                                 | Adds exact workspace/space capability policy and run snapshots. Seeds workspaces with the eleven legacy Agent capabilities and existing MCP keys with the seven legacy read capabilities.                                                                                                          | Deletes saved policy, API-key capability lists, and run snapshots; use policy switches or `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED=false` instead.                                                  |
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
-| [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                   | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                       | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
+| [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                     | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                     | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
 | [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
@@ -1335,6 +1367,9 @@ CSRF contract.
 | `GET/PUT /api/spaces/:spaceId/ai/exclusions`                          | read or replace exclusion rules with optimistic revision                                                                       |
 | `GET /api/spaces/:spaceId/ai/exclusions/candidates`                   | search page candidates for exclusions                                                                                          |
 | `GET /api/spaces/:spaceId/ai/status?pageId=`                          | availability, permissions, identity, daily and last-7-calendar-day usage, active runs, and quick commands                      |
+| `GET /api/dictionary-terms/word-form-generation/status?spaceId=`      | whether the configured space provider is available to a dictionary editor or workspace administrator                           |
+| `POST /api/dictionary-terms/actions/generate-word-forms`              | return generated forms for one unsaved term form; requires dictionary edit access                                              |
+| `POST /api/dictionary-terms/actions/generate-all-word-forms`          | generate and atomically save forms for every term; requires workspace `owner\|admin`                                           |
 | `GET/POST /api/ai/conversations`                                      | list by required `pageId` or create a conversation                                                                             |
 | `GET/PATCH/DELETE /api/ai/conversations/:id`                          | read, update, or soft-delete an owned conversation                                                                             |
 | `POST /api/ai/conversations/:id/actions/open`                         | update the last-opened time                                                                                                    |

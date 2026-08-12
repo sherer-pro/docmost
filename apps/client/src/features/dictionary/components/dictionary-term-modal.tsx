@@ -14,11 +14,13 @@ import { useTranslation } from "react-i18next";
 import * as z from "zod";
 import {
   useCreateDictionaryTermMutation,
+  useGenerateDictionaryWordFormsMutation,
   useUpdateDictionaryTermMutation,
 } from "@/features/dictionary/queries/dictionary-query";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
 import { DictionaryMarkdown } from "./dictionary-markdown";
 import classes from "./dictionary.module.css";
+import { IconSparkles } from "@tabler/icons-react";
 
 interface DictionaryTermModalProps {
   opened: boolean;
@@ -26,6 +28,7 @@ interface DictionaryTermModalProps {
   spaceId: string;
   initialTerm?: string;
   term?: IDictionaryTerm | null;
+  wordFormGenerationAvailable?: boolean;
 }
 
 const formSchema = z.object({
@@ -42,10 +45,12 @@ export function DictionaryTermModal({
   spaceId,
   initialTerm = "",
   term,
+  wordFormGenerationAvailable = false,
 }: DictionaryTermModalProps) {
   const { t } = useTranslation();
   const createMutation = useCreateDictionaryTermMutation(spaceId);
   const updateMutation = useUpdateDictionaryTermMutation(spaceId);
+  const generateMutation = useGenerateDictionaryWordFormsMutation();
   const isEditing = Boolean(term?.id);
 
   const form = useForm<FormValues>({
@@ -86,6 +91,25 @@ export function DictionaryTermModal({
     onClose();
   };
 
+  const handleGenerateWordForms = async () => {
+    const termValue = form.values.term.trim();
+    if (!termValue) {
+      form.setFieldError("term", t("Enter a term"));
+      return;
+    }
+
+    try {
+      const result = await generateMutation.mutateAsync({
+        spaceId,
+        term: termValue,
+        forms: form.values.forms,
+      });
+      form.setFieldValue("forms", result.forms);
+    } catch {
+      return;
+    }
+  };
+
   return (
     <Modal
       opened={opened}
@@ -114,6 +138,21 @@ export function DictionaryTermModal({
             clearable
             {...form.getInputProps("forms")}
           />
+
+          {isEditing && wordFormGenerationAvailable && (
+            <Group justify="flex-start">
+              <Button
+                type="button"
+                variant="light"
+                size="compact-sm"
+                leftSection={<IconSparkles size={15} />}
+                loading={generateMutation.isPending}
+                onClick={handleGenerateWordForms}
+              >
+                {t("Generate word forms")}
+              </Button>
+            </Group>
+          )}
 
           <Textarea
             label={t("Definition")}

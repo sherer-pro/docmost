@@ -40,11 +40,11 @@ Deprecation tracking:
 - Bootstrap routes expose only the authenticated principal and minimal navigation
   context needed to complete step-up authentication.
 - `GET /spaces` is the paginated bootstrap catalog. `GET
-  /spaces/policy-context?spaceSlug=...` is the canonical bootstrap lookup for an
+/spaces/policy-context?spaceSlug=...` is the canonical bootstrap lookup for an
   active route and is not limited to the first catalog page.
 - Space/resource routes resolve the owning space before evaluating MFA and SSO
   assurance. A failed evaluation returns `428
-  AUTHENTICATION_ASSURANCE_REQUIRED`; it must not be converted into a global
+AUTHENTICATION_ASSURANCE_REQUIRED`; it must not be converted into a global
   login redirect.
 
 ## RAG API namespace
@@ -152,6 +152,10 @@ Rules:
 - Import/export:
   - `POST /dictionary-terms/actions/import`
   - `POST /dictionary-terms/actions/export`
+- LLM word-form generation:
+  - `GET /dictionary-terms/word-form-generation/status?spaceId=:spaceId`
+  - `POST /dictionary-terms/actions/generate-word-forms`
+  - `POST /dictionary-terms/actions/generate-all-word-forms`
 - Space feature flag:
   - `PATCH /spaces/:spaceId` with `dictionaryEnabled: boolean`
 

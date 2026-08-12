@@ -3,6 +3,10 @@ import {
   ICreateDictionaryTermPayload,
   IDictionaryTerm,
   IDictionaryPortableTerm,
+  IDictionaryWordFormGenerationStatus,
+  IGenerateAllDictionaryWordFormsResult,
+  IGenerateDictionaryWordFormsPayload,
+  IGenerateDictionaryWordFormsResult,
   IImportDictionaryTermsPayload,
   IImportDictionaryTermsResult,
   IUpdateDictionaryTermPayload,
@@ -40,6 +44,36 @@ export async function updateDictionaryTerm(
 
 export async function deleteDictionaryTerm(termId: string): Promise<void> {
   await api.delete(`/dictionary-terms/${termId}`);
+}
+
+export async function getDictionaryWordFormGenerationStatus(
+  spaceId: string,
+): Promise<IDictionaryWordFormGenerationStatus> {
+  const req = await api.get<IDictionaryWordFormGenerationStatus>(
+    "/dictionary-terms/word-form-generation/status",
+    { params: { spaceId } },
+  );
+  return req.data;
+}
+
+export async function generateDictionaryWordForms(
+  payload: IGenerateDictionaryWordFormsPayload,
+): Promise<IGenerateDictionaryWordFormsResult> {
+  const req = await api.post<IGenerateDictionaryWordFormsResult>(
+    "/dictionary-terms/actions/generate-word-forms",
+    payload,
+  );
+  return req.data;
+}
+
+export async function generateAllDictionaryWordForms(
+  spaceId: string,
+): Promise<IGenerateAllDictionaryWordFormsResult> {
+  const req = await api.post<IGenerateAllDictionaryWordFormsResult>(
+    "/dictionary-terms/actions/generate-all-word-forms",
+    { spaceId },
+  );
+  return req.data;
 }
 
 export async function exportDictionaryTerms(spaceId: string): Promise<void> {

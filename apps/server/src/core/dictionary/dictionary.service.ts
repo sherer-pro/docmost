@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -28,6 +29,13 @@ interface PreparedAlias {
 interface PreparedImportTerm {
   source: DictionaryImportTermDto;
   aliases: PreparedAlias[];
+}
+
+interface DictionaryFormsUpdate {
+  id: string;
+  term: string;
+  updatedAt: Date | string;
+  forms: string[];
 }
 
 @Injectable()
@@ -134,9 +142,8 @@ export class DictionaryService {
 
       const importedPrimaryAlias =
         importedAlias.importTerm.aliases[0].normalizedAlias;
-      const matchedTermId = existingPrimaryTermsByNormalized.get(
-        importedPrimaryAlias,
-      );
+      const matchedTermId =
+        existingPrimaryTermsByNormalized.get(importedPrimaryAlias);
 
       if (alias.termId !== matchedTermId) {
         throw new BadRequestException(
@@ -162,8 +169,7 @@ export class DictionaryService {
               workspaceId,
               {
                 term: primaryAlias.alias,
-                definitionMarkdown:
-                  importTerm.source.definitionMarkdown.trim(),
+                definitionMarkdown: importTerm.source.definitionMarkdown.trim(),
               },
               trx,
             );
@@ -194,8 +200,7 @@ export class DictionaryService {
               workspaceId,
               creatorId: user.id,
               term: primaryAlias.alias,
-              definitionMarkdown:
-                importTerm.source.definitionMarkdown.trim(),
+              definitionMarkdown: importTerm.source.definitionMarkdown.trim(),
             },
             trx,
           );
@@ -301,8 +306,7 @@ export class DictionaryService {
           {
             term: aliases[0].alias,
             definitionMarkdown:
-              dto.definitionMarkdown?.trim() ??
-              existingTerm.definitionMarkdown,
+              dto.definitionMarkdown?.trim() ?? existingTerm.definitionMarkdown,
           },
           trx,
         );
@@ -343,6 +347,117 @@ export class DictionaryService {
         trx,
       );
       await this.dictionaryTermRepo.softDeleteTerm(termId, workspaceId, trx);
+    });
+  }
+
+  mergeGeneratedForms(
+    term: string,
+    existingForms: string[],
+    generatedForms: string[],
+  ): string[] {
+    const validForms = [...existingForms, ...generatedForms].filter(
+      (form) => this.normalizeVisibleAlias(form).length <= 255,
+    );
+
+    return this.prepareAliases(term, validForms)
+      .slice(1, 101)
+      .map((alias) => alias.alias);
+  }
+
+  async replaceFormsForTerms(
+    spaceId: string,
+    workspaceId: string,
+    updates: DictionaryFormsUpdate[],
+  ): Promise<{ updatedTerms: number; generatedForms: number }> {
+    return executeTx(this.db, async (trx) => {
+      const currentTerms = await this.dictionaryTermRepo.listBySpace(
+        spaceId,
+        workspaceId,
+        trx,
+      );
+      const currentById = new Map(currentTerms.map((term) => [term.id, term]));
+
+      if (
+        currentTerms.length !== updates.length ||
+        updates.some((update) => {
+          const current = currentById.get(update.id);
+          return (
+            !current ||
+            current.term !== update.term ||
+            current.updatedAt.getTime() !== new Date(update.updatedAt).getTime()
+          );
+        })
+      ) {
+        throw new ConflictException(
+          'Dictionary changed while word forms were generated',
+        );
+      }
+
+      const preparedByTermId = new Map(
+        updates.map((update) => [
+          update.id,
+          this.prepareAliases(update.term, update.forms).slice(0, 101),
+        ]),
+      );
+      const claimedAliases = new Map<string, string>();
+
+      for (const current of currentTerms) {
+        const nextAliases = new Set(
+          (preparedByTermId.get(current.id) ?? []).map(
+            (alias) => alias.normalizedAlias,
+          ),
+        );
+        for (const alias of current.aliases) {
+          if (alias.isPrimary || nextAliases.has(alias.normalizedAlias)) {
+            claimedAliases.set(alias.normalizedAlias, current.id);
+          }
+        }
+      }
+
+      let generatedForms = 0;
+      for (const current of currentTerms) {
+        const priorAliases = new Set(
+          current.aliases.map((alias) => alias.normalizedAlias),
+        );
+        const prepared = preparedByTermId.get(current.id) ?? [];
+        const accepted = prepared.filter((alias) => {
+          if (alias.isPrimary) {
+            return true;
+          }
+
+          const owner = claimedAliases.get(alias.normalizedAlias);
+          if (owner && owner !== current.id) {
+            return false;
+          }
+
+          claimedAliases.set(alias.normalizedAlias, current.id);
+          if (!priorAliases.has(alias.normalizedAlias)) {
+            generatedForms += 1;
+          }
+          return true;
+        });
+
+        await this.dictionaryTermRepo.updateTerm(
+          current.id,
+          workspaceId,
+          {},
+          trx,
+        );
+        await this.dictionaryTermRepo.deleteAliasesByTermId(
+          current.id,
+          workspaceId,
+          trx,
+        );
+        await this.insertAliases(
+          current.id,
+          spaceId,
+          workspaceId,
+          accepted,
+          trx,
+        );
+      }
+
+      return { updatedTerms: currentTerms.length, generatedForms };
     });
   }
 
@@ -392,13 +507,12 @@ export class DictionaryService {
     aliases: PreparedAlias[],
     opts?: { excludeTermId?: string },
   ) {
-    const conflicts =
-      await this.dictionaryTermRepo.findAliasesByNormalized(
-        spaceId,
-        workspaceId,
-        aliases.map((alias) => alias.normalizedAlias),
-        opts,
-      );
+    const conflicts = await this.dictionaryTermRepo.findAliasesByNormalized(
+      spaceId,
+      workspaceId,
+      aliases.map((alias) => alias.normalizedAlias),
+      opts,
+    );
 
     if (conflicts.length > 0) {
       throw new BadRequestException(
@@ -481,8 +595,7 @@ export class DictionaryService {
       cause?: { code?: string };
       driverError?: { code?: string };
     };
-    const code =
-      error.code ?? error.cause?.code ?? error.driverError?.code;
+    const code = error.code ?? error.cause?.code ?? error.driverError?.code;
 
     if (code === '23505') {
       throw new BadRequestException(

@@ -6,13 +6,20 @@ import {
   createDictionaryTerm,
   deleteDictionaryTerm,
   exportDictionaryTerms,
+  generateAllDictionaryWordForms,
+  generateDictionaryWordForms,
   getDictionaryTerms,
+  getDictionaryWordFormGenerationStatus,
   importDictionaryTerms,
   updateDictionaryTerm,
 } from "@/features/dictionary/services/dictionary-service";
 import {
   ICreateDictionaryTermPayload,
   IDictionaryTerm,
+  IDictionaryWordFormGenerationStatus,
+  IGenerateAllDictionaryWordFormsResult,
+  IGenerateDictionaryWordFormsPayload,
+  IGenerateDictionaryWordFormsResult,
   IImportDictionaryTermsPayload,
   IImportDictionaryTermsResult,
   IUpdateDictionaryTermPayload,
@@ -23,6 +30,8 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit";
 export const DICTIONARY_QUERY_KEYS = {
   terms: (spaceId?: string): string[] =>
     ["dictionaryTerms", spaceId].filter(Boolean) as string[],
+  wordFormGenerationStatus: (spaceId?: string): string[] =>
+    ["dictionaryWordFormGenerationStatus", spaceId].filter(Boolean) as string[],
 };
 
 export function useDictionaryTermsQuery(
@@ -33,6 +42,69 @@ export function useDictionaryTermsQuery(
     queryKey: DICTIONARY_QUERY_KEYS.terms(spaceId),
     queryFn: () => getDictionaryTerms(spaceId as string),
     enabled: Boolean(spaceId && enabled),
+  });
+}
+
+export function useDictionaryWordFormGenerationStatusQuery(
+  spaceId?: string,
+  enabled = true,
+): UseQueryResult<IDictionaryWordFormGenerationStatus, Error> {
+  return useQuery({
+    queryKey: DICTIONARY_QUERY_KEYS.wordFormGenerationStatus(spaceId),
+    queryFn: () => getDictionaryWordFormGenerationStatus(spaceId as string),
+    enabled: Boolean(spaceId && enabled),
+  });
+}
+
+export function useGenerateDictionaryWordFormsMutation() {
+  const { t } = useTranslation();
+
+  return useMutation<
+    IGenerateDictionaryWordFormsResult,
+    Error,
+    IGenerateDictionaryWordFormsPayload
+  >({
+    mutationFn: generateDictionaryWordForms,
+    onError: (error) => {
+      notifications.show({
+        message:
+          error["response"]?.data?.message ||
+          t("Failed to generate word forms"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useGenerateAllDictionaryWordFormsMutation() {
+  const { t } = useTranslation();
+  const emit = useQueryEmit();
+
+  return useMutation<IGenerateAllDictionaryWordFormsResult, Error, string>({
+    mutationFn: generateAllDictionaryWordForms,
+    onSuccess: (result, generatedSpaceId) => {
+      queryClient.invalidateQueries({
+        queryKey: DICTIONARY_QUERY_KEYS.terms(generatedSpaceId),
+      });
+      emit({
+        operation: "invalidate",
+        spaceId: generatedSpaceId,
+        entity: DICTIONARY_QUERY_KEYS.terms(generatedSpaceId),
+      });
+      notifications.show({
+        message: t("Word forms generated for {{count}} terms", {
+          count: result.updatedTerms,
+        }),
+      });
+    },
+    onError: (error) => {
+      notifications.show({
+        message:
+          error["response"]?.data?.message ||
+          t("Failed to generate word forms"),
+        color: "red",
+      });
+    },
   });
 }
 

@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { DictionaryController } from './dictionary.controller';
 import { DictionaryService } from './dictionary.service';
 import { UserRole } from '../../common/helpers/types/permission';
+import { DictionaryWordFormService } from './dictionary-word-form.service';
 
 describe('DictionaryController import/export actions', () => {
   const dictionaryService = {
@@ -11,9 +12,15 @@ describe('DictionaryController import/export actions', () => {
   const spaceAbility = {
     createForUser: jest.fn(),
   };
+  const wordForms = {
+    getAvailability: jest.fn(),
+    generateForms: jest.fn(),
+    generateAndSaveAll: jest.fn(),
+  };
   const controller = new DictionaryController(
     dictionaryService as unknown as DictionaryService,
     spaceAbility as any,
+    wordForms as unknown as DictionaryWordFormService,
   );
   const workspace = { id: 'workspace-1' } as any;
   const admin = { id: 'admin-1', role: UserRole.ADMIN } as any;
@@ -134,5 +141,69 @@ describe('DictionaryController import/export actions', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(dictionaryService.importTerms).not.toHaveBeenCalled();
+  });
+
+  it('reports word-form generation availability to dictionary editors', async () => {
+    spaceAbility.createForUser.mockResolvedValue({
+      cannot: jest.fn().mockReturnValue(false),
+    });
+    wordForms.getAvailability.mockResolvedValue({ available: true });
+
+    await expect(
+      controller.getWordFormGenerationStatus(
+        { spaceId: '9d55e07a-2cc8-4b03-9297-189bfa5c3b74' },
+        member,
+        workspace,
+      ),
+    ).resolves.toEqual({ available: true });
+    expect(wordForms.getAvailability).toHaveBeenCalledWith(
+      '9d55e07a-2cc8-4b03-9297-189bfa5c3b74',
+      'workspace-1',
+    );
+  });
+
+  it('generates forms for one term when the user can edit the dictionary', async () => {
+    spaceAbility.createForUser.mockResolvedValue({
+      cannot: jest.fn().mockReturnValue(false),
+    });
+    wordForms.generateForms.mockResolvedValue({ forms: ['Alphas'] });
+
+    await expect(
+      controller.generateWordForms(
+        {
+          spaceId: '9d55e07a-2cc8-4b03-9297-189bfa5c3b74',
+          term: 'Alpha',
+          forms: [],
+        },
+        member,
+        workspace,
+      ),
+    ).resolves.toEqual({ forms: ['Alphas'] });
+  });
+
+  it('generates and saves forms for all terms for workspace admins', async () => {
+    wordForms.generateAndSaveAll.mockResolvedValue({
+      updatedTerms: 2,
+      generatedForms: 4,
+    });
+
+    await expect(
+      controller.generateAllWordForms(
+        { spaceId: '9d55e07a-2cc8-4b03-9297-189bfa5c3b74' },
+        admin,
+        workspace,
+      ),
+    ).resolves.toEqual({ updatedTerms: 2, generatedForms: 4 });
+  });
+
+  it('rejects bulk word-form generation for workspace members', async () => {
+    await expect(
+      controller.generateAllWordForms(
+        { spaceId: '9d55e07a-2cc8-4b03-9297-189bfa5c3b74' },
+        member,
+        workspace,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(wordForms.generateAndSaveAll).not.toHaveBeenCalled();
   });
 });

@@ -44,3 +44,22 @@ export interface IImportDictionaryTermsResult {
   updated: number;
   total: number;
 }
+
+export interface IDictionaryWordFormGenerationStatus {
+  available: boolean;
+}
+
+export interface IGenerateDictionaryWordFormsPayload {
+  spaceId: string;
+  term: string;
+  forms?: string[];
+}
+
+export interface IGenerateDictionaryWordFormsResult {
+  forms: string[];
+}
+
+export interface IGenerateAllDictionaryWordFormsResult {
+  updatedTerms: number;
+  generatedForms: number;
+}

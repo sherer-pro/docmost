@@ -1,17 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   exportDictionaryTerms,
+  generateAllDictionaryWordForms,
+  generateDictionaryWordForms,
+  getDictionaryWordFormGenerationStatus,
   importDictionaryTerms,
   parseDictionaryImportJson,
 } from "./dictionary-service";
 
-const { downloadBlobFromAxiosResponseMock, postMock } = vi.hoisted(() => ({
-  downloadBlobFromAxiosResponseMock: vi.fn(),
-  postMock: vi.fn(),
-}));
+const { downloadBlobFromAxiosResponseMock, getMock, postMock } = vi.hoisted(
+  () => ({
+    downloadBlobFromAxiosResponseMock: vi.fn(),
+    getMock: vi.fn(),
+    postMock: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/api-client", () => ({
   default: {
+    get: getMock,
     post: postMock,
   },
 }));
@@ -68,19 +75,16 @@ describe("dictionary-service JSON import/export", () => {
       }),
     ).resolves.toEqual({ created: 1, updated: 2, total: 3 });
 
-    expect(postMock).toHaveBeenCalledWith(
-      "/dictionary-terms/actions/import",
-      {
-        spaceId: "space-1",
-        terms: [
-          {
-            term: "Alpha",
-            forms: ["Alphas"],
-            definitionMarkdown: "Definition",
-          },
-        ],
-      },
-    );
+    expect(postMock).toHaveBeenCalledWith("/dictionary-terms/actions/import", {
+      spaceId: "space-1",
+      terms: [
+        {
+          term: "Alpha",
+          forms: ["Alphas"],
+          definitionMarkdown: "Definition",
+        },
+      ],
+    });
   });
 
   it("parses exported dictionary JSON", () => {
@@ -133,5 +137,48 @@ describe("dictionary-service JSON import/export", () => {
     expect(() =>
       parseDictionaryImportJson(JSON.stringify({ terms: [{ term: "Alpha" }] })),
     ).toThrow("Invalid dictionary JSON file");
+  });
+
+  it("reads word-form generation availability", async () => {
+    getMock.mockResolvedValue({ data: { available: true } });
+
+    await expect(
+      getDictionaryWordFormGenerationStatus("space-1"),
+    ).resolves.toEqual({ available: true });
+    expect(getMock).toHaveBeenCalledWith(
+      "/dictionary-terms/word-form-generation/status",
+      { params: { spaceId: "space-1" } },
+    );
+  });
+
+  it("generates word forms for an unsaved term form", async () => {
+    postMock.mockResolvedValue({ data: { forms: ["Alphas"] } });
+
+    await expect(
+      generateDictionaryWordForms({
+        spaceId: "space-1",
+        term: "Alpha",
+        forms: [],
+      }),
+    ).resolves.toEqual({ forms: ["Alphas"] });
+    expect(postMock).toHaveBeenCalledWith(
+      "/dictionary-terms/actions/generate-word-forms",
+      { spaceId: "space-1", term: "Alpha", forms: [] },
+    );
+  });
+
+  it("generates and saves word forms for all terms", async () => {
+    postMock.mockResolvedValue({
+      data: { updatedTerms: 2, generatedForms: 4 },
+    });
+
+    await expect(generateAllDictionaryWordForms("space-1")).resolves.toEqual({
+      updatedTerms: 2,
+      generatedForms: 4,
+    });
+    expect(postMock).toHaveBeenCalledWith(
+      "/dictionary-terms/actions/generate-all-word-forms",
+      { spaceId: "space-1" },
+    );
   });
 });

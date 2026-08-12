@@ -119,6 +119,7 @@ const SECURITY_ITEMS = [
 
 const OPERATIONS = [
   "ai.adminGuide.operationsSetup",
+  "ai.adminGuide.operationsDictionaryForms",
   "ai.adminGuide.operationsProfileNames",
   "ai.adminGuide.operationsRagMigration",
   "ai.ragSync.test",

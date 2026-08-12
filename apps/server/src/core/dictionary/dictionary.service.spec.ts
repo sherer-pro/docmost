@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DictionaryService } from './dictionary.service';
 import { DictionaryTermRepo } from '@docmost/db/repos/dictionary/dictionary-term.repo';
 
@@ -286,15 +286,17 @@ describe('DictionaryService', () => {
         isPrimary: true,
       },
     ]);
-    dictionaryTermRepo.updateTerm.mockImplementation(async (termId: string) => ({
-      id: termId,
-      spaceId: 'space-1',
-      workspaceId: 'workspace-1',
-      term: termId === 'term-1' ? 'Alpha' : 'Beta',
-      definitionMarkdown: 'Definition',
-      createdAt: new Date('2026-01-01T00:00:00.000Z'),
-      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-    }));
+    dictionaryTermRepo.updateTerm.mockImplementation(
+      async (termId: string) => ({
+        id: termId,
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        term: termId === 'term-1' ? 'Alpha' : 'Beta',
+        definitionMarkdown: 'Definition',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      }),
+    );
     dictionaryTermRepo.insertAliases.mockImplementation(async (aliases) =>
       aliases.map((alias, index) => ({ id: `alias-${index}`, ...alias })),
     );
@@ -377,5 +379,115 @@ describe('DictionaryService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('merges generated forms after existing forms with normalization and limits', () => {
+    const forms = service.mergeGeneratedForms(
+      ' Alpha ',
+      [' Alphas '],
+      ['ALPHAS', ' Alpha   Beta ', 'Alpha', 'x'.repeat(256)],
+    );
+
+    expect(forms).toEqual(['Alphas', 'Alpha Beta']);
+  });
+
+  it('replaces all generated forms atomically and skips cross-term collisions', async () => {
+    const updatedAt = new Date('2026-01-02T00:00:00.000Z');
+    dictionaryTermRepo.listBySpace.mockResolvedValue([
+      {
+        id: 'term-1',
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        term: 'Alpha',
+        definitionMarkdown: 'Alpha definition',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt,
+        aliases: [
+          {
+            termId: 'term-1',
+            alias: 'Alpha',
+            normalizedAlias: 'alpha',
+            isPrimary: true,
+          },
+          {
+            termId: 'term-1',
+            alias: 'Alphas',
+            normalizedAlias: 'alphas',
+            isPrimary: false,
+          },
+        ],
+      },
+      {
+        id: 'term-2',
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        term: 'Beta',
+        definitionMarkdown: 'Beta definition',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt,
+        aliases: [
+          {
+            termId: 'term-2',
+            alias: 'Beta',
+            normalizedAlias: 'beta',
+            isPrimary: true,
+          },
+        ],
+      },
+    ]);
+    dictionaryTermRepo.updateTerm.mockResolvedValue({});
+    dictionaryTermRepo.insertAliases.mockImplementation(async (aliases) =>
+      aliases.map((alias, index) => ({ id: `alias-${index}`, ...alias })),
+    );
+
+    await expect(
+      service.replaceFormsForTerms('space-1', 'workspace-1', [
+        {
+          id: 'term-1',
+          term: 'Alpha',
+          updatedAt,
+          forms: ['Alphas', 'Shared form'],
+        },
+        {
+          id: 'term-2',
+          term: 'Beta',
+          updatedAt,
+          forms: ['Shared form'],
+        },
+      ]),
+    ).resolves.toEqual({ updatedTerms: 2, generatedForms: 1 });
+
+    expect(dictionaryTermRepo.insertAliases.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ alias: 'Alphas' }),
+        expect.objectContaining({ alias: 'Shared form' }),
+      ]),
+    );
+    expect(dictionaryTermRepo.insertAliases.mock.calls[1][0]).toEqual([
+      expect.objectContaining({ alias: 'Beta', isPrimary: true }),
+    ]);
+  });
+
+  it('rejects a bulk save when the dictionary changed during generation', async () => {
+    dictionaryTermRepo.listBySpace.mockResolvedValue([
+      {
+        id: 'term-1',
+        term: 'Alpha',
+        updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+        aliases: [],
+      },
+    ]);
+
+    await expect(
+      service.replaceFormsForTerms('space-1', 'workspace-1', [
+        {
+          id: 'term-1',
+          term: 'Alpha',
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          forms: [],
+        },
+      ]),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(dictionaryTermRepo.deleteAliasesByTermId).not.toHaveBeenCalled();
   });
 });

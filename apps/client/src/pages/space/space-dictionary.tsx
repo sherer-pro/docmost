@@ -22,6 +22,7 @@ import {
   IconPencil,
   IconPlus,
   IconSearch,
+  IconSparkles,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
@@ -37,7 +38,9 @@ import {
   useDeleteDictionaryTermMutation,
   useDictionaryTermsQuery,
   useExportDictionaryTermsMutation,
+  useGenerateAllDictionaryWordFormsMutation,
   useImportDictionaryTermsMutation,
+  useDictionaryWordFormGenerationStatusQuery,
 } from "@/features/dictionary/queries/dictionary-query";
 import { parseDictionaryImportJson } from "@/features/dictionary/services/dictionary-service";
 import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
@@ -118,9 +121,14 @@ export default function SpaceDictionary() {
     space?.id,
     Boolean(space?.id && dictionaryEnabled),
   );
+  const wordFormGenerationStatus = useDictionaryWordFormGenerationStatusQuery(
+    space?.id,
+    Boolean(space?.id && dictionaryEnabled && (isAdmin || canManageDictionary)),
+  );
   const deleteMutation = useDeleteDictionaryTermMutation(space?.id);
   const exportMutation = useExportDictionaryTermsMutation();
   const importMutation = useImportDictionaryTermsMutation();
+  const generateAllMutation = useGenerateAllDictionaryWordFormsMutation();
   const importJsonResetRef = useRef<() => void>(null);
   const [modalOpened, setModalOpened] = useState(false);
   const [editingTerm, setEditingTerm] = useState<IDictionaryTerm | null>(null);
@@ -193,6 +201,25 @@ export default function SpaceDictionary() {
     }
 
     exportMutation.mutate(space.id);
+  };
+
+  const confirmGenerateAllWordForms = () => {
+    if (!space?.id) {
+      return;
+    }
+
+    modals.openConfirmModal({
+      title: t("Generate word forms for all terms?"),
+      children: (
+        <Text size="sm">
+          {t(
+            "Existing word forms will be kept, and generated forms will be saved immediately.",
+          )}
+        </Text>
+      ),
+      labels: { confirm: t("Generate word forms"), cancel: t("Cancel") },
+      onConfirm: () => generateAllMutation.mutate(space.id),
+    });
   };
 
   const handleImportJson = async (file: File | null) => {
@@ -295,44 +322,55 @@ export default function SpaceDictionary() {
           }
           actions={
             (isAdmin || canManageDictionary) && dictionaryEnabled ? (
-            <Group gap="xs" wrap="wrap">
-              {isAdmin && (
-                <>
-                  <FileButton
-                    accept="application/json,.json"
-                    onChange={handleImportJson}
-                    resetRef={importJsonResetRef}
-                  >
-                    {(props) => (
-                      <Button
-                        variant="default"
-                        leftSection={<IconFileImport size={16} />}
-                        loading={importMutation.isPending}
-                        {...props}
-                      >
-                        {t("Import JSON")}
-                      </Button>
-                    )}
-                  </FileButton>
+              <Group gap="xs" wrap="wrap">
+                {isAdmin && (
+                  <>
+                    <FileButton
+                      accept="application/json,.json"
+                      onChange={handleImportJson}
+                      resetRef={importJsonResetRef}
+                    >
+                      {(props) => (
+                        <Button
+                          variant="default"
+                          leftSection={<IconFileImport size={16} />}
+                          loading={importMutation.isPending}
+                          {...props}
+                        >
+                          {t("Import JSON")}
+                        </Button>
+                      )}
+                    </FileButton>
+                    <Button
+                      variant="default"
+                      leftSection={<IconFileExport size={16} />}
+                      loading={exportMutation.isPending}
+                      onClick={handleExportJson}
+                    >
+                      {t("Export JSON")}
+                    </Button>
+                    {wordFormGenerationStatus.data?.available &&
+                      terms.length > 0 && (
+                        <Button
+                          variant="default"
+                          leftSection={<IconSparkles size={16} />}
+                          loading={generateAllMutation.isPending}
+                          onClick={confirmGenerateAllWordForms}
+                        >
+                          {t("Generate for all terms")}
+                        </Button>
+                      )}
+                  </>
+                )}
+                {canManageDictionary && (
                   <Button
-                    variant="default"
-                    leftSection={<IconFileExport size={16} />}
-                    loading={exportMutation.isPending}
-                    onClick={handleExportJson}
+                    leftSection={<IconPlus size={16} />}
+                    onClick={openCreateModal}
                   >
-                    {t("Export JSON")}
+                    {t("Add term")}
                   </Button>
-                </>
-              )}
-              {canManageDictionary && (
-                <Button
-                  leftSection={<IconPlus size={16} />}
-                  onClick={openCreateModal}
-                >
-                  {t("Add term")}
-                </Button>
-              )}
-            </Group>
+                )}
+              </Group>
             ) : undefined
           }
         />
@@ -573,6 +611,9 @@ export default function SpaceDictionary() {
         onClose={() => setModalOpened(false)}
         spaceId={space.id}
         term={editingTerm}
+        wordFormGenerationAvailable={Boolean(
+          wordFormGenerationStatus.data?.available && canManageDictionary,
+        )}
       />
     </>
   );
