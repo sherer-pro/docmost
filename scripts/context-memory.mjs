@@ -114,7 +114,12 @@ function agentMemoryEnv() {
   }
   const privateBin = join(homedir(), '.agentmemory', 'bin');
   const pathKey = Object.keys(env).find((name) => name.toLowerCase() === 'path') ?? 'PATH';
-  env[pathKey] = `${privateBin}${delimiter}${env[pathKey] ?? ''}`;
+  const currentPath = env[pathKey] ?? '';
+  for (const name of Object.keys(env)) {
+    if (name.toLowerCase() === 'path') delete env[name];
+  }
+  env[process.platform === 'win32' ? 'Path' : 'PATH'] =
+    `${privateBin}${delimiter}${currentPath}`;
   return env;
 }
 
