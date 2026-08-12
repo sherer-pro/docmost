@@ -350,13 +350,19 @@
   padding: 6px 8px;
 }
 
+.composerFooter[data-busy="true"] {
+  justify-content: space-between;
+}
+
 .composerProfileGroup {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 180px;
 }
 
 .composerProfileButton {
-  flex: 0 1 auto;
+  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 32px;
   max-width: 180px;
@@ -371,24 +377,11 @@
   min-width: 0;
 }
 
-.composerProfileLabel {
+.composerProfileLabel,
+.composerProfileButton .composerResponsiveLabel {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.composerProfilePreferences {
-  flex: 0 0 auto;
-}
-
-.composerFooterDivider {
-  width: 1px;
-  height: 24px;
-  margin-inline: 4px;
-  background: light-dark(
-    var(--mantine-color-gray-3),
-    var(--mantine-color-dark-4)
-  );
 }
 
 .composerProfileMenu {
@@ -409,6 +402,20 @@
 .composerFooterButton {
   flex: 0 0 auto;
   min-height: 32px;
+}
+
+.composerRunStatus {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composerStopButton {
+  flex: 0 0 auto;
+  min-height: 32px;
+  white-space: nowrap;
 }
 
 .composerStatus {
@@ -876,7 +883,6 @@
     display: inline;
   }
 
-  .composerResponsiveLabel,
   .sendShortcutFull,
   .sendShortcutShort {
     display: none;
@@ -884,7 +890,6 @@
 
   .composerSearchButton,
   .composerInlineAction,
-  .composerProfileButton,
   .composerFooterButton,
   .sendButton {
     min-width: 44px;
@@ -896,17 +901,14 @@
   }
 
   .composerProfileButton {
-    max-width: 44px;
-    padding-inline: 0;
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 140px;
   }
 
   .composerProfileButton
     :global(.mantine-Button-section[data-position="right"]) {
     display: none;
-  }
-
-  .composerFooterDivider {
-    margin-inline: 1px;
   }
 
   .composerFooterButton
@@ -923,13 +925,36 @@
   }
 }
 
-@container ai-composer (min-width: 421px) and (max-width: 520px) {
-  .sendShortcutFull {
+@container ai-composer (max-width: 520px) {
+  .composerSearchButton .composerResponsiveLabel,
+  .composerFooterButton .composerResponsiveLabel,
+  .sendShortcutFull,
+  .sendShortcutShort {
     display: none;
   }
 
-  .sendShortcutShort {
-    display: inline;
+  .composerSearchButton,
+  .composerFooterButton {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
+  .composerFooterButton
+    :global(.mantine-Button-section[data-position="right"]) {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .composerSearchButton,
+  .composerInlineAction,
+  .composerProfileButton,
+  .composerFooterButton,
+  .composerStopButton,
+  .sendButton {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
@@ -939,7 +964,9 @@
   }
 
   .conversationBar > button,
+  .composerSearchButton,
   .composerFooterButton,
+  .composerStopButton,
   .sendButton {
     min-width: 44px;
     min-height: 44px;
