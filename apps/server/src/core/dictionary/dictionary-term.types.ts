@@ -26,3 +26,12 @@ export interface DictionaryImportResult {
   updated: number;
   total: number;
 }
+
+export interface DictionaryWordFormGenerationResult {
+  forms: string[];
+}
+
+export interface DictionaryBulkWordFormGenerationResult {
+  updatedTerms: number;
+  generatedForms: number;
+}

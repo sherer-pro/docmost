@@ -96,7 +96,10 @@
 | DELETE | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | PATCH | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms/actions/export` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/dictionary-terms/actions/generate-all-word-forms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| POST | `/dictionary-terms/actions/generate-word-forms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms/actions/import` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| GET | `/dictionary-terms/word-form-generation/status` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | GET | `/favorites` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | POST | `/favorites/add` | `apps/server/src/core/favorite/favorite.controller.ts` |
 | GET | `/favorites/ids` | `apps/server/src/core/favorite/favorite.controller.ts` |

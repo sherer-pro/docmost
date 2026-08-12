@@ -312,6 +312,8 @@ The fork provides more advanced terminology management:
 
 - word forms and term variants;
 
+- LLM-assisted word forms for one term or every term in an enabled space;
+
 - automatic highlighting of terms in documents;
 
 - JSON dictionary import and export.

@@ -94,3 +94,25 @@ export class ImportDictionaryTermsDto {
   @Type(() => DictionaryImportTermDto)
   terms: DictionaryImportTermDto[];
 }
+
+export class GenerateDictionaryWordFormsDto {
+  @IsUUID()
+  spaceId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  term: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(255, { each: true })
+  forms?: string[];
+}
+
+export class GenerateAllDictionaryWordFormsDto {
+  @IsUUID()
+  spaceId: string;
+}
