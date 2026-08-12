@@ -1467,13 +1467,13 @@
       "overviewTitle": "What each part does",
       "assistantDescription": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches.",
       "retrievalDescription": "Space search runs while an answer is generated. It asks an external index for candidates, then Docmost rechecks every source against the database, current access rules, and AI exclusions. Retrieval failure does not fail the chat.",
-      "ragDescription": "The read-only /api/rag/* API exports full and incremental content feeds to an external indexer. It does not perform search or answer questions, and every RAG key is restricted to one space.",
-      "inboundMcpDescription": "External assistants connect to Docmost at the root /mcp endpoint with a scoped MCP key. The endpoint is stateless and exposes only read tools allowed by the key's exact capability policy.",
+      "ragDescription": "The read-only /api/rag/* API exports full and incremental feeds to an external indexer and can return protected attachment streams after authorization. It does not search or answer questions; every RAG key is scoped to one space.",
+      "inboundMcpDescription": "External assistants connect to the root /mcp endpoint with a scoped MCP key. It is stateless, exposes only allowed read tools, and returns attachment metadata rather than binary attachment contents.",
       "outboundMcpDescription": "The Docmost Agent can call tools on approved remote MCP servers. This is the opposite direction from inbound MCP and uses separate settings and credentials.",
       "setupTitle": "Where to configure it",
       "setupDescription": "Open the relevant settings area. Deployment environment allowlists and kill switches remain operator-managed.",
       "syncTitle": "Regular RAG index updates",
-      "syncDescription": "Docmost has no local embedding table. Built-in RAG synchronization runs inside the main Docmost process, uses shared Redis for coordination, and stores one encrypted Open WebUI writer key per space in PostgreSQL. Configure the Open WebUI origin, Knowledge Base ID, and writer key in the space RAG synchronization tab. Enable the deployment with RAG_SYNC_ENABLED and allow the exact origin through RAG_SYNC_ALLOWED_ORIGINS. The index includes every page allowed by the space AI policy; direct Open WebUI access can therefore expose content beyond a user's Docmost ACL. Query and writer credentials remain separate.",
+      "syncDescription": "Built-in Open WebUI RAG Sync runs inside Docmost, reads PostgreSQL directly through Docmost services, coordinates with Redis, and writes with a separate encrypted per-space credential. It never calls the public /api/rag/* API; query and writer credentials stay separate.",
       "syncStepDelta": "Each feed uses an opaque cursor bound to one fixed database snapshot. Keep its starting watermark until hasMore=false; only the terminal page advances the checkpoint, and retries must remain idempotent.",
       "riskTitle": "Trade-offs and risks",
       "riskTiming": "Freshness is the polling interval plus cycle processing time. A longer interval increases staleness; a very short interval raises Docmost, Redis, and Open WebUI load and can cause 429/503 responses.",
@@ -1493,7 +1493,108 @@
       "operationsProfileNames": "Keep assistant profile names unique within each space. A duplicate returns 409 with ai_profile_name_conflict; reload the list if needed and choose another name.",
       "operationsRagMigration": "When replacing the standalone RAG worker, stop it first, migrate with RAG_SYNC_ENABLED=false, then configure, Test, and Enable each space. The API rejects Enable until the current target has passed Test. Old environment secrets are not imported. Roll back with the deployment switch, not migration down.",
       "operationsRecovery": "On failure, recover dependencies before retrying, keep PostgreSQL authoritative, and preserve the Knowledge Base during mapping recovery. A repeated private-file upload with the same Idempotency-Key resumes its reserved batch after a process failure without creating another file row. For an emergency RAG Sync rollback, set RAG_SYNC_ENABLED=false and restart Docmost; AI_EXTERNAL_MCP_ENABLED controls only outbound MCP.",
-      "templateExportScope": "Template catalog entries are excluded. Pages created from templates are exported as ordinary materialized pages."
+      "templateExportScope": "Template catalog entries are excluded. Pages created from templates are exported as ordinary materialized pages.",
+      "contractVersion": "Guide contract v{{version}}",
+      "quickNavLabel": "AI guide sections",
+      "taskChooserTitle": "Choose what you need to set up",
+      "taskChooserDescription": "Start with the outcome you need. Each path identifies the owner, prerequisite, expected result, and exact settings page.",
+      "roleLabel": "Owner",
+      "prerequisiteLabel": "Requires",
+      "resultLabel": "Result",
+      "detailsLabel": "Read the steps",
+      "openSettings": "Open settings",
+      "openRelevantGuide": "Open relevant guide",
+      "architectureTitle": "How the paths connect",
+      "architectureDescription": "The overview separates generation, query-time retrieval, export, synchronization, and both MCP directions. PostgreSQL remains authoritative; Redis coordinates admission and leases.",
+      "setupSequence": "Default sequence: Save → Test → Enable. API-key clients use Create → copy once → test → start.",
+      "instructionsTitle": "Setup, success signal, and rollback",
+      "stepsTitle": "Setup sequence",
+      "successTitle": "Success looks like",
+      "rollbackTitle": "Safe rollback",
+      "referencesTitle": "Routes and deployment controls",
+      "referencesDescription": "Copy exact public routes and environment names. Secret values belong in an approved secret store, never in this guide or logs.",
+      "routeLabel": "Route",
+      "environmentLabel": "Environment variable",
+      "securityMatrixTitle": "Credentials and security boundaries",
+      "securityMatrixDescription": "Every path has its own credentials and live authorization checks. Do not reuse query, writer, RAG, inbound MCP, outbound MCP, or provider secrets.",
+      "securityScenarioLabel": "Path",
+      "securityOwnerLabel": "Controlled by",
+      "securityBoundaryLabel": "Storage and boundary",
+      "troubleshootingTitle": "Troubleshooting",
+      "troubleshootingDescription": "Start from the stable error code or state, restore the failed dependency or authorization boundary, then retry the smallest safe operation.",
+      "problemLabel": "Signal",
+      "actionLabel": "What to do",
+      "scenario": {
+        "assistant": {
+          "facts": "Space administrator||Approved provider origin, model, and optional assistant profile||Chat and Agent use the selected model and only permitted tools",
+          "operations": "Save provider, model, profile, and policy settings|Test Chat and Agent|Enable the space model and intended profiles||A test answer completes; Agent lists only allowed tools and asks before writes||Disable Agent or the space model, then restore the last known-good settings"
+        },
+        "retrieval": {
+          "facts": "Operator and space administrator||Approved retrieval origin and a configured adapter||Answers may cite external candidates only after live Docmost checks",
+          "operations": "Save endpoint, adapter, and query credential|Test retrieval from the space settings|Enable external search||The test returns candidates and the answer keeps only readable, non-excluded sources||Disable external search; Chat continues without retrieval"
+        },
+        "ragApi": {
+          "facts": "Workspace administrator and indexer operator||A space-scoped RAG API key copied at creation||An external indexer receives authorized feeds and protected attachment streams",
+          "operations": "Create the RAG key and copy it once|Test /api/rag/pages and cursor continuation|Start the external indexer||Responses return 200, stable cursors, and only the key creator's live readable scope||Revoke the key and stop the indexer; create a new key for recovery"
+        },
+        "ragSync": {
+          "facts": "Deployment operator and space administrator||RAG_SYNC_ENABLED, an allowed Open WebUI origin, Knowledge ID, and writer key||Docmost incrementally maintains the selected Open WebUI Knowledge Base",
+          "operations": "Save the target and writer credential|Run Test for the current target|Enable the binding||Last success advances and no cleanup or target-mismatch state remains||Disable the binding and finish cleanup; for emergency rollback disable RAG_SYNC_ENABLED and restart"
+        },
+        "inboundMcp": {
+          "facts": "Workspace administrator and MCP client owner||A space-scoped MCP key with an exact capability allowlist||The client can call authorized read-only Docmost tools through /mcp",
+          "operations": "Create the MCP key and copy it once|Test initialize, tools/list, and one allowed call|Start the client integration||Allowed tools work; denied capabilities and binary attachment reads remain unavailable||Revoke the key or remove the creator from the space; active access closes on the next request"
+        },
+        "outboundMcp": {
+          "facts": "Deployment operator, workspace administrator, space administrator, and user||Both origin allowlists, enabled server and binding, group policy, and user consent||Docmost Agent may use the intersected remote MCP tool set",
+          "operations": "Save the server, binding, and group policy|Test and discover tools|Enable the server and collect user consent||Only intersected tools appear and the DNS-pinned request returns an untrusted result for review||Disable any authorization layer or revoke consent; changing the URL revokes all saved consent"
+        }
+      },
+      "diagram": {
+        "expand": "Open diagram full screen",
+        "invalid": "The architecture diagram could not be rendered. Use the adjacent steps.",
+        "stepsTitle": "Equivalent step-by-step view",
+        "overview": {
+          "label": "AI, RAG, and MCP architecture overview",
+          "caption": "Generation, export, synchronization, and the two MCP directions use distinct admission and credential paths.",
+          "textAlternative": "Configure the assistant and optional query-time retrieval per space|Use /api/rag/* only for external read-only export clients|Use built-in RAG Sync for direct Open WebUI writes without calling the public RAG API|Use /mcp for inbound read tools and external MCP settings for outbound Agent tools"
+        },
+        "rag": {
+          "label": "RAG API and built-in RAG Sync architecture",
+          "caption": "Query, public export, and writer credentials are separate; built-in sync does not loop through /api/rag/*.",
+          "textAlternative": "Chat retrieval uses a query credential to ask the external index|An external indexer reads authorized content through /api/rag/*|Built-in RAG Sync reads Docmost state internally and writes with a per-space writer key|Live ACL and content policy checks stay in front of exported or synchronized content"
+        },
+        "inboundMcp": {
+          "label": "Inbound MCP authorization flow",
+          "caption": "Every /mcp request rechecks key scope before Redis admission and the shared read-only tool policy.",
+          "textAlternative": "Create a typed, space-scoped MCP key|Validate the live key, workspace, creator, and space|Acquire Redis rate and concurrency admission|Intersect capability policy with page ACL and content policy before reading PostgreSQL"
+        },
+        "outboundMcp": {
+          "label": "Outbound MCP authorization flow",
+          "caption": "Every authorization layer must allow the request; consent follows the recipient URL and DNS resolution is pinned.",
+          "textAlternative": "Enable the deployment and approve the origin|Enable the workspace server and space binding|Apply deny-first group policy and user consent|Resolve and pin the approved remote address, then treat schemas and results as untrusted"
+        },
+        "overviewNodes": "Shared AI tool registry|External systems|Remote MCP server",
+        "ragNodes": "Chat query|Query credential|External index|External indexer|Live ACL and content policy|Writer credential|does not call",
+        "inboundNodes": "API key settings|Live key, workspace, user, and space scope|Redis rate and concurrency admission|Tool policy, page ACL, and content policy",
+        "outboundNodes": "Deployment control|Workspace control|Space binding|Deny-first group policy|User consent|DNS-pinned remote request"
+      },
+      "securityOwner": {
+        "spaceAdmin": "Space administrator; operator approves the origin",
+        "workspaceAdmin": "Workspace owner or administrator",
+        "operatorAndSpaceAdmin": "Deployment operator and space administrator",
+        "layered": "Operator, workspace admin, space admin, group policy, and user"
+      },
+      "troubleshooting": {
+        "401": "401 Unauthorized||Check the Bearer key type, expiry, revocation, creator's live membership, and exact scoped space. User cookies do not authenticate RAG or MCP.",
+        "409": "409 Conflict||Reload current state. Resolve duplicate profile names, stale versions, RAG target conflicts, or incomplete cleanup before retrying.",
+        "429": "429 Too Many Requests||Back off with jitter and reduce parallelism. Check RAG/MCP rate and concurrency limits and long-running leases.",
+        "503": "503 Service Unavailable||Restore Redis, the provider, or the external target first. Admission fails closed when Redis cannot protect limits.",
+        "leaseLost": "Redis lease lost||Treat the active request as aborted, verify Redis stability and ownership fencing, then retry idempotently.",
+        "sourceAccessChanged": "source_access_changed||The partial answer and citations were cleared because access changed. Reopen the source only after permissions are intentionally restored.",
+        "cleanupRequired": "cleanup required||Do not switch targets or rotate APP_SECRET yet. Restore the current writer access, finish cleanup, then save and test the new target.",
+        "consentRevoked": "MCP consent revoked||The user must review and opt in again. A URL change intentionally revokes every saved consent for the previous recipient."
+      }
     },
     "integrations": {
       "backToSpace": "Back to space",

@@ -140,6 +140,26 @@ Supported capabilities include:
 - a stateless read-only MCP endpoint for external assistants, using the same
   access-aware tool registry and exact capability policy as agent mode.
 
+Workspace administrators and operators can use the layered guide at
+`/settings/ai/guide` instead of reconstructing these paths from separate
+settings pages. Stable anchors cover the assistant, query-time retrieval,
+external RAG API clients, built-in Open WebUI RAG Sync, inbound `/mcp`, outbound
+MCP, security, and troubleshooting. Task cards identify the responsible role,
+prerequisites, expected result, and direct settings link; expandable instructions
+add Save/Test/Enable sequencing, success signals, rollback, copyable routes and
+environment controls, a credential matrix, and strict sanitized Mermaid diagrams
+with text alternatives. The API-key and per-space AI pages link back to their
+relevant guide sections.
+
+The guide makes three operational boundaries explicit: query-time retrieval is
+answer-time search; `/api/rag/*` is an API-key-only export surface that may stream
+authorized attachments; and built-in RAG Sync writes to Open WebUI internally
+without calling that public API. Inbound `/mcp` returns attachment metadata but
+never attachment binaries. A strict `check:ai-docs` pull-request gate couples
+changes in production AI/RAG/RAG Sync/MCP/API-key logic, shared contracts,
+migrations, and environment contracts to the canonical documentation, structured
+guide content, its version, and all twelve locales.
+
 This allows Docmost content to serve as an up-to-date knowledge base for local
 or corporate LLMs. RAG and MCP keys are scoped to one space, are not
 interchangeable, and are revalidated on every request against the creator's

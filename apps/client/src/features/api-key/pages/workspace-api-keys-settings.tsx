@@ -1,8 +1,12 @@
-import { Tabs, Text } from "@mantine/core";
-import { IconDatabase, IconPlugConnected } from "@tabler/icons-react";
+import { Button, Tabs, Text } from "@mantine/core";
+import {
+  IconBook2,
+  IconDatabase,
+  IconPlugConnected,
+} from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import SettingsTitle from "@/components/settings/settings-title";
 import { getAppName } from "@/lib/config";
 import { WorkspaceApiKeysPanel } from "@/features/api-key/pages/workspace-api-keys.tsx";
@@ -18,7 +22,10 @@ export default function WorkspaceApiKeysSettings() {
 
   if (!isApiKeysSettingsTab(keyType)) {
     return (
-      <Navigate to={`/settings/keys/${API_KEYS_SETTINGS_DEFAULT_TAB}`} replace />
+      <Navigate
+        to={`/settings/keys/${API_KEYS_SETTINGS_DEFAULT_TAB}`}
+        replace
+      />
     );
   }
 
@@ -30,7 +37,22 @@ export default function WorkspaceApiKeysSettings() {
         </title>
       </Helmet>
 
-      <SettingsTitle title={t("API keys")} />
+      <SettingsTitle
+        title={t("API keys")}
+        actions={
+          <Button
+            component={Link}
+            to={`/settings/ai/guide#${
+              keyType === "mcp" ? "inbound-mcp" : "rag-api"
+            }`}
+            variant="light"
+            size="sm"
+            leftSection={<IconBook2 size={16} />}
+          >
+            {t("ai.adminGuide.openRelevantGuide")}
+          </Button>
+        }
+      />
 
       <Tabs
         value={keyType}

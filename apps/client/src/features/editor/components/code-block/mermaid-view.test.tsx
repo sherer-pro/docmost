@@ -28,8 +28,20 @@ vi.mock("uuid", () => ({
 }));
 
 vi.mock("@mantine/core", () => ({
-  Modal: ({ children, opened }: { children: React.ReactNode; opened: boolean }) =>
-    opened ? children : null,
+  ActionIcon: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
+  Modal: ({
+    children,
+    opened,
+  }: {
+    children: React.ReactNode;
+    opened: boolean;
+  }) => (opened ? children : null),
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
   useComputedColorScheme: () => colorSchemeMock.current,
 }));
 
@@ -100,6 +112,13 @@ describe("MermaidView", () => {
 
     expect(mermaidRenderMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Rendered diagram");
+    expect(mermaidInitializeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        securityLevel: "strict",
+        startOnLoad: false,
+        suppressErrorRendering: true,
+      }),
+    );
 
     await renderView(root, {
       editor: { isEditable: true },
@@ -143,5 +162,39 @@ describe("MermaidView", () => {
     expect(mermaidRenderMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Mermaid diagram error:");
     expect(container.textContent).toContain("Error: broken diagram");
+  });
+
+  it("sanitizes rendered SVG and opens the read-only preview from the keyboard", async () => {
+    mermaidRenderMock.mockResolvedValue({
+      svg: "<svg><script>alert(1)</script><text>Safe diagram</text></svg>",
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoot = root;
+    mountedContainer = container;
+
+    await renderView(
+      root,
+      createProps({
+        isEditable: false,
+        textContent: "graph TD; SAFE-->PREVIEW",
+      }),
+    );
+
+    expect(container.innerHTML).not.toContain("<script");
+    expect(container.textContent).toContain("Safe diagram");
+
+    const interactive = container.querySelector('[role="button"]');
+    expect(interactive).toBeTruthy();
+    await act(async () => {
+      interactive?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent?.match(/Safe diagram/gu)).toHaveLength(2);
   });
 });

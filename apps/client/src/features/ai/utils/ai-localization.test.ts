@@ -6,6 +6,11 @@ import {
   getAiErrorTranslationKey,
   resolveAiErrorMessage,
 } from "./ai-policies.ts";
+import guideContract from "@/features/ai/components/ai-admin-guide-contract.json";
+import {
+  buildAiAdminGuideDiagrams,
+  splitAiAdminGuideFields,
+} from "@/features/ai/components/ai-admin-guide-content.ts";
 
 const LOCALES = [
   "de-DE",
@@ -33,6 +38,11 @@ const PROFILE_ERROR_REASON_KEYS = [
 const PROFILE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
   "de-DE": new Set(["profiles.name"]),
   "fr-FR": new Set(["profiles.profileDescription", "profiles.instructions"]),
+};
+const GUIDE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
+  "de-DE": new Set(["routeLabel", "problemLabel"]),
+  "fr-FR": new Set(["problemLabel"]),
+  "nl-NL": new Set(["routeLabel"]),
 };
 const BUILTIN_TOOL_NAMES = [
   "search",
@@ -209,17 +219,89 @@ describe("AI localization contract", () => {
     const guideKeys = Object.keys(english).filter((key) =>
       key.startsWith("adminGuide."),
     );
+    const manifestedKeys = guideContract.requiredKeys.map(
+      (key) => `adminGuide.${key}`,
+    );
 
-    expect(guideKeys).toHaveLength(33);
+    expect(guideKeys.sort()).toEqual(manifestedKeys.sort());
 
     for (const locale of LOCALES.filter((value) => value !== "en-US")) {
       const localized = flatten(readAiLocale(locale));
-      for (const key of guideKeys) {
+      const allowlist = GUIDE_IDENTICAL_VALUE_ALLOWLIST[locale] ?? new Set();
+      for (const key of manifestedKeys) {
         expect(localized[key]).toBeTruthy();
-        expect(localized[key]).not.toBe(english[key]);
+        if (!allowlist.has(key.replace(/^adminGuide\./u, ""))) {
+          expect(localized[key]).not.toBe(english[key]);
+        }
         expect(localized[key].match(/{{[^}]+}}/g) ?? []).toEqual(
           english[key].match(/{{[^}]+}}/g) ?? [],
         );
+      }
+    }
+  });
+
+  it("keeps compact guide fields and localized Mermaid sources valid", () => {
+    for (const locale of LOCALES) {
+      const ai = readAiLocale(locale);
+      const translate = ((key: string) => {
+        const segments = key.replace(/^ai\./u, "").split(".");
+        let value: unknown = ai;
+        for (const segment of segments) {
+          value = (value as Record<string, unknown>)[segment];
+        }
+        return value as string;
+      }) as any;
+
+      for (const scenario of [
+        "assistant",
+        "retrieval",
+        "ragApi",
+        "ragSync",
+        "inboundMcp",
+        "outboundMcp",
+      ]) {
+        expect(
+          splitAiAdminGuideFields(
+            translate(`ai.adminGuide.scenario.${scenario}.facts`),
+            3,
+          ),
+        ).toHaveLength(3);
+        expect(
+          splitAiAdminGuideFields(
+            translate(`ai.adminGuide.scenario.${scenario}.operations`),
+            3,
+          ),
+        ).toHaveLength(3);
+      }
+
+      for (const row of [
+        "401",
+        "409",
+        "429",
+        "503",
+        "leaseLost",
+        "sourceAccessChanged",
+        "cleanupRequired",
+        "consentRevoked",
+      ]) {
+        expect(
+          splitAiAdminGuideFields(
+            translate(`ai.adminGuide.troubleshooting.${row}`),
+            2,
+          ),
+        ).toHaveLength(2);
+      }
+
+      const diagrams = buildAiAdminGuideDiagrams(translate);
+      expect(Object.keys(diagrams)).toEqual([
+        "overview",
+        "rag",
+        "inboundMcp",
+        "outboundMcp",
+      ]);
+      for (const diagram of Object.values(diagrams)) {
+        expect(diagram.source).toMatch(/^flowchart LR/u);
+        expect(diagram.source).not.toContain("<script");
       }
     }
   });

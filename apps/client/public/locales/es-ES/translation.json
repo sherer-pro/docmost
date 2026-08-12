@@ -1467,13 +1467,13 @@
       "overviewTitle": "Qué hace cada componente",
       "assistantDescription": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales.",
       "retrievalDescription": "La búsqueda del espacio se ejecuta mientras se genera una respuesta. Solicita candidatos a un índice externo y, después, Docmost vuelve a comprobar cada fuente con la base de datos, las reglas de acceso actuales y las exclusiones de AI. Un fallo de recuperación no hace que falle el chat.",
-      "ragDescription": "La API de solo lectura /api/rag/* exporta fuentes de contenido completas e incrementales a un indexador externo. No realiza búsquedas ni responde preguntas, y cada clave RAG está restringida a un único espacio.",
-      "inboundMcpDescription": "Los asistentes externos se conectan a Docmost en el endpoint raíz /mcp con una clave MCP de ámbito limitado. El endpoint no mantiene estado y solo expone las herramientas de lectura permitidas por la política exacta de capacidades de la clave.",
+      "ragDescription": "La API /api/rag/* de solo lectura exporta feeds completos e incrementales a un indexador externo y puede devolver flujos de archivos adjuntos protegidos después de la autorización. No busca ni responde preguntas; cada clave RAG tiene como alcance un espacio.",
+      "inboundMcpDescription": "Los asistentes externos se conectan al punto final raíz /mcp con una clave MCP con alcance. No tiene estado, expone solo herramientas de lectura permitidas y devuelve metadatos de archivos adjuntos en lugar de contenidos binarios de archivos adjuntos.",
       "outboundMcpDescription": "Docmost Agent puede invocar herramientas en servidores MCP remotos aprobados. Este flujo sigue la dirección opuesta al MCP entrante y utiliza ajustes y credenciales independientes.",
       "setupTitle": "Dónde configurarlo",
       "setupDescription": "Abra el área de configuración correspondiente. Las listas de orígenes permitidos y los interruptores de emergencia del entorno de despliegue siguen bajo la gestión del operador.",
       "syncTitle": "Actualizaciones periódicas del índice RAG",
-      "syncDescription": "Docmost no mantiene una tabla local de embeddings. La sincronización RAG integrada se ejecuta dentro del proceso principal de Docmost, usa Redis compartido para la coordinación y almacena una clave de escritura de Open WebUI cifrada por espacio en PostgreSQL. Configure el origen de Open WebUI, el ID de Knowledge Base y la clave de escritura en la pestaña de sincronización RAG del espacio. Active el despliegue con RAG_SYNC_ENABLED y permita el origen exacto mediante RAG_SYNC_ALLOWED_ORIGINS. El índice incluye todas las páginas permitidas por la política de IA del espacio; el acceso directo a Open WebUI puede exponer contenido fuera de las ACL de Docmost del usuario. Las credenciales de consulta y escritura permanecen separadas.",
+      "syncDescription": "La sincronización integrada Open WebUI RAG se ejecuta dentro de Docmost, lee PostgreSQL directamente a través de los servicios Docmost, se coordina con Redis y escribe con una credencial cifrada separada por espacio. Nunca llama a la API pública /api/rag/*; Las credenciales de consulta y de escritor permanecen separadas.",
       "syncStepDelta": "Cada fuente usa un cursor opaco vinculado a una instantánea fija de la base de datos. Conserve la marca de agua inicial hasta hasMore=false; solo la página terminal avanza el checkpoint y los reintentos deben ser idempotentes.",
       "riskTitle": "Compensaciones y riesgos",
       "riskTiming": "La actualidad de los datos equivale al intervalo de consulta más el tiempo de procesamiento del ciclo. Un intervalo más largo aumenta la desactualización; uno muy corto incrementa la carga de Docmost, Redis y Open WebUI y puede provocar respuestas 429/503.",
@@ -1493,7 +1493,108 @@
       "operationsProfileNames": "Los nombres de perfiles del asistente deben ser únicos en cada espacio. Un duplicado devuelve 409 con ai_profile_name_conflict; vuelva a cargar la lista si es necesario y elija otro nombre.",
       "operationsRagMigration": "Al sustituir el worker RAG independiente, deténgalo primero, migre con RAG_SYNC_ENABLED=false y después configure, pruebe y habilite cada espacio. La API rechaza la habilitación hasta que el destino actual supere la prueba. Los secretos antiguos del entorno no se importan. Para revertir, use el interruptor de despliegue y no migration down.",
       "operationsRecovery": "Después de un fallo, restaure primero las dependencias, mantenga PostgreSQL como fuente autoritativa y conserve la Knowledge Base durante la recuperación de correspondencias. Repetir la carga de un archivo privado con el mismo Idempotency-Key reanuda el lote reservado tras un fallo del proceso sin crear otra fila de archivo. Para una reversión de emergencia de RAG Sync, establezca RAG_SYNC_ENABLED=false y reinicie Docmost; AI_EXTERNAL_MCP_ENABLED controla únicamente el MCP saliente.",
-      "templateExportScope": "Las entradas del catálogo de plantillas se excluyen. Las páginas creadas a partir de plantillas se exportan como páginas materializadas normales."
+      "templateExportScope": "Las entradas del catálogo de plantillas se excluyen. Las páginas creadas a partir de plantillas se exportan como páginas materializadas normales.",
+      "contractVersion": "Contrato de guía v{{version}}",
+      "quickNavLabel": "Secciones de guía AI",
+      "taskChooserTitle": "Elige lo que necesitas configurar",
+      "taskChooserDescription": "Comience con el resultado que necesita. Cada ruta identifica el propietario, el requisito previo, el resultado esperado y la página de configuración exacta.",
+      "roleLabel": "propietario",
+      "prerequisiteLabel": "Requiere",
+      "resultLabel": "Resultado",
+      "detailsLabel": "Lee los pasos",
+      "openSettings": "Abrir configuración",
+      "openRelevantGuide": "Abrir guía relevante",
+      "architectureTitle": "Cómo se conectan los caminos",
+      "architectureDescription": "La descripción general separa la generación, la recuperación en el momento de la consulta, la exportación, la sincronización y ambas direcciones MCP. PostgreSQL sigue teniendo autoridad; Redis coordina admisiones y arrendamientos.",
+      "setupSequence": "Secuencia predeterminada: Save → Test → Enable. Los clientes de clave API usan Create → copiar una vez → probar → iniciar.",
+      "instructionsTitle": "Configuración, señal de éxito y reversión",
+      "stepsTitle": "Secuencia de configuración",
+      "successTitle": "El éxito parece",
+      "rollbackTitle": "Reversión segura",
+      "referencesTitle": "Rutas y controles de implementación.",
+      "referencesDescription": "Copie rutas públicas exactas y nombres de entornos. Los valores secretos pertenecen a un almacén secreto aprobado, nunca a esta guía o registros.",
+      "routeLabel": "Ruta",
+      "environmentLabel": "variable de entorno",
+      "securityMatrixTitle": "Credenciales y límites de seguridad",
+      "securityMatrixDescription": "Cada ruta tiene sus propias credenciales y comprobaciones de autorización en vivo. No reutilice los secretos de consulta, escritor, RAG, MCP entrante, MCP saliente ni proveedor.",
+      "securityScenarioLabel": "Camino",
+      "securityOwnerLabel": "Controlado por",
+      "securityBoundaryLabel": "Almacenamiento y límite",
+      "troubleshootingTitle": "Solución de problemas",
+      "troubleshootingDescription": "Comience desde el código o estado de error estable, restaure la dependencia fallida o el límite de autorización y luego vuelva a intentar la operación segura más pequeña.",
+      "problemLabel": "señal",
+      "actionLabel": "que hacer",
+      "scenario": {
+        "assistant": {
+          "facts": "Administrador de espacio||Origen, modelo y perfil de asistente opcional del proveedor homologado||Chat y Agent utilizan el modelo seleccionado y solo herramientas permitidas",
+          "operations": "Configuración de proveedor, modelo, perfil y política de Save|Test Chat y Agent|Enable el modelo espacial y los perfiles previstos.||Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir||Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida"
+        },
+        "retrieval": {
+          "facts": "Operador y administrador del espacio||Origen de recuperación aprobado y un adaptador configurado||Las respuestas pueden citar candidatos externos solo después de verificaciones en vivo del Docmost",
+          "operations": "Credencial de consulta, adaptador y terminal Save|Recuperación de Test desde la configuración del espacio.|Búsqueda externa Enable||La prueba arroja candidatos y la respuesta conserva solo fuentes legibles y no excluidas.||Deshabilitar la búsqueda externa; Chat continúa sin recuperación"
+        },
+        "ragApi": {
+          "facts": "Administrador del espacio de trabajo y operador del indexador.||Una clave API RAG de ámbito espacial copiada en el momento de la creación||Un indexador externo recibe feeds autorizados y flujos de archivos adjuntos protegidos.",
+          "operations": "Create la clave RAG y cópiela una vez|Test /api/rag/pages y continuación del cursor|Iniciar el indexador externo||Las respuestas devuelven 200 cursores estables y solo el alcance legible en vivo del creador de la clave||Revocar la clave y detener el indexador; crear una nueva clave para la recuperación"
+        },
+        "ragSync": {
+          "facts": "Operador de implementación y administrador del espacio.||RAG_SYNC_ENABLED, un origen Open WebUI permitido, Knowledge ID y clave de escritor||Docmost mantiene incrementalmente el Open WebUI Knowledge Base seleccionado",
+          "operations": "Save la credencial de destino y de escritor|Ejecute Test para el objetivo actual|Enable la unión||El último éxito avanza y no queda ningún estado de limpieza o desajuste de objetivos||Deshabilite el enlace y finalice la limpieza; para reversión de emergencia, deshabilite RAG_SYNC_ENABLED y reinicie"
+        },
+        "inboundMcp": {
+          "facts": "Administrador del espacio de trabajo y propietario del cliente MCP||Una clave MCP de ámbito espacial con una lista de capacidades exactas permitidas||El cliente puede llamar a herramientas autorizadas de solo lectura Docmost a través de /mcp",
+          "operations": "Create la clave MCP y cópiela una vez|Inicialización de Test, tools/list y una llamada permitida|Iniciar la integración del cliente||Las herramientas permitidas funcionan; Las capacidades denegadas y las lecturas de archivos adjuntos binarios siguen no disponibles.||Revocar la clave o eliminar al creador del espacio; el acceso activo se cierra en la siguiente solicitud"
+        },
+        "outboundMcp": {
+          "facts": "Operador de implementación, administrador del espacio de trabajo, administrador del espacio y usuario||Ambas listas permitidas de origen, servidor habilitado y enlace, política de grupo y consentimiento del usuario||Docmost Agent puede utilizar el conjunto de herramientas remotas MCP intersectadas",
+          "operations": "Save el servidor, el enlace y la política de grupo|Test y descubre herramientas|Enable el servidor y recoger el consentimiento del usuario||Solo aparecen herramientas intersecadas y la solicitud DNS-pinned devuelve un resultado que no es confiable para su revisión||Deshabilitar cualquier capa de autorización o revocar el consentimiento; cambiar la URL revoca todo el consentimiento guardado"
+        }
+      },
+      "diagram": {
+        "expand": "Abrir diagrama en pantalla completa",
+        "invalid": "No se pudo representar el diagrama de arquitectura. Utilice los pasos adyacentes.",
+        "stepsTitle": "Vista equivalente paso a paso",
+        "overview": {
+          "label": "Descripción general de la arquitectura AI, RAG y MCP",
+          "caption": "La generación, exportación, sincronización y las dos direcciones MCP utilizan rutas de admisión y credenciales distintas.",
+          "textAlternative": "Configurar el asistente y la recuperación opcional en tiempo de consulta por espacio|Utilice /api/rag/* solo para clientes de exportación externos de solo lectura|Utilice la sincronización RAG incorporada para escrituras directas en Open WebUI sin llamar a la API pública RAG|Utilice /mcp para herramientas de lectura entrantes y configuraciones externas de MCP para herramientas Agent salientes."
+        },
+        "rag": {
+          "label": "API RAG y arquitectura de sincronización RAG incorporada",
+          "caption": "Las credenciales de consulta, exportación pública y escritor son independientes; la sincronización incorporada no recorre el /api/rag/*.",
+          "textAlternative": "La recuperación de Chat utiliza una credencial de consulta para solicitar el índice externo|Un indexador externo lee el contenido autorizado a través de /api/rag/*|La sincronización RAG incorporada lee el estado de Docmost internamente y escribe con una clave de escritura por espacio|Las comprobaciones de políticas de contenido y ACL en vivo permanecen delante del contenido exportado o sincronizado."
+        },
+        "inboundMcp": {
+          "label": "Flujo de autorización entrante MCP",
+          "caption": "Cada solicitud de /mcp vuelve a verificar el alcance de la clave antes de la admisión de Redis y la política de herramienta compartida de solo lectura.",
+          "textAlternative": "Create una clave MCP escrita y con alcance espacial|Validar la clave en vivo, el espacio de trabajo, el creador y el espacio|Adquiera tarifa Redis y admisión concurrente|Intersección de la política de capacidad con la página ACL y la política de contenido antes de leer PostgreSQL"
+        },
+        "outboundMcp": {
+          "label": "Flujo de autorización saliente MCP",
+          "caption": "Cada capa de autorización debe permitir la solicitud; el consentimiento sigue la URL del destinatario y la resolución DNS está fijada.",
+          "textAlternative": "Enable el despliegue y aprobar el origen|Enable el servidor del espacio de trabajo y el enlace espacial|Aplicar la política de grupo de denegar primero y el consentimiento del usuario|Resuelva y fije la dirección remota aprobada, luego trate los esquemas y resultados como no confiables"
+        },
+        "overviewNodes": "Registro de herramientas AI compartido|Sistemas externos|Servidor remoto MCP",
+        "ragNodes": "Consulta Chat|Credencial de consulta|índice externo|indexador externo|ACL en vivo y política de contenido|credencial de escritor|no llama",
+        "inboundNodes": "Configuración de clave API|Clave en vivo, espacio de trabajo, usuario y alcance del espacio|Tarifa Redis y admisión concurrente|Política de herramientas, ACL de páginas y política de contenido",
+        "outboundNodes": "control de despliegue|Control del espacio de trabajo|Enlace espacial|Política de grupo de denegar primero|Consentimiento del usuario|Solicitud remota DNS-pinned"
+      },
+      "securityOwner": {
+        "spaceAdmin": "Administrador del espacio; El operador aprueba el origen.",
+        "workspaceAdmin": "Propietario o administrador del espacio de trabajo",
+        "operatorAndSpaceAdmin": "Operador de implementación y administrador del espacio.",
+        "layered": "Operador, administrador del espacio de trabajo, administrador del espacio, política de grupo y usuario"
+      },
+      "troubleshooting": {
+        "401": "401 No autorizado||Verifique el tipo de clave Bearer, su vencimiento, su revocación, la membresía activa del creador y el espacio de alcance exacto. Las cookies de usuario no autentican RAG o MCP.",
+        "409": "409 Conflicto||Recargar el estado actual. Resuelva nombres de perfiles duplicados, versiones obsoletas, conflictos de objetivos de RAG o limpieza incompleta antes de volver a intentarlo.",
+        "429": "429 Demasiadas solicitudes||Retroceda con la inquietud y reduzca el paralelismo. Verifique la tasa de RAG/MCP, los límites de simultaneidad y los arrendamientos a largo plazo.",
+        "503": "Servicio 503 no disponible||Restaure primero Redis, el proveedor o el objetivo externo. La admisión falla cerrada cuando Redis no puede proteger los límites.",
+        "leaseLost": "Arrendamiento Redis perdido||Trate la solicitud activa como cancelada, verifique la estabilidad del Redis y el límite de propiedad, luego vuelva a intentarlo de manera idempotente.",
+        "sourceAccessChanged": "source_access_changed||La respuesta parcial y las citas fueron eliminadas porque el acceso cambió. Vuelva a abrir la fuente solo después de que los permisos se restablezcan intencionalmente.",
+        "cleanupRequired": "limpieza requerida||No cambie de objetivo ni gire la APP_SECRET todavía. Restaure el acceso de escritura actual, finalice la limpieza, luego guarde y pruebe el nuevo destino.",
+        "consentRevoked": "Consentimiento revocado MCP||El usuario debe revisar y optar nuevamente. Un cambio de URL revoca intencionalmente todos los consentimientos guardados del destinatario anterior."
+      }
     },
     "integrations": {
       "backToSpace": "Volver al espacio",
