@@ -3,11 +3,14 @@ import {
   BadRequestException,
   ForbiddenException,
   HttpException,
+  Inject,
   Injectable,
 } from '@nestjs/common';
-import { AiSpaceConfig } from '@docmost/db/types/entity.types';
-import { AiConfigService } from '../ai/services/ai-config.service';
-import { OpenAiCompatibleProviderService } from '../ai/services/openai-compatible-provider.service';
+import {
+  AI_TEXT_GENERATION_PORT,
+  AiTextGenerationPort,
+  AiTextGenerationSession,
+} from '../ai/ports/ai-text-generation.port';
 import { DictionaryService } from './dictionary.service';
 
 const GENERATION_BATCH_SIZE = 8;
@@ -27,14 +30,14 @@ interface GeneratedBatchItem {
 @Injectable()
 export class DictionaryWordFormService {
   constructor(
-    private readonly configs: AiConfigService,
-    private readonly provider: OpenAiCompatibleProviderService,
+    @Inject(AI_TEXT_GENERATION_PORT)
+    private readonly generation: AiTextGenerationPort,
     private readonly dictionaryService: DictionaryService,
   ) {}
 
   async getAvailability(spaceId: string, workspaceId: string) {
-    const config = await this.configs.getRawConfig(spaceId, workspaceId);
-    return { available: this.isConfigAvailable(config) };
+    const session = await this.generation.createSession(spaceId, workspaceId);
+    return { available: Boolean(session) };
   }
 
   async generateForms(
@@ -47,8 +50,8 @@ export class DictionaryWordFormService {
       throw new BadRequestException('Dictionary term is required');
     }
 
-    const config = await this.getAvailableConfig(spaceId, workspaceId);
-    const generated = await this.generateBatch(config, [term]);
+    const session = await this.getAvailableSession(spaceId, workspaceId);
+    const generated = await this.generateBatch(session, [term]);
 
     return {
       forms: this.dictionaryService.mergeGeneratedForms(
@@ -60,7 +63,7 @@ export class DictionaryWordFormService {
   }
 
   async generateAndSaveAll(spaceId: string, workspaceId: string) {
-    const config = await this.getAvailableConfig(spaceId, workspaceId);
+    const session = await this.getAvailableSession(spaceId, workspaceId);
     const terms = await this.dictionaryService.listTerms(spaceId, workspaceId);
 
     if (terms.length === 0) {
@@ -77,7 +80,7 @@ export class DictionaryWordFormService {
       GENERATION_CONCURRENCY,
       (batch) =>
         this.generateBatch(
-          config,
+          session,
           batch.map((term) => term.term),
         ),
     );
@@ -100,40 +103,30 @@ export class DictionaryWordFormService {
     );
   }
 
-  private async getAvailableConfig(
+  private async getAvailableSession(
     spaceId: string,
     workspaceId: string,
-  ): Promise<AiSpaceConfig> {
-    const config = await this.configs.getRawConfig(spaceId, workspaceId);
-    if (!this.isConfigAvailable(config)) {
+  ): Promise<AiTextGenerationSession> {
+    const session = await this.generation.createSession(spaceId, workspaceId);
+    if (!session) {
       throw new ForbiddenException({
         code: 'ai_unavailable',
         message: 'AI is not available in this space',
       });
     }
 
-    return config;
-  }
-
-  private isConfigAvailable(
-    config: AiSpaceConfig | undefined,
-  ): config is AiSpaceConfig {
-    return Boolean(config?.enabled && config.baseUrl && config.chatModel);
+    return session;
   }
 
   private async generateBatch(
-    config: AiSpaceConfig,
+    session: AiTextGenerationSession,
     terms: string[],
   ): Promise<string[][]> {
     let lastError: unknown;
 
     for (let attempt = 0; attempt < GENERATION_ATTEMPTS; attempt += 1) {
       try {
-        const completion = await this.provider.complete(
-          {
-            ...this.configs.toProviderConfig(config),
-            temperature: 0.1,
-          },
+        const completion = await session.complete(
           [
             {
               role: 'system',
@@ -147,6 +140,7 @@ export class DictionaryWordFormService {
               }),
             },
           ],
+          { temperature: 0.1 },
         );
 
         return this.parseBatchResponse(completion.content, terms.length);

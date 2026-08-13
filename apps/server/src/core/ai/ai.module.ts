@@ -24,16 +24,13 @@ import { AiConversationService } from './services/ai-conversation.service';
 import { AiContextService } from './services/ai-context.service';
 import { AiCitationService } from './services/ai-citation.service';
 import { AiFileService } from './services/ai-file.service';
-import { AiOutboundUrlPolicyService } from './services/ai-outbound-url-policy.service';
 import { AiOperationalMetricsService } from './services/ai-operational-metrics.service';
-import { AiProviderUrlPolicyService } from './services/ai-provider-url-policy.service';
 import { AiPromptBuilderService } from './services/ai-prompt-builder.service';
 import { AiQueueReconcilerService } from './services/ai-queue-reconciler.service';
 import { AiRetrievalUrlPolicyService } from './services/ai-retrieval-url-policy.service';
 import { AiRunExecutionService } from './services/ai-run-execution.service';
 import { AiRunEventService } from './services/ai-run-event.service';
 import { AiRunService } from './services/ai-run.service';
-import { OpenAiCompatibleProviderService } from './services/openai-compatible-provider.service';
 import { AiAuxRunService } from './services/ai-aux-run.service';
 import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
@@ -65,9 +62,11 @@ import {
 } from './controllers/ai-assistant-profile.controller';
 import { AiAssistantProfileService } from './services/ai-assistant-profile.service';
 import { AiSourceAccessService } from './services/ai-source-access.service';
+import { AiProviderModule } from './ai-provider.module';
 
 @Module({
   imports: [
+    AiProviderModule,
     WsModule,
     SearchModule,
     AiContentPolicyModule,
@@ -99,9 +98,7 @@ import { AiSourceAccessService } from './services/ai-source-access.service';
     AiCitationService,
     AiContextService,
     AiFileService,
-    AiOutboundUrlPolicyService,
     AiOperationalMetricsService,
-    AiProviderUrlPolicyService,
     AiPromptBuilderService,
     AiQueueReconcilerService,
     AiRetrievalUrlPolicyService,
@@ -130,12 +127,10 @@ import { AiSourceAccessService } from './services/ai-source-access.service';
     HttpJsonAiRetrievalAdapter,
     OpenWebUiKnowledgeRetrievalAdapter,
     NoopAiRetrievalAdapter,
-    OpenAiCompatibleProviderService,
   ],
   exports: [
+    AiProviderModule,
     AiConfigService,
-    OpenAiCompatibleProviderService,
-    AiOutboundUrlPolicyService,
     AiToolRegistryService,
     AiBuiltinToolPolicyService,
     AI_BUILTIN_TOOL_POLICY_RESOLVER,

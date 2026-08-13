@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 2 -->
+<!-- ai-admin-guide-contract-version: 3 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -94,7 +94,8 @@ The main components are:
 | `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history     |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
-| `DictionaryWordFormService`              | bounded structured word-form generation through the configured space provider               |
+| `AiTextGenerationService`                | narrow provider session facade exported through `AI_TEXT_GENERATION_PORT`                   |
+| `DictionaryWordFormService`              | bounded structured word-form generation through the narrow generation port                  |
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
 | `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots             |
 | `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                |
@@ -608,6 +609,14 @@ rules, unsupported-content guardrails, and the expected output-only response.
 Space administrators can replace these defaults with custom quick commands.
 
 ### Dictionary word-form generation
+
+`DictionaryModule` imports the controller-free `AiProviderModule` and injects
+`AI_TEXT_GENERATION_PORT`; it does not import the full `AiModule` or depend on
+`AiConfigService` and `OpenAiCompatibleProviderService`. The port resolves and
+decrypts the effective provider configuration once per operation and returns a
+scoped completion session. Provider configuration lookup remains shared with
+`AiConfigService`, so the dictionary and chat paths do not implement competing
+configuration rules.
 
 When the space provider is enabled and has both `baseUrl` and `chatModel`, the
 dictionary exposes two model-assisted commands. A user who can manage pages in

@@ -2,23 +2,11 @@ import { BadGatewayException, ForbiddenException } from '@nestjs/common';
 import { DictionaryWordFormService } from './dictionary-word-form.service';
 
 describe('DictionaryWordFormService', () => {
-  const config = {
-    enabled: true,
-    baseUrl: 'http://provider.test/v1',
-    chatModel: 'model-1',
-  } as any;
-  const configs = {
-    getRawConfig: jest.fn(),
-    toProviderConfig: jest.fn().mockReturnValue({
-      baseUrl: 'http://provider.test/v1',
-      chatModel: 'model-1',
-      temperature: 0.2,
-      maxOutputTokens: 8192,
-      requestTimeoutMs: 300000,
-    }),
-  };
-  const provider = {
+  const session = {
     complete: jest.fn(),
+  };
+  const generation = {
+    createSession: jest.fn(),
   };
   const dictionary = {
     listTerms: jest.fn(),
@@ -31,21 +19,13 @@ describe('DictionaryWordFormService', () => {
     replaceFormsForTerms: jest.fn(),
   };
   const service = new DictionaryWordFormService(
-    configs as any,
-    provider as any,
+    generation as any,
     dictionary as any,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
-    configs.getRawConfig.mockResolvedValue(config);
-    configs.toProviderConfig.mockReturnValue({
-      baseUrl: 'http://provider.test/v1',
-      chatModel: 'model-1',
-      temperature: 0.2,
-      maxOutputTokens: 8192,
-      requestTimeoutMs: 300000,
-    });
+    generation.createSession.mockResolvedValue(session);
     dictionary.mergeGeneratedForms.mockImplementation(
       (_term: string, existing: string[], generated: string[]) => [
         ...existing,
@@ -59,17 +39,14 @@ describe('DictionaryWordFormService', () => {
       service.getAvailability('space-1', 'workspace-1'),
     ).resolves.toEqual({ available: true });
 
-    configs.getRawConfig.mockResolvedValue({
-      ...config,
-      enabled: false,
-    });
+    generation.createSession.mockResolvedValue(null);
     await expect(
       service.getAvailability('space-1', 'workspace-1'),
     ).resolves.toEqual({ available: false });
   });
 
   it('generates forms for one term without saving them', async () => {
-    provider.complete.mockResolvedValue({
+    session.complete.mockResolvedValue({
       content:
         '```json\n{"items":[{"index":0,"forms":["термина","термины"]}]}\n```',
       usage: { inputTokens: 10, outputTokens: 20 },
@@ -91,7 +68,7 @@ describe('DictionaryWordFormService', () => {
   });
 
   it('retries an invalid provider response and then fails closed', async () => {
-    provider.complete.mockResolvedValue({
+    session.complete.mockResolvedValue({
       content: 'not-json',
       usage: { inputTokens: 1, outputTokens: 1 },
     });
@@ -102,11 +79,11 @@ describe('DictionaryWordFormService', () => {
         forms: [],
       }),
     ).rejects.toBeInstanceOf(BadGatewayException);
-    expect(provider.complete).toHaveBeenCalledTimes(2);
+    expect(session.complete).toHaveBeenCalledTimes(2);
   });
 
   it('rejects generation when AI is unavailable in the space', async () => {
-    configs.getRawConfig.mockResolvedValue({ ...config, enabled: false });
+    generation.createSession.mockResolvedValue(null);
 
     await expect(
       service.generateForms('space-1', 'workspace-1', {
@@ -114,7 +91,7 @@ describe('DictionaryWordFormService', () => {
         forms: [],
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(provider.complete).not.toHaveBeenCalled();
+    expect(session.complete).not.toHaveBeenCalled();
   });
 
   it('generates every term before delegating the atomic bulk save', async () => {
@@ -133,7 +110,7 @@ describe('DictionaryWordFormService', () => {
         updatedAt,
       },
     ]);
-    provider.complete.mockResolvedValue({
+    session.complete.mockResolvedValue({
       content:
         '{"items":[{"index":0,"forms":["Alpha form"]},{"index":1,"forms":["Beta form"]}]}',
       usage: { inputTokens: 10, outputTokens: 20 },
