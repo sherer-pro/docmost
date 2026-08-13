@@ -26,6 +26,7 @@ import { ApiKeyTrafficGuard } from '../api-key/traffic/api-key-traffic.guard';
 import { ApiKeyTraffic } from '../api-key/traffic/api-key-traffic.decorator';
 import { ApiKeyTrafficService } from '../api-key/traffic/api-key-traffic.service';
 import { AuthApiKey } from '../../common/decorators/auth-api-key.decorator';
+import { getAppVersion } from '../../common/helpers/get-app-version';
 import { AiBuiltinToolPolicyService } from '../ai/tools/ai-builtin-tool-policy.service';
 
 /*
@@ -57,7 +58,7 @@ export class McpController {
   ): Promise<void> {
     const allowedTools = await this.toolPolicy.listForMcp(apiKey);
     const server = new Server(
-      { name: 'docmost', version: '1.0.0' },
+      { name: 'docmost', version: getAppVersion() },
       {
         capabilities: { tools: {} },
         instructions:

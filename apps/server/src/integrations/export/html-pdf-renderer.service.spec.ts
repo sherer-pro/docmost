@@ -68,6 +68,50 @@ describe('isAllowedPdfResourceUrl', () => {
 });
 
 describe('HtmlPdfRendererService attachment request authorization', () => {
+  it('waits for network idle after loading HTML with Puppeteer 25', async () => {
+    const page = {
+      setDefaultNavigationTimeout: jest.fn(),
+      setDefaultTimeout: jest.fn(),
+      setContent: jest.fn(async () => undefined),
+      waitForNetworkIdle: jest.fn(async () => undefined),
+      pdf: jest.fn(async () => Buffer.from('%PDF-1.7 test')),
+      close: jest.fn(async () => undefined),
+    };
+    const browser = {
+      newPage: jest.fn(async () => page),
+      close: jest.fn(async () => undefined),
+    };
+    const service = new HtmlPdfRendererService({
+      getPdfRenderTimeoutMs: () => 5_000,
+    } as any);
+    jest.spyOn(service as any, 'launchBrowser').mockResolvedValue(browser);
+    jest
+      .spyOn(service as any, 'configureRequestInterception')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'renderMermaidDiagrams')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'assertAttachmentImagesLoaded')
+      .mockResolvedValue(undefined);
+
+    await expect(
+      service.render('<html><body>Ready</body></html>'),
+    ).resolves.toEqual(Buffer.from('%PDF-1.7 test'));
+
+    expect(page.setContent).toHaveBeenCalledWith(
+      '<html><body>Ready</body></html>',
+      { waitUntil: 'domcontentloaded', timeout: 5_000 },
+    );
+    expect(page.waitForNetworkIdle).toHaveBeenCalledWith({
+      idleTime: 500,
+      timeout: 5_000,
+    });
+    expect(page.setContent.mock.invocationCallOrder[0]).toBeLessThan(
+      page.waitForNetworkIdle.mock.invocationCallOrder[0],
+    );
+  });
+
   it('injects an attachment-specific token and aborts unknown attachments', async () => {
     let requestHandler: ((request: any) => void) | undefined;
     const page = {

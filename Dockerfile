@@ -56,6 +56,7 @@ ARG PNPM_OFFLINE=1
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
+    pnpm fetch --prod --frozen-lockfile && \
     if [ "$PNPM_OFFLINE" = "1" ]; then \
       pnpm install --frozen-lockfile --prod --offline; \
     else \
