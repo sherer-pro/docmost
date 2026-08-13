@@ -108,6 +108,7 @@
 - Release-candidate verification (full local verification plus route/docs/text/audit contracts and AI/editor browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
+- Check manifest, MCP runtime, and release-tag version consistency: `pnpm check:release-version`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
 - Check the RAG Postman collection against route inventory and key-type examples: `pnpm check:rag-docs`
@@ -271,12 +272,12 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-- `.github/workflows/ci.yml` — PR validation (`install`, `build`, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+- `.github/workflows/ci.yml` — PR validation (`install`, `build`, release-version, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
   3. before PR: `pnpm verify:full` (build → lint → tests → security suite).
-  4. before release candidates: `pnpm verify:release` against the documented production-like runtime.
+  4. before release candidates: `pnpm check:release-version`, then `pnpm verify:release` against the documented production-like runtime. The Docker release tag must equal `v${package.version}` exactly.
   5. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
 - Functional checks (`check:env`, `build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
 

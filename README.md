@@ -851,8 +851,15 @@ For a release candidate, run the complete release contract against the
 documented production-like PostgreSQL, Redis, API, and collaboration runtime:
 
 ```bash
+pnpm check:release-version
 pnpm verify:release
 ```
+
+The version gate requires matching root, client, and server package versions,
+runtime-derived MCP versions, and an exact `v${package.version}` release tag.
+For the current candidate the only accepted release tag is `v1.1.0`. Follow the
+[v1.1.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.1.0.md)
+before deployment.
 
 For backend changes:
 
