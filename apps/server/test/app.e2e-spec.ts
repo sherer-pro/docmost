@@ -11,6 +11,7 @@ import { SpaceRepo } from '../src/database/repos/space/space.repo';
 import { UserRepo } from '../src/database/repos/user/user.repo';
 import type { DB } from '../src/database/types/db';
 import type { KyselyDB } from '../src/database/types/kysely.types';
+import { normalizePostgresUrl } from '../src/common/helpers';
 
 jest.setTimeout(30_000);
 
@@ -25,8 +26,9 @@ describe('server infrastructure (e2e)', () => {
   let redis: Redis;
 
   beforeAll(async () => {
-    database = postgres(process.env.DATABASE_URL!, { max: 2 });
-    repositoryClient = postgres(process.env.DATABASE_URL!, { max: 2 });
+    const databaseUrl = normalizePostgresUrl(process.env.DATABASE_URL!);
+    database = postgres(databaseUrl, { max: 2 });
+    repositoryClient = postgres(databaseUrl, { max: 2 });
     kysely = new Kysely<DB>({
       dialect: new PostgresJSDialect({ postgres: repositoryClient }),
       plugins: [new CamelCasePlugin()],
@@ -243,9 +245,7 @@ describe('server infrastructure (e2e)', () => {
         outboxRepo.claimNext(secondLeaseToken, 60_000),
       ]);
       const firstClaim = firstAttempt ?? competingAttempt;
-      const firstOwnerToken = firstAttempt
-        ? firstLeaseToken
-        : secondLeaseToken;
+      const firstOwnerToken = firstAttempt ? firstLeaseToken : secondLeaseToken;
       const takeoverToken = firstAttempt ? secondLeaseToken : firstLeaseToken;
       expect(firstClaim).toMatchObject({
         id,
@@ -287,9 +287,9 @@ describe('server infrastructure (e2e)', () => {
       await expect(
         outboxRepo.markFailed(id!, firstOwnerToken, 'forged_owner'),
       ).resolves.toBe(false);
-      await expect(
-        outboxRepo.markCompleted(id!, takeoverToken),
-      ).resolves.toBe(true);
+      await expect(outboxRepo.markCompleted(id!, takeoverToken)).resolves.toBe(
+        true,
+      );
 
       const [persisted] = await database<
         { status: string; secret_payload: string | null }[]
