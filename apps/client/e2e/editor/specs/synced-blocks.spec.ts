@@ -666,16 +666,16 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         exact: true,
       },
     );
-    await selectionText.click();
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Shift+End");
-    await page.getByRole("button", { name: "Create synced block" }).click();
+    await selectionText.selectText();
+    const createSyncedBlockButton = page.getByRole("button", {
+      name: "Create synced block",
+    });
+    await expect(createSyncedBlockButton).toBeVisible({ timeout: 15_000 });
+    await createSyncedBlockButton.click();
     await expect(page.locator('[data-type="transclusionSource"]')).toHaveCount(
       1,
     );
-    await selectionText.click();
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Shift+End");
+    await selectionText.selectText();
     await expect(
       page.getByRole("button", { name: "Create synced block" }),
     ).toHaveCount(0);

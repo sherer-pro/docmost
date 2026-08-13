@@ -164,6 +164,7 @@ const modelControlUrl = `http://127.0.0.1:${modelPort}`;
 const modelProviderUrl = `http://host.docker.internal:${modelPort}/v1`;
 const toxiproxyUrl = `http://127.0.0.1:${toxiproxyPort}`;
 const appSecret = randomBytes(48).toString("base64url");
+const collabInternalSecret = randomBytes(48).toString("base64url");
 const databasePassword = randomBytes(30).toString("base64url");
 const adminPassword = `Aa1!${randomBytes(30).toString("base64url")}`;
 const adminEmail = `ai-agent-admin-${runId}@example.com`;
@@ -177,6 +178,8 @@ const composeEnv = {
   APP_URL: baseURL,
   COLLAB_PORT: String(collabPort),
   COLLAB_URL: collabURL,
+  COLLAB_INTERNAL_URL: `http://collab:${collabPort}`,
+  COLLAB_INTERNAL_SECRET: collabInternalSecret,
   APP_SECRET: appSecret,
   POSTGRES_USER: "docmost",
   POSTGRES_DB: "docmost",
@@ -294,6 +297,7 @@ try {
     ["auth-token", authToken],
     ["csrf-token", csrfToken],
     ["app-secret", appSecret],
+    ["collab-internal-secret", collabInternalSecret],
     ["database-password", databasePassword],
     ["admin-password", adminPassword],
     ["canary", canary],

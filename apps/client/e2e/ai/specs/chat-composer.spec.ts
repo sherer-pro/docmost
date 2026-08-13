@@ -108,6 +108,19 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
     await expect(composer.locator(selector)).toContainText("format");
   }
 
+  // The previous case intentionally leaves the editor in a code block, where
+  // inline marks are not allowed. Restore a paragraph before testing links.
+  await composer.press("ControlOrMeta+a");
+  await page
+    .getByRole("button", {
+      name: /Markdown formatting|Форматирование Markdown/i,
+    })
+    .click();
+  await page
+    .getByRole("menuitem", { name: /Code block|Блок кода/i })
+    .click();
+  await expect(composer.locator("p")).toContainText("format");
+
   await composer.fill("format");
   await composer.press("ControlOrMeta+a");
   await page

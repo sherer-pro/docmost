@@ -67,11 +67,13 @@ test("streaming survives reload and a delayed run can be stopped", async ({
   page,
   context,
 }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   const state = await loadState();
   await openAssistant(page, state);
   const resizeHandle = page.locator(
     '[role="separator"][aria-valuemin="360"][aria-valuemax="520"]',
   );
+  await expect(resizeHandle).toBeVisible();
   const originalWidth = Number(
     await resizeHandle.getAttribute("aria-valuenow"),
   );

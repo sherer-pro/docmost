@@ -59,6 +59,14 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
   let publicContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
   try {
+    const auditOrigin = new URL(baseUrl()).origin;
+    await page.route("**/*", async (route) => {
+      if (new URL(route.request().url()).origin !== auditOrigin) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
     await apiPost(api, "/api/users/update", {
       headingNumberingByPageId: {
         ...(originalPreferences.headingNumberingByPageId ?? {}),
@@ -169,9 +177,21 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
     publicContext = await browser.newContext({
       baseURL: baseUrl(),
       locale: "en-US",
+      serviceWorkers: "block",
+    });
+    await publicContext.route("**/*", async (route) => {
+      if (new URL(route.request().url()).origin !== auditOrigin) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
     });
     const publicPage = await publicContext.newPage();
-    await publicPage.goto(`/share/${share.id}/p/${seeded.page.slugId}`);
+    const publicResponse = await publicPage.goto(
+      `/share/${share.id}/p/${seeded.page.slugId}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    expect(publicResponse?.ok(), "public share shell status").toBe(true);
     const publicEditor = publicDocument(publicPage);
     await expect(publicEditor).toContainText("Editor regression audit");
     await expect(publicEditor).toHaveAttribute("contenteditable", "false");
