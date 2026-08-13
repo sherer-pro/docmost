@@ -17,6 +17,7 @@ const [
   migrationSource,
   editorMobileSource,
   aiContextAuditSource,
+  dockerfileSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -31,6 +32,7 @@ const [
   readFile("apps/server/src/database/migrate.ts", "utf8"),
   readFile("apps/client/e2e/editor/specs/mobile-accessibility.spec.ts", "utf8"),
   readFile("apps/client/e2e/ai-context/run-ai-context-audit.mjs", "utf8"),
+  readFile("Dockerfile", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -45,6 +47,7 @@ function inputs(overrides = {}) {
     dockerSource: workflows["docker.yml"],
     workflowSources: workflows,
     packageJson: overrides.packageJson ?? packageJson,
+    dockerfileSource: overrides.dockerfileSource ?? dockerfileSource,
   };
 }
 
@@ -170,6 +173,18 @@ test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => 
     aiAgentAuditSource,
     /DATABASE_URL: databaseUrl,[\s\S]*REDIS_URL: redisUrl,/u,
   );
+  assert.match(
+    aiAgentAuditSource,
+    /COLLAB_INTERNAL_SECRET: collabInternalSecret,/u,
+  );
+  assert.match(
+    aiAgentAuditSource,
+    /COLLAB_INTERNAL_URL: `http:\/\/collab:\$\{collabPort\}`/u,
+  );
+  assert.match(
+    aiAgentAuditSource,
+    /\["collab-internal-secret", collabInternalSecret\]/u,
+  );
   assert.match(aiAgentAuditSource, /@toxiproxy:15432\/docmost/u);
   assert.match(
     aiAgentAuditSource,
@@ -210,10 +225,26 @@ test("production migrations resolve file-backed secrets before connecting", () =
   assert.match(migrationSource, /if \(fileSecretErrors\.length > 0\)/u);
 });
 
+test("production runtime dependencies populate their own offline cache", () => {
+  const command = "pnpm fetch --prod --frozen-lockfile";
+  assert.ok(dockerfileSource.includes(command), "Dockerfile fixture must fetch");
+  const errors = validateReleaseGateContract(
+    inputs({
+      dockerfileSource: dockerfileSource.replace(command, "removed-fetch"),
+    }),
+  );
+  assert.ok(
+    errors.includes(
+      "Dockerfile runtime dependencies must be fetched before the offline production install",
+    ),
+  );
+});
+
 const workflowMutations = [
   ["community boundary", "ciSource", "pnpm check:no-ee"],
   ["community boundary tests", "ciSource", "pnpm test:no-ee"],
   ["architecture contract", "ciSource", "pnpm check:architecture"],
+  ["release version contract", "ciSource", "pnpm check:release-version"],
   ["release gate self-check", "ciSource", "pnpm check:release-gates"],
   ["build", "ciSource", "pnpm build"],
   ["route inventory", "ciSource", "pnpm routes:inventory:check"],
@@ -277,6 +308,16 @@ const workflowMutations = [
     "sanitized artifact marker",
     "ciSource",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
+  ],
+  [
+    "release manifest version lookup",
+    "dockerSource",
+    'manifest_version="$(node -p "require(\'./package.json\').version")"',
+  ],
+  [
+    "release tag and manifest equality",
+    "dockerSource",
+    'test "$tag" = "$expected_tag"',
   ],
   [
     "release image build",
@@ -404,7 +445,9 @@ test("rejects fail-open command chaining in root verification scripts", () => {
 });
 
 for (const [scriptName, command] of [
+  ["verify:quick", "run check:release-version"],
   ["verify:quick", "run test:security"],
+  ["verify:full", "run check:release-version"],
   ["verify:full", "run build"],
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run test:ai:e2e"],

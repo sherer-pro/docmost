@@ -7,6 +7,7 @@ const REQUIRED_JOB_COMMANDS = {
     "pnpm check:no-ee",
     "pnpm test:no-ee",
     "pnpm check:architecture",
+    "pnpm check:release-version",
     "pnpm check:release-gates",
     "pnpm build",
     "pnpm routes:inventory:check",
@@ -76,6 +77,7 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run check:no-ee",
     "run test:no-ee",
     "run check:architecture",
+    "run check:release-version",
     "run check:release-gates",
     "run check:env",
     "run check:ai-docs",
@@ -87,6 +89,7 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run check:no-ee",
     "run test:no-ee",
     "run check:architecture",
+    "run check:release-version",
     "run check:release-gates",
     "run check:env",
     "run check:ai-docs",
@@ -328,9 +331,33 @@ function validateAiGuideGateMetadata(errors, ciSource) {
   }
 }
 
+function validateDockerfileDependencyInstall(errors, dockerfileSource) {
+  const runtimeStart = dockerfileSource.indexOf(
+    "FROM build-base AS runtime-dependencies",
+  );
+  const runtimeEnd = dockerfileSource.indexOf("FROM node-base AS installer");
+  const runtimeBlock = dockerfileSource.slice(runtimeStart, runtimeEnd);
+  const fetch = runtimeBlock.indexOf("pnpm fetch --prod --frozen-lockfile");
+  const offlineInstall = runtimeBlock.indexOf(
+    "pnpm install --frozen-lockfile --prod --offline",
+  );
+  if (
+    runtimeStart < 0 ||
+    runtimeEnd <= runtimeStart ||
+    fetch < 0 ||
+    offlineInstall < 0 ||
+    fetch > offlineInstall
+  ) {
+    errors.push(
+      "Dockerfile runtime dependencies must be fetched before the offline production install",
+    );
+  }
+}
+
 export function validateReleaseGateContract({
   ciSource,
   dockerSource,
+  dockerfileSource,
   workflowSources = {},
   packageJson,
 }) {
@@ -359,6 +386,8 @@ export function validateReleaseGateContract({
     errors.push("publish must not bypass failed gates with always()");
   }
   for (const command of [
+    'manifest_version="$(node -p "require(\'./package.json\').version")"',
+    'test "$tag" = "$expected_tag"',
     "docker build --build-arg PNPM_OFFLINE=0",
     'docker push "shererpro/docmost:${VERSION}"',
     "docker push shererpro/docmost:latest",
@@ -372,6 +401,7 @@ export function validateReleaseGateContract({
   validateVerificationScripts(errors, packageJson);
   validateWorkflowHygiene(errors, workflowSources);
   validateAiGuideGateMetadata(errors, ciSource);
+  validateDockerfileDependencyInstall(errors, dockerfileSource);
 
   return errors;
 }
@@ -390,11 +420,13 @@ async function main() {
     ),
   );
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const dockerfileSource = await readFile("Dockerfile", "utf8");
   const errors = validateReleaseGateContract({
     ciSource: workflowSources["ci.yml"],
     dockerSource: workflowSources["docker.yml"],
     workflowSources,
     packageJson,
+    dockerfileSource,
   });
   if (errors.length > 0) {
     for (const error of errors) {

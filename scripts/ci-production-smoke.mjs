@@ -1,7 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { HocuspocusProvider } from "@hocuspocus/provider";
+import { readFile } from "node:fs/promises";
 import * as Y from "yjs";
+
+const packageVersion = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 
 const baseUrl = new URL(
   process.env.CI_SMOKE_BASE_URL ?? "http://127.0.0.1:3000",
@@ -294,6 +299,12 @@ await client.connect(
   }),
 );
 try {
+  const serverInfo = client.getServerVersion();
+  if (serverInfo?.version !== packageVersion) {
+    fail(
+      `MCP server version ${serverInfo?.version ?? "missing"} does not match package version ${packageVersion}`,
+    );
+  }
   const tools = await client.listTools();
   const names = new Set(tools.tools.map((tool) => tool.name));
   if (!names.has("getTree") || !names.has("search")) {

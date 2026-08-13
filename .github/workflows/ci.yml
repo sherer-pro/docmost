@@ -46,6 +46,7 @@ jobs:
       - name: Blocking architecture and release gate contracts
         run: |
           pnpm check:architecture
+          pnpm check:release-version
           pnpm check:release-gates
 
       - name: Build
