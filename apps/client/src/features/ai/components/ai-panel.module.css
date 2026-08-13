@@ -883,6 +883,7 @@
     display: inline;
   }
 
+  .composerSearchButton .composerResponsiveLabel,
   .sendShortcutFull,
   .sendShortcutShort {
     display: none;
@@ -926,14 +927,12 @@
 }
 
 @container ai-composer (max-width: 520px) {
-  .composerSearchButton .composerResponsiveLabel,
   .composerFooterButton .composerResponsiveLabel,
   .sendShortcutFull,
   .sendShortcutShort {
     display: none;
   }
 
-  .composerSearchButton,
   .composerFooterButton {
     width: 32px;
     min-width: 32px;
