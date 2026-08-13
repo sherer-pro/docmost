@@ -17,7 +17,10 @@ import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
 import { envPath } from './common/helpers';
 import { getEmbedFrameSources } from '@docmost/editor-ext/server';
 import { API_PREFIX_EXCLUDES } from './common/config/api-prefix-excludes';
-import { terminateStartup } from './common/errors/startup.errors';
+import {
+  closeApplicationOnStartupFailure,
+  terminateStartup,
+} from './common/errors/startup.errors';
 
 /**
  * Returns the origin from a URL string when parsing succeeds.
@@ -310,9 +313,7 @@ async function bootstrap() {
       );
     });
   } catch (error) {
-    if (app) {
-      await app.close().catch(() => undefined);
-    }
+    await closeApplicationOnStartupFailure(app);
     throw error;
   }
 }

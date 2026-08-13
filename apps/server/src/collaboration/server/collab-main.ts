@@ -12,7 +12,10 @@ import { createCorsOptions } from '../../common/security/cors.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { getTrustedProxiesFromEnv } from '../../common/security/trusted-proxy.util';
 import { envPath } from '../../common/helpers';
-import { terminateStartup } from '../../common/errors/startup.errors';
+import {
+  closeApplicationOnStartupFailure,
+  terminateStartup,
+} from '../../common/errors/startup.errors';
 
 async function bootstrap() {
   let app: NestFastifyApplication | undefined;
@@ -53,9 +56,7 @@ async function bootstrap() {
       logger.log(`Listening on http://127.0.0.1:${port}`);
     });
   } catch (error) {
-    if (app) {
-      await app.close().catch(() => undefined);
-    }
+    await closeApplicationOnStartupFailure(app);
     throw error;
   }
 }
