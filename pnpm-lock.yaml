@@ -408,6 +408,9 @@ importers:
       eslint-plugin-react-refresh:
         specifier: ^0.4.16
         version: 0.4.16(eslint@9.39.2(jiti@2.7.0))
+      fflate:
+        specifier: 0.4.8
+        version: 0.4.8
       globals:
         specifier: ^15.13.0
         version: 15.13.0
