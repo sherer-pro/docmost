@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { createAiMarkdownComposerExtensions } from "./ai-markdown-composer.extensions.ts";
+import {
+  createAiMarkdownComposerExtensions,
+  insertMarkdownAtSelection,
+} from "./ai-markdown-composer.extensions.ts";
 import {
   composerHtmlToMarkdown,
   markdownToComposerHtml,
@@ -26,12 +29,8 @@ function type(editor: Editor, text: string) {
     let handled = false;
     editor.view.someProp("handleTextInput", (handler) => {
       handled =
-        handler(
-          editor.view,
-          from,
-          to,
-          character,
-          () => editor.state.tr.insertText(character, from, to),
+        handler(editor.view, from, to, character, () =>
+          editor.state.tr.insertText(character, from, to),
         ) === true;
       return handled;
     });
@@ -141,5 +140,93 @@ describe("AI Markdown composer", () => {
     expect(serialized).toContain("- [ ] Open task");
     expect(serialized).toContain("- [x] Done task");
     expect(serialized).toContain("```ts");
+  });
+
+  it("inserts a Markdown template at the current cursor position", () => {
+    const editor = createEditor();
+    editor.commands.setContent("<p>beforeafter</p>");
+    editor.commands.setTextSelection(7);
+
+    expect(insertMarkdownAtSelection(editor.view, "**template**")).toBe(true);
+    expect(editor.getHTML()).toBe(
+      "<p>before<strong>template</strong>after</p>",
+    );
+    expect(composerHtmlToMarkdown(editor.getHTML())).toBe(
+      "before**template**after",
+    );
+  });
+
+  it("preserves surrounding draft blocks when inserting a multiline template", () => {
+    const editor = createEditor();
+    editor.commands.setContent("<p>beforeafter</p>");
+    editor.commands.setTextSelection(7);
+
+    expect(
+      insertMarkdownAtSelection(
+        editor.view,
+        "1. First instruction\n2. Second instruction",
+      ),
+    ).toBe(true);
+
+    const markdown = composerHtmlToMarkdown(editor.getHTML());
+    expect(editor.getHTML()).toBe(
+      "<p>before</p><ol><li><p>First instruction</p></li><li><p>Second instruction</p></li></ol><p>after</p>",
+    );
+    expect(markdown.indexOf("before")).toBeLessThan(
+      markdown.indexOf("First instruction"),
+    );
+    expect(markdown.indexOf("First instruction")).toBeLessThan(
+      markdown.indexOf("after"),
+    );
+    expect(markdown).toMatch(/1\.\s+First instruction/);
+    expect(markdown).toMatch(/2\.\s+Second instruction/);
+  });
+
+  it("supports every Markdown formatting menu command", () => {
+    const editor = createEditor();
+    const inlineCases = [
+      ["strong", () => editor.chain().focus().toggleBold().run()],
+      ["em", () => editor.chain().focus().toggleItalic().run()],
+      ["s", () => editor.chain().focus().toggleStrike().run()],
+      ["code", () => editor.chain().focus().toggleCode().run()],
+      [
+        "a",
+        () =>
+          editor.chain().focus().setLink({ href: "https://example.com" }).run(),
+      ],
+    ] as const;
+
+    for (const [selector, run] of inlineCases) {
+      editor.commands.setContent("<p>format</p>");
+      editor.commands.setTextSelection({ from: 1, to: 7 });
+      expect(run()).toBe(true);
+      expect(editor.view.dom.querySelector(selector)?.textContent).toBe(
+        "format",
+      );
+    }
+
+    const blockCases = [
+      ["h1", () => editor.chain().focus().toggleHeading({ level: 1 }).run()],
+      [
+        "ul:not([data-type])",
+        () => editor.chain().focus().toggleBulletList().run(),
+      ],
+      ["ol", () => editor.chain().focus().toggleOrderedList().run()],
+      [
+        '[data-type="taskList"]',
+        () => editor.chain().focus().toggleTaskList().run(),
+      ],
+      ["blockquote", () => editor.chain().focus().toggleBlockquote().run()],
+      ["pre", () => editor.chain().focus().toggleCodeBlock().run()],
+    ] as const;
+
+    for (const [selector, run] of blockCases) {
+      editor.commands.setContent("<p>format</p>");
+      editor.commands.setTextSelection(2);
+      expect(run()).toBe(true);
+      expect(editor.view.dom.querySelector(selector)?.textContent).toBe(
+        "format",
+      );
+    }
   });
 });

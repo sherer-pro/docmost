@@ -2,9 +2,9 @@ import { Extension, InputRule } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { DOMParser } from "@tiptap/pm/model";
+import { DOMParser, Slice } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { LinkExtension, sanitizeLinkHref } from "@docmost/editor-ext";
 import { markdownToComposerHtml } from "./ai-markdown-composer.utils.ts";
 
@@ -20,9 +20,7 @@ const markdownSyntaxByMark: Record<string, MarkdownSyntax> = {
   code: { prefix: "`", suffix: "`" },
 };
 
-const activeMarkdownSyntaxPluginKey = new PluginKey(
-  "activeMarkdownSyntax",
-);
+const activeMarkdownSyntaxPluginKey = new PluginKey("activeMarkdownSyntax");
 
 function getMarkRange($pos: any, mark: any) {
   const parent = $pos.parent;
@@ -52,10 +50,7 @@ function getMarkRange($pos: any, mark: any) {
   let startIndex = index;
   let endIndex = index + 1;
 
-  while (
-    startIndex > 0 &&
-    mark.isInSet(parent.child(startIndex - 1).marks)
-  ) {
+  while (startIndex > 0 && mark.isInSet(parent.child(startIndex - 1).marks)) {
     startIndex -= 1;
     from -= parent.child(startIndex).nodeSize;
   }
@@ -255,7 +250,7 @@ export function createAiMarkdownComposerExtensions(placeholder: string) {
   ];
 }
 
-export function insertMarkdownPaste(view: any, text: string) {
+export function insertMarkdownAtSelection(view: EditorView, text: string) {
   const html = markdownToComposerHtml(text);
   if (!html) {
     return false;
@@ -263,10 +258,46 @@ export function insertMarkdownPaste(view: any, text: string) {
 
   const container = view.dom.ownerDocument.createElement("div");
   container.innerHTML = html;
-  const slice = DOMParser.fromSchema(view.state.schema).parseSlice(container, {
+  const parser = DOMParser.fromSchema(view.state.schema);
+  const parsedDocument = parser.parse(container, {
     preserveWhitespace: true,
   });
+  const isInlineParagraph =
+    parsedDocument.childCount === 1 &&
+    parsedDocument.firstChild?.type.name === "paragraph";
 
-  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+  if (isInlineParagraph) {
+    const slice = parser.parseSlice(container, { preserveWhitespace: true });
+    view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+    return true;
+  }
+
+  if (!view.state.selection.empty) {
+    view.dispatch(view.state.tr.deleteSelection());
+  }
+
+  let { state } = view;
+  let { $from } = state.selection;
+  if (!$from.parent.isTextblock || $from.depth === 0) {
+    const slice = new Slice(parsedDocument.content, 0, 0);
+    view.dispatch(state.tr.replaceSelection(slice).scrollIntoView());
+    return true;
+  }
+
+  let insertPosition: number;
+  if ($from.parentOffset === 0) {
+    insertPosition = $from.before($from.depth);
+  } else if ($from.parentOffset === $from.parent.content.size) {
+    insertPosition = $from.after($from.depth);
+  } else {
+    view.dispatch(state.tr.split(state.selection.from));
+    state = view.state;
+    $from = state.selection.$from;
+    insertPosition = $from.before($from.depth);
+  }
+
+  view.dispatch(
+    state.tr.insert(insertPosition, parsedDocument.content).scrollIntoView(),
+  );
   return true;
 }
