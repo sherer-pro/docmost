@@ -36,9 +36,13 @@ jobs:
       - name: Resolve immutable version
         shell: bash
         run: |
+          manifest_version="$(node -p "require('./package.json').version")"
+          test -n "$manifest_version"
           if [ "${{ github.event_name }}" = "release" ]; then
             tag="${{ github.event.release.tag_name }}"
-            version="${tag#v}"
+            expected_tag="v${manifest_version}"
+            test "$tag" = "$expected_tag"
+            version="$manifest_version"
           else
             version="manual-${GITHUB_SHA::12}"
           fi
