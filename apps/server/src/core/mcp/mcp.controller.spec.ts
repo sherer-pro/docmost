@@ -7,6 +7,7 @@ import { createServer, Server as HttpServer } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { ForbiddenException } from '@nestjs/common';
 import { McpController } from './mcp.controller';
+import { getAppVersion } from '../../common/helpers/get-app-version';
 
 describe('McpController protocol', () => {
   let httpServer: HttpServer;
@@ -105,6 +106,12 @@ describe('McpController protocol', () => {
         }),
       }),
     ]);
+  });
+
+  it('reports the application package version during initialize', () => {
+    expect(client.getServerVersion()).toEqual(
+      expect.objectContaining({ name: 'docmost', version: getAppVersion() }),
+    );
   });
 
   it('executes a tool with the authenticated space context', async () => {

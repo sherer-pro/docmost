@@ -12,6 +12,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { AiErrorCode } from '@docmost/api-contract';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { getAppVersion } from '../../../common/helpers/get-app-version';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { AiMcpUrlPolicyService } from '../services/ai-mcp-url-policy.service';
 import { AiOperationalMetricsService } from '../services/ai-operational-metrics.service';
@@ -40,7 +41,7 @@ import {
   AI_MCP_TOTAL_TIMEOUT_MS,
 } from './ai-mcp.constants';
 
-const CLIENT_INFO = { name: 'docmost', version: '1.0.0' };
+const CLIENT_INFO = { name: 'docmost', version: getAppVersion() };
 
 type Connection = {
   client: Client;
