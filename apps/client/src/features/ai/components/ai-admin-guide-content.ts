@@ -113,6 +113,12 @@ export const AI_ADMIN_GUIDE_COPY_VALUES = [
 
 export const AI_ADMIN_GUIDE_SECURITY_ROWS = [
   {
+    id: "dictionary",
+    nameKey: "Dictionary",
+    ownerKey: "ai.adminGuide.securityOwner.spaceAdmin",
+    boundaryKey: "ai.adminGuide.operationsDictionaryForms",
+  },
+  {
     id: "provider",
     nameKey: "ai.settings.providerSection",
     ownerKey: "ai.adminGuide.securityOwner.spaceAdmin",

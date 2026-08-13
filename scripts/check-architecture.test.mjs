@@ -47,3 +47,12 @@ test("rejects a persistence import of core feature implementation", () => {
   assert.notEqual(result.status, 0, result.stdout || result.stderr);
   assert.match(result.stdout, /no-database-to-core/);
 });
+
+test("rejects a dictionary import of AI implementation details", () => {
+  const result = cruise([
+    "scripts/fixtures/architecture/dictionary-to-ai/apps/server/src",
+  ]);
+
+  assert.notEqual(result.status, 0, result.stdout || result.stderr);
+  assert.match(result.stdout, /no-dictionary-to-ai-implementation/);
+});

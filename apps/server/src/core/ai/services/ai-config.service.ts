@@ -41,6 +41,10 @@ import type { JsonValue } from '../../../database/types/db';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import { createHash } from 'node:crypto';
 import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
+import {
+  loadAiProviderSpaceConfig,
+  toAiProviderConfig,
+} from './ai-provider-config.util';
 
 @Injectable()
 export class AiConfigService {
@@ -192,11 +196,7 @@ export class AiConfigService {
           .select((eb) => eb.fn.countAll<number>().as('count'))
           .where('workspaceId', '=', workspace.id)
           .where('spaceId', '=', spaceId)
-          .where('status', 'in', [
-            'queued',
-            'running',
-            'awaiting_approval',
-          ])
+          .where('status', 'in', ['queued', 'running', 'awaiting_approval'])
           .executeTakeFirstOrThrow(),
       ]);
       usage = {
@@ -722,24 +722,11 @@ export class AiConfigService {
     spaceId: string,
     workspaceId: string,
   ): Promise<AiSpaceConfigEntity | undefined> {
-    const aiDb = this.db as any;
-    let query = aiDb
-      .selectFrom('aiSpaceConfigs')
-      .selectAll()
-      .where('spaceId', '=', spaceId);
-    query = query.where('workspaceId', '=', workspaceId);
-    return query.executeTakeFirst();
+    return loadAiProviderSpaceConfig(this.db, spaceId, workspaceId);
   }
 
   toProviderConfig(config: AiSpaceConfigEntity): AiProviderConfig {
-    return {
-      baseUrl: config.baseUrl,
-      apiKey: this.decryptSecret(config.apiKeyEncrypted),
-      chatModel: config.chatModel,
-      temperature: config.temperature,
-      maxOutputTokens: config.maxOutputTokens,
-      requestTimeoutMs: config.requestTimeoutMs,
-    };
+    return toAiProviderConfig(config, this.environmentService.getAppSecret());
   }
 
   toRetrievalConfig(config: AiSpaceConfigEntity): AiRetrievalConfig {

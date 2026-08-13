@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AiModule } from '../ai/ai.module';
+import { AiProviderModule } from '../ai/ai-provider.module';
 import { RagModule } from '../rag/rag.module';
 import {
   RAG_SYNC_CONTROL,
@@ -26,7 +26,7 @@ import {
 } from './runtime';
 
 @Module({
-  imports: [AiModule, RagModule],
+  imports: [AiProviderModule, RagModule],
   controllers: [RagSyncAdminController],
   providers: [
     RagSyncAdminRepo,

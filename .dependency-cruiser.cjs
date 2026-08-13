@@ -67,6 +67,18 @@ module.exports = {
         path: "(^|/)apps/server/src/collaboration/(?:collaboration\\.(?:gateway|module)|extensions|processors|server)(?:[./]|$)",
       },
     },
+    {
+      name: "no-dictionary-to-ai-implementation",
+      severity: "error",
+      comment:
+        "Dictionary must use the narrow AI text-generation port instead of depending on AI implementation details.",
+      from: {
+        path: "(^|/)apps/server/src/core/dictionary",
+      },
+      to: {
+        path: "(^|/)apps/server/src/core/ai/(?!ports/ai-text-generation\\.port(?:\\.|$)|ai-provider\\.module(?:\\.|$))",
+      },
+    },
   ],
   options: {
     tsConfig: {
