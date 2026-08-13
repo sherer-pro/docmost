@@ -101,6 +101,7 @@ import {
 import { captureAiEditorContext } from "@/features/ai/utils/editor-context.ts";
 import { AiMessageCard } from "./ai-message-card.tsx";
 import { AiMarkdownComposer } from "./ai-markdown-composer.tsx";
+import { insertMarkdownAtSelection } from "./ai-markdown-composer.extensions.ts";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
 import classes from "./ai-panel.module.css";
 import { DEFAULT_AI_QUICK_COMMANDS } from "@/features/ai/constants/quick-commands.ts";
@@ -748,7 +749,13 @@ export function AiPanel() {
     }
   };
 
-  const handleQuickCommand = (prompt: string) => void submit(prompt);
+  const handleQuickCommand = (prompt: string) => {
+    if (!composerEditor) return;
+    if (!insertMarkdownAtSelection(composerEditor.view, prompt)) return;
+
+    composerEditor.commands.focus();
+    setQuickCommandsOpened(false);
+  };
 
   const selectConversation = (conversationId: string | null) => {
     if (!pageId || !conversationId) {
@@ -2881,7 +2888,6 @@ export function AiPanel() {
                   }
                   onClick={() => {
                     handleQuickCommand(command.prompt);
-                    setQuickCommandsOpened(false);
                   }}
                 >
                   <Text size="sm" truncate>

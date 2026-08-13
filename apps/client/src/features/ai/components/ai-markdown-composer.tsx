@@ -9,7 +9,7 @@ import {
 } from "./ai-markdown-composer.utils.ts";
 import {
   createAiMarkdownComposerExtensions,
-  insertMarkdownPaste,
+  insertMarkdownAtSelection,
 } from "./ai-markdown-composer.extensions.ts";
 import classes from "./ai-panel.module.css";
 
@@ -57,7 +57,7 @@ export function AiMarkdownComposer({
           return false;
         }
 
-        return insertMarkdownPaste(view, text);
+        return insertMarkdownAtSelection(view, text);
       },
       handleKeyDown: (_view, event) => {
         if (shouldSubmitAiComposer(event)) {
