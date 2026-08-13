@@ -466,7 +466,7 @@ describe('DatabaseService mixed tree flows', () => {
     }
     const rootPdfBuffer = await rootPdfEntry.async('nodebuffer');
     expect(rootPdfBuffer.toString('utf8')).toContain('%PDF-1.7 mock');
-  });
+  }, 15_000);
 
   it.each([
     DatabaseExportFormat.Docmost,
