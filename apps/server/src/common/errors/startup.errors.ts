@@ -34,11 +34,44 @@ export class DatabasePreflightError extends StartupError {
   }
 }
 
-export function terminateStartup(error: unknown): void {
+const STARTUP_CLOSE_TIMEOUT_MS = 5_000;
+
+type ClosableApplication = {
+  close: () => Promise<unknown> | unknown;
+};
+
+type ExitProcess = (code: number) => never;
+
+export async function closeApplicationOnStartupFailure(
+  app: ClosableApplication | undefined,
+  timeoutMs = STARTUP_CLOSE_TIMEOUT_MS,
+): Promise<void> {
+  if (!app) {
+    return;
+  }
+
+  let timeout: NodeJS.Timeout | undefined;
+  const close = Promise.resolve()
+    .then(() => app.close())
+    .catch(() => undefined);
+  const deadline = new Promise<void>((resolve) => {
+    timeout = setTimeout(resolve, timeoutMs);
+  });
+
+  await Promise.race([close, deadline]);
+  if (timeout) {
+    clearTimeout(timeout);
+  }
+}
+
+export function terminateStartup(
+  error: unknown,
+  exit: ExitProcess = process.exit,
+): never {
   if (error instanceof StartupError) {
     console.error(error.message);
   } else {
     console.error('Application startup failed');
   }
-  process.exitCode = 1;
+  return exit(1);
 }
