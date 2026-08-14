@@ -1,11 +1,16 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
+import { InjectKysely } from 'nestjs-kysely';
 import { createHash } from 'node:crypto';
 import { v7 as uuid7 } from 'uuid';
 import type { User } from '@docmost/db/types/entity.types';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
-import type { PageRepo } from '@docmost/db/repos/page/page.repo';
-import type { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import type { StorageService } from '../../../integrations/storage/storage.service';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { StorageService } from '../../../integrations/storage/storage.service';
 import { strictJsonToNode } from '../../../collaboration/collaboration.util';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { getAttachmentIds } from '../../../common/helpers/prosemirror/utils';
@@ -23,8 +28,10 @@ export type PageTemplateOperationKind =
 
 const OPERATION_LEASE_MS = 5 * 60 * 1000;
 
+@Injectable()
 export class PageTemplateOperationService {
   constructor(
+    @InjectKysely()
     private readonly db: KyselyDB,
     private readonly pageRepo: PageRepo,
     private readonly attachmentRepo: AttachmentRepo,
@@ -289,6 +296,27 @@ export class PageTemplateOperationService {
       .where('leaseExpiresAt', '>', new Date())
       .executeTakeFirstOrThrow();
     return rewritten;
+  }
+
+  async stageAttachmentMapping(
+    operationId: string,
+    leaseToken: string,
+    attachmentMapping: Array<{
+      oldAttachmentId: string;
+      newAttachmentId: string;
+    }>,
+  ): Promise<void> {
+    await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        attachmentMapping: attachmentMapping as any,
+        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operationId)
+      .where('status', '=', 'pending')
+      .where('leaseToken', '=', leaseToken)
+      .executeTakeFirstOrThrow();
   }
 
   async assertOperationLease(

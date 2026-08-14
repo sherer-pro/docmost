@@ -10,7 +10,9 @@ import type { User } from '@docmost/db/types/entity.types';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import type { PageTemplateSyncOutboxHandler } from '../../../integrations/queue/outbox/queue-outbox.types';
-import { PageTemplateService } from './page-template.service';
+import { LegacyPageEmbedMigrationService } from './legacy-page-embed-migration.service';
+import { PageTemplateOperationService } from './page-template-operation.service';
+import { PageTemplateSyncService } from './page-template-sync.service';
 
 const SYNC_RUN_LEASE_MS = 5 * 60 * 1000;
 const SYNC_RESUME_INTERVAL_MS = 15_000;
@@ -26,7 +28,9 @@ export class PageTemplateRuntimeService
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageRepo: PageRepo,
-    private readonly pageTemplates: PageTemplateService,
+    private readonly legacyMigration: LegacyPageEmbedMigrationService,
+    private readonly templateSync: PageTemplateSyncService,
+    private readonly operations: PageTemplateOperationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -48,7 +52,8 @@ export class PageTemplateRuntimeService
   }
 
   private async migrateLegacyPageEmbeds(): Promise<void> {
-    const candidates = await this.pageTemplates.findLegacyPageEmbedCandidates();
+    const candidates =
+      await this.legacyMigration.findLegacyPageEmbedCandidates();
     if (candidates.length === 0) return;
 
     let migrated = 0;
@@ -56,7 +61,7 @@ export class PageTemplateRuntimeService
     for (const candidate of candidates) {
       try {
         if (
-          await this.pageTemplates.migrateLegacyPageEmbedsForPage(
+          await this.legacyMigration.migrateLegacyPageEmbedsForPage(
             candidate.referencePageId,
           )
         ) {
@@ -64,21 +69,22 @@ export class PageTemplateRuntimeService
         }
       } catch (error) {
         failed += 1;
-        await this.pageTemplates
+        await this.legacyMigration
           .recordLegacyMigrationFailure(candidate.referencePageId, error)
           .catch((journalError) => {
             this.logger.error(
-              `Legacy page embed failure journal write failed; pageId=${candidate.referencePageId}; code=${this.pageTemplates.errorCode(journalError)}`,
+              `Legacy page embed failure journal write failed; pageId=${candidate.referencePageId}; code=${this.operations.errorCode(journalError)}`,
             );
           });
         this.logger.error(
-          `Legacy page embed migration failed; pageId=${candidate.referencePageId}; code=${this.pageTemplates.errorCode(error)}`,
+          `Legacy page embed migration failed; pageId=${candidate.referencePageId}; code=${this.operations.errorCode(error)}`,
         );
       }
     }
 
-    const remaining = (await this.pageTemplates.findLegacyPageEmbedCandidates())
-      .length;
+    const remaining = (
+      await this.legacyMigration.findLegacyPageEmbedCandidates()
+    ).length;
     if (remaining > 0 || failed > 0) {
       this.logger.error(
         `Legacy page embed migration incomplete; migrated=${migrated}; failed=${failed}; remaining=${remaining}`,
@@ -166,11 +172,11 @@ export class PageTemplateRuntimeService
       if (!actor && revision) {
         const template = await this.pageRepo.findById(claimed.templatePageId);
         if (template) {
-          actor = await this.pageTemplates.findLegacyMigrationActor(template);
+          actor = await this.legacyMigration.findLegacyMigrationActor(template);
         }
       }
       if (!revision || !actor) {
-        await this.pageTemplates.finishSyncRun(
+        await this.templateSync.finishSyncRun(
           runId,
           leaseToken,
           'failed',
@@ -198,23 +204,23 @@ export class PageTemplateRuntimeService
           .returning('id')
           .executeTakeFirst();
         if (!renewed) return;
-        await this.pageTemplates.processSyncItem(
+        await this.templateSync.processSyncItem(
           claimed,
           revision,
           item,
           actor as User,
         );
       }
-      await this.pageTemplates.recalculateSyncRun(runId, leaseToken);
+      await this.templateSync.recalculateSyncRun(runId, leaseToken);
     } catch (error) {
       this.logger.error(
-        `Template synchronization run failed; runId=${runId}; code=${this.pageTemplates.errorCode(error)}`,
+        `Template synchronization run failed; runId=${runId}; code=${this.operations.errorCode(error)}`,
       );
-      await this.pageTemplates.finishSyncRun(
+      await this.templateSync.finishSyncRun(
         runId,
         leaseToken,
         'failed',
-        this.pageTemplates.errorCode(error),
+        this.operations.errorCode(error),
       );
     } finally {
       this.activeSyncRuns.delete(runId);

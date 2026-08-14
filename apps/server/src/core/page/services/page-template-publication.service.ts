@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
+import { InjectKysely } from 'nestjs-kysely';
 import type { Page, User } from '@docmost/db/types/entity.types';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
@@ -11,8 +13,9 @@ import {
 
 const PUBLISH_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
 
+@Injectable()
 export class PageTemplatePublicationService {
-  constructor(private readonly db: KyselyDB) {}
+  constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   async buildPublishPreflight(
     template: Page,

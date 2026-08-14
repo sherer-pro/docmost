@@ -19,6 +19,13 @@ import { PageAccessModule } from '../page-access/page-access.module';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
 import { PAGE_TEMPLATE_SYNC_HANDLER } from '../../integrations/queue/outbox/queue-outbox.types';
 import { PageTemplateRuntimeService } from './services/page-template-runtime.service';
+import { PageTemplateContentService } from './services/page-template-content.service';
+import { PageTemplateOperationService } from './services/page-template-operation.service';
+import { PageTemplatePublicationService } from './services/page-template-publication.service';
+import { PageTemplateInstanceService } from './services/page-template-instance.service';
+import { PageTemplateSyncService } from './services/page-template-sync.service';
+import { PageEmbedCommandService } from './services/page-embed-command.service';
+import { LegacyPageEmbedMigrationService } from './services/legacy-page-embed-migration.service';
 
 @Module({
   controllers: [PageController, PageTemplateController],
@@ -30,6 +37,13 @@ import { PageTemplateRuntimeService } from './services/page-template-runtime.ser
     TrashCleanupService,
     BacklinkService,
     LinkPreviewService,
+    PageTemplateContentService,
+    PageTemplateOperationService,
+    PageTemplatePublicationService,
+    PageTemplateInstanceService,
+    PageTemplateSyncService,
+    PageEmbedCommandService,
+    LegacyPageEmbedMigrationService,
     PageTemplateService,
     PageTemplateRuntimeService,
     {
