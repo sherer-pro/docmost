@@ -354,12 +354,50 @@ function validateDockerfileDependencyInstall(errors, dockerfileSource) {
   }
 }
 
+function validateRagSyncHarness(errors, ragSyncComposeSource) {
+  const requiredFragments = [
+    [
+      "COLLAB_URL: http://127.0.0.1:3201",
+      "RAG Sync harness must expose the isolated collaboration URL",
+    ],
+    [
+      "COLLAB_INTERNAL_URL: http://collab:3001",
+      "RAG Sync harness must configure the internal collaboration URL",
+    ],
+    [
+      "COLLAB_INTERNAL_SECRET: isolated-rag-audit-collab-secret-at-least-32-characters",
+      "RAG Sync harness must configure an isolated collaboration secret",
+    ],
+    [
+      "apps/server/dist/apps/server/src/collaboration/server/collab-main.js",
+      "RAG Sync harness must start the dedicated collaboration process",
+    ],
+    [
+      "postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+      "RAG Sync harness must use the supported pinned PostgreSQL runtime",
+    ],
+    [
+      "docmost-audit-storage:/app/data/storage",
+      "RAG Sync harness replicas must share persistent attachment storage",
+    ],
+  ];
+  for (const [fragment, message] of requiredFragments) {
+    if (!ragSyncComposeSource.includes(fragment)) {
+      errors.push(message);
+    }
+  }
+  if (/postgres:18-alpine/u.test(ragSyncComposeSource)) {
+    errors.push("RAG Sync harness must not use the unsupported Alpine PostgreSQL runtime");
+  }
+}
+
 export function validateReleaseGateContract({
   ciSource,
   dockerSource,
   dockerfileSource,
   workflowSources = {},
   packageJson,
+  ragSyncComposeSource = "",
 }) {
   const errors = [];
   const integration = jobBlock(ciSource, "integration");
@@ -402,6 +440,7 @@ export function validateReleaseGateContract({
   validateWorkflowHygiene(errors, workflowSources);
   validateAiGuideGateMetadata(errors, ciSource);
   validateDockerfileDependencyInstall(errors, dockerfileSource);
+  validateRagSyncHarness(errors, ragSyncComposeSource);
 
   return errors;
 }
@@ -421,12 +460,14 @@ async function main() {
   );
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   const dockerfileSource = await readFile("Dockerfile", "utf8");
+  const ragSyncComposeSource = await readFile("tests/rag-sync/compose.yml", "utf8");
   const errors = validateReleaseGateContract({
     ciSource: workflowSources["ci.yml"],
     dockerSource: workflowSources["docker.yml"],
     workflowSources,
     packageJson,
     dockerfileSource,
+    ragSyncComposeSource,
   });
   if (errors.length > 0) {
     for (const error of errors) {
