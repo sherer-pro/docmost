@@ -1538,7 +1538,7 @@
           "operations": "Create a chave RAG e copie-a uma vez|Test /api/rag/pages e continuação do cursor|Inicie o indexador externo||As respostas retornam 200 cursores estáveis e apenas o escopo legível ao vivo do criador da chave||Revogue a chave e pare o indexador; crie uma nova chave para recuperação"
         },
         "ragSync": {
-          "facts": "Operador de implantação e administrador de espaço||RAG_SYNC_ENABLED, uma origem Open WebUI permitida, Knowledge ID e chave de gravador||Docmost mantém incrementalmente o Open WebUI Knowledge Base selecionado",
+          "facts": "Operador de implantação e administrador de espaço||RAG_SYNC_ENABLED, uma origem Open WebUI permitida, Knowledge ID e chave de gravador||Docmost mantém incrementalmente o Open WebUI Knowledge Base selecionado; somente anexos PDF, DOCX, TXT e Markdown entram no índice portátil de documentos",
           "operations": "Save o destino e a credencial do gravador|Execute Test para o destino atual|Enable a ligação||O último sucesso avança e nenhum estado de limpeza ou incompatibilidade de destino permanece||Desative a ligação e finalize a limpeza; para reversão de emergência, desative RAG_SYNC_ENABLED e reinicie"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 Serviço indisponível||Restaure Redis, o provedor ou o destino externo primeiro. A admissão falha quando o Redis não consegue proteger os limites.",
         "leaseLost": "Locação Redis perdida||Trate a solicitação ativa como anulada, verifique a estabilidade e a proteção de propriedade do Redis e tente novamente de forma idempotente.",
         "sourceAccessChanged": "source_access_changed||A resposta parcial e as citações foram apagadas porque o acesso mudou. Reabra a fonte somente depois que as permissões forem restauradas intencionalmente.",
+        "sourceRemoved": "fonte removida||Uma página, banco de dados ou anexo desapareceu após o snapshot do feed. O RAG Sync trata isso como exclusão, remove os arquivos gerenciados e continua sem repetir um erro interno not found.",
+        "runtimeStopped": "sincronização interrompida||Um erro de runtime não repetível desativou a vinculação. Corrija a causa informada; se o destino estiver indisponível, teste a Knowledge Base novamente antes de ativar a sincronização.",
         "cleanupRequired": "limpeza necessária||Não mude de alvo nem gire o APP_SECRET ainda. Restaure o acesso do gravador atual, conclua a limpeza e salve e teste o novo destino.",
         "consentRevoked": "Consentimento MCP revogado||O usuário deve revisar e aceitar novamente. Uma alteração de URL revoga intencionalmente todos os consentimentos salvos do destinatário anterior."
       }

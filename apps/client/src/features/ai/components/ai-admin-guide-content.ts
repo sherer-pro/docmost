@@ -163,6 +163,8 @@ export const AI_ADMIN_GUIDE_TROUBLESHOOTING_ROWS = [
   "503",
   "leaseLost",
   "sourceAccessChanged",
+  "sourceRemoved",
+  "runtimeStopped",
   "cleanupRequired",
   "consentRevoked",
 ] as const;

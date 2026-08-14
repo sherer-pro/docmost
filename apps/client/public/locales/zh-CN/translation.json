@@ -1538,7 +1538,7 @@
           "operations": "Create RAG 密钥并复制一次|Test /api/rag/pages 和光标延续|启动外部索引器||响应返回 200，稳定的游标，并且只有密钥创建者的实时可读范围||撤销密钥并停止索引器；创建新的恢复密钥"
         },
         "ragSync": {
-          "facts": "部署操作员和空间管理员||RAG_SYNC_ENABLED、允许的 Open WebUI 来源、Knowledge ID 和写入器密钥||Docmost增量维护选择的Open WebUI Knowledge Base",
+          "facts": "部署操作员和空间管理员||RAG_SYNC_ENABLED、允许的 Open WebUI 来源、Knowledge ID 和写入器密钥||Docmost 增量维护所选的 Open WebUI Knowledge Base；只有 PDF、DOCX、TXT 和 Markdown 附件会进入可移植文档索引",
           "operations": "Save 目标和作者凭证|针对当前目标运行Test|Enable 绑定||最后的成功继续进行，并且不存在清理或目标不匹配状态||禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 服务不可用||首先恢复 Redis、提供程序或外部目标。当 Redis 无法保护限制时，准入失败关闭。",
         "leaseLost": "Redis 租约丢失||将活动请求视为已中止，验证 Redis 稳定性和所有权防护，然后幂等重试。",
         "sourceAccessChanged": "source_access_changed||由于访问权限发生了变化，部分答案和引用被清除。仅在有意恢复权限后重新打开源。",
+        "sourceRemoved": "源已删除||页面、数据库或附件在 feed 快照后消失。RAG Sync 会将其视为删除操作，移除托管文件，并继续运行而不重试内部 not found 错误。",
+        "runtimeStopped": "同步已停止||不可重试的运行时错误已禁用绑定。请修复报告的原因；如果目标不可用，请在启用同步前重新测试 Knowledge Base。",
         "cleanupRequired": "需要清理||请勿切换目标或旋转 APP_SECRET。恢复当前的写入访问权限，完成清理，然后保存并测试新目标。",
         "consentRevoked": "MCP 同意撤销||用户必须再次查看并选择加入。 URL 更改会故意撤销先前收件人保存的所有同意。"
       }

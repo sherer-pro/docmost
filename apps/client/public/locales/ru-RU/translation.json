@@ -1538,7 +1538,7 @@
           "operations": "Создайте RAG-ключ и скопируйте его один раз|Проверьте /api/rag/pages и продолжение cursor|Запустите внешний индексатор||Ответы 200 содержат стабильные cursors и только текущую читаемую область создателя ключа||Отзовите ключ и остановите индексатор; для восстановления создайте новый ключ"
         },
         "ragSync": {
-          "facts": "Оператор deployment и администратор пространства||RAG_SYNC_ENABLED, разрешённый Open WebUI origin, Knowledge ID и writer key||Docmost инкрементально поддерживает выбранную Open WebUI Knowledge Base",
+          "facts": "Оператор deployment и администратор пространства||RAG_SYNC_ENABLED, разрешённый Open WebUI origin, Knowledge ID и writer key||Docmost инкрементально поддерживает выбранную Open WebUI Knowledge Base; в переносимый индекс документов попадают только вложения PDF, DOCX, TXT и Markdown",
           "operations": "Сохраните target и writer credential|Выполните Test текущего target|Включите binding||Last success обновляется, нет cleanup required или target mismatch||Отключите binding и завершите cleanup; для аварийного rollback выключите RAG_SYNC_ENABLED и перезапустите Docmost"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 Service Unavailable||Сначала восстановите Redis, provider или внешний target. Без Redis admission работает fail-closed.",
         "leaseLost": "Потерян Redis lease||Считайте активный запрос прерванным, проверьте стабильность Redis и ownership fencing, затем повторите идемпотентно.",
         "sourceAccessChanged": "source_access_changed||Частичный ответ и citations очищены из-за смены доступа. Откройте источник снова только после осознанного восстановления прав.",
+        "sourceRemoved": "источник удалён||Страница, база данных или вложение исчезли после снимка feed. RAG Sync обрабатывает это как удаление, очищает управляемые файлы и продолжает без повторов внутренней ошибки not found.",
+        "runtimeStopped": "синхронизация остановлена||Неповторяемая runtime-ошибка отключила binding. Устраните указанную причину; если target недоступен, повторно протестируйте Knowledge Base перед включением синхронизации.",
         "cleanupRequired": "cleanup required||Не меняйте target и пока не ротируйте APP_SECRET. Восстановите доступ writer, завершите cleanup, затем сохраните и протестируйте новый target.",
         "consentRevoked": "MCP consent отозван||Пользователь должен повторно проверить получателя и дать согласие. Смена URL намеренно отзывает все consent для прежнего адресата."
       }

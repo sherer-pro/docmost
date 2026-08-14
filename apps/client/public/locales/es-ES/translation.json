@@ -1538,7 +1538,7 @@
           "operations": "Create la clave RAG y cópiela una vez|Test /api/rag/pages y continuación del cursor|Iniciar el indexador externo||Las respuestas devuelven 200 cursores estables y solo el alcance legible en vivo del creador de la clave||Revocar la clave y detener el indexador; crear una nueva clave para la recuperación"
         },
         "ragSync": {
-          "facts": "Operador de implementación y administrador del espacio.||RAG_SYNC_ENABLED, un origen Open WebUI permitido, Knowledge ID y clave de escritor||Docmost mantiene incrementalmente el Open WebUI Knowledge Base seleccionado",
+          "facts": "Operador de implementación y administrador del espacio.||RAG_SYNC_ENABLED, un origen Open WebUI permitido, Knowledge ID y clave de escritor||Docmost mantiene incrementalmente el Open WebUI Knowledge Base seleccionado; solo los adjuntos PDF, DOCX, TXT y Markdown entran en el índice de documentos portátil",
           "operations": "Save la credencial de destino y de escritor|Ejecute Test para el objetivo actual|Enable la unión||El último éxito avanza y no queda ningún estado de limpieza o desajuste de objetivos||Deshabilite el enlace y finalice la limpieza; para reversión de emergencia, deshabilite RAG_SYNC_ENABLED y reinicie"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "Servicio 503 no disponible||Restaure primero Redis, el proveedor o el objetivo externo. La admisión falla cerrada cuando Redis no puede proteger los límites.",
         "leaseLost": "Arrendamiento Redis perdido||Trate la solicitud activa como cancelada, verifique la estabilidad del Redis y el límite de propiedad, luego vuelva a intentarlo de manera idempotente.",
         "sourceAccessChanged": "source_access_changed||La respuesta parcial y las citas fueron eliminadas porque el acceso cambió. Vuelva a abrir la fuente solo después de que los permisos se restablezcan intencionalmente.",
+        "sourceRemoved": "fuente eliminada||Una página, base de datos o archivo adjunto desapareció después de la instantánea del feed. RAG Sync lo trata como una eliminación, quita los archivos administrados y continúa sin reintentar un error interno de tipo not found.",
+        "runtimeStopped": "sincronización detenida||Un error de ejecución no reintentable deshabilitó el vínculo. Corrija la causa indicada; si el destino no está disponible, vuelva a probar la Knowledge Base antes de habilitar la sincronización.",
         "cleanupRequired": "limpieza requerida||No cambie de objetivo ni gire la APP_SECRET todavía. Restaure el acceso de escritura actual, finalice la limpieza, luego guarde y pruebe el nuevo destino.",
         "consentRevoked": "Consentimiento revocado MCP||El usuario debe revisar y optar nuevamente. Un cambio de URL revoca intencionalmente todos los consentimientos guardados del destinatario anterior."
       }

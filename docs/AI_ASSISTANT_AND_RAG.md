@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 3 -->
+<!-- ai-admin-guide-contract-version: 6 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -827,6 +827,24 @@ Open WebUI results still pass through Docmost source resolution and the
 requesting user's current ACL. Direct user access to the Open WebUI Knowledge
 Base is not safe because the external index contains the full policy-allowed
 space scope.
+
+Attachment update feeds include only attachments whose parent page is still
+live in the same workspace and space. A page, database, or attachment can still
+disappear after a feed snapshot; the embedded synchronizer treats that race as
+a deletion, schedules cleanup of its managed remote files, and advances the
+feed instead of retrying an internal not-found error indefinitely.
+The portable Open WebUI document contract sends only PDF, DOCX, TXT, and
+Markdown attachments. JPEG, PNG, and WebP remain available in Docmost but are
+not synchronized because their processing depends on target-specific OCR or
+vision configuration and can otherwise poison an incremental document queue.
+
+Retryable upstream and infrastructure errors keep bounded exponential backoff.
+A non-retryable runtime error stops an enabled binding with the stable error
+code instead of creating a retry storm. `rag_sync_target_unavailable` also
+clears `lastTestedAt`, so the missing Knowledge Base must pass Test again before
+Enable is accepted. Runtime failure logs contain only an allowlisted processing
+stage and source kind; they never include source identifiers, target URLs,
+credentials, or document content.
 
 The management contract is:
 

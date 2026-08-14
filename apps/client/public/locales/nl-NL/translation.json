@@ -1538,7 +1538,7 @@
           "operations": "Create de RAG-sleutel en kopieer deze één keer|Test /api/rag/pages en cursorvervolg|Start de externe indexeerder||Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker||Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel"
         },
         "ragSync": {
-          "facts": "Implementatieoperator en ruimtebeheerder||RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel||Docmost onderhoudt stapsgewijs de geselecteerde Open WebUI Knowledge Base",
+          "facts": "Implementatieoperator en ruimtebeheerder||RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel||Docmost onderhoudt stapsgewijs de geselecteerde Open WebUI Knowledge Base; alleen PDF-, DOCX-, TXT- en Markdown-bijlagen gaan naar de draagbare documentindex",
           "operations": "Save de doel- en schrijverreferentie|Voer Test uit voor het huidige doel|Enable de binding||Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan||Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 Dienst niet beschikbaar||Herstel eerst Redis, de provider of het externe doel. Toegang mislukt gesloten wanneer Redis de grenzen niet kan beschermen.",
         "leaseLost": "Redis huurcontract verloren||Behandel het actieve verzoek als afgebroken, controleer de stabiliteit van de Redis en de eigendomsafscheiding en probeer het vervolgens opnieuw idempotent.",
         "sourceAccessChanged": "source_access_changed||Het gedeeltelijke antwoord en de citaten zijn verwijderd omdat de toegang is gewijzigd. Open de broncode pas opnieuw nadat de machtigingen opzettelijk zijn hersteld.",
+        "sourceRemoved": "bron verwijderd||Een pagina, database of bijlage verdween na de feed-snapshot. RAG Sync behandelt dit als een verwijdering, verwijdert beheerde bestanden en gaat door zonder een interne not-found-fout opnieuw te proberen.",
+        "runtimeStopped": "synchronisatie gestopt||Een niet-opnieuw-probeerbare runtimefout heeft de binding uitgeschakeld. Los de gemelde oorzaak op; test de Knowledge Base opnieuw voordat u synchronisatie inschakelt als het doel niet beschikbaar is.",
         "cleanupRequired": "opruimen vereist||Wissel nog niet van doel en draai de APP_SECRET nog niet. Herstel de huidige schrijverstoegang, voltooi het opschonen, sla het nieuwe doel op en test het.",
         "consentRevoked": "MCP toestemming ingetrokken||De gebruiker moet het opnieuw beoordelen en zich opnieuw aanmelden. Bij een URL-wijziging wordt opzettelijk elke opgeslagen toestemming van de vorige ontvanger ingetrokken."
       }

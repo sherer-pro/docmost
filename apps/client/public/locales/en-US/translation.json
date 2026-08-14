@@ -1538,7 +1538,7 @@
           "operations": "Create the RAG key and copy it once|Test /api/rag/pages and cursor continuation|Start the external indexer||Responses return 200, stable cursors, and only the key creator's live readable scope||Revoke the key and stop the indexer; create a new key for recovery"
         },
         "ragSync": {
-          "facts": "Deployment operator and space administrator||RAG_SYNC_ENABLED, an allowed Open WebUI origin, Knowledge ID, and writer key||Docmost incrementally maintains the selected Open WebUI Knowledge Base",
+          "facts": "Deployment operator and space administrator||RAG_SYNC_ENABLED, an allowed Open WebUI origin, Knowledge ID, and writer key||Docmost incrementally maintains the selected Open WebUI Knowledge Base; only PDF, DOCX, TXT, and Markdown attachments enter the portable document index",
           "operations": "Save the target and writer credential|Run Test for the current target|Enable the binding||Last success advances and no cleanup or target-mismatch state remains||Disable the binding and finish cleanup; for emergency rollback disable RAG_SYNC_ENABLED and restart"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 Service Unavailable||Restore Redis, the provider, or the external target first. Admission fails closed when Redis cannot protect limits.",
         "leaseLost": "Redis lease lost||Treat the active request as aborted, verify Redis stability and ownership fencing, then retry idempotently.",
         "sourceAccessChanged": "source_access_changed||The partial answer and citations were cleared because access changed. Reopen the source only after permissions are intentionally restored.",
+        "sourceRemoved": "source removed||A page, database, or attachment disappeared after the feed snapshot. RAG Sync treats it as a deletion, removes managed files, and continues without an internal not-found retry.",
+        "runtimeStopped": "synchronization stopped||A non-retryable runtime error disabled the binding. Fix the reported cause; if the target is unavailable, Test the Knowledge Base again before enabling synchronization.",
         "cleanupRequired": "cleanup required||Do not switch targets or rotate APP_SECRET yet. Restore the current writer access, finish cleanup, then save and test the new target.",
         "consentRevoked": "MCP consent revoked||The user must review and opt in again. A URL change intentionally revokes every saved consent for the previous recipient."
       }
