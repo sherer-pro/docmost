@@ -78,8 +78,6 @@
       "exports|apps/client/src/features/database/utils/database-markdown.ts|getCellValue",
       "exports|apps/client/src/features/database/utils/database-markdown.ts|matchCondition",
       "exports|apps/client/src/features/database/utils/database-markdown.ts|stringifyCellValue",
-      "exports|apps/client/src/features/dictionary/queries/dictionary-query.ts|DICTIONARY_QUERY_KEYS",
-      "exports|apps/client/src/features/dictionary/utils/dictionary-matcher.ts|normalizeDictionaryAlias",
       "exports|apps/client/src/features/editor/components/audio/audio-menu.tsx|AudioMenu",
       "exports|apps/client/src/features/editor/components/callout/callout-menu.tsx|CalloutMenu",
       "exports|apps/client/src/features/editor/components/drawio/drawio-menu.tsx|DrawioMenu",
@@ -160,7 +158,6 @@
       "exports|apps/server/src/core/ai/services/ai-outbound-url-policy.service.ts|isAiUnspecifiedAddress",
       "exports|apps/server/src/core/ai/services/openai-compatible-provider.service.ts|AiProviderInvalidResponseError",
       "exports|apps/server/src/core/attachment/attachment-public-token.util.ts|ATTACHMENT_TOKEN_COOKIE_PREFIX",
-      "exports|apps/server/src/core/dictionary/dto/dictionary-term.dto.ts|MAX_DICTIONARY_IMPORT_TERMS",
       "exports|apps/server/src/core/group/dto/create-group.dto.ts|DefaultGroup",
       "exports|apps/server/src/core/label/dto/label.dto.ts|FindPagesByLabelDto",
       "exports|apps/server/src/core/label/dto/label.dto.ts|ListLabelsDto",
@@ -257,7 +254,6 @@
       "types|apps/client/src/features/database/types/database.types.ts|IDatabaseCell",
       "types|apps/client/src/features/database/types/database.types.ts|IDatabaseCellBatchOperation",
       "types|apps/client/src/features/database/types/database.types.ts|IDatabasePropertySettings",
-      "types|apps/client/src/features/dictionary/types/dictionary.types.ts|IDictionaryExportPayload",
       "types|apps/client/src/features/editor/components/bubble-menu/color-selector.tsx|BubbleColorMenuItem",
       "types|apps/client/src/features/editor/components/bubble-menu/node-selector.tsx|BubbleMenuItem",
       "types|apps/client/src/features/editor/components/bubble-menu/text-alignment-selector.tsx|BubbleMenuItem",
@@ -308,9 +304,6 @@
       "types|apps/server/src/core/ai/tools/ai-tool-registry.service.ts|AiToolWriteClass",
       "types|apps/server/src/core/ai/tools/ai-tool-registry.service.ts|AiToolWriteProposal",
       "types|apps/server/src/core/attachment/attachment-public-token.util.ts|AttachmentAccessTokenSource",
-      "types|apps/server/src/core/dictionary/dictionary-term.types.ts|DictionaryBulkWordFormGenerationResult",
-      "types|apps/server/src/core/dictionary/dictionary-term.types.ts|DictionaryPortableTerm",
-      "types|apps/server/src/core/dictionary/dictionary-term.types.ts|DictionaryWordFormGenerationResult",
       "types|apps/server/src/core/notification/services/notification-delivery-policy.service.ts|NotificationDeliveryChannel",
       "types|apps/server/src/core/page-access/page-access.service.ts|PageAccessSource",
       "types|apps/server/src/core/page/dto/duplicate-page.dto.ts|ICopyPageAttachment",
@@ -435,12 +428,40 @@
       "types|packages/editor-ext/src/lib/math/math-block.ts|MathBlockOptions",
       "types|packages/editor-ext/src/lib/math/math-inline.ts|MathInlineAttributes"
     ],
-    "rationaleByCategory": {
-      "duplicates": "Compatibility aliases expose both named and default exports.",
-      "enumMembers": "Reserved protocol and domain states remain part of stable enums.",
-      "exports": "Public, test, framework, and reflection entry points are reviewed before removal.",
-      "types": "Generated database and reusable contract types intentionally exceed direct imports."
-    }
+    "reviewGroups": [
+      {
+        "id": "client-application-contracts",
+        "owner": "apps/client",
+        "classification": "reusable-or-compatibility-contract",
+        "rationale": "Private client exports are reviewed against cross-feature imports, tests, and compatibility aliases before removal.",
+        "pathPattern": "^apps/client/",
+        "reviewBy": "2026-11-14"
+      },
+      {
+        "id": "server-generated-database-types",
+        "owner": "apps/server/src/database/types",
+        "classification": "generated-contract-surface",
+        "rationale": "Generated Kysely entity aliases mirror the database schema and are reviewed after migration type regeneration.",
+        "pathPattern": "^apps/server/src/database/types/",
+        "reviewBy": "2026-11-14"
+      },
+      {
+        "id": "server-framework-and-domain-contracts",
+        "owner": "apps/server",
+        "classification": "framework-or-reusable-contract",
+        "rationale": "Server findings are reviewed with Nest reflection, module wiring, protocol constants, and route contracts before removal.",
+        "pathPattern": "^apps/server/(?!src/database/types/)",
+        "reviewBy": "2026-11-14"
+      },
+      {
+        "id": "editor-package-contracts",
+        "owner": "packages/editor-ext",
+        "classification": "public-package-contract",
+        "rationale": "Editor extension findings are reviewed against the package entry point and downstream editor consumers before removal.",
+        "pathPattern": "^packages/editor-ext/",
+        "reviewBy": "2026-11-14"
+      }
+    ]
   },
   "jscpd": {
     "accepted": [
@@ -507,11 +528,6 @@
       {
         "fingerprint": "typescript|core/notification/services/comment.notification.ts|core/notification/services/page.notification.ts|27|148",
         "classification": "delivery-variant",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template.service.ts|core/page/services/page-template.service.ts|26|120",
-        "classification": "parallel-product-flow",
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {

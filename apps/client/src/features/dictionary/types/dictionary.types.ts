@@ -28,12 +28,6 @@ export interface IDictionaryPortableTerm {
   definitionMarkdown: string;
 }
 
-export interface IDictionaryExportPayload {
-  version: 1;
-  exportedAt: string;
-  terms: IDictionaryPortableTerm[];
-}
-
 export interface IImportDictionaryTermsPayload {
   spaceId: string;
   terms: IDictionaryPortableTerm[];

@@ -9,7 +9,7 @@ export interface DictionaryTermResponse {
   updatedAt: Date;
 }
 
-export interface DictionaryPortableTerm {
+interface DictionaryPortableTerm {
   term: string;
   forms: string[];
   definitionMarkdown: string;
@@ -25,13 +25,4 @@ export interface DictionaryImportResult {
   created: number;
   updated: number;
   total: number;
-}
-
-export interface DictionaryWordFormGenerationResult {
-  forms: string[];
-}
-
-export interface DictionaryBulkWordFormGenerationResult {
-  updatedTerms: number;
-  generatedForms: number;
 }

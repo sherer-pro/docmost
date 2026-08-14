@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export const MAX_DICTIONARY_IMPORT_TERMS = 1000;
+const MAX_DICTIONARY_IMPORT_TERMS = 1000;
 
 export class ListDictionaryTermsQueryDto {
   @IsUUID()

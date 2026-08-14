@@ -31,7 +31,7 @@ interface NormalizedDictionaryText {
   originalEnds: number[];
 }
 
-export function normalizeDictionaryAlias(value: string): string {
+function normalizeDictionaryAlias(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ");
 }
 
