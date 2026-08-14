@@ -3,6 +3,13 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { PageTemplateService } from './page-template.service';
 import { PageTemplateRuntimeService } from './page-template-runtime.service';
+import { PageTemplateContentService } from './page-template-content.service';
+import { PageTemplateOperationService } from './page-template-operation.service';
+import { PageTemplatePublicationService } from './page-template-publication.service';
+import { PageTemplateInstanceService } from './page-template-instance.service';
+import { PageTemplateSyncService } from './page-template-sync.service';
+import { PageEmbedCommandService } from './page-embed-command.service';
+import { LegacyPageEmbedMigrationService } from './legacy-page-embed-migration.service';
 
 const user = {
   id: '019fdaa0-0000-7000-8000-000000000010',
@@ -22,6 +29,9 @@ function buildService(options?: {
   policy?: any;
   transclusion?: any;
   queueOutbox?: any;
+  attachmentRepo?: any;
+  storageService?: any;
+  collaboration?: any;
 }) {
   const pageRepo = options?.pageRepo ?? { findById: jest.fn() };
   const pageService = options?.pageService ?? { create: jest.fn() };
@@ -43,25 +53,87 @@ function buildService(options?: {
   const policy =
     options?.policy ??
     ({ assertAction: jest.fn(), resolveForUser: jest.fn() } as any);
-  const service = new PageTemplateService(
-    options?.db ?? ({} as any),
+  const db = options?.db ?? ({} as any);
+  const attachmentRepo = options?.attachmentRepo ?? ({} as any);
+  const storageService = options?.storageService ?? ({} as any);
+  const pageEmbedService = { getMaxDepth: () => 5 } as any;
+  const pageHistoryRecorder = {} as any;
+  const content = new PageTemplateContentService(
     pageRepo,
-    pageService,
     pageAccessService,
     spaceAbility,
     {} as any,
     {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
+    attachmentRepo,
+    storageService,
+    options?.collaboration ?? ({} as any),
+  );
+  const operations = new PageTemplateOperationService(
+    db,
+    pageRepo,
+    attachmentRepo,
+    storageService,
+  );
+  const publication = new PageTemplatePublicationService(db);
+  const instance = new PageTemplateInstanceService(
+    db,
+    pageRepo,
+    pageService,
+    pageAccessService,
+    spaceAbility,
+    attachmentRepo,
+    storageService,
     policy,
-    { getMaxDepth: () => 5 } as any,
+    pageEmbedService,
     options?.transclusion ?? ({} as any),
-    {} as any,
+    pageHistoryRecorder,
+    content,
+    operations,
+  );
+  const sync = new PageTemplateSyncService(
+    db,
+    pageRepo,
+    pageAccessService,
+    policy,
+    attachmentRepo,
+    storageService,
+    pageHistoryRecorder,
+    content,
+    operations,
+    publication,
     options?.queueOutbox,
   );
+  const pageEmbeds = new PageEmbedCommandService(
+    pageAccessService,
+    policy,
+    pageEmbedService,
+    attachmentRepo,
+    storageService,
+    content,
+    operations,
+  );
+  const legacy = new LegacyPageEmbedMigrationService(
+    db,
+    pageRepo,
+    pageAccessService,
+    pageEmbedService,
+    pageHistoryRecorder,
+    attachmentRepo,
+    storageService,
+    content,
+    operations,
+  );
+  const service = new PageTemplateService(instance, sync, pageEmbeds);
   return {
     service,
+    instance,
+    sync,
+    legacy,
+    operations,
+    publication,
+    content,
+    attachmentRepo,
+    storageService,
     pageRepo,
     pageService,
     pageAccessService,
@@ -71,11 +143,98 @@ function buildService(options?: {
 }
 
 describe('PageTemplateService space boundaries', () => {
+  it('fails closed when collaboration content cannot be loaded', async () => {
+    const collaborationFailure = new Error('collaboration unavailable');
+    const collaboration = {
+      getPageContent: jest.fn(async () => {
+        throw collaborationFailure;
+      }),
+    };
+    const { content } = buildService({ collaboration });
+
+    await expect(content.getLiveContent(sourcePageId, user)).rejects.toBe(
+      collaborationFailure,
+    );
+    expect(collaboration.getPageContent).toHaveBeenCalledWith(
+      `page.${sourcePageId}`,
+      { user },
+    );
+  });
+
+  it('preserves copied paths when a later attachment copy fails', async () => {
+    const firstAttachmentId = '019fdaa0-0000-7000-8000-000000000071';
+    const secondAttachmentId = '019fdaa0-0000-7000-8000-000000000072';
+    const firstTargetId = '019fdaa0-0000-7000-8000-000000000073';
+    const secondTargetId = '019fdaa0-0000-7000-8000-000000000074';
+    const copyFailure = new Error('copy failed');
+    const attachmentRepo = {
+      findByIds: jest.fn(async () => [
+        {
+          id: firstAttachmentId,
+          pageId: sourcePageId,
+          filePath: `pages/${firstAttachmentId}/first.pdf`,
+        },
+        {
+          id: secondAttachmentId,
+          pageId: sourcePageId,
+          filePath: `pages/${secondAttachmentId}/second.pdf`,
+        },
+      ]),
+    };
+    const storageService = {
+      copy: jest
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(copyFailure),
+    };
+    const { content } = buildService({ attachmentRepo, storageService });
+    const copiedPaths: string[] = [];
+
+    await expect(
+      content.copyAttachments(
+        [
+          {
+            oldAttachmentId: firstAttachmentId,
+            newAttachmentId: firstTargetId,
+          },
+          {
+            oldAttachmentId: secondAttachmentId,
+            newAttachmentId: secondTargetId,
+          },
+        ],
+        { id: sourcePageId } as any,
+        consumerPageId,
+        targetSpaceId,
+        user,
+        copiedPaths,
+        false,
+      ),
+    ).rejects.toBe(copyFailure);
+    expect(copiedPaths).toEqual([`pages/${firstTargetId}/first.pdf`]);
+  });
+
+  it('rejects a lost operation lease with the stable conflict code', async () => {
+    const query: any = {};
+    for (const method of ['select', 'where']) {
+      query[method] = jest.fn(() => query);
+    }
+    query.executeTakeFirst = jest.fn(async () => undefined);
+    const { operations } = buildService({
+      db: { selectFrom: jest.fn(() => query) },
+    });
+
+    await expect(
+      operations.assertOperationLease('operation-1', 'lost-lease'),
+    ).rejects.toMatchObject({
+      response: { code: 'page_template_operation_lease_lost' },
+    });
+  });
+
   it('keeps stable error codes and redacts raw failure messages', () => {
-    const { service } = buildService();
+    const { operations } = buildService();
 
     expect(
-      (service as any).errorCode(
+      operations.errorCode(
         new ConflictException({
           code: 'page_template_sync_conflict',
           message: 'The template changed',
@@ -83,14 +242,12 @@ describe('PageTemplateService space boundaries', () => {
       ),
     ).toBe('page_template_sync_conflict');
     expect(
-      (service as any).errorCode(
+      operations.errorCode(
         new Error('storage failed for /private/G24_CANARY_SECRET/customer.pdf'),
       ),
     ).toBe('page_template_operation_failed');
     expect(
-      (service as any).errorCode(
-        new Error('duplicate_attachments_partial_failure'),
-      ),
+      operations.errorCode(new Error('duplicate_attachments_partial_failure')),
     ).toBe('page_template_operation_failed');
   });
 
@@ -120,7 +277,7 @@ describe('PageTemplateService space boundaries', () => {
         deletedAt: null,
       }),
     };
-    const { service } = buildService({ db, pageRepo });
+    const { sync, content, operations } = buildService({ db, pageRepo });
     const current = {
       type: 'doc',
       content: [
@@ -132,9 +289,9 @@ describe('PageTemplateService space boundaries', () => {
       ],
     };
     jest
-      .spyOn(service as any, 'prepareInstanceRevisionContent')
+      .spyOn(sync as any, 'prepareInstanceRevisionContent')
       .mockResolvedValue(current);
-    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue({
+    jest.spyOn(content, 'getLiveContent').mockResolvedValue({
       ...current,
       content: [
         {
@@ -148,24 +305,24 @@ describe('PageTemplateService space boundaries', () => {
         },
       ],
     });
-    jest.spyOn(service as any, 'beginOperation').mockResolvedValue({
+    jest.spyOn(operations, 'beginOperation').mockResolvedValue({
       id: 'operation-1',
       leaseToken: 'lease-1',
     });
-    jest.spyOn(service as any, 'applyMutation').mockRejectedValue(
+    jest.spyOn(content, 'applyMutation').mockRejectedValue(
       new ConflictException({
         code: 'page_template_revision_stale',
         message: 'A newer revision won',
       }),
     );
     const completed = jest
-      .spyOn(service as any, 'markSyncItemCompleted')
+      .spyOn(sync as any, 'markSyncItemCompleted')
       .mockResolvedValue(undefined);
     const failed = jest
-      .spyOn(service as any, 'markSyncItemFailed')
+      .spyOn(sync as any, 'markSyncItemFailed')
       .mockResolvedValue(undefined);
 
-    await (service as any).processSyncItem(
+    await sync.processSyncItem(
       { id: 'run-1', templatePageId: sourcePageId, revision: 1 },
       { content: current },
       {
@@ -217,14 +374,14 @@ describe('PageTemplateService space boundaries', () => {
       }),
       kick: jest.fn(() => expect(transactionCommitted).toBe(true)),
     };
-    const { service } = buildService({ db, queueOutbox });
+    const { sync } = buildService({ db, queueOutbox });
     jest
-      .spyOn(service as any, 'requireManagedSyncedTemplate')
+      .spyOn(sync as any, 'requireManagedSyncedTemplate')
       .mockResolvedValue({ id: sourcePageId });
 
-    await expect(
-      service.retrySyncRun(sourcePageId, runId, user),
-    ).resolves.toEqual({ accepted: true, runId });
+    await expect(sync.retrySyncRun(sourcePageId, runId, user)).resolves.toEqual(
+      { accepted: true, runId },
+    );
 
     expect(queueOutbox.enqueuePageTemplateSync).toHaveBeenCalledWith(
       { runId },
@@ -305,30 +462,30 @@ describe('PageTemplateService space boundaries', () => {
       }),
       kick: jest.fn(() => expect(transactionCommitted).toBe(true)),
     };
-    const { service } = buildService({
+    const { sync, content, publication } = buildService({
       db,
       pageRepo: { findById: jest.fn().mockResolvedValue(template) },
       queueOutbox,
     });
     jest
-      .spyOn(service as any, 'requireManagedSyncedTemplate')
+      .spyOn(sync as any, 'requireManagedSyncedTemplate')
       .mockResolvedValue(template);
-    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue(draft);
+    jest.spyOn(content, 'getLiveContent').mockResolvedValue(draft);
     jest
-      .spyOn(service as any, 'normalizeDraftForPublication')
+      .spyOn(publication, 'normalizeDraftForPublication')
       .mockReturnValue(draft);
-    jest.spyOn(service as any, 'buildPublishPreflight').mockResolvedValue({
+    jest.spyOn(sync as any, 'buildPublishPreflight').mockResolvedValue({
       requiresDestructiveConfirmation: false,
     });
     jest
-      .spyOn(service as any, 'serializeRevision')
-      .mockReturnValue({ id: revision.id });
+      .spyOn(publication, 'serializeRevision')
+      .mockReturnValue({ id: revision.id } as any);
     jest
-      .spyOn(service as any, 'serializeSyncRun')
-      .mockReturnValue({ id: run.id });
+      .spyOn(publication, 'serializeSyncRun')
+      .mockReturnValue({ id: run.id } as any);
 
     await expect(
-      service.publish(
+      sync.publish(
         sourcePageId,
         { draftHash: hashProseMirrorJson(draft as any) },
         user,
@@ -385,24 +542,26 @@ describe('PageTemplateService space boundaries', () => {
         capabilities: { canRead: true },
       })),
     };
-    const { service } = buildService({ db, pageRepo, pageAccessService });
+    const { instance } = buildService({ db, pageRepo, pageAccessService });
 
-    await expect(service.getProvenance(consumerPageId, user)).resolves.toEqual({
-      createdFromTemplate: true,
-      kind: 'regular',
-      status: 'snapshot',
-      appliedRevision: null,
-      latestRevision: null,
-      canReadTemplate: true,
-      canDetach: false,
-      sourceTemplate: {
-        id: sourcePageId,
-        slugId: 'source-slug',
-        title: 'Source template',
-        icon: '📄',
-        spaceSlug: 'docs',
+    await expect(instance.getProvenance(consumerPageId, user)).resolves.toEqual(
+      {
+        createdFromTemplate: true,
+        kind: 'regular',
+        status: 'snapshot',
+        appliedRevision: null,
+        latestRevision: null,
+        canReadTemplate: true,
+        canDetach: false,
+        sourceTemplate: {
+          id: sourcePageId,
+          slugId: 'source-slug',
+          title: 'Source template',
+          icon: '📄',
+          spaceSlug: 'docs',
+        },
       },
-    });
+    );
     expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
       targetPage,
       user,
@@ -444,18 +603,20 @@ describe('PageTemplateService space boundaries', () => {
         capabilities: { canRead: true, canWrite: false },
       })),
     };
-    const { service } = buildService({ db, pageRepo, pageAccessService });
+    const { instance } = buildService({ db, pageRepo, pageAccessService });
 
-    await expect(service.getProvenance(consumerPageId, user)).resolves.toEqual({
-      createdFromTemplate: true,
-      kind: 'regular',
-      status: 'snapshot',
-      appliedRevision: null,
-      latestRevision: null,
-      canReadTemplate: false,
-      canDetach: false,
-      sourceTemplate: null,
-    });
+    await expect(instance.getProvenance(consumerPageId, user)).resolves.toEqual(
+      {
+        createdFromTemplate: true,
+        kind: 'regular',
+        status: 'snapshot',
+        appliedRevision: null,
+        latestRevision: null,
+        canReadTemplate: false,
+        canDetach: false,
+        sourceTemplate: null,
+      },
+    );
     expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledTimes(1);
   });
 
@@ -475,10 +636,10 @@ describe('PageTemplateService space boundaries', () => {
         ],
       })),
     };
-    const { service } = buildService({ policy });
+    const { instance } = buildService({ policy });
 
     await expect(
-      service.discover({ spaceId: sourceSpaceId, limit: 20 }, user),
+      instance.discover({ spaceId: sourceSpaceId, limit: 20 }, user),
     ).resolves.toEqual({
       items: [],
       nextCursor: null,
@@ -492,19 +653,17 @@ describe('PageTemplateService space boundaries', () => {
   });
 
   it('rejects cross-space snapshots before checking destination policy', async () => {
-    const { service, policy } = buildService();
-    jest
-      .spyOn(service as any, 'findCompletedOperation')
-      .mockResolvedValue(null);
-    jest.spyOn(service as any, 'requireTemplateSource').mockResolvedValue({
+    const { instance, policy, operations, content } = buildService();
+    jest.spyOn(operations, 'findCompletedOperation').mockResolvedValue(null);
+    jest.spyOn(content, 'requireTemplateSource').mockResolvedValue({
       id: sourcePageId,
       workspaceId: user.workspaceId,
       spaceId: sourceSpaceId,
       templateKind: 'regular',
-    });
+    } as any);
 
     await expect(
-      service.createFromTemplate(
+      instance.createFromTemplate(
         { templatePageId: sourcePageId, spaceId: targetSpaceId },
         'snapshot-key',
         user,
@@ -522,11 +681,11 @@ describe('PageTemplateService space boundaries', () => {
       content: null,
     };
     const pageRepo = { findById: jest.fn(async () => source) };
-    const { service } = buildService({ pageRepo });
+    const { legacy, content } = buildService({ pageRepo });
     jest
-      .spyOn(service as any, 'canMaterializeLegacySource')
+      .spyOn(legacy as any, 'canMaterializeLegacySource')
       .mockResolvedValue(true);
-    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue({
+    jest.spyOn(content, 'getLiveContent').mockResolvedValue({
       type: 'doc',
       content: [
         {
@@ -543,7 +702,7 @@ describe('PageTemplateService space boundaries', () => {
       ],
     });
 
-    const result = await (service as any).resolveLegacyPageEmbeds(
+    const result = await (legacy as any).resolveLegacyPageEmbeds(
       {
         type: 'doc',
         content: [
@@ -574,10 +733,10 @@ describe('PageTemplateService space boundaries', () => {
   });
 
   it('replaces an unavailable legacy source with an informational block', async () => {
-    const { service } = buildService({
+    const { legacy, content } = buildService({
       pageRepo: { findById: jest.fn(async () => null) },
     });
-    const result = await (service as any).resolveLegacyPageEmbeds(
+    const result = await (legacy as any).resolveLegacyPageEmbeds(
       {
         type: 'doc',
         content: [
@@ -612,9 +771,9 @@ describe('PageTemplateService space boundaries', () => {
 
   it('replaces legacy embeds beyond the configured depth without loading the source', async () => {
     const pageRepo = { findById: jest.fn() };
-    const { service } = buildService({ pageRepo });
+    const { legacy } = buildService({ pageRepo });
 
-    const result = await (service as any).resolveLegacyPageEmbeds(
+    const result = await (legacy as any).resolveLegacyPageEmbeds(
       {
         type: 'doc',
         content: [
@@ -673,13 +832,13 @@ describe('PageTemplateService space boundaries', () => {
         capabilities: { canRead: false },
       })),
     };
-    const { service } = buildService({
+    const { legacy, content } = buildService({
       pageRepo: { findById: jest.fn(async () => source) },
       pageAccessService,
     });
-    const getLiveContent = jest.spyOn(service as any, 'getLiveContent');
+    const getLiveContent = jest.spyOn(content, 'getLiveContent');
 
-    const result = await (service as any).resolveLegacyPageEmbeds(
+    const result = await (legacy as any).resolveLegacyPageEmbeds(
       {
         type: 'doc',
         content: [
@@ -732,17 +891,17 @@ describe('PageTemplateService space boundaries', () => {
       deletedAt: null,
       content: restrictedContent,
     };
-    const { service } = buildService({
+    const { legacy, content } = buildService({
       pageRepo: { findById: jest.fn(async () => source) },
     });
     jest
-      .spyOn(service as any, 'canMaterializeLegacySource')
+      .spyOn(legacy as any, 'canMaterializeLegacySource')
       .mockResolvedValue(false);
     const getLiveContent = jest
-      .spyOn(service as any, 'getLiveContent')
+      .spyOn(content, 'getLiveContent')
       .mockResolvedValue(restrictedContent);
 
-    const result = await (service as any).resolveLegacyPageEmbeds(
+    const result = await (legacy as any).resolveLegacyPageEmbeds(
       {
         type: 'doc',
         content: [
@@ -775,19 +934,21 @@ describe('PageTemplateService space boundaries', () => {
   });
 
   it('fails startup when legacy page embeds remain after migration', async () => {
-    const { service, pageRepo } = buildService();
+    const { legacy, sync, operations, pageRepo } = buildService();
     jest
-      .spyOn(service as any, 'findLegacyPageEmbedCandidates')
+      .spyOn(legacy as any, 'findLegacyPageEmbedCandidates')
       .mockResolvedValueOnce([{ referencePageId: consumerPageId }])
       .mockResolvedValueOnce([{ referencePageId: consumerPageId }]);
     jest
-      .spyOn(service as any, 'migrateLegacyPageEmbedsForPage')
+      .spyOn(legacy as any, 'migrateLegacyPageEmbedsForPage')
       .mockResolvedValue(false);
 
     const runtime = new PageTemplateRuntimeService(
       {} as any,
       pageRepo,
-      service,
+      legacy,
+      sync,
+      operations,
     );
     await expect((runtime as any).migrateLegacyPageEmbeds()).rejects.toThrow(
       'legacy_page_embed_migration_incomplete',
@@ -836,10 +997,10 @@ describe('PageTemplateService space boundaries', () => {
       return query;
     };
     const db = { selectFrom: jest.fn((table: string) => queryFor(table)) };
-    const { service } = buildService({ db });
-    jest.spyOn(service as any, 'getLiveContent').mockResolvedValue(previous);
+    const { sync, content } = buildService({ db });
+    jest.spyOn(content, 'getLiveContent').mockResolvedValue(previous);
 
-    const result = await (service as any).buildPublishPreflight(
+    const result = await (sync as any).buildPublishPreflight(
       { id: sourcePageId },
       user,
       false,
@@ -892,10 +1053,10 @@ describe('PageTemplateService space boundaries', () => {
           ]),
       ),
     };
-    const { service } = buildService({ db, pageRepo, pageAccessService });
+    const { instance } = buildService({ db, pageRepo, pageAccessService });
 
     await expect(
-      service.listDestinations({ spaceId: sourceSpaceId, limit: 20 }, user),
+      instance.listDestinations({ spaceId: sourceSpaceId, limit: 20 }, user),
     ).resolves.toMatchObject({
       rootAllowed: true,
       items: [{ id: 'allowed' }],

@@ -2,22 +2,28 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { Page, User } from '@docmost/db/types/entity.types';
-import type { PageRepo } from '@docmost/db/repos/page/page.repo';
-import type { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
-import type { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
-import type { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
-import type { StorageService } from '../../../integrations/storage/storage.service';
-import type { CollaborationDocumentPort } from '../../../collaboration/collaboration-document.port';
-import type SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
+import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
+import { StorageService } from '../../../integrations/storage/storage.service';
+import {
+  COLLABORATION_DOCUMENT_PORT,
+  CollaborationDocumentPort,
+} from '../../../collaboration/collaboration-document.port';
+import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../../casl/interfaces/space-ability.type';
-import type { PageAccessService } from '../../page-access/page-access.service';
+import { PageAccessService } from '../../page-access/page-access.service';
 
+@Injectable()
 export class PageTemplateContentService {
   constructor(
     private readonly pageRepo: PageRepo,
@@ -27,6 +33,7 @@ export class PageTemplateContentService {
     private readonly databaseRowRepo: DatabaseRowRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly storageService: StorageService,
+    @Inject(COLLABORATION_DOCUMENT_PORT)
     private readonly collaborationGateway: CollaborationDocumentPort,
   ) {}
 
