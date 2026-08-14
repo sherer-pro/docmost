@@ -15,7 +15,9 @@ import { RagSyncRuntimeConfigService } from './rag-sync-runtime.config';
 import {
   RAG_SYNC_BINDING_REGISTRY,
   RagSyncBindingRegistry,
+  RagSyncDiagnosticError,
   RagSyncRuntimeBinding,
+  RagSyncRuntimeError,
 } from './rag-sync-runtime.types';
 
 type ScheduledBinding = {
@@ -237,21 +239,50 @@ export class RagSyncSupervisorService implements OnModuleInit, OnModuleDestroy {
               ? Date.now()
               : Date.now() + this.config.pollIntervalMs;
       })
-      .catch((error) => {
+      .catch(async (error) => {
         if (controller.signal.aborted) {
           entry.nextRunAt = Date.now();
           return;
         }
+        const runtimeError = normalizeSupervisorError(error);
+        if (
+          bindingSnapshot.state === 'enabled' &&
+          runtimeError instanceof RagSyncRuntimeError &&
+          !runtimeError.retryable
+        ) {
+          const stopped = await this.registry
+            .stopForRuntimeError(
+              bindingSnapshot.id,
+              bindingSnapshot.configVersion,
+              bindingSnapshot.targetVersion,
+              runtimeError.code === 'rag_sync_target_unavailable',
+            )
+            .catch(() => false);
+          if (stopped) entry.removed = true;
+        }
         entry.failures += 1;
         entry.order = this.order++;
         entry.nextRunAt = Date.now() + retryDelay(entry.failures);
+        const diagnostic =
+          error instanceof RagSyncDiagnosticError ? error : undefined;
+        const originalError = diagnostic?.originalError ?? error;
         this.logger.warn(
           JSON.stringify({
             component: 'rag-sync',
             event: 'binding.failed',
             errorType:
-              error instanceof Error ? error.constructor.name : 'unknown',
-            retryInMs: Math.max(0, entry.nextRunAt - Date.now()),
+              originalError instanceof Error
+                ? originalError.constructor.name
+                : 'unknown',
+            ...(diagnostic
+              ? {
+                  stage: diagnostic.stage,
+                  sourceKind: diagnostic.sourceKind,
+                }
+              : {}),
+            retryInMs: entry.removed
+              ? null
+              : Math.max(0, entry.nextRunAt - Date.now()),
           }),
         );
       })
@@ -340,6 +371,10 @@ export class RagSyncSupervisorService implements OnModuleInit, OnModuleDestroy {
     this.schedule(0);
     void this.discover();
   }
+}
+
+function normalizeSupervisorError(error: unknown): unknown {
+  return error instanceof RagSyncDiagnosticError ? error.originalError : error;
 }
 
 export async function closeRedisConnection(

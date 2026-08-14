@@ -22,6 +22,12 @@ export interface RagSyncRuntimeBinding {
 
 export interface RagSyncBindingRegistry {
   listRunnableBindings(): Promise<RagSyncRuntimeBinding[]>;
+  stopForRuntimeError(
+    bindingId: string,
+    expectedConfigVersion: number,
+    expectedTargetVersion: number,
+    resetTargetTest: boolean,
+  ): Promise<boolean>;
   completeDrain(
     bindingId: string,
     expectedConfigVersion: number,
@@ -207,6 +213,37 @@ export class RagSyncRuntimeError extends Error {
   ) {
     super(message);
     this.name = 'RagSyncRuntimeError';
+  }
+}
+
+export type RagSyncDiagnosticStage =
+  | 'scope'
+  | 'drain'
+  | 'policy'
+  | 'reconcile'
+  | `feed:${RagSyncFeedKind}`;
+
+export type RagSyncDiagnosticSourceKind =
+  | 'binding'
+  | 'page'
+  | 'database'
+  | 'database-row'
+  | 'attachment'
+  | 'tombstone'
+  | 'unknown';
+
+export class RagSyncDiagnosticError extends Error {
+  constructor(
+    readonly stage: RagSyncDiagnosticStage,
+    readonly sourceKind: RagSyncDiagnosticSourceKind,
+    readonly originalError: unknown,
+  ) {
+    super(
+      originalError instanceof Error
+        ? originalError.message
+        : 'RAG synchronization stage failed',
+    );
+    this.name = 'RagSyncDiagnosticError';
   }
 }
 

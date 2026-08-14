@@ -1,9 +1,11 @@
+import { NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import {
   RagSyncSourceService,
   runConcurrently,
 } from './rag-sync-source.service';
+import { RagSyncDiagnosticError } from '../runtime/rag-sync-runtime.types';
 
 describe('RagSyncSourceService', () => {
   const binding = {
@@ -589,6 +591,122 @@ describe('RagSyncSourceService', () => {
     );
   });
 
+  it('treats a page removed after feed creation as a deletion', async () => {
+    const { service, rag, state, writer } = setup();
+    rag.getUpdates.mockResolvedValue({
+      items: [{ type: 'page', id: 'page-1', updatedAtMs: 200 }],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.getPageInfo.mockRejectedValue(new NotFoundException('Page not found'));
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).resolves.toMatchObject({ hasMore: true, processedCount: 1 });
+
+    expect(state.getMapping).toHaveBeenCalledWith(lease, 'page:page-1');
+    expect(state.setCheckpoint).toHaveBeenCalledWith(lease, 'updates', 201);
+    expect(writer.upload).not.toHaveBeenCalled();
+  });
+
+  it('treats a database removed after feed creation as a deletion', async () => {
+    const { service, rag, state } = setup();
+    rag.getUpdates.mockResolvedValue({
+      items: [
+        {
+          type: 'database',
+          id: 'database-page-1',
+          databaseId: 'database-1',
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.getDatabaseSyncMetadata.mockRejectedValue(
+      new NotFoundException('Database not found'),
+    );
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).resolves.toMatchObject({ hasMore: true, processedCount: 1 });
+
+    expect(state.deleteDatabaseWorkProgress).toHaveBeenCalledWith(
+      lease,
+      'delete',
+      'database-1',
+    );
+    expect(state.setCheckpoint).toHaveBeenCalledWith(lease, 'updates', 201);
+    expect(rag.getDatabaseSyncRowsPage).not.toHaveBeenCalled();
+  });
+
+  it('treats an attachment removed after feed creation as a deletion', async () => {
+    const { service, rag, state, storage, writer } = setup();
+    rag.getAttachmentUpdates.mockResolvedValue({
+      items: [
+        {
+          id: 'attachment-1',
+          fileName: 'attachment.txt',
+          fileExt: '.txt',
+          mimeType: 'text/plain',
+          fileSize: 100,
+          pageId: 'page-1',
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.resolveAttachmentForDownload.mockRejectedValue(
+      new NotFoundException('File not found'),
+    );
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).resolves.toMatchObject({ hasMore: true, processedCount: 1 });
+
+    expect(state.getMapping).toHaveBeenCalledWith(
+      lease,
+      'attachment:attachment-1',
+    );
+    expect(state.setCheckpoint).toHaveBeenCalledWith(
+      lease,
+      'attachment-updates',
+      201,
+    );
+    expect(storage.readStream).not.toHaveBeenCalled();
+    expect(writer.upload).not.toHaveBeenCalled();
+  });
+
+  it('adds only safe feed stage and source-kind diagnostics to unknown errors', async () => {
+    const { service, rag } = setup();
+    rag.getUpdates.mockResolvedValue({
+      items: [{ type: 'page', id: 'page-1', updatedAtMs: 200 }],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.getPageInfo.mockRejectedValue(new TypeError('simulated failure'));
+
+    let failure: unknown;
+    try {
+      await service.processQuantum(binding, context);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(RagSyncDiagnosticError);
+    expect(failure).toMatchObject({
+      stage: 'feed:updates',
+      sourceKind: 'page',
+      originalError: expect.any(TypeError),
+    });
+    expect(failure).not.toHaveProperty('sourceId');
+  });
+
   it('destroys a blocked attachment stream when the quantum is aborted', async () => {
     const { service, storage } = setup();
     const stream = new Readable({ read: jest.fn() });
@@ -781,6 +899,38 @@ describe('RagSyncSourceService', () => {
         operationId: intent.operationId,
         cleanupRequested: true,
       }),
+    );
+  });
+
+  it('does not send raster images to an Open WebUI document index', async () => {
+    const { service, rag, state, writer } = setup();
+    rag.getAttachmentUpdates.mockResolvedValue({
+      items: [
+        {
+          id: 'attachment-1',
+          fileName: 'diagram.png',
+          fileExt: '.png',
+          mimeType: 'image/png',
+          fileSize: 100,
+          pageId: 'page-1',
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).resolves.toMatchObject({ hasMore: true, processedCount: 1 });
+
+    expect(rag.resolveAttachmentForDownload).not.toHaveBeenCalled();
+    expect(writer.upload).not.toHaveBeenCalled();
+    expect(state.setCheckpoint).toHaveBeenCalledWith(
+      lease,
+      'attachment-updates',
+      201,
     );
   });
 
@@ -1844,13 +1994,9 @@ function effectiveFingerprint(): string {
         maxAttachmentBytes: 25 * 1024 * 1024,
         supportedAttachmentExtensions: [
           '.docx',
-          '.jpeg',
-          '.jpg',
           '.md',
           '.pdf',
-          '.png',
           '.txt',
-          '.webp',
         ],
       }),
     )

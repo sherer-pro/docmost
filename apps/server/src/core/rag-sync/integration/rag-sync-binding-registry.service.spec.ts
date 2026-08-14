@@ -60,4 +60,22 @@ describe('RagSyncBindingRegistryService', () => {
 
     expect(repo.completeCleanup).toHaveBeenCalledWith('binding-1', 6, 7);
   });
+
+  it('stops a failed binding using config- and target-version fencing', async () => {
+    const repo = {
+      stopForRuntimeError: jest.fn().mockResolvedValue(true),
+    };
+    const service = new RagSyncBindingRegistryService(repo as any);
+
+    await expect(
+      service.stopForRuntimeError('binding-1', 6, 7, true),
+    ).resolves.toBe(true);
+
+    expect(repo.stopForRuntimeError).toHaveBeenCalledWith(
+      'binding-1',
+      6,
+      7,
+      true,
+    );
+  });
 });

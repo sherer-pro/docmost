@@ -58,6 +58,20 @@ export class RagSyncBindingRegistryService implements RagSyncBindingRegistry {
     return bindings;
   }
 
+  stopForRuntimeError(
+    bindingId: string,
+    expectedConfigVersion: number,
+    expectedTargetVersion: number,
+    resetTargetTest: boolean,
+  ): Promise<boolean> {
+    return this.repo.stopForRuntimeError(
+      bindingId,
+      expectedConfigVersion,
+      expectedTargetVersion,
+      resetTargetTest,
+    );
+  }
+
   async completeDrain(
     bindingId: string,
     expectedConfigVersion: number,

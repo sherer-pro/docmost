@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { createHash } from 'node:crypto';
 import type { RagScope, RagSyncSourceType } from '@docmost/api-contract';
@@ -14,6 +14,9 @@ import { RagSyncMemoryBudgetService } from '../runtime/rag-sync-memory-budget.se
 import { RagSyncStateStore } from '../runtime/rag-sync-state-store.service';
 import {
   OpenWebUiFile,
+  RagSyncDiagnosticError,
+  RagSyncDiagnosticSourceKind,
+  RagSyncDiagnosticStage,
   RagSyncDatabaseWorkProgress,
   RagSyncDocmostMetadataV2,
   RagSyncFeedKind,
@@ -34,10 +37,6 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   '.docx',
   '.txt',
   '.md',
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.webp',
 ]);
 const CHECKPOINT_SETTLE_MS = 5_000;
 const TARGET_TEST_TIMEOUT_MS = 120_000;
@@ -63,6 +62,10 @@ type QuantumSession = {
   lagMs: number | null;
   retryAfterMs?: number;
   drainStartedAtMs?: number;
+  diagnostic: {
+    stage: RagSyncDiagnosticStage;
+    sourceKind: RagSyncDiagnosticSourceKind;
+  };
 };
 
 type FeedPage<T> = {
@@ -143,6 +146,31 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     binding: RagSyncRuntimeBinding,
     context: RagSyncQuantumContext,
   ): Promise<RagSyncQuantumResult> {
+    const diagnostic: QuantumSession['diagnostic'] = {
+      stage: 'scope',
+      sourceKind: 'binding',
+    };
+    try {
+      return await this.processQuantumWithDiagnostic(
+        binding,
+        context,
+        diagnostic,
+      );
+    } catch (error) {
+      if (error instanceof RagSyncDiagnosticError) throw error;
+      throw new RagSyncDiagnosticError(
+        diagnostic.stage,
+        diagnostic.sourceKind,
+        error,
+      );
+    }
+  }
+
+  private async processQuantumWithDiagnostic(
+    binding: RagSyncRuntimeBinding,
+    context: RagSyncQuantumContext,
+    diagnostic: QuantumSession['diagnostic'],
+  ): Promise<RagSyncQuantumResult> {
     const scope = await this.loadSystemScope(binding);
     const ragScope = await this.rag.getScope(scope);
     const session: QuantumSession = {
@@ -152,9 +180,11 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       ragScope,
       processedCount: 0,
       lagMs: null,
+      diagnostic,
     };
 
     if (binding.state === 'draining') {
+      diagnostic.stage = 'drain';
       return this.drain(session);
     }
 
@@ -167,6 +197,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     );
     const scopeChanged = storedFingerprint !== effectiveFingerprint;
     if (scopeChanged) {
+      diagnostic.stage = 'policy';
       const purged = await this.purgeBlockedSources(
         session,
         effectiveFingerprint,
@@ -184,6 +215,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
 
     const reconcileAt = await this.state.getReconcileAt(context.lease);
     if (scopeChanged || reconcileAt === null || reconcileAt <= Date.now()) {
+      diagnostic.stage = 'reconcile';
       const reconciliationChanged = await this.reconcile(
         session,
         effectiveFingerprint,
@@ -313,6 +345,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     checkpointField: 'maxUpdatedAtMs' | 'maxDeletedAtMs',
   ): Promise<RagSyncQuantumResult | null> {
     this.assertActive(session);
+    session.diagnostic.stage = `feed:${kind}`;
+    session.diagnostic.sourceKind = 'unknown';
     const savedProgress = await this.state.getFeedProgress(
       session.context.lease,
       kind,
@@ -337,6 +371,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       session.context.maxConcurrentDocuments,
       async (item) => {
         this.assertActive(session);
+        session.diagnostic.sourceKind = feedDiagnosticSourceKind(kind, item);
         if (!(await process(item))) pageCompleted = false;
         this.assertActive(session);
       },
@@ -376,11 +411,19 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         session.context.maxAttachmentBytes,
         session.context.signal,
         async () => {
-          const page = (await this.rag.getPageInfo(
-            session.scope,
-            item.id,
-            true,
-          )) as unknown as InternalRagPageDetail;
+          let page: InternalRagPageDetail;
+          try {
+            page = (await this.rag.getPageInfo(
+              session.scope,
+              item.id,
+              true,
+            )) as unknown as InternalRagPageDetail;
+          } catch (error) {
+            if (!(error instanceof NotFoundException)) throw error;
+            const identity = sourceIdentity('page', item.id);
+            await this.deleteIdentity(session, identity);
+            return this.requestUploadIntentCleanup(session, identity);
+          }
           if (!page.title?.trim() && !page.contentMarkdown?.trim()) {
             const identity = sourceIdentity('page', page.id);
             await this.deleteIdentity(session, identity);
@@ -407,10 +450,23 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         sourceIdentity('page', item.id),
       );
     }
-    const database = (await this.rag.getDatabaseSyncMetadata(
-      session.scope,
-      item.databaseId,
-    )) as unknown as InternalRagDatabaseDetail;
+    let database: InternalRagDatabaseDetail;
+    try {
+      database = (await this.rag.getDatabaseSyncMetadata(
+        session.scope,
+        item.databaseId,
+      )) as unknown as InternalRagDatabaseDetail;
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) throw error;
+      if (!(await this.deleteDatabase(session, item.id, item.databaseId))) {
+        return false;
+      }
+      await this.replayUpdatesFeed(session);
+      return this.requestUploadIntentCleanup(
+        session,
+        sourceIdentity('page', item.id),
+      );
+    }
     return this.upsertDatabase(session, database, item.updatedAtMs);
   }
 
@@ -779,10 +835,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       session.context.maxAttachmentBytes,
       session.context.signal,
       async () => {
-        const attachment = await this.rag.resolveAttachmentForDownload(
-          session.scope,
-          item.id,
-        );
+        let attachment: { filePath: string };
+        try {
+          attachment = await this.rag.resolveAttachmentForDownload(
+            session.scope,
+            item.id,
+          );
+        } catch (error) {
+          if (!(error instanceof NotFoundException)) throw error;
+          await this.deleteIdentity(session, identity);
+          return this.requestUploadIntentCleanup(session, identity);
+        }
         const content = await this.readAttachmentBounded(
           attachment.filePath,
           session.context.maxAttachmentBytes,
@@ -2711,6 +2774,21 @@ function dateToMs(value: string | Date | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function feedDiagnosticSourceKind(
+  kind: RagSyncFeedKind,
+  item: unknown,
+): RagSyncDiagnosticSourceKind {
+  if (kind === 'attachment-updates' || kind === 'attachment-deleted') {
+    return 'attachment';
+  }
+  if (item && typeof item === 'object' && 'type' in item) {
+    const type = (item as { type?: unknown }).type;
+    if (type === 'page' || type === 'database') return type;
+    if (type === 'databaseRow') return 'database-row';
+  }
+  return kind === 'deleted' ? 'tombstone' : 'unknown';
 }
 
 function sameMapping(

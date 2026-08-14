@@ -4,6 +4,7 @@ import { RagSyncRuntimeConfigService } from './rag-sync-runtime.config';
 import { RagSyncStateStore } from './rag-sync-state-store.service';
 import {
   RAG_SYNC_QUANTUM_PROCESSOR,
+  RagSyncDiagnosticError,
   RagSyncLease,
   RagSyncLeaseLostError,
   RagSyncOperationalStatus,
@@ -173,6 +174,9 @@ export class RagSyncBindingRuntime {
 }
 
 export function normalizeRuntimeError(error: unknown): RagSyncRuntimeError {
+  if (error instanceof RagSyncDiagnosticError) {
+    return normalizeRuntimeError(error.originalError);
+  }
   if (error instanceof RagSyncRuntimeError) return error;
   if ((error as Error)?.name === 'AbortError') {
     return new RagSyncRuntimeError('rag_sync_aborted', true);
