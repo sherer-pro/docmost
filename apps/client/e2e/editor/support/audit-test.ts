@@ -163,7 +163,7 @@ export async function runAxe(
   testInfo: TestInfo,
   scope = ".ProseMirror",
   label = "axe",
-): Promise<void> {
+) {
   const builder = new AxeBuilder({ page }).withTags([
     "wcag2a",
     "wcag2aa",
@@ -193,6 +193,7 @@ export async function runAxe(
     )}\n`,
     "utf8",
   );
+  return results;
 }
 
 export async function recordDefect(defect: {

@@ -53,6 +53,15 @@ type TableName =
   | 'databaseCells'
   | 'databaseViews';
 
+function linkedInstanceDb(result?: unknown) {
+  const query: any = {};
+  for (const method of ['select', 'where', 'limit']) {
+    query[method] = jest.fn(() => query);
+  }
+  query.executeTakeFirst = jest.fn().mockResolvedValue(result);
+  return { selectFrom: jest.fn(() => query) };
+}
+
 function createService(params?: {
   pageRepo?: Record<string, jest.Mock>;
   db?: unknown;
@@ -64,10 +73,10 @@ function createService(params?: {
     kick: jest.Mock;
   };
 }) {
-  return new PageService(
+  const service = new PageService(
     (params?.pageRepo ?? {}) as any,
     {} as any,
-    (params?.db ?? {}) as any,
+    (params?.db ?? linkedInstanceDb()) as any,
     {} as any,
     {} as any,
     (params?.generalQueue ?? { add: jest.fn() }) as any,
@@ -90,6 +99,8 @@ function createService(params?: {
     undefined,
     params?.queueOutboxService as any,
   );
+  jest.spyOn(service as any, 'hasTemplateInPageTree').mockResolvedValue(false);
+  return service;
 }
 
 function createMemoryTransaction(
@@ -152,6 +163,105 @@ describe('PageService duplicatePage properties', () => {
     jest.clearAllMocks();
     mockGetAttachmentIds.mockReturnValue([]);
     mockIsAttachmentNode.mockReturnValue(false);
+  });
+
+  it('rejects ordinary duplication of a linked synchronized page', async () => {
+    const rootPage = {
+      id: 'page-root',
+      slugId: 'root',
+      title: 'Root',
+      position: 'a0',
+      parentPageId: null,
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+      templateKind: null,
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    };
+    const pageRepo = {
+      getPageAndDescendants: jest.fn().mockResolvedValue([rootPage]),
+    };
+    const service = createService({
+      pageRepo,
+      db: linkedInstanceDb({ id: 'instance' }),
+    });
+
+    await expect(
+      service.duplicatePage(rootPage as any, undefined, {
+        id: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({
+        code: 'page_template_linked_page_duplicate_forbidden',
+      }),
+    });
+    expect(executeTx).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: 'root template',
+      pages: [
+        {
+          id: 'page-root',
+          slugId: 'root',
+          title: 'Root template',
+          position: 'a0',
+          parentPageId: null,
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+          templateKind: 'regular',
+          content: { type: 'doc', content: [] },
+        },
+      ],
+    },
+    {
+      label: 'template descendant',
+      pages: [
+        {
+          id: 'page-root',
+          slugId: 'root',
+          title: 'Ordinary root',
+          position: 'a0',
+          parentPageId: null,
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+          templateKind: null,
+          content: { type: 'doc', content: [] },
+        },
+        {
+          id: 'page-template-child',
+          slugId: 'template-child',
+          title: 'Template child',
+          position: 'a1',
+          parentPageId: 'page-root',
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+          templateKind: 'synced',
+          content: { type: 'doc', content: [] },
+        },
+      ],
+    },
+  ])('rejects ordinary duplication of a $label', async ({ pages }) => {
+    const pageRepo = {
+      getPageAndDescendants: jest.fn().mockResolvedValue(pages),
+    };
+    const service = createService({ pageRepo });
+    (service as any).hasTemplateInPageTree.mockResolvedValue(true);
+
+    await expect(
+      service.duplicatePage(pages[0] as any, undefined, {
+        id: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({
+        code: 'page_template_source_duplicate_forbidden',
+      }),
+    });
+    expect(executeTx).not.toHaveBeenCalled();
   });
 
   it.each([

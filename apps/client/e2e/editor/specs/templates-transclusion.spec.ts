@@ -7,11 +7,16 @@ import {
   apiPostWithHeaders,
   createAdminApi,
   createPage,
-  hashProseMirrorJson,
   loadAuditState,
   updatePageContent,
 } from "../support/api";
-import { captureStep, expect, mainEditor, test } from "../support/audit-test";
+import {
+  captureStep,
+  expect,
+  mainEditor,
+  runAxe,
+  test,
+} from "../support/audit-test";
 import {
   provisionAuditMember,
   removeAuditMember,
@@ -25,6 +30,8 @@ type Page = {
   spaceId: string;
   content?: Record<string, unknown>;
 };
+
+type CreatedPage = { page: Page };
 
 function documentText(content: unknown): string {
   if (!content || typeof content !== "object") return "";
@@ -51,19 +58,32 @@ async function responseStatus(
   return response.status();
 }
 
-test("audits regular and synchronized template lifecycle and policies", async ({
-  page,
-  browser,
-}, testInfo) => {
-  test.setTimeout(180_000);
-  const api = await createAdminApi();
-  const state = await loadAuditState();
-  const suffix = `${testInfo.project.name}-${Date.now()}`;
+test.describe("page template lifecycle", () => {
+  test.describe.configure({ mode: "serial" });
+
+  let api: Awaited<ReturnType<typeof createAdminApi>>;
+  let state: Awaited<ReturnType<typeof loadAuditState>>;
+  let suffix: string;
   let member: AuditMember | undefined;
   let groupId: string | undefined;
   let secondSpaceId: string | undefined;
+  let sourcePage: Page;
+  let regularBlank: CreatedPage;
+  let regularFromSource: CreatedPage;
+  let syncedTemplate: CreatedPage;
+  let syncedV1: Record<string, any>;
+  let syncedInstance: CreatedPage;
+  let synchronizedContent: Record<string, unknown>;
+  let secondPublish: any;
+  let originalLocale: string | undefined;
 
-  try {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    api = await createAdminApi();
+    const currentUser = await apiGet<any>(api, "/api/users/me");
+    originalLocale = currentUser.user.locale;
+    await apiPost(api, "/api/users/update", { locale: "en-US" });
+    state = await loadAuditState();
+    suffix = `${testInfo.project.name}-${Date.now()}`;
     member = await provisionAuditMember({
       api,
       browser,
@@ -79,23 +99,28 @@ test("audits regular and synchronized template lifecycle and policies", async ({
       },
     );
     groupId = group.id;
+    await apiPost(api, "/api/spaces/members/add", {
+      spaceId: state.spaceId,
+      role: "writer",
+      userIds: [],
+      groupIds: [group.id],
+    });
 
-    const sourceV1 = {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: `Regular source v1 ${suffix}` }],
-        },
-      ],
-    };
-    const sourcePage = await createPage(
+    sourcePage = await createPage(
       api,
       state.spaceId,
       `Template source ${suffix}`,
-      sourceV1,
+      {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: `Regular source v1 ${suffix}` }],
+          },
+        ],
+      },
     );
-    const regularBlank = await apiPost<{ page: Page }>(
+    regularBlank = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/templates/actions/create",
       {
@@ -103,8 +128,9 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         kind: "regular",
         title: `Regular blank ${suffix}`,
       },
+      { "Idempotency-Key": randomUUID() },
     );
-    const regularFromSource = await apiPost<{ page: Page }>(
+    regularFromSource = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/templates/actions/create",
       {
@@ -113,8 +139,9 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         sourcePageId: sourcePage.id,
         title: `Regular sourced ${suffix}`,
       },
+      { "Idempotency-Key": randomUUID() },
     );
-    const syncedTemplate = await apiPost<{ page: Page }>(
+    syncedTemplate = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/templates/actions/create",
       {
@@ -123,58 +150,101 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         sourcePageId: sourcePage.id,
         title: `Synchronized ${suffix}`,
       },
+      { "Idempotency-Key": randomUUID() },
     );
+  });
 
-    const syncedDraftInfo = await apiGet<Page>(
+  test.afterAll(async () => {
+    if (!api) return;
+    if (secondSpaceId) {
+      await apiDelete(api, `/api/spaces/${secondSpaceId}`).catch(
+        () => undefined,
+      );
+    }
+    if (groupId) {
+      await apiPost(api, "/api/groups/actions/delete", { groupId }).catch(
+        () => undefined,
+      );
+    }
+    await removeAuditMember(api, member);
+    if (originalLocale) {
+      await apiPost(api, "/api/users/update", {
+        locale: originalLocale,
+      }).catch(() => undefined);
+    }
+    await api.dispose();
+  });
+
+  test("catalog is searchable, keyboard reachable, accessible, and responsive", async ({
+    page,
+  }, testInfo) => {
+    const catalog = await apiGet<any>(
       api,
-      `/api/pages/info?pageId=${syncedTemplate.page.id}`,
+      `/api/pages/templates?spaceId=${state.spaceId}&limit=50`,
     );
-    expect(nodeTypes(syncedDraftInfo.content)).toContain(
-      "templateManagedBlock",
+    expect(catalog.items.map((item: any) => item.id)).toEqual(
+      expect.arrayContaining([
+        regularBlank.page.id,
+        regularFromSource.page.id,
+        syncedTemplate.page.id,
+      ]),
     );
-    expect(nodeTypes(syncedDraftInfo.content)).not.toContain("pageEmbed");
 
-    const fieldId = randomUUID();
-    const blockId = randomUUID();
-    const syncedV1 = {
-      type: "doc",
-      content: [
-        {
-          type: "templateManagedBlock",
-          attrs: { templateBlockId: blockId, locked: false },
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: `Managed v1 ${suffix}` }],
-            },
-          ],
-        },
-        {
-          type: "templateField",
-          attrs: {
-            fieldId,
-            label: "Audit owner",
-            placeholder: "Enter an owner",
+    await page.goto(`/s/${state.spaceSlug}/templates`);
+    await expect(page.getByText(regularFromSource.page.title)).toBeVisible();
+    await expect(page.getByText(syncedTemplate.page.title)).toBeVisible();
+
+    const search = page.getByRole("textbox", { name: "Search templates" });
+    await search.focus();
+    await page.keyboard.type("Synchronized");
+    await expect(page.getByText(syncedTemplate.page.title)).toBeVisible();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+    await expect(page.getByText(regularFromSource.page.title)).toBeVisible();
+
+    const templateRow = page
+      .getByRole("button")
+      .filter({ hasText: regularFromSource.page.title })
+      .first();
+    await templateRow.focus();
+    await page.keyboard.press("Enter");
+    const detailsDialog = page
+      .locator('[role="dialog"]:visible')
+      .filter({ hasText: regularFromSource.page.title });
+    await expect(detailsDialog).toContainText(regularFromSource.page.title);
+    await page.keyboard.press("Escape");
+    await expect(templateRow).toBeFocused();
+
+    testInfo.annotations.push({
+      type: "zoom",
+      description:
+        "A 720 CSS-pixel viewport exercises the effective layout width of a 1440px viewport at 200% browser zoom.",
+    });
+    for (const width of [320, 390, 720, 767, 768, 1440]) {
+      await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              () =>
+                document.documentElement.scrollWidth >
+                document.documentElement.clientWidth + 1,
+            ),
+          {
+            message: `horizontal overflow at ${width}px`,
           },
-          content: [{ type: "paragraph" }],
-        },
-      ],
-    };
-    await updatePageContent(api, syncedTemplate.page.id, syncedV1);
-    const firstPreflight = await apiPost<any>(
-      api,
-      `/api/pages/templates/${syncedTemplate.page.id}/actions/preflight-publish`,
-      {},
-    );
-    expect(firstPreflight.nextRevision).toBe(1);
-    const firstPublish = await apiPost<any>(
-      api,
-      `/api/pages/templates/${syncedTemplate.page.id}/actions/publish`,
-      { draftHash: firstPreflight.draftHash },
-    );
-    expect(firstPublish.revision.revision).toBe(1);
-    expect(firstPublish.syncRun.status).toBe("completed");
+        )
+        .toBe(false);
+    }
+    expect(
+      (await runAxe(page, testInfo, "main", "templates-catalog")).violations,
+    ).toEqual([]);
+    await captureStep(page, testInfo, "templates-catalog", {
+      fullPage: testInfo.project.name.startsWith("mobile"),
+    });
+  });
 
+  test("regular templates create stable independent copies", async () => {
     const regularKey = randomUUID();
     const regularInstance = await apiPostWithHeaders<{
       page: Page;
@@ -205,7 +275,7 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     expect(regularReplay.page.id).toBe(regularInstance.page.id);
     expect(regularReplay.idempotent).toBe(true);
 
-    const blankInstance = await apiPostWithHeaders<{ page: Page }>(
+    const blankInstance = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/actions/create-from-template",
       {
@@ -240,7 +310,8 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     expect(documentText(existingRegular.content)).not.toContain(
       `Regular source v2 ${suffix}`,
     );
-    const newRegular = await apiPostWithHeaders<{ page: Page }>(
+
+    const newRegular = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/actions/create-from-template",
       {
@@ -260,8 +331,103 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         ).content,
       ),
     ).toContain(`Regular source v2 ${suffix}`);
+  });
 
-    const syncedInstance = await apiPostWithHeaders<{ page: Page }>(
+  test("synchronized template publishing exposes status and inline history", async ({
+    page,
+  }, testInfo) => {
+    const syncedDraftInfo = await apiGet<Page>(
+      api,
+      `/api/pages/info?pageId=${syncedTemplate.page.id}`,
+    );
+    expect(nodeTypes(syncedDraftInfo.content)).toContain(
+      "templateManagedBlock",
+    );
+    expect(nodeTypes(syncedDraftInfo.content)).not.toContain("pageEmbed");
+
+    syncedV1 = {
+      type: "doc",
+      content: [
+        {
+          type: "templateManagedBlock",
+          attrs: { templateBlockId: randomUUID(), locked: false },
+          content: [
+            {
+              type: "paragraph",
+              attrs: { id: randomUUID(), indent: 0 },
+              content: [{ type: "text", text: `Managed v1 ${suffix}` }],
+            },
+          ],
+        },
+        {
+          type: "templateField",
+          attrs: {
+            fieldId: randomUUID(),
+            label: "Audit owner",
+            placeholder: "Enter an owner",
+          },
+          content: [
+            {
+              type: "paragraph",
+              attrs: { id: randomUUID(), indent: 0 },
+            },
+          ],
+        },
+      ],
+    };
+    await updatePageContent(api, syncedTemplate.page.id, syncedV1);
+    const firstPreflight = await apiPost<any>(
+      api,
+      `/api/pages/templates/${syncedTemplate.page.id}/actions/preflight-publish`,
+      {},
+    );
+    expect(firstPreflight.nextRevision).toBe(1);
+    const firstPublish = await apiPostWithHeaders<any>(
+      api,
+      `/api/pages/templates/${syncedTemplate.page.id}/actions/publish`,
+      { draftHash: firstPreflight.draftHash },
+      { "Idempotency-Key": randomUUID() },
+    );
+    expect(firstPublish.revision.revision).toBe(1);
+
+    await page.goto(`/s/${state.spaceSlug}/p/${syncedTemplate.page.slugId}`);
+    const statusBar = page.locator('section[aria-label="Template editor"]');
+    await expect(statusBar).toContainText("Linked page");
+    await expect(statusBar).toContainText("Published v1");
+    await expect(statusBar.getByText("Saved", { exact: true })).toBeVisible();
+    await expect(
+      statusBar.getByRole("button", { name: "History" }),
+    ).toBeVisible();
+    await statusBar.getByRole("button", { name: "History" }).click();
+    const history = page
+      .locator('[role="dialog"]:visible')
+      .filter({ hasText: "Template history" });
+    await expect(history).toContainText("Template history");
+    await expect(history).toContainText("Version 1");
+    await history.getByRole("button", { name: "View" }).click();
+    const comparison = page
+      .locator('[role="dialog"]:visible')
+      .filter({ hasText: "Back" });
+    await expect(comparison).toHaveCount(1);
+    await expect(comparison).toContainText("Back");
+    await page.keyboard.press("Escape");
+    expect(
+      (
+        await runAxe(
+          page,
+          testInfo,
+          'section[aria-label="Template editor"]',
+          "template-editor-status",
+        )
+      ).violations,
+    ).toEqual([]);
+  });
+
+  test("linked instances preserve fields, block unsafe operations, and detach", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    syncedInstance = await apiPostWithHeaders<CreatedPage>(
       api,
       "/api/pages/actions/create-from-template",
       {
@@ -380,10 +546,11 @@ test("audits regular and synchronized template lifecycle and policies", async ({
       `/api/pages/templates/${syncedTemplate.page.id}/actions/preflight-publish`,
       {},
     );
-    const secondPublish = await apiPost<any>(
+    secondPublish = await apiPostWithHeaders<any>(
       api,
       `/api/pages/templates/${syncedTemplate.page.id}/actions/publish`,
       { draftHash: secondPreflight.draftHash },
+      { "Idempotency-Key": randomUUID() },
     );
     expect(secondPublish.revision.revision).toBe(2);
     await expect
@@ -397,7 +564,7 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         return documentText(content);
       })
       .toContain(`Managed v2 ${suffix}`);
-    const synchronizedContent = (
+    synchronizedContent = (
       await apiGet<Page>(
         api,
         `/api/pages/info?pageId=${syncedInstance.page.id}`,
@@ -437,80 +604,125 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     );
     expect(nodeTypes(exportedInstance.content)).not.toContain("templateField");
 
-    const revisions = await apiGet<any>(
+    expect(
+      await responseStatus(
+        api.post("/api/pages/duplicate", {
+          data: { pageId: syncedInstance.page.id },
+        }),
+      ),
+    ).toBe(409);
+    const independentKey = randomUUID();
+    const independentCopy = await apiPostWithHeaders<{
+      page: Page;
+      idempotent: boolean;
+    }>(
       api,
-      `/api/pages/templates/${syncedTemplate.page.id}/revisions`,
-    );
-    expect(revisions.items.map((item: any) => item.revision)).toEqual([2, 1]);
-    const retry = await apiPost<any>(
-      api,
-      `/api/pages/templates/${syncedTemplate.page.id}/sync-runs/${secondPublish.syncRun.id}/actions/retry`,
+      `/api/pages/${syncedInstance.page.id}/actions/create-independent-copy`,
       {},
+      { "Idempotency-Key": independentKey },
     );
-    expect(retry.accepted).toBe(true);
+    const independentReplay = await apiPostWithHeaders<{
+      page: Page;
+      idempotent: boolean;
+    }>(
+      api,
+      `/api/pages/${syncedInstance.page.id}/actions/create-independent-copy`,
+      {},
+      { "Idempotency-Key": independentKey },
+    );
+    expect(independentReplay.page.id).toBe(independentCopy.page.id);
+    expect(independentReplay.idempotent).toBe(true);
+    const independentProvenance = await apiGet<any>(
+      api,
+      `/api/pages/templates/${independentCopy.page.id}/provenance`,
+    );
+    expect(independentProvenance.createdFromTemplate).toBe(false);
 
-    const duplicate = await apiPost<Page>(api, "/api/pages/duplicate", {
-      pageId: syncedInstance.page.id,
+    await page.goto(`/s/${state.spaceSlug}/p/${syncedInstance.page.slugId}`);
+    const instanceStatus = page.locator(
+      'section[aria-label="Linked template status"]',
+    );
+    await expect(instanceStatus).toContainText(syncedTemplate.page.title);
+    await expect(instanceStatus).toContainText("Version 2 of 2");
+    await expect(
+      instanceStatus.getByRole("button", { name: "Create independent copy" }),
+    ).toBeVisible();
+    expect(
+      (
+        await runAxe(
+          page,
+          testInfo,
+          'section[aria-label="Linked template status"]',
+          "linked-instance-status",
+        )
+      ).violations,
+    ).toEqual([]);
+    await captureStep(page, testInfo, "template-linked-instance");
+
+    await instanceStatus.getByRole("button", { name: "Detach" }).click();
+    const detachDialog = page
+      .locator('[role="dialog"]:visible')
+      .filter({ hasText: "Detach from linked template?" });
+    await expect(detachDialog).toContainText("Detach from linked template?");
+    await detachDialog
+      .getByRole("checkbox", {
+        name: "I understand this action is irreversible",
+      })
+      .check();
+    const detachButton = detachDialog.getByRole("button", {
+      name: "Detach and keep this page",
     });
-    const duplicateProvenance = await apiGet<any>(
-      api,
-      `/api/pages/templates/${duplicate.id}/provenance`,
-    );
-    expect(duplicateProvenance.createdFromTemplate).toBe(false);
+    await expect(detachButton).toBeEnabled();
+    await detachButton.click();
+    await expect(page.getByText("Page detached from template")).toBeVisible();
 
-    const detach = await apiPostWithHeaders<any>(
-      api,
-      `/api/pages/${syncedInstance.page.id}/actions/detach-template`,
-      {
-        confirmed: true,
-        baseContentHash: hashProseMirrorJson(synchronizedContent),
-      },
-      { "Idempotency-Key": randomUUID() },
-    );
-    expect(detach.detached).toBe(true);
     const detached = await apiGet<Page>(
       api,
       `/api/pages/info?pageId=${syncedInstance.page.id}`,
     );
     expect(nodeTypes(detached.content)).not.toContain("templateManagedBlock");
     expect(nodeTypes(detached.content)).not.toContain("templateField");
+  });
 
+  test("policies enforce role and cross-space boundaries", async () => {
     const groupPolicy = await apiGet<any>(
       api,
       `/api/pages/templates/policies/spaces/${state.spaceId}/groups/${groupId}`,
     );
-    await api
-      .put(
-        `/api/pages/templates/policies/spaces/${state.spaceId}/groups/${groupId}`,
-        {
-          data: {
-            allowedActions: ["use_regular_template"],
-            expectedRevision: groupPolicy.revision,
-          },
+    const policyResponse = await api.put(
+      `/api/pages/templates/policies/spaces/${state.spaceId}/groups/${groupId}`,
+      {
+        data: {
+          allowedActions: ["use_regular_template"],
+          expectedRevision: groupPolicy.revision,
         },
-      )
-      .then(async (response) => {
-        expect(response.ok()).toBe(true);
-        await response.dispose();
-      });
-    const memberCatalog = await member.get<any>(
+      },
+    );
+    expect(policyResponse.ok()).toBe(true);
+    await policyResponse.dispose();
+
+    const memberCatalog = await member!.get<any>(
       `/api/pages/templates?spaceId=${state.spaceId}&limit=50`,
     );
     expect(memberCatalog.capabilities.useRegular).toBe(true);
     expect(memberCatalog.capabilities.useSynced).toBe(false);
     expect(
       await responseStatus(
-        member.context.request.get("/api/pages/templates/policies/workspace"),
+        member!.context.request.get("/api/pages/templates/policies/workspace"),
       ),
     ).toBe(403);
     await expect(
-      member.post("/api/pages/templates/actions/create", {
-        spaceId: state.spaceId,
-        kind: "regular",
-        title: `Denied member template ${suffix}`,
-      }),
+      member!.post(
+        "/api/pages/templates/actions/create",
+        {
+          spaceId: state.spaceId,
+          kind: "regular",
+          title: `Denied member template ${suffix}`,
+        },
+        { "Idempotency-Key": randomUUID() },
+      ),
     ).rejects.toThrow(/403/);
-    const memberRegular = await member.post<{ page: Page }>(
+    const memberRegular = await member!.post<CreatedPage>(
       "/api/pages/actions/create-from-template",
       {
         templatePageId: regularFromSource.page.id,
@@ -521,7 +733,7 @@ test("audits regular and synchronized template lifecycle and policies", async ({
     );
     expect(memberRegular.page.id).toBeTruthy();
     await expect(
-      member.post(
+      member!.post(
         "/api/pages/actions/create-from-template",
         {
           templatePageId: syncedTemplate.page.id,
@@ -549,22 +761,63 @@ test("audits regular and synchronized template lifecycle and policies", async ({
         { "Idempotency-Key": randomUUID() },
       ),
     ).rejects.toThrow(/404/);
+  });
 
-    const catalog = await apiGet<any>(
+  test("recovery retries provenance and protects completed synchronization before archival", async ({
+    page,
+  }, testInfo) => {
+    expect(
+      await responseStatus(
+        api.post(
+          `/api/pages/templates/${syncedTemplate.page.id}/sync-runs/${secondPublish.syncRun.id}/actions/retry`,
+          { data: {} },
+        ),
+      ),
+    ).toBe(409);
+
+    const recoveryInstance = await apiPostWithHeaders<CreatedPage>(
       api,
-      `/api/pages/templates?spaceId=${state.spaceId}&limit=50`,
+      "/api/pages/actions/create-from-template",
+      {
+        templatePageId: syncedTemplate.page.id,
+        spaceId: state.spaceId,
+        title: `Recovery instance ${suffix}`,
+      },
+      { "Idempotency-Key": randomUUID() },
     );
-    expect(catalog.items.map((item: any) => item.id)).toEqual(
-      expect.arrayContaining([
-        regularBlank.page.id,
-        regularFromSource.page.id,
-        syncedTemplate.page.id,
-      ]),
+    const provenanceRoute = `**/api/pages/templates/${recoveryInstance.page.id}/provenance`;
+    await page.route(provenanceRoute, async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "temporary audit failure" }),
+      });
+    });
+    await page.goto(`/s/${state.spaceSlug}/p/${recoveryInstance.page.slugId}`);
+    await expect(
+      page.getByText("Could not load template details."),
+    ).toBeVisible();
+    expect(
+      (
+        await runAxe(
+          page,
+          testInfo,
+          'section[aria-label="Linked template status"]',
+          "provenance-recovery",
+        )
+      ).violations,
+    ).toEqual([]);
+    await page.unroute(provenanceRoute);
+    await page.getByRole("button", { name: "Retry" }).click();
+    await expect(
+      page.locator('section[aria-label="Linked template status"]'),
+    ).toContainText("Up to date");
+
+    const revisions = await apiGet<any>(
+      api,
+      `/api/pages/templates/${syncedTemplate.page.id}/revisions`,
     );
-    await page.goto(`/s/${state.spaceSlug}/templates`);
-    await expect(page.getByText(regularFromSource.page.title)).toBeVisible();
-    await expect(page.getByText(syncedTemplate.page.title)).toBeVisible();
-    await captureStep(page, testInfo, "templates-catalog");
+    expect(revisions.items.map((item: any) => item.revision)).toEqual([2, 1]);
 
     for (const templatePageId of [
       regularBlank.page.id,
@@ -599,20 +852,28 @@ test("audits regular and synchronized template lifecycle and policies", async ({
       ),
     ).rejects.toThrow(/409/);
 
+    const restored = await apiPost<any>(
+      api,
+      `/api/pages/templates/${regularFromSource.page.id}/actions/restore`,
+      {},
+    );
+    expect(restored).toMatchObject({
+      archived: false,
+      archiveState: "active",
+    });
+    const restoredInstance = await apiPostWithHeaders<CreatedPage>(
+      api,
+      "/api/pages/actions/create-from-template",
+      {
+        templatePageId: regularFromSource.page.id,
+        spaceId: state.spaceId,
+        title: `Restored template instance ${suffix}`,
+      },
+      { "Idempotency-Key": randomUUID() },
+    );
+    expect(restoredInstance.page.id).toBeTruthy();
+
     await page.goto(`/s/${state.spaceSlug}/p/${sourcePage.slugId}`);
     await expect(mainEditor(page)).toContainText(`Regular source v1 ${suffix}`);
-  } finally {
-    if (secondSpaceId) {
-      await apiDelete(api, `/api/spaces/${secondSpaceId}`).catch(
-        () => undefined,
-      );
-    }
-    if (groupId) {
-      await apiPost(api, "/api/groups/actions/delete", { groupId }).catch(
-        () => undefined,
-      );
-    }
-    await removeAuditMember(api, member);
-    await api.dispose();
-  }
+  });
 });

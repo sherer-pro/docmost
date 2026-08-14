@@ -70,7 +70,12 @@ describe('PageService getSidebarPages database node mapping', () => {
   });
 
   it('builds root database nodes with page slug id for sidebar routing compatibility', async () => {
-    await service.getSidebarPages('space-1', { limit: 20, query: '', adminView: false }, undefined, ['database']);
+    await service.getSidebarPages(
+      'space-1',
+      { limit: 20, query: '', adminView: false },
+      undefined,
+      ['database'],
+    );
 
     expect(executeWithCursorPagination).toHaveBeenCalledTimes(1);
 
@@ -80,6 +85,29 @@ describe('PageService getSidebarPages database node mapping', () => {
     expect(compiled.sql).toContain('"databasePage"."id" as "id"');
     expect(compiled.sql).toContain('"databasePage"."slugId" as "slugId"');
     expect(compiled.sql).toContain('"databases"."id" as "databaseId"');
-    expect(compiled.sql).not.toContain("null as \"slugId\"");
+    expect(compiled.sql).not.toContain('null as "slugId"');
+    expect(compiled.sql).toContain('false as "isLinkedTemplateInstance"');
+  });
+
+  it('projects the linked synchronized-instance flag for page sidebar nodes', async () => {
+    await service.getSidebarPages(
+      'space-1',
+      { limit: 20, query: '', adminView: false },
+      undefined,
+      ['page'],
+    );
+
+    const [query] = (executeWithCursorPagination as jest.Mock).mock.calls[0];
+    const compiled = query.compile();
+    expect(compiled.sql).toContain(
+      '"pageTemplateInstances" as "sidebarInstance"',
+    );
+    expect(compiled.sql).toContain(
+      '"sidebarInstance"."childPageId" = "pages"."id"',
+    );
+    expect(compiled.sql).toContain('as "isLinkedTemplateInstance"');
+    expect(compiled.parameters).toEqual(
+      expect.arrayContaining(['synced', 'active', 'syncing', 'error']),
+    );
   });
 });

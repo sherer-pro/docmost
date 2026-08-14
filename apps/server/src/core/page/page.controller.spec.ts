@@ -110,6 +110,9 @@ describe('PageController guardrails and mixed-id contract', () => {
     getPreview: jest.fn(),
   };
   const pageAccessMutationService = {};
+  const pageTemplateSyncService = {
+    catchUpRestoredInstances: jest.fn(),
+  };
 
   const controller = new PageController(
     pageService as any,
@@ -122,12 +125,17 @@ describe('PageController guardrails and mixed-id contract', () => {
     labelService as any,
     backlinkService as any,
     linkPreviewService as any,
+    pageTemplateSyncService as any,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     pageService.getSidebarPages.mockResolvedValue({ items: [] });
     pageService.update.mockResolvedValue({ id: 'uuid-page', settings: null });
+    pageRepo.restorePage.mockResolvedValue(['uuid-page']);
+    pageTemplateSyncService.catchUpRestoredInstances.mockResolvedValue(
+      undefined,
+    );
     pageHistoryService.findMetadataById.mockResolvedValue({
       id: 'history-1',
       workspaceId: 'workspace-1',
@@ -356,6 +364,10 @@ describe('PageController guardrails and mixed-id contract', () => {
     expect(pageRepo.findById).toHaveBeenLastCalledWith('uuid-page', {
       includeHasChildren: true,
     });
+    expect(pageTemplateSyncService.catchUpRestoredInstances).toHaveBeenCalledWith(
+      ['uuid-page'],
+      expect.objectContaining({ id: 'u1' }),
+    );
   });
 
   it('deletes a history entry after workspace admin authorization', async () => {

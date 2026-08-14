@@ -45,6 +45,7 @@ describe('PageService synchronized template content guard', () => {
   const db = {
     selectFrom: jest.fn(() => activeInstanceQuery),
   };
+  const pageTemplatePolicy = { assertAction: jest.fn() };
   const service = new PageService(
     pageRepo as any,
     {} as any,
@@ -67,6 +68,10 @@ describe('PageService synchronized template content guard', () => {
     {} as any,
     {} as any,
     {} as any,
+    undefined,
+    undefined,
+    undefined,
+    pageTemplatePolicy as any,
   );
 
   beforeEach(() => {
@@ -77,6 +82,7 @@ describe('PageService synchronized template content guard', () => {
     activeInstanceQuery.executeTakeFirst.mockResolvedValue({ id: 'instance' });
     pageRepo.findById.mockResolvedValue({ content: content('Managed v1', '') });
     collaborationGateway.updatePageContent.mockResolvedValue(undefined);
+    pageTemplatePolicy.assertAction.mockResolvedValue(undefined);
   });
 
   it('rejects a managed block change before opening the live document', async () => {
@@ -129,6 +135,36 @@ describe('PageService synchronized template content guard', () => {
       status: 409,
     });
 
+    expect(collaborationGateway.updatePageContent).not.toHaveBeenCalled();
+  });
+
+  it('requires manage_template policy for HTTP writes to a source template', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: PAGE_ID,
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      templateKind: 'synced',
+      content: content('Managed v1', ''),
+    });
+    pageTemplatePolicy.assertAction.mockRejectedValue(
+      Object.assign(new Error('denied'), { response: { code: 'denied' } }),
+    );
+
+    await expect(
+      service.updatePageContent(
+        PAGE_ID,
+        content('Managed v1', ''),
+        'replace',
+        'json',
+        { id: 'user-1' } as any,
+      ),
+    ).rejects.toThrow('denied');
+    expect(pageTemplatePolicy.assertAction).toHaveBeenCalledWith(
+      'workspace-1',
+      'space-1',
+      'user-1',
+      'manage_template',
+    );
     expect(collaborationGateway.updatePageContent).not.toHaveBeenCalled();
   });
 });

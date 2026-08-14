@@ -39,11 +39,15 @@ export const TemplateManagedBlock = {} as any;
 export const TRANSCLUSION_LABEL_STYLE = 'font-weight: 600';
 
 export {
+  assertNormalizedTemplateDraft,
   collectTemplateFields,
   createTemplateInstanceContent,
   detachTemplateContent,
+  formatTemplateDraftId,
   isTemplateFieldFilled,
   normalizeTemplateDraft,
+  serializeTemplateDraftSeed,
+  serializeTemplateInstanceContentForHash,
   summarizeTemplateDiff,
   validateTemplateInstanceMutation,
 } from '../../../../packages/editor-ext/src/lib/page-template/template-content';
