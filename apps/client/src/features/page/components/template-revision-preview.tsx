@@ -2,7 +2,13 @@ import { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { mainExtensions } from "@/features/editor/extensions/extensions";
 
-export function TemplateRevisionPreview({ content }: { content: unknown }) {
+export function TemplateRevisionPreview({
+  content,
+  label,
+}: {
+  content: unknown;
+  label?: string;
+}) {
   const editor = useEditor({
     extensions: mainExtensions,
     editable: false,
@@ -15,8 +21,9 @@ export function TemplateRevisionPreview({ content }: { content: unknown }) {
   }, [content, editor]);
 
   return (
-    <EditorContent
-      editor={editor}
+    <div
+      role="region"
+      aria-label={label}
       style={{
         minHeight: 180,
         padding: "var(--mantine-spacing-md)",
@@ -24,6 +31,8 @@ export function TemplateRevisionPreview({ content }: { content: unknown }) {
         borderRadius: "var(--mantine-radius-md)",
         background: "var(--mantine-color-body)",
       }}
-    />
+    >
+      <EditorContent editor={editor} />
+    </div>
   );
 }

@@ -1,9 +1,21 @@
 import api from "@/lib/api-client";
 import type {
+  PageTemplateAction,
+  PageTemplateGroupPolicy,
+  PageTemplatePolicyGroupsQuery,
+  PageTemplatePolicyGroupsResponse,
+  PageTemplateSpacePolicy,
+  PageTemplateWorkspacePolicy,
+} from "@docmost/api-contract";
+import type {
   PageTemplateCapabilities,
-  PageTemplateDestination,
+  PageTemplateArchiveState,
+  PageTemplateDestinationPage,
+  PageTemplateDestinationPurpose,
   PageTemplateDiscoveryItem,
   PageTemplateProvenance,
+  PageTemplateRevisionPage,
+  PageTemplateUsagePage,
   TemplateKind,
   TemplatePublishPreflight,
   TemplateRevision,
@@ -17,13 +29,26 @@ export async function discoverPageTemplates(params: {
   limit?: number;
   kind?: TemplateKind;
   includeArchived?: boolean;
+  archiveState?: PageTemplateArchiveState;
 }): Promise<{
   items: PageTemplateDiscoveryItem[];
   nextCursor: string | null;
   capabilities: PageTemplateCapabilities;
 }> {
   const response = await api.get("/pages/templates", { params });
-  return response.data;
+  return {
+    ...response.data,
+    capabilities: normalizeCapabilities(response.data.capabilities),
+  };
+}
+
+export async function getPageTemplateCapabilities(
+  spaceId: string,
+): Promise<PageTemplateCapabilities> {
+  const response = await api.get("/pages/templates/capabilities", {
+    params: { spaceId },
+  });
+  return normalizeCapabilities(response.data.capabilities);
 }
 
 export async function createPageTemplate(params: {
@@ -32,8 +57,7 @@ export async function createPageTemplate(params: {
   kind: TemplateKind;
   sourcePageId?: string;
 }) {
-  const response = await api.post("/pages/templates/actions/create", params);
-  return response.data;
+  return postIdempotent("/pages/templates/actions/create", params);
 }
 
 export async function getPageTemplateProvenance(
@@ -45,11 +69,14 @@ export async function getPageTemplateProvenance(
 
 export async function getPageTemplateDestinations(params: {
   spaceId: string;
+  pageId?: string;
   query?: string;
+  cursor?: string;
   limit?: number;
-}): Promise<{ rootAllowed: boolean; items: PageTemplateDestination[] }> {
+  purpose?: PageTemplateDestinationPurpose;
+}): Promise<PageTemplateDestinationPage> {
   const response = await api.get("/pages/templates/destinations", { params });
-  return response.data;
+  return { ...response.data, nextCursor: response.data.nextCursor ?? null };
 }
 
 export async function createPageFromTemplate(params: {
@@ -59,6 +86,20 @@ export async function createPageFromTemplate(params: {
   title?: string;
 }) {
   return postIdempotent("/pages/actions/create-from-template", params);
+}
+
+export async function createIndependentPageCopy(params: {
+  pageId: string;
+  title?: string;
+  parentPageId?: string | null;
+}) {
+  return postIdempotent(
+    `/pages/${params.pageId}/actions/create-independent-copy`,
+    {
+      title: params.title,
+      parentPageId: params.parentPageId,
+    },
+  );
 }
 
 export async function preflightPageTemplatePublish(
@@ -74,22 +115,27 @@ export async function publishPageTemplate(params: {
   pageId: string;
   draftHash: string;
   confirmationToken?: string;
-}): Promise<{ revision: TemplateRevision; syncRun: TemplateSyncRun }> {
-  const response = await api.post(
-    `/pages/templates/${params.pageId}/actions/publish`,
-    {
-      draftHash: params.draftHash,
-      confirmationToken: params.confirmationToken,
-    },
-  );
-  return response.data;
+}): Promise<{
+  revision: TemplateRevision;
+  syncRun: TemplateSyncRun;
+  idempotent?: boolean;
+  noOp?: boolean;
+}> {
+  return postIdempotent(`/pages/templates/${params.pageId}/actions/publish`, {
+    draftHash: params.draftHash,
+    confirmationToken: params.confirmationToken,
+  });
 }
 
 export async function getPageTemplateRevisions(
   pageId: string,
-): Promise<{ items: Array<TemplateRevision & { content: unknown }> }> {
-  const response = await api.get(`/pages/templates/${pageId}/revisions`);
-  return response.data;
+  cursor?: string,
+  limit = 20,
+): Promise<PageTemplateRevisionPage> {
+  const response = await api.get(`/pages/templates/${pageId}/revisions`, {
+    params: { cursor, limit },
+  });
+  return { ...response.data, nextCursor: response.data.nextCursor ?? null };
 }
 
 export async function getPageTemplateSyncRuns(
@@ -99,10 +145,7 @@ export async function getPageTemplateSyncRuns(
   return response.data;
 }
 
-export async function retryPageTemplateSyncRun(
-  pageId: string,
-  runId: string,
-) {
+export async function retryPageTemplateSyncRun(pageId: string, runId: string) {
   const response = await api.post(
     `/pages/templates/${pageId}/sync-runs/${runId}/actions/retry`,
   );
@@ -110,10 +153,17 @@ export async function retryPageTemplateSyncRun(
 }
 
 export async function archivePageTemplate(pageId: string) {
-  const response = await api.post(
-    `/pages/templates/${pageId}/actions/archive`,
-  );
+  const response = await api.post(`/pages/templates/${pageId}/actions/archive`);
   return response.data as { pageId: string; archived: true };
+}
+
+export async function restorePageTemplate(pageId: string) {
+  const response = await api.post(`/pages/templates/${pageId}/actions/restore`);
+  return response.data as {
+    pageId: string;
+    archived: false;
+    archiveState: "active";
+  };
 }
 
 export async function detachSyncedPageTemplate(params: {
@@ -126,52 +176,23 @@ export async function detachSyncedPageTemplate(params: {
   });
 }
 
-export async function getPageTemplateUsages(pageId: string) {
-  const response = await api.get(
-    `/pages/templates/${pageId}/actions/usages`,
-  );
-  return response.data as {
-    totalCount: number;
-    hiddenCount: number;
-    items: Array<{
-      childPageId: string;
-      slugId: string;
-      title: string | null;
-      icon: string | null;
-      status: string;
-      appliedRevision: number | null;
-      updatedAt: string;
-    }>;
-  };
+export async function getPageTemplateUsages(
+  pageId: string,
+  cursor?: string,
+  limit = 20,
+): Promise<PageTemplateUsagePage> {
+  const response = await api.get(`/pages/templates/${pageId}/actions/usages`, {
+    params: { cursor, limit },
+  });
+  return { ...response.data, nextCursor: response.data.nextCursor ?? null };
 }
 
-export type PageTemplateWorkspacePolicy = {
-  enabled: boolean;
-  revision: number;
-  systemEnabled: boolean;
-};
-
-export type PageTemplateSpacePolicy = {
-  spaceId: string;
-  templatesEnabled: boolean;
-  allowCreateTemplate: boolean;
-  allowRegularTemplate: boolean;
-  allowSyncedTemplate: boolean;
-  revision: number;
-};
-
-export type PageTemplateAction =
-  | "create_template"
-  | "manage_template"
-  | "use_regular_template"
-  | "use_synced_template";
-
-export type PageTemplateGroupPolicy = {
-  groupId: string;
-  spaceId: string;
-  allowedActions: PageTemplateAction[] | null;
-  revision: number;
-};
+export type {
+  PageTemplateAction,
+  PageTemplateGroupPolicy,
+  PageTemplateSpacePolicy,
+  PageTemplateWorkspacePolicy,
+} from "@docmost/api-contract";
 
 export async function getPageTemplateWorkspacePolicy() {
   const response = await api.get("/pages/templates/policies/workspace");
@@ -196,13 +217,24 @@ export async function getPageTemplateSpacePolicy(spaceId: string) {
 
 export async function updatePageTemplateSpacePolicy(
   policy: PageTemplateSpacePolicy,
-  patch: Partial<Omit<PageTemplateSpacePolicy, "spaceId" | "revision">>,
+  patch: Partial<
+    Pick<
+      PageTemplateSpacePolicy,
+      | "templatesEnabled"
+      | "allowCreateTemplate"
+      | "allowRegularTemplate"
+      | "allowSyncedTemplate"
+    >
+  >,
 ) {
+  const next = { ...policy, ...patch };
   const response = await api.put(
     `/pages/templates/policies/spaces/${policy.spaceId}`,
     {
-      ...policy,
-      ...patch,
+      templatesEnabled: next.templatesEnabled,
+      allowCreateTemplate: next.allowCreateTemplate,
+      allowRegularTemplate: next.allowRegularTemplate,
+      allowSyncedTemplate: next.allowSyncedTemplate,
       expectedRevision: policy.revision,
     },
   );
@@ -217,6 +249,17 @@ export async function getPageTemplateGroupPolicy(
     `/pages/templates/policies/spaces/${spaceId}/groups/${groupId}`,
   );
   return response.data as PageTemplateGroupPolicy;
+}
+
+export async function getPageTemplatePolicyGroups(
+  spaceId: string,
+  params: PageTemplatePolicyGroupsQuery = {},
+): Promise<PageTemplatePolicyGroupsResponse> {
+  const response = await api.get(
+    `/pages/templates/policies/spaces/${spaceId}/groups`,
+    { params },
+  );
+  return { ...response.data, nextCursor: response.data.nextCursor ?? null };
 }
 
 export async function updatePageTemplateGroupPolicy(
@@ -246,6 +289,18 @@ function canonicalJson(value: unknown): string {
 
 const inFlightIdempotencyKeys = new Map<string, string>();
 
+function normalizeCapabilities(
+  value: Partial<PageTemplateCapabilities> | undefined,
+): PageTemplateCapabilities {
+  return {
+    enabled: Boolean(value?.enabled),
+    createTemplate: Boolean(value?.createTemplate),
+    manageTemplate: Boolean(value?.manageTemplate),
+    useRegular: Boolean(value?.useRegular),
+    useSynced: Boolean(value?.useSynced),
+  };
+}
+
 async function postIdempotent(endpoint: string, body: unknown) {
   const fingerprint = `${endpoint}:${canonicalJson(body)}`;
   const storageKey = `docmost:idempotency:${fingerprint}`;
@@ -266,12 +321,4 @@ async function postIdempotent(endpoint: string, body: unknown) {
     sessionStorage.removeItem(storageKey);
   }
   return response.data;
-}
-
-export async function hashProseMirrorJson(value: unknown): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalJson(value));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 }

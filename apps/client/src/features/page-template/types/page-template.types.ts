@@ -1,5 +1,17 @@
+import type {
+  PageTemplateCatalogItem,
+  PageTemplateDestinationsResponse,
+  PageTemplateRevisionsResponse,
+  PageTemplateUsagesResponse,
+} from "@docmost/api-contract";
+
 export type {
-  PageTemplateCatalogItem as PageTemplateDiscoveryItem,
+  PageTemplateArchiveState,
+  PageTemplateCapabilities,
+  PageTemplateDestination,
+  PageTemplateDestinationPurpose,
+  PageTemplateProvenance,
+  PageTemplateUsage,
   TemplateDraftDiff,
   TemplateInstanceInfo,
   TemplateInstanceStatus,
@@ -10,34 +22,7 @@ export type {
   TemplateSyncRunStatus,
 } from "@docmost/api-contract";
 
-export type PageTemplateCapabilities = {
-  enabled: boolean;
-  createTemplate: boolean;
-  useRegular: boolean;
-  useSynced: boolean;
-};
-
-export type PageTemplateDestination = {
-  id: string;
-  slugId: string;
-  title: string | null;
-  icon: string | null;
-  parentPageId: string | null;
-};
-
-export type PageTemplateProvenance = {
-  createdFromTemplate: boolean;
-  kind?: "regular" | "synced";
-  status?: "snapshot" | "active" | "syncing" | "error" | "detached";
-  appliedRevision?: number | null;
-  latestRevision?: number | null;
-  canReadTemplate?: boolean;
-  canDetach?: boolean;
-  sourceTemplate: {
-    id: string;
-    slugId: string;
-    title: string | null;
-    icon: string | null;
-    spaceSlug: string | null;
-  } | null;
-};
+export type PageTemplateDiscoveryItem = PageTemplateCatalogItem;
+export type PageTemplateDestinationPage = PageTemplateDestinationsResponse;
+export type PageTemplateUsagePage = PageTemplateUsagesResponse;
+export type PageTemplateRevisionPage = PageTemplateRevisionsResponse;

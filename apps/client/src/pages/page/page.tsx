@@ -23,6 +23,7 @@ import { useSpaceQuery } from "@/features/space/queries/space-query";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { AiDocumentContextSync } from "@/features/ai/components/ai-document-context-sync.tsx";
+import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -40,7 +41,12 @@ export default function Page() {
           icon={IconAlertTriangle}
           title={t("Failed to load page. An error occurred.")}
           action={
-            <Button variant="default" size="sm" mt="xs" onClick={resetErrorBoundary}>
+            <Button
+              variant="default"
+              size="sm"
+              mt="xs"
+              onClick={resetErrorBoundary}
+            >
               {t("Try again")}
             </Button>
           }
@@ -71,11 +77,20 @@ function PageContent({
     isError,
     error,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
+  const templateCapabilitiesQuery = usePageTemplateCapabilitiesQuery(
+    page?.spaceId,
+  );
+  const templateCapabilities = templateCapabilitiesQuery.data;
   const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
   const pageCapabilities = page?.access?.capabilities;
   const canWritePage = pageCapabilities?.canWrite === true;
-  const canMoveDeleteSharePage =
-    pageCapabilities?.canMoveDeleteShare === true;
+  const canEditPage =
+    canWritePage &&
+    (!page?.templateKind ||
+      (templateCapabilitiesQuery.isSuccess &&
+        !templateCapabilitiesQuery.isError &&
+        templateCapabilities?.manageTemplate === true));
+  const canMoveDeleteSharePage = pageCapabilities?.canMoveDeleteShare === true;
   const resolvedSpaceSlug = page?.space?.slug ?? routeSpaceSlug;
   const resolvedSpaceSettings = currentSpace?.settings ?? page?.space?.settings;
   const headingNumberingEnabled = resolveHeadingNumberingEnabled({
@@ -88,7 +103,8 @@ function PageContent({
 
   useEffect(() => {
     const shouldOpenCommentsAside = Boolean(
-      (location.state as { openCommentsAside?: boolean } | null)?.openCommentsAside,
+      (location.state as { openCommentsAside?: boolean } | null)
+        ?.openCommentsAside,
     );
 
     if (!page?.id || !shouldOpenCommentsAside) {
@@ -113,7 +129,13 @@ function PageContent({
             "This page may have been deleted, moved, or you may not have access.",
           )}
           action={
-            <Button component={Link} to="/home" variant="default" size="sm" mt="xs">
+            <Button
+              component={Link}
+              to="/home"
+              variant="default"
+              size="sm"
+              mt="xs"
+            >
               {t("Go to homepage")}
             </Button>
           }
@@ -121,10 +143,7 @@ function PageContent({
       );
     }
     return (
-      <EmptyState
-        icon={IconFileOff}
-        title={t("Error fetching page data.")}
-      />
+      <EmptyState icon={IconFileOff} title={t("Error fetching page data.")} />
     );
   }
 
@@ -136,14 +155,14 @@ function PageContent({
           spaceId={page.spaceId}
           spaceSlug={resolvedSpaceSlug}
           title={page.title}
-          canWrite={canWritePage}
+          canWrite={canEditPage}
         />
         <Helmet>
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
 
         <MemoizedPageHeader
-          readOnly={!canWritePage}
+          readOnly={!canEditPage}
           canMoveDeleteShare={canMoveDeleteSharePage}
         />
 
@@ -154,17 +173,14 @@ function PageContent({
               <TemplateEditingAlert
                 pageId={page.id}
                 kind={page.templateKind}
-                editable={canWritePage}
+                editable={canEditPage}
               />
             ) : (
               <TemplateInstanceAlert pageId={page.id} editable={canWritePage} />
             )
           }
           metaPanel={
-            <DocumentFieldsPanel
-              page={page}
-              readOnly={!canWritePage}
-            />
+            <DocumentFieldsPanel page={page} readOnly={!canEditPage} />
           }
           footer={
             isCommentsAsideOpen ? undefined : (
@@ -188,7 +204,7 @@ function PageContent({
             resolvedSpaceSettings?.documentFields?.readingTime === true
           }
           templateKind={page.templateKind}
-          editable={canWritePage}
+          editable={canEditPage}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>

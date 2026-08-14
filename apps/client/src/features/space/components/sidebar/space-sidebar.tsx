@@ -73,6 +73,7 @@ import CustomLinkFormModal, {
   type CustomLinkFormValue,
 } from "@/features/space/components/custom-links/custom-link-form-modal.tsx";
 import type { ISpaceCustomLink } from "@/features/space/types/space.types.ts";
+import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
 
 const PAGE_TREE_ACTION_SIZE = 24;
 const PAGE_TREE_ACTION_ICON_SIZE = 16;
@@ -107,6 +108,8 @@ export function SpaceSidebar() {
 
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
+  const templateCapabilitiesQuery = usePageTemplateCapabilitiesQuery(space?.id);
+  const templateCapabilities = templateCapabilitiesQuery.data;
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
@@ -120,6 +123,14 @@ export function SpaceSidebar() {
   });
   const canExportSpace = canManageSpaceSettings;
   const createDatabaseMutation = useCreateDatabaseMutation(space?.id);
+  const showTemplateCatalog =
+    templateCapabilitiesQuery.isSuccess &&
+    !templateCapabilitiesQuery.isError &&
+    templateCapabilities?.enabled === true &&
+    (templateCapabilities.createTemplate ||
+      templateCapabilities.manageTemplate ||
+      templateCapabilities.useRegular ||
+      templateCapabilities.useSynced);
 
   if (!space) {
     return <></>;
@@ -321,26 +332,28 @@ export function SpaceSidebar() {
               </UnstyledButton>
             )}
 
-            <UnstyledButton
-              component={Link}
-              to={`/s/${spaceSlug}/templates`}
-              className={clsx(
-                classes.menu,
-                location.pathname.toLowerCase() ===
-                  `/s/${spaceSlug}/templates`.toLowerCase()
-                  ? classes.activeButton
-                  : "",
-              )}
-            >
-              <div className={classes.menuItemInner}>
-                <IconTemplate
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
-                />
-                <span>{t("Templates")}</span>
-              </div>
-            </UnstyledButton>
+            {showTemplateCatalog && (
+              <UnstyledButton
+                component={Link}
+                to={`/s/${spaceSlug}/templates`}
+                className={clsx(
+                  classes.menu,
+                  location.pathname.toLowerCase() ===
+                    `/s/${spaceSlug}/templates`.toLowerCase()
+                    ? classes.activeButton
+                    : "",
+                )}
+              >
+                <div className={classes.menuItemInner}>
+                  <IconTemplate
+                    size={18}
+                    className={classes.menuItemIcon}
+                    stroke={2}
+                  />
+                  <span>{t("Templates")}</span>
+                </div>
+              </UnstyledButton>
+            )}
 
             {customLinks
               .filter((link) => isSafeCustomLinkUrl(link.url))

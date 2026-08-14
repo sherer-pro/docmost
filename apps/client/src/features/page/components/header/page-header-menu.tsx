@@ -73,6 +73,8 @@ import {
 import { queryClient } from "@/lib/query-client.ts";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
+import { usePageTemplateProvenanceQuery } from "@/features/page/queries/page-details-query";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -90,7 +92,7 @@ export default function PageHeaderMenu({
   });
   const assistantIdentity = useAiAssistantIdentity(page?.spaceId, page?.id);
   const pageCapabilities = page?.access?.capabilities;
-  const canWritePage = pageCapabilities?.canWrite ?? !readOnly;
+  const canWritePage = !readOnly && (pageCapabilities?.canWrite ?? true);
   const canMoveDeleteSharePage =
     pageCapabilities?.canMoveDeleteShare ?? canMoveDeleteShare ?? !readOnly;
   const isReadOnly = !canWritePage;
@@ -263,9 +265,17 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const clipboard = useClipboard({ timeout: 500 });
   const { pageSlug, spaceSlug } = useParams();
-  const { data: page, isLoading } = usePageQuery({
+  const { data: page } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+  const templateCapabilitiesQuery = usePageTemplateCapabilitiesQuery(
+    page?.spaceId,
+  );
+  const templateCapabilities = templateCapabilitiesQuery.data;
+  const templateCapabilitiesAvailable =
+    templateCapabilitiesQuery.isSuccess && !templateCapabilitiesQuery.isError;
+  const templateProvenanceQuery = usePageTemplateProvenanceQuery(page?.id);
+  const templateProvenance = templateProvenanceQuery.data;
   const { openDeleteModal } = useDeletePageModal();
   const [tree] = useAtom(treeApiAtom);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
@@ -293,7 +303,29 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
     page?.access?.capabilities?.canMoveDeleteShare ??
     canMoveDeleteShare ??
     !readOnly;
-  const canWritePage = page?.access?.capabilities?.canWrite ?? !readOnly;
+  const canWritePage =
+    !readOnly && (page?.access?.capabilities?.canWrite ?? true);
+  const canCreateChild = page?.access?.capabilities?.canCreateChild === true;
+  const isTemplateSource = Boolean(page?.templateKind);
+  const isManagedSyncedInstance =
+    templateProvenance?.createdFromTemplate === true &&
+    templateProvenance.kind === "synced" &&
+    ["active", "syncing", "error"].includes(templateProvenance.status);
+  const templateProvenanceUnavailable =
+    templateProvenanceQuery.isLoading || templateProvenanceQuery.isError;
+  const canCreateTemplateFromPage =
+    canWritePage &&
+    !isTemplateSource &&
+    !templateProvenanceUnavailable &&
+    !isManagedSyncedInstance &&
+    templateCapabilitiesAvailable &&
+    templateCapabilities?.createTemplate === true;
+  const canCreateChildFromTemplate =
+    canCreateChild &&
+    !isTemplateSource &&
+    templateCapabilitiesAvailable &&
+    templateCapabilities?.enabled === true &&
+    (templateCapabilities.useRegular || templateCapabilities.useSynced);
   const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
   const canExportPage = canExportDocument({
     parentPageId: page?.parentPageId,
@@ -557,46 +589,54 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
             }
           />
 
-          {canMoveDeleteSharePage && (
-            <>
-              <Menu.Divider />
-              <PageOperationMenuItems
-                onDuplicate={() => void handleDuplicatePage()}
-                onMove={openMovePageModal}
-                onCopyToSpace={openCopyPageModal}
-              />
-              {!page?.databaseId && (
-                <>
-                  <Menu.Divider />
-                  <Menu.Item
-                    leftSection={<IconArrowsExchange size={16} />}
-                    onClick={handleConvertToDatabase}
-                    disabled={isConvertingPageToDatabase}
-                  >
-                    {t("Convert to database")}
-                  </Menu.Item>
-                </>
-              )}
-            </>
-          )}
+          {canMoveDeleteSharePage &&
+            !isTemplateSource &&
+            !templateProvenanceUnavailable &&
+            !isManagedSyncedInstance && (
+              <>
+                <Menu.Divider />
+                <PageOperationMenuItems
+                  onDuplicate={() => void handleDuplicatePage()}
+                  onMove={openMovePageModal}
+                  onCopyToSpace={openCopyPageModal}
+                />
+                {!page?.databaseId && (
+                  <>
+                    <Menu.Divider />
+                    <Menu.Item
+                      leftSection={<IconArrowsExchange size={16} />}
+                      onClick={handleConvertToDatabase}
+                      disabled={isConvertingPageToDatabase}
+                    >
+                      {t("Convert to database")}
+                    </Menu.Item>
+                  </>
+                )}
+              </>
+            )}
 
-          {canWritePage && !page?.databaseId && (
-            <>
-              <Menu.Divider />
-              <Menu.Item
-                leftSection={<IconTemplate size={16} />}
-                onClick={handleCreateTemplateFromPage}
-              >
-                {t("Create template from this page")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconTemplate size={16} />}
-                onClick={handleCreateFromTemplate}
-              >
-                {t("Create child from template")}
-              </Menu.Item>
-            </>
-          )}
+          {!page?.databaseId &&
+            (canCreateTemplateFromPage || canCreateChildFromTemplate) && (
+              <>
+                <Menu.Divider />
+                {canCreateTemplateFromPage && (
+                  <Menu.Item
+                    leftSection={<IconTemplate size={16} />}
+                    onClick={handleCreateTemplateFromPage}
+                  >
+                    {t("Create template from this page")}
+                  </Menu.Item>
+                )}
+                {canCreateChildFromTemplate && (
+                  <Menu.Item
+                    leftSection={<IconTemplate size={16} />}
+                    onClick={handleCreateFromTemplate}
+                  >
+                    {t("Create child from template")}
+                  </Menu.Item>
+                )}
+              </>
+            )}
 
           {canMoveDeleteSharePage && page?.databaseId && (
             <>
@@ -611,7 +651,7 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
             </>
           )}
 
-          {canMoveDeleteSharePage && (
+          {canMoveDeleteSharePage && !isTemplateSource && (
             <>
               <Menu.Divider />
               <Menu.Item

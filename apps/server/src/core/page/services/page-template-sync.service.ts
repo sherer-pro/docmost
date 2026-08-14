@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import { v7 as uuid7 } from 'uuid';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
 import type { Page, User } from '@docmost/db/types/entity.types';
@@ -13,9 +14,13 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
+import { hashPageTemplateInstanceContent } from '../../../common/helpers/prosemirror/page-template-content-hash';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { PageTemplatePolicyService } from '../transclusion/page-template-policy.service';
-import { PublishPageTemplateDto } from '../dto/page-template.dto';
+import {
+  PageTemplatePaginationDto,
+  PublishPageTemplateDto,
+} from '../dto/page-template.dto';
 import { executeTx } from '@docmost/db/utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
@@ -24,6 +29,8 @@ import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-
 import { PageTemplateContentService } from './page-template-content.service';
 import { PageTemplateOperationService } from './page-template-operation.service';
 import { PageTemplatePublicationService } from './page-template-publication.service';
+
+const SYNC_ITEM_INSERT_BATCH_SIZE = 500;
 
 @Injectable()
 export class PageTemplateSyncService {
@@ -48,13 +55,40 @@ export class PageTemplateSyncService {
     return this.buildPublishPreflight(template, user, true, draft);
   }
 
-  async publish(pageId: string, dto: PublishPageTemplateDto, user: User) {
+  async publish(
+    pageId: string,
+    dto: PublishPageTemplateDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    this.operations.assertIdempotencyKey(idempotencyKey);
+    const operationKey = `publish:${pageId}:${idempotencyKey}`;
+    const request = { pageId, ...dto };
     const template = await this.requireManagedSyncedTemplate(pageId, user);
     if (template.templateArchivedAt) {
       throw new ConflictException({
         code: 'page_template_archived',
         message: 'Archived templates cannot be published',
       });
+    }
+    const completedOperation = await this.operations.findCompletedOperation(
+      'template_sync',
+      operationKey,
+      user,
+      request,
+    );
+    if (completedOperation) {
+      const completedResult = await this.readPublishedOperationResult(
+        completedOperation.stagedContent,
+        pageId,
+      );
+      if (completedResult) {
+        return this.serializePublishedResult(completedResult, true);
+      }
+      throw this.conflict(
+        'page_template_publish_result_missing',
+        'The completed publication result is unavailable',
+      );
     }
     const draft = this.publication.normalizeDraftForPublication(
       await this.content.getLiveContent(template.id, user),
@@ -64,6 +98,16 @@ export class PageTemplateSyncService {
       throw this.conflict(
         'page_template_draft_changed',
         'The template draft changed after the publication preview',
+      );
+    }
+    const existingPublished = await this.findLatestPublishedResult(
+      template.id,
+      draftHash,
+    );
+    if (existingPublished) {
+      throw this.conflict(
+        'page_template_no_changes',
+        'The template draft has no changes to publish',
       );
     }
     const preflight = await this.buildPublishPreflight(
@@ -79,142 +123,275 @@ export class PageTemplateSyncService {
           'Removing populated template fields requires confirmation',
         );
       }
-      const confirmation = await this.db
-        .selectFrom('pageTemplatePublishConfirmations')
-        .selectAll()
-        .where('id', '=', dto.confirmationToken)
-        .where('templatePageId', '=', template.id)
-        .where('requestedById', '=', user.id)
-        .where('draftHash', '=', draftHash)
-        .where('consumedAt', 'is', null)
-        .where('expiresAt', '>', new Date())
-        .executeTakeFirst();
-      if (!confirmation) {
-        throw this.conflict(
-          'page_template_confirmation_invalid',
-          'The destructive confirmation is missing, expired, or stale',
-        );
-      }
     }
 
-    const result = await executeTx(this.db, async (trx) => {
-      const lockedTemplate = await this.pageRepo.findById(template.id, {
-        withLock: true,
-        trx,
-      });
-      if (
-        !lockedTemplate ||
-        lockedTemplate.templateKind !== 'synced' ||
-        lockedTemplate.templateArchivedAt
-      ) {
-        throw this.conflict(
-          'page_template_publish_conflict',
-          'The template is no longer publishable',
-        );
+    const operation = await this.operations.beginOperation(
+      'template_sync',
+      operationKey,
+      user,
+      request,
+      { sourcePageId: template.id },
+    );
+    if (operation.status === 'completed') {
+      const completedResult = await this.readPublishedOperationResult(
+        operation.stagedContent,
+        template.id,
+      );
+      if (completedResult) {
+        return this.serializePublishedResult(completedResult, true);
       }
-      if (dto.confirmationToken) {
-        const consumed = await trx
-          .updateTable('pageTemplatePublishConfirmations')
-          .set({ consumedAt: new Date() })
-          .where('id', '=', dto.confirmationToken)
-          .where('templatePageId', '=', template.id)
-          .where('requestedById', '=', user.id)
-          .where('draftHash', '=', draftHash)
-          .where('consumedAt', 'is', null)
-          .where('expiresAt', '>', new Date())
-          .returning('id')
-          .executeTakeFirst();
-        if (preflight.requiresDestructiveConfirmation && !consumed) {
+      throw this.conflict(
+        'page_template_publish_result_missing',
+        'The completed publication result is unavailable',
+      );
+    }
+
+    let result: { revision: any; run: any; noOp: boolean };
+    try {
+      const fencedDraft = this.publication.normalizeDraftForPublication(
+        await this.content.getLiveContent(template.id, user),
+      );
+      const fencedDraftHash = hashProseMirrorJson(fencedDraft as any);
+      result = await executeTx(this.db, async (trx) => {
+        if (fencedDraftHash !== draftHash) {
           throw this.conflict(
-            'page_template_confirmation_invalid',
-            'The destructive confirmation is missing, expired, or stale',
+            'page_template_draft_changed',
+            'The template draft changed after the publication preview',
           );
         }
-      }
-      const latest = await trx
-        .selectFrom('pageTemplateRevisions')
-        .select((eb) => eb.fn.max<number>('revision').as('revision'))
-        .where('templatePageId', '=', template.id)
-        .executeTakeFirst();
-      const revisionNumber = Number(latest?.revision ?? 0) + 1;
-      const revision = await trx
-        .insertInto('pageTemplateRevisions')
-        .values({
-          workspaceId: template.workspaceId,
-          spaceId: template.spaceId,
-          templatePageId: template.id,
-          revision: revisionNumber,
-          content: draft as any,
-          contentHash: draftHash,
-          publishedById: user.id,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
-      const instances = await trx
-        .selectFrom('pageTemplateInstances')
-        .select(['id', 'childPageId'])
-        .where('templatePageId', '=', template.id)
-        .where('instanceKind', '=', 'synced')
-        .where('status', 'in', ['active', 'syncing', 'error'])
-        .execute();
-      const run = await trx
-        .insertInto('pageTemplateSyncRuns')
-        .values({
-          workspaceId: template.workspaceId,
-          spaceId: template.spaceId,
-          templatePageId: template.id,
-          revisionId: revision.id,
-          revision: revisionNumber,
-          requestedById: user.id,
-          status: instances.length > 0 ? 'pending' : 'completed',
-          totalCount: instances.length,
-          completedAt: instances.length > 0 ? null : new Date(),
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
-      if (instances.length > 0) {
-        await trx
-          .insertInto('pageTemplateSyncItems')
-          .values(
-            instances.map((instance) => ({
-              runId: run.id,
-              instanceId: instance.id,
-              childPageId: instance.childPageId,
-            })),
-          )
-          .execute();
-        if (!this.queueOutbox) {
-          throw new Error('page_template_sync_outbox_unavailable');
-        }
-        await this.queueOutbox.enqueuePageTemplateSync(
-          { runId: run.id },
-          revision.id,
+        const lockedTemplate = await this.pageRepo.findById(template.id, {
+          withLock: true,
           trx,
+        });
+        if (
+          !lockedTemplate ||
+          lockedTemplate.deletedAt ||
+          lockedTemplate.workspaceId !== template.workspaceId ||
+          lockedTemplate.spaceId !== template.spaceId ||
+          lockedTemplate.templateKind !== 'synced' ||
+          lockedTemplate.templateArchivedAt
+        ) {
+          throw this.conflict(
+            'page_template_publish_conflict',
+            'The template is no longer publishable',
+          );
+        }
+        const latest = await trx
+          .selectFrom('pageTemplateRevisions')
+          .selectAll()
+          .where('templatePageId', '=', template.id)
+          .orderBy('revision', 'desc')
+          .executeTakeFirst();
+        if (latest?.contentHash === draftHash) {
+          throw this.conflict(
+            'page_template_no_changes',
+            'The template draft has no changes to publish',
+          );
+        }
+        if (dto.confirmationToken) {
+          const confirmation = await trx
+            .selectFrom('pageTemplatePublishConfirmations')
+            .selectAll()
+            .where('id', '=', dto.confirmationToken)
+            .where('templatePageId', '=', template.id)
+            .where('requestedById', '=', user.id)
+            .where('draftHash', '=', draftHash)
+            .where('consumedAt', 'is', null)
+            .where('expiresAt', '>', new Date())
+            .forUpdate()
+            .executeTakeFirst();
+          if (
+            !confirmation ||
+            !this.publication.isConfirmationBasisValid(
+              confirmation.removedFieldIds,
+              latest,
+              fencedDraft,
+            )
+          ) {
+            throw this.conflict(
+              'page_template_confirmation_invalid',
+              'The destructive confirmation is stale; rerun the publication preview',
+            );
+          }
+          const consumed = await trx
+            .updateTable('pageTemplatePublishConfirmations')
+            .set({ consumedAt: new Date() })
+            .where('id', '=', dto.confirmationToken)
+            .where('templatePageId', '=', template.id)
+            .where('requestedById', '=', user.id)
+            .where('draftHash', '=', draftHash)
+            .where('consumedAt', 'is', null)
+            .where('expiresAt', '>', new Date())
+            .returning('id')
+            .executeTakeFirst();
+          if (!consumed) {
+            throw this.conflict(
+              'page_template_confirmation_invalid',
+              'The destructive confirmation is stale; rerun the publication preview',
+            );
+          }
+        }
+        const revisionNumber = Number(latest?.revision ?? 0) + 1;
+        const revision = await trx
+          .insertInto('pageTemplateRevisions')
+          .values({
+            workspaceId: template.workspaceId,
+            spaceId: template.spaceId,
+            templatePageId: template.id,
+            revision: revisionNumber,
+            content: fencedDraft as any,
+            contentHash: draftHash,
+            publishedById: user.id,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        const runSeed = await trx
+          .insertInto('pageTemplateSyncRuns')
+          .values({
+            workspaceId: template.workspaceId,
+            spaceId: template.spaceId,
+            templatePageId: template.id,
+            revisionId: revision.id,
+            revision: revisionNumber,
+            requestedById: user.id,
+            status: 'pending',
+            totalCount: 0,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        let totalCount = 0;
+        let lastInstanceId: string | null = null;
+        while (true) {
+          let instanceQuery = trx
+            .selectFrom('pageTemplateInstances as instance')
+            .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+            .select(['instance.id', 'instance.childPageId'])
+            .where('instance.templatePageId', '=', template.id)
+            .where('instance.instanceKind', '=', 'synced')
+            .where('instance.status', 'in', ['active', 'syncing', 'error'])
+            .where('child.deletedAt', 'is', null);
+          if (lastInstanceId) {
+            instanceQuery = instanceQuery.where(
+              'instance.id',
+              '>',
+              lastInstanceId,
+            );
+          }
+          const instances = await instanceQuery
+            .orderBy('instance.id', 'asc')
+            .limit(SYNC_ITEM_INSERT_BATCH_SIZE)
+            .execute();
+          if (instances.length === 0) break;
+          await trx
+            .insertInto('pageTemplateSyncItems')
+            .values(
+              instances.map((instance) => ({
+                runId: runSeed.id,
+                instanceId: instance.id,
+                childPageId: instance.childPageId,
+              })),
+            )
+            .execute();
+          await trx
+            .updateTable('pageTemplateInstances')
+            .set({
+              status: 'syncing',
+              lastErrorCode: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              'id',
+              'in',
+              instances.map((instance) => instance.id),
+            )
+            .where('status', 'in', ['active', 'syncing', 'error'])
+            .execute();
+          totalCount += instances.length;
+          lastInstanceId = instances.at(-1)!.id;
+          if (instances.length < SYNC_ITEM_INSERT_BATCH_SIZE) break;
+        }
+        const run = await trx
+          .updateTable('pageTemplateSyncRuns')
+          .set({
+            status: totalCount > 0 ? 'pending' : 'completed',
+            totalCount,
+            completedAt: totalCount > 0 ? null : new Date(),
+            updatedAt: new Date(),
+          })
+          .where('id', '=', runSeed.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        if (totalCount > 0) {
+          if (!this.queueOutbox) {
+            throw new Error('page_template_sync_outbox_unavailable');
+          }
+          await this.queueOutbox.enqueuePageTemplateSync(
+            { runId: run.id },
+            revision.id,
+            trx,
+          );
+        }
+        await this.completePublishOperationInTransaction(
+          trx,
+          operation,
+          draftHash,
+          revision,
+          run,
+          false,
         );
-      }
-      return { revision, run };
-    });
-    if (result.run.status === 'pending') {
+        return { revision, run, noOp: false };
+      });
+    } catch (error) {
+      await this.operations.failOperation(
+        operation.id,
+        this.operations.errorCode(error),
+        operation.leaseToken,
+      );
+      throw error;
+    }
+    if (!result.noOp && result.run.status === 'pending') {
       this.queueOutbox!.kick();
     }
-    return {
-      revision: this.publication.serializeRevision(result.revision),
-      syncRun: this.publication.serializeSyncRun(result.run),
-    };
+    return this.serializePublishedResult(result, false);
   }
 
-  async listRevisions(pageId: string, user: User) {
+  async listRevisions(
+    pageId: string,
+    dto: PageTemplatePaginationDto,
+    user: User,
+  ) {
     const template = await this.requireManagedSyncedTemplate(pageId, user);
-    const revisions = await this.db
+    const limit = dto.limit ?? 20;
+    const cursor = this.operations.decodeRevisionCursor(dto.cursor);
+    let query = this.db
       .selectFrom('pageTemplateRevisions')
       .selectAll()
-      .where('templatePageId', '=', template.id)
+      .where('templatePageId', '=', template.id);
+    if (cursor) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('revision', '<', cursor.revision),
+          eb.and([
+            eb('revision', '=', cursor.revision),
+            eb('id', '<', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    const revisions = await query
       .orderBy('revision', 'desc')
+      .orderBy('id', 'desc')
+      .limit(limit + 1)
       .execute();
+    const items = revisions.slice(0, limit);
     return {
-      items: revisions.map((revision) =>
+      items: items.map((revision) =>
         this.publication.serializeRevision(revision, true),
       ),
+      nextCursor:
+        revisions.length > limit
+          ? this.operations.encodeRevisionCursor(items.at(-1)!)
+          : null,
     };
   }
 
@@ -232,34 +409,240 @@ export class PageTemplateSyncService {
     };
   }
 
+  async catchUpRestoredInstances(pageIds: string[], user: User): Promise<void> {
+    if (pageIds.length === 0) return;
+    let enqueued = false;
+    await executeTx(this.db, async (trx) => {
+      const instances = await trx
+        .selectFrom('pageTemplateInstances as instance')
+        .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+        .innerJoin(
+          'pages as template',
+          'template.id',
+          'instance.templatePageId',
+        )
+        .select([
+          'instance.id',
+          'instance.childPageId',
+          'instance.templatePageId',
+          'instance.workspaceId',
+          'instance.spaceId',
+          'instance.appliedRevision',
+        ])
+        .where('instance.workspaceId', '=', user.workspaceId)
+        .where('instance.instanceKind', '=', 'synced')
+        .where('instance.status', 'in', ['active', 'syncing', 'error'])
+        .where('child.deletedAt', 'is', null)
+        .where('template.deletedAt', 'is', null)
+        .where('template.templateKind', '=', 'synced')
+        .whereRef('template.workspaceId', '=', 'instance.workspaceId')
+        .whereRef('template.spaceId', '=', 'instance.spaceId')
+        .where(
+          sql<boolean>`${sql.ref('instance.childPageId')} = any(${pageIds}::uuid[])`,
+        )
+        .forUpdate()
+        .execute();
+      const templateIds = [
+        ...new Set(
+          instances
+            .map((instance) => instance.templatePageId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      if (templateIds.length === 0) return;
+      const revisions = await trx
+        .selectFrom('pageTemplateRevisions')
+        .selectAll()
+        .where(
+          sql<boolean>`${sql.ref('templatePageId')} = any(${templateIds}::uuid[])`,
+        )
+        .orderBy('templatePageId', 'asc')
+        .orderBy('revision', 'desc')
+        .execute();
+      const latestByTemplate = new Map<string, any>();
+      for (const revision of revisions) {
+        if (!latestByTemplate.has(revision.templatePageId)) {
+          latestByTemplate.set(revision.templatePageId, revision);
+        }
+      }
+      const groups = new Map<
+        string,
+        { revision: any; instances: typeof instances }
+      >();
+      for (const instance of instances) {
+        if (!instance.templatePageId) continue;
+        const revision = latestByTemplate.get(instance.templatePageId);
+        if (!revision || (instance.appliedRevision ?? 0) >= revision.revision) {
+          continue;
+        }
+        const group = groups.get(revision.id) ?? {
+          revision,
+          instances: [],
+        };
+        group.instances.push(instance);
+        groups.set(revision.id, group);
+      }
+      for (const { revision, instances: staleInstances } of groups.values()) {
+        const first = staleInstances[0];
+        const run = await trx
+          .insertInto('pageTemplateSyncRuns')
+          .values({
+            workspaceId: first.workspaceId,
+            spaceId: first.spaceId,
+            templatePageId: first.templatePageId!,
+            revisionId: revision.id,
+            revision: revision.revision,
+            requestedById: user.id,
+            status: 'pending',
+            totalCount: staleInstances.length,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        for (
+          let offset = 0;
+          offset < staleInstances.length;
+          offset += SYNC_ITEM_INSERT_BATCH_SIZE
+        ) {
+          const batch = staleInstances.slice(
+            offset,
+            offset + SYNC_ITEM_INSERT_BATCH_SIZE,
+          );
+          await trx
+            .insertInto('pageTemplateSyncItems')
+            .values(
+              batch.map((instance) => ({
+                runId: run.id,
+                instanceId: instance.id,
+                childPageId: instance.childPageId,
+              })),
+            )
+            .execute();
+          await trx
+            .updateTable('pageTemplateInstances')
+            .set({
+              status: 'syncing',
+              lastErrorCode: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              'id',
+              'in',
+              batch.map((instance) => instance.id),
+            )
+            .where('status', 'in', ['active', 'syncing', 'error'])
+            .execute();
+        }
+        if (!this.queueOutbox) {
+          throw new Error('page_template_sync_outbox_unavailable');
+        }
+        await this.queueOutbox.enqueuePageTemplateSync(
+          { runId: run.id },
+          revision.id,
+          trx,
+        );
+        enqueued = true;
+      }
+    });
+    if (enqueued) this.queueOutbox!.kick();
+  }
+
   async retrySyncRun(pageId: string, runId: string, user: User) {
     const template = await this.requireManagedSyncedTemplate(pageId, user);
-    const run = await this.db
-      .selectFrom('pageTemplateSyncRuns')
-      .selectAll()
-      .where('id', '=', runId)
-      .where('templatePageId', '=', template.id)
-      .executeTakeFirst();
-    if (!run)
-      throw new NotFoundException('Template synchronization run not found');
     const dispatchId = uuid7();
     await executeTx(this.db, async (trx) => {
-      await trx
-        .updateTable('pageTemplateSyncItems')
-        .set({ status: 'pending', errorCode: null, updatedAt: new Date() })
+      const run = await trx
+        .selectFrom('pageTemplateSyncRuns')
+        .selectAll()
+        .where('id', '=', runId)
+        .where('templatePageId', '=', template.id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!run) {
+        throw new NotFoundException('Template synchronization run not found');
+      }
+      if (run.status !== 'partial' && run.status !== 'failed') {
+        throw this.conflict(
+          'page_template_sync_retry_not_available',
+          'This synchronization run cannot be retried',
+        );
+      }
+      const itemCounts = await trx
+        .selectFrom('pageTemplateSyncItems')
+        .select('status')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
         .where('runId', '=', run.id)
-        .where('status', '=', 'failed')
+        .groupBy('status')
+        .execute();
+      const countFor = (status: string) =>
+        Number(itemCounts.find((item) => item.status === status)?.count ?? 0);
+      const completedCount = countFor('completed');
+      const retryableCount =
+        countFor('pending') + countFor('running') + countFor('failed');
+      if (retryableCount === 0) {
+        throw this.conflict(
+          'page_template_sync_retry_not_available',
+          'This synchronization run cannot be retried',
+        );
+      }
+      await trx
+        .updateTable('pageTemplateInstances')
+        .set({
+          status: 'syncing',
+          lastErrorCode: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          'id',
+          'in',
+          trx
+            .selectFrom('pageTemplateSyncItems')
+            .select('instanceId')
+            .where('runId', '=', run.id)
+            .where('status', 'in', ['pending', 'running', 'failed']),
+        )
+        .where('status', 'in', ['active', 'syncing', 'error'])
+        .where((eb) =>
+          eb.or([
+            eb('appliedRevision', 'is', null),
+            eb('appliedRevision', '<', run.revision),
+          ]),
+        )
         .execute();
       await trx
+        .updateTable('pageTemplateSyncItems')
+        .set({
+          status: 'pending',
+          attemptCount: 0,
+          errorCode: null,
+          updatedAt: new Date(),
+        })
+        .where('runId', '=', run.id)
+        .where('status', 'in', ['pending', 'running', 'failed'])
+        .execute();
+      const retried = await trx
         .updateTable('pageTemplateSyncRuns')
         .set({
           status: 'pending',
+          processedCount: completedCount,
+          succeededCount: completedCount,
+          failedCount: 0,
           errorCode: null,
+          startedAt: null,
           completedAt: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
           updatedAt: new Date(),
         })
         .where('id', '=', run.id)
-        .execute();
+        .where('status', 'in', ['partial', 'failed'])
+        .returning('id')
+        .executeTakeFirst();
+      if (!retried) {
+        throw this.conflict(
+          'page_template_sync_retry_not_available',
+          'This synchronization run cannot be retried',
+        );
+      }
       if (!this.queueOutbox) {
         throw new Error('page_template_sync_outbox_unavailable');
       }
@@ -270,7 +653,7 @@ export class PageTemplateSyncService {
       );
     });
     this.queueOutbox!.kick();
-    return { accepted: true, runId: run.id };
+    return { accepted: true, runId };
   }
 
   async processSyncItem(
@@ -330,14 +713,15 @@ export class PageTemplateSyncService {
       .execute();
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
+      let operation: any;
       try {
         const current = await this.content.getLiveContent(page.id, actor);
         const next = createTemplateInstanceContent(
           publishedForInstance,
           current,
         );
-        const baseHash = hashProseMirrorJson(current as any);
-        const nextHash = hashProseMirrorJson(next as any);
+        const baseHash = hashPageTemplateInstanceContent(current);
+        const nextHash = hashPageTemplateInstanceContent(next);
         if (baseHash === nextHash) {
           const revisionApplied = await this.markInstanceRevisionApplied(
             instance.id,
@@ -357,9 +741,9 @@ export class PageTemplateSyncService {
           }
           return;
         }
-        const operation = await this.operations.beginOperation(
+        operation = await this.operations.beginOperation(
           'template_sync',
-          `template-sync:${run.id}:${instance.id}:${attempt}`,
+          `template-sync:${run.id}:${instance.id}:${run.leaseToken ?? 'unleased'}:${attempt}`,
           actor,
           {
             runId: run.id,
@@ -396,12 +780,30 @@ export class PageTemplateSyncService {
         return;
       } catch (error) {
         lastError = error;
+        if (
+          operation?.leaseToken &&
+          (await this.operations.ownsOperationLease(
+            operation.id,
+            operation.leaseToken,
+          ))
+        ) {
+          await this.operations.failOperation(
+            operation.id,
+            this.operations.errorCode(error),
+            operation.leaseToken,
+          );
+        }
         const errorCode = this.operations.errorCode(error);
         if (errorCode === 'page_template_revision_stale') {
           await this.markSyncItemCompleted(item.id);
           return;
         }
-        if (errorCode !== 'page_embed_stale') break;
+        if (
+          errorCode !== 'page_template_stale' &&
+          errorCode !== 'page_embed_stale'
+        ) {
+          break;
+        }
       }
     }
     await this.markSyncItemFailed(
@@ -549,7 +951,22 @@ export class PageTemplateSyncService {
     });
   }
 
+  async updateSyncRunProgress(
+    runId: string,
+    leaseToken: string,
+  ): Promise<boolean> {
+    return this.writeSyncRunProgress(runId, leaseToken, false);
+  }
+
   async recalculateSyncRun(runId: string, leaseToken: string): Promise<void> {
+    await this.writeSyncRunProgress(runId, leaseToken, true);
+  }
+
+  private async writeSyncRunProgress(
+    runId: string,
+    leaseToken: string,
+    finalize: boolean,
+  ): Promise<boolean> {
     const rows = await this.db
       .selectFrom('pageTemplateSyncItems')
       .select('status')
@@ -561,24 +978,26 @@ export class PageTemplateSyncService {
     const succeeded = counts.get('completed') ?? 0;
     const failed = counts.get('failed') ?? 0;
     const processed = succeeded + failed;
-    const status =
+    const terminalStatus =
       failed === 0 ? 'completed' : succeeded > 0 ? 'partial' : 'failed';
-    await this.db
+    const updated = await this.db
       .updateTable('pageTemplateSyncRuns')
       .set({
-        status,
+        status: finalize ? terminalStatus : 'running',
         processedCount: processed,
         succeededCount: succeeded,
         failedCount: failed,
-        errorCode: failed > 0 ? 'page_template_sync_partial_failure' : null,
-        completedAt: new Date(),
-        leaseToken: null,
-        leaseExpiresAt: null,
+        errorCode:
+          finalize && failed > 0 ? 'page_template_sync_partial_failure' : null,
+        completedAt: finalize ? new Date() : null,
+        ...(finalize ? { leaseToken: null, leaseExpiresAt: null } : {}),
         updatedAt: new Date(),
       })
       .where('id', '=', runId)
       .where('leaseToken', '=', leaseToken)
-      .execute();
+      .returning('id')
+      .executeTakeFirst();
+    return Boolean(updated);
   }
 
   async finishSyncRun(
@@ -587,20 +1006,154 @@ export class PageTemplateSyncService {
     status: 'failed',
     errorCode: string,
   ): Promise<void> {
-    await this.db
-      .updateTable('pageTemplateSyncRuns')
+    await executeTx(this.db, async (trx) => {
+      const finished = await trx
+        .updateTable('pageTemplateSyncRuns')
+        .set({
+          status,
+          errorCode,
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', runId)
+        .where('leaseToken', '=', leaseToken)
+        .returning('id')
+        .executeTakeFirst();
+      if (!finished) return;
+      await trx
+        .updateTable('pageTemplateInstances')
+        .set({
+          status: 'error',
+          lastErrorCode: errorCode,
+          updatedAt: new Date(),
+        })
+        .where(
+          'id',
+          'in',
+          trx
+            .selectFrom('pageTemplateSyncItems')
+            .select('instanceId')
+            .where('runId', '=', runId)
+            .where('status', 'in', ['pending', 'running']),
+        )
+        .where('status', 'in', ['active', 'syncing', 'error'])
+        .execute();
+    });
+  }
+
+  private async findLatestPublishedResult(
+    templatePageId: string,
+    draftHash: string,
+  ): Promise<{ revision: any; run: any; noOp: true } | null> {
+    const revision = await this.db
+      .selectFrom('pageTemplateRevisions')
+      .selectAll()
+      .where('templatePageId', '=', templatePageId)
+      .orderBy('revision', 'desc')
+      .executeTakeFirst();
+    if (!revision || revision.contentHash !== draftHash) return null;
+    const run = await this.db
+      .selectFrom('pageTemplateSyncRuns')
+      .selectAll()
+      .where('revisionId', '=', revision.id)
+      .executeTakeFirst();
+    return run ? { revision, run, noOp: true } : null;
+  }
+
+  private publishOperationSnapshot(
+    revision: any,
+    run: any,
+    noOp: boolean,
+  ): Record<string, unknown> {
+    return {
+      type: 'page_template_publish_result',
+      revisionId: revision.id,
+      syncRunId: run.id,
+      noOp,
+    };
+  }
+
+  private async readPublishedOperationResult(
+    value: unknown,
+    templatePageId: string,
+  ): Promise<{ revision: any; run: any; noOp: boolean } | null> {
+    if (!value || typeof value !== 'object') return null;
+    const snapshot = value as Record<string, unknown>;
+    if (
+      snapshot.type !== 'page_template_publish_result' ||
+      typeof snapshot.revisionId !== 'string' ||
+      typeof snapshot.syncRunId !== 'string'
+    ) {
+      return null;
+    }
+    const [revision, run] = await Promise.all([
+      this.db
+        .selectFrom('pageTemplateRevisions')
+        .selectAll()
+        .where('id', '=', snapshot.revisionId)
+        .where('templatePageId', '=', templatePageId)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('pageTemplateSyncRuns')
+        .selectAll()
+        .where('id', '=', snapshot.syncRunId)
+        .where('templatePageId', '=', templatePageId)
+        .executeTakeFirst(),
+    ]);
+    if (!revision || !run || run.revisionId !== revision.id) return null;
+    return { revision, run, noOp: snapshot.noOp === true };
+  }
+
+  private async completePublishOperationInTransaction(
+    trx: any,
+    operation: any,
+    draftHash: string,
+    revision: any,
+    run: any,
+    noOp: boolean,
+  ): Promise<void> {
+    const completed = await trx
+      .updateTable('pageTemplateOperations')
       .set({
-        status,
-        errorCode,
-        completedAt: new Date(),
+        status: 'completed',
+        afterContentHash: draftHash,
+        stagedContent: this.publishOperationSnapshot(
+          revision,
+          run,
+          noOp,
+        ) as any,
+        errorCode: null,
         leaseToken: null,
         leaseExpiresAt: null,
         updatedAt: new Date(),
       })
-      .where('id', '=', runId)
-      .where('leaseToken', '=', leaseToken)
-      .execute();
+      .where('id', '=', operation.id)
+      .where('status', '=', 'pending')
+      .where('leaseToken', '=', operation.leaseToken)
+      .returning('id')
+      .executeTakeFirst();
+    if (!completed) {
+      throw this.conflict(
+        'page_template_operation_lease_lost',
+        'The page template operation lease was lost',
+      );
+    }
   }
+
+  private serializePublishedResult(
+    result: { revision: any; run: any; noOp: boolean },
+    idempotent: boolean,
+  ) {
+    return {
+      revision: this.publication.serializeRevision(result.revision),
+      syncRun: this.publication.serializeSyncRun(result.run),
+      idempotent,
+      noOp: result.noOp,
+    };
+  }
+
   private buildPublishPreflight(
     template: Page,
     user: User,

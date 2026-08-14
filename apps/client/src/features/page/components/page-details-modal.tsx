@@ -185,8 +185,8 @@ export default function PageDetailsModal({
             active={Boolean(page?.templateKind)}
             activeText={
               page?.templateKind === "synced"
-                ? t("Synchronized template")
-                : t("Regular template")
+                ? t("Linked page")
+                : t("Independent copy")
             }
             inactiveText={t("Regular page")}
             description={
@@ -204,12 +204,23 @@ export default function PageDetailsModal({
                 : templateProvenance?.createdFromTemplate
             }
             loading={provenanceLoading}
-            activeText={t("Yes, created from a template")}
+            activeText={
+              templateProvenance?.createdFromTemplate &&
+              templateProvenance.kind === "synced"
+                ? t("Linked page")
+                : t("Independent copy")
+            }
             inactiveText={t("No, created without a template")}
             unavailableText={t("Status unavailable")}
             description={
               templateProvenance?.createdFromTemplate
-                ? t("The page started as a snapshot of a template.")
+                ? templateProvenance.kind === "synced"
+                  ? t(
+                      "Template blocks stay linked; the title, location, access, and local fields remain independent.",
+                    )
+                  : t(
+                      "This page is an independent copy and will not receive template updates.",
+                    )
                 : t("No source template is associated with this page.")
             }
           >

@@ -16,6 +16,7 @@ import { PageTemplateSyncService } from './page-template-sync.service';
 
 const SYNC_RUN_LEASE_MS = 5 * 60 * 1000;
 const SYNC_RESUME_INTERVAL_MS = 15_000;
+const SYNC_ITEM_BATCH_SIZE = 100;
 
 @Injectable()
 export class PageTemplateRuntimeService
@@ -185,31 +186,45 @@ export class PageTemplateRuntimeService
         return;
       }
 
-      const items = await this.db
-        .selectFrom('pageTemplateSyncItems')
-        .selectAll()
-        .where('runId', '=', runId)
-        .where('status', '=', 'pending')
-        .orderBy('createdAt', 'asc')
-        .execute();
-      for (const item of items) {
-        const renewed = await this.db
-          .updateTable('pageTemplateSyncRuns')
-          .set({
-            leaseExpiresAt: new Date(Date.now() + SYNC_RUN_LEASE_MS),
-            updatedAt: new Date(),
-          })
-          .where('id', '=', runId)
-          .where('leaseToken', '=', leaseToken)
-          .returning('id')
-          .executeTakeFirst();
-        if (!renewed) return;
-        await this.templateSync.processSyncItem(
-          claimed,
-          revision,
-          item,
-          actor as User,
-        );
+      let lastItemId: string | null = null;
+      while (true) {
+        let itemQuery = this.db
+          .selectFrom('pageTemplateSyncItems')
+          .selectAll()
+          .where('runId', '=', runId)
+          .where('status', '=', 'pending');
+        if (lastItemId) {
+          itemQuery = itemQuery.where('id', '>', lastItemId);
+        }
+        const items = await itemQuery
+          .orderBy('id', 'asc')
+          .limit(SYNC_ITEM_BATCH_SIZE)
+          .execute();
+        if (items.length === 0) break;
+        for (const item of items) {
+          const renewed = await this.db
+            .updateTable('pageTemplateSyncRuns')
+            .set({
+              leaseExpiresAt: new Date(Date.now() + SYNC_RUN_LEASE_MS),
+              updatedAt: new Date(),
+            })
+            .where('id', '=', runId)
+            .where('leaseToken', '=', leaseToken)
+            .returning('id')
+            .executeTakeFirst();
+          if (!renewed) return;
+          await this.templateSync.processSyncItem(
+            claimed,
+            revision,
+            item,
+            actor as User,
+          );
+          const progressUpdated =
+            await this.templateSync.updateSyncRunProgress(runId, leaseToken);
+          if (!progressUpdated) return;
+          lastItemId = item.id;
+        }
+        if (items.length < SYNC_ITEM_BATCH_SIZE) break;
       }
       await this.templateSync.recalculateSyncRun(runId, leaseToken);
     } catch (error) {

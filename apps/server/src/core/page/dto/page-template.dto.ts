@@ -12,7 +12,14 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { TEMPLATE_KINDS, TemplateKind } from '@docmost/api-contract';
+import {
+  PAGE_TEMPLATE_ARCHIVE_STATES,
+  PAGE_TEMPLATE_DESTINATION_PURPOSES,
+  TEMPLATE_KINDS,
+  PageTemplateArchiveState,
+  PageTemplateDestinationPurpose,
+  TemplateKind,
+} from '@docmost/api-contract';
 
 export class PageTemplateDiscoveryDto {
   @IsOptional()
@@ -33,6 +40,10 @@ export class PageTemplateDiscoveryDto {
   includeArchived?: boolean = false;
 
   @IsOptional()
+  @IsIn(PAGE_TEMPLATE_ARCHIVE_STATES)
+  archiveState?: PageTemplateArchiveState;
+
+  @IsOptional()
   @IsString()
   cursor?: string;
 
@@ -49,9 +60,52 @@ export class PageTemplateDestinationsDto {
   spaceId!: string;
 
   @IsOptional()
+  @IsUUID()
+  pageId?: string;
+
+  @IsOptional()
+  @IsIn(PAGE_TEMPLATE_DESTINATION_PURPOSES)
+  purpose?: PageTemplateDestinationPurpose = 'destination';
+
+  @IsOptional()
   @IsString()
   @MaxLength(200)
   query?: string;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 20;
+}
+
+export class PageTemplatePaginationDto {
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 20;
+}
+
+export class PageTemplatePolicyGroupsDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  query?: string;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -88,6 +142,17 @@ export class CreateFromTemplateDto {
   @IsOptional()
   @IsUUID()
   parentPageId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  title?: string;
+}
+
+export class CreateIndependentPageCopyDto {
+  @IsOptional()
+  @IsUUID()
+  parentPageId?: string | null;
 
   @IsOptional()
   @IsString()

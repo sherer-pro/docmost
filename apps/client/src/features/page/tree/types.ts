@@ -35,5 +35,6 @@ export type SpaceTreeNode = {
   /** Whether `children` is an authoritative loaded list, not just known items. */
   childrenLoaded?: boolean;
   access?: PageAccessInfo;
+  isLinkedTemplateInstance?: boolean;
   children: SpaceTreeNode[];
 };

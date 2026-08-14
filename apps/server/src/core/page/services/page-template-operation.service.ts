@@ -7,7 +7,10 @@ import { InjectKysely } from 'nestjs-kysely';
 import { createHash } from 'node:crypto';
 import { v7 as uuid7 } from 'uuid';
 import type { User } from '@docmost/db/types/entity.types';
-import type { KyselyDB } from '@docmost/db/types/kysely.types';
+import type {
+  KyselyDB,
+  KyselyTransaction,
+} from '@docmost/db/types/kysely.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
@@ -241,6 +244,107 @@ export class PageTemplateOperationService {
     return Boolean(await query.returning('id').executeTakeFirst());
   }
 
+  async completeOperationInTransaction(
+    trx: KyselyTransaction,
+    id: string,
+    leaseToken: string,
+    fields: Record<string, unknown>,
+  ): Promise<void> {
+    const completed = await trx
+      .updateTable('pageTemplateOperations')
+      .set({
+        status: 'completed',
+        errorCode: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+        ...(fields as any),
+      })
+      .where('id', '=', id)
+      .where('status', '=', 'pending')
+      .where('leaseToken', '=', leaseToken)
+      .where('leaseExpiresAt', '>', new Date())
+      .returning('id')
+      .executeTakeFirst();
+    if (!completed) {
+      throw this.conflict(
+        'page_template_operation_lease_lost',
+        'The page template operation lease was lost',
+      );
+    }
+  }
+
+  async claimCreatedPageFinalization(
+    operationId: string,
+  ): Promise<string | null> {
+    const leaseToken = uuid7();
+    const claimed = await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        errorCode: 'page_template_finalization_pending',
+        leaseToken,
+        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operationId)
+      .where('operationKind', '=', 'snapshot')
+      .where('status', '=', 'completed')
+      .where('afterContentHash', 'is', null)
+      .where((eb) =>
+        eb.or([
+          eb('leaseToken', 'is', null),
+          eb('leaseExpiresAt', 'is', null),
+          eb('leaseExpiresAt', '<=', new Date()),
+        ]),
+      )
+      .returning('id')
+      .executeTakeFirst();
+    return claimed ? leaseToken : null;
+  }
+
+  async completeCreatedPageFinalization(
+    operationId: string,
+    leaseToken: string,
+    pageContent: unknown,
+  ): Promise<boolean> {
+    const completed = await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        afterContentHash: hashProseMirrorJson(pageContent as any),
+        errorCode: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operationId)
+      .where('operationKind', '=', 'snapshot')
+      .where('status', '=', 'completed')
+      .where('afterContentHash', 'is', null)
+      .where('leaseToken', '=', leaseToken)
+      .returning('id')
+      .executeTakeFirst();
+    return Boolean(completed);
+  }
+
+  async releaseCreatedPageFinalization(
+    operationId: string,
+    leaseToken: string,
+  ): Promise<void> {
+    await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operationId)
+      .where('operationKind', '=', 'snapshot')
+      .where('status', '=', 'completed')
+      .where('afterContentHash', 'is', null)
+      .where('leaseToken', '=', leaseToken)
+      .execute();
+  }
+
   async failOperation(id: string, code: string, leaseToken?: string) {
     await this.db
       .updateTable('pageTemplateOperations')
@@ -282,7 +386,7 @@ export class PageTemplateOperationService {
       (oldAttachmentId) =>
         existingMapping.get(oldAttachmentId ?? '') ?? uuid7(),
     );
-    await this.db
+    const staged = await this.db
       .updateTable('pageTemplateOperations')
       .set({
         stagedContent: rewritten.content as any,
@@ -294,8 +398,46 @@ export class PageTemplateOperationService {
       .where('status', '=', 'pending')
       .where('leaseToken', '=', leaseToken)
       .where('leaseExpiresAt', '>', new Date())
-      .executeTakeFirstOrThrow();
+      .returning('id')
+      .executeTakeFirst();
+    if (!staged) {
+      throw this.conflict(
+        'page_template_operation_lease_lost',
+        'The page template operation lease was lost',
+      );
+    }
     return rewritten;
+  }
+
+  async stageCreatedPageContent(
+    operationId: string,
+    leaseToken: string,
+    content: unknown,
+    attachmentMapping: Array<{
+      oldAttachmentId: string;
+      newAttachmentId: string;
+    }>,
+  ): Promise<void> {
+    const staged = await this.db
+      .updateTable('pageTemplateOperations')
+      .set({
+        stagedContent: content as any,
+        attachmentMapping: attachmentMapping as any,
+        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
+        updatedAt: new Date(),
+      })
+      .where('id', '=', operationId)
+      .where('status', '=', 'pending')
+      .where('leaseToken', '=', leaseToken)
+      .where('leaseExpiresAt', '>', new Date())
+      .returning('id')
+      .executeTakeFirst();
+    if (!staged) {
+      throw this.conflict(
+        'page_template_operation_lease_lost',
+        'The page template operation lease was lost',
+      );
+    }
   }
 
   async stageAttachmentMapping(
@@ -376,17 +518,77 @@ export class PageTemplateOperationService {
     return createHash('sha256').update(JSON.stringify(request)).digest('hex');
   }
 
-  encodeCursor(offset: number): string {
-    return Buffer.from(String(offset)).toString('base64url');
+  encodePageCursor(row: { updatedAt: Date | string; id: string }): string {
+    return this.encodeVersionedCursor({
+      version: 1,
+      type: 'page',
+      updatedAt: new Date(row.updatedAt).toISOString(),
+      id: row.id,
+    });
   }
 
-  decodeCursor(cursor?: string): number {
-    if (!cursor) return 0;
-    const value = Number(Buffer.from(cursor, 'base64url').toString('utf8'));
-    if (!Number.isSafeInteger(value) || value < 0) {
+  decodePageCursor(cursor?: string): { updatedAt: Date; id: string } | null {
+    if (!cursor) return null;
+    const parsed = this.decodeVersionedCursor(cursor);
+    const updatedAt =
+      typeof parsed.updatedAt === 'string'
+        ? new Date(parsed.updatedAt)
+        : new Date(Number.NaN);
+    if (
+      parsed.version !== 1 ||
+      parsed.type !== 'page' ||
+      typeof parsed.id !== 'string' ||
+      parsed.id.length === 0 ||
+      Number.isNaN(updatedAt.getTime())
+    ) {
       throw new BadRequestException('Invalid cursor');
     }
-    return value;
+    return { updatedAt, id: parsed.id };
+  }
+
+  encodeRevisionCursor(row: { revision: number; id: string }): string {
+    return this.encodeVersionedCursor({
+      version: 1,
+      type: 'revision',
+      revision: row.revision,
+      id: row.id,
+    });
+  }
+
+  decodeRevisionCursor(
+    cursor?: string,
+  ): { revision: number; id: string } | null {
+    if (!cursor) return null;
+    const parsed = this.decodeVersionedCursor(cursor);
+    if (
+      parsed.version !== 1 ||
+      parsed.type !== 'revision' ||
+      !Number.isSafeInteger(parsed.revision) ||
+      Number(parsed.revision) < 0 ||
+      typeof parsed.id !== 'string' ||
+      parsed.id.length === 0
+    ) {
+      throw new BadRequestException('Invalid cursor');
+    }
+    return { revision: Number(parsed.revision), id: parsed.id };
+  }
+
+  private encodeVersionedCursor(value: Record<string, unknown>): string {
+    return Buffer.from(JSON.stringify(value)).toString('base64url');
+  }
+
+  private decodeVersionedCursor(cursor: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(cursor, 'base64url').toString('utf8'),
+      );
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('invalid');
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      throw new BadRequestException('Invalid cursor');
+    }
   }
 
   errorCode(error: unknown): string {

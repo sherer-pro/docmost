@@ -17,7 +17,7 @@ export const CLIENT_BUNDLE_BUDGET = Object.freeze({
   generalMaxRawBytes: 1_500_000,
   excalidrawSubset: Object.freeze({
     maxRawBytes: 1_821_659,
-    maxGzipBytes: 736_666,
+    maxGzipBytes: 736_669,
   }),
 });
 

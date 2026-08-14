@@ -28,10 +28,13 @@ import {
 import {
   CreatePageTemplateDto,
   CreateFromTemplateDto,
+  CreateIndependentPageCopyDto,
   DetachSyncedTemplateDto,
   PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
   PageTemplateGroupPolicyDto,
+  PageTemplatePaginationDto,
+  PageTemplatePolicyGroupsDto,
   PublishPageTemplateDto,
   PageTemplateSpacePolicyDto,
   PageTemplateWorkspacePolicyDto,
@@ -57,6 +60,15 @@ export class PageTemplateController {
     return this.templates.discover(dto, user);
   }
 
+  @Get('templates/capabilities')
+  @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
+  async getCapabilities(
+    @Query('spaceId', ParseUUIDPipe) spaceId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.getCapabilities(spaceId, user);
+  }
+
   @Get('templates/destinations')
   @AuthPolicyScope('space', { source: 'query', key: 'spaceId' })
   async listDestinations(
@@ -70,9 +82,10 @@ export class PageTemplateController {
   @AuthPolicyScope('space', { source: 'body', key: 'spaceId' })
   async createTemplate(
     @Body() dto: CreatePageTemplateDto,
+    @Headers('idempotency-key') idempotencyKey: string,
     @AuthUser() user: User,
   ) {
-    return this.templates.createTemplate(dto, user);
+    return this.templates.createTemplate(dto, idempotencyKey, user);
   }
 
   @Get('templates/:pageId/provenance')
@@ -96,11 +109,13 @@ export class PageTemplateController {
   }
 
   @Get('templates/:pageId/actions/usages')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
   async listUsages(
     @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Query() dto: PageTemplatePaginationDto,
     @AuthUser() user: User,
   ) {
-    return this.templates.listUsages(pageId, user);
+    return this.templates.listUsages(pageId, dto, user);
   }
 
   @Post('templates/:pageId/actions/preflight-publish')
@@ -117,18 +132,20 @@ export class PageTemplateController {
   async publish(
     @Param('pageId', ParseUUIDPipe) pageId: string,
     @Body() dto: PublishPageTemplateDto,
+    @Headers('idempotency-key') idempotencyKey: string,
     @AuthUser() user: User,
   ) {
-    return this.templates.publish(pageId, dto, user);
+    return this.templates.publish(pageId, dto, idempotencyKey, user);
   }
 
   @Get('templates/:pageId/revisions')
   @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
   async listRevisions(
     @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Query() dto: PageTemplatePaginationDto,
     @AuthUser() user: User,
   ) {
-    return this.templates.listRevisions(pageId, user);
+    return this.templates.listRevisions(pageId, dto, user);
   }
 
   @Get('templates/:pageId/sync-runs')
@@ -159,6 +176,31 @@ export class PageTemplateController {
     return this.templates.archive(pageId, user);
   }
 
+  @Post('templates/:pageId/actions/restore')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async restore(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.restore(pageId, user);
+  }
+
+  @Post(':pageId/actions/create-independent-copy')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  async createIndependentCopy(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: CreateIndependentPageCopyDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.createIndependentCopy(
+      pageId,
+      dto,
+      idempotencyKey,
+      user,
+    );
+  }
+
   @Post(':pageId/actions/detach-template')
   @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
   async detachTemplate(
@@ -171,6 +213,7 @@ export class PageTemplateController {
   }
 
   @Get('templates/policies/workspace')
+  @AuthPolicyScope('workspace')
   async getWorkspacePolicy(
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
@@ -180,6 +223,7 @@ export class PageTemplateController {
   }
 
   @Patch('templates/policies/workspace')
+  @AuthPolicyScope('workspace')
   async updateWorkspacePolicy(
     @Body() dto: PageTemplateWorkspacePolicyDto,
     @AuthUser() user: User,
@@ -195,6 +239,7 @@ export class PageTemplateController {
   }
 
   @Get('templates/policies/spaces/:spaceId')
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   async getSpacePolicy(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @AuthUser() user: User,
@@ -204,6 +249,7 @@ export class PageTemplateController {
   }
 
   @Put('templates/policies/spaces/:spaceId')
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   async updateSpacePolicy(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @Body() dto: PageTemplateSpacePolicyDto,
@@ -218,7 +264,19 @@ export class PageTemplateController {
     });
   }
 
+  @Get('templates/policies/spaces/:spaceId/groups')
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
+  async listPolicyGroups(
+    @Param('spaceId', ParseUUIDPipe) spaceId: string,
+    @Query() dto: PageTemplatePolicyGroupsDto,
+    @AuthUser() user: User,
+  ) {
+    await this.assertManageSpace(user, spaceId);
+    return this.policy.listPolicyGroups(user.workspaceId, spaceId, dto);
+  }
+
   @Get('templates/policies/spaces/:spaceId/groups/:groupId')
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   async getGroupPolicy(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -229,6 +287,7 @@ export class PageTemplateController {
   }
 
   @Put('templates/policies/spaces/:spaceId/groups/:groupId')
+  @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
   async updateGroupPolicy(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @Param('groupId', ParseUUIDPipe) groupId: string,

@@ -128,6 +128,7 @@ export interface ISidebarNode {
   databaseId?: string | null;
   customFields?: PageCustomFields | null;
   access?: PageAccessInfo;
+  isLinkedTemplateInstance?: boolean;
 }
 
 export interface SidebarPagesParams {
