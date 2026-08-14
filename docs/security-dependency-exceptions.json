@@ -1,13 +1,4 @@
 {
   "schemaVersion": 1,
-  "exceptions": [
-    {
-      "ghsa": "GHSA-qwww-vcr4-c8h2",
-      "package": "react-router",
-      "reviewedAt": "2026-08-01",
-      "reviewAfter": "2026-10-30",
-      "status": "not_applicable",
-      "evidence": "The client is a Vite SPA using React Router declarative/data APIs and does not enable the unstable RSC APIs required by this advisory."
-    }
-  ]
+  "exceptions": []
 }

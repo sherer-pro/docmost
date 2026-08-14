@@ -62,16 +62,8 @@ vi.mock("@/components/layouts/global/global-app-shell.tsx", () => ({
   },
 }));
 
-vi.mock("@/features/telemetry/components/posthog-user.tsx", () => ({
-  PosthogUser: () => null,
-}));
-
 vi.mock("@/features/search/components/search-spotlight.tsx", () => ({
   SearchSpotlight: () => null,
-}));
-
-vi.mock("@/lib/config.ts", () => ({
-  isCloud: () => false,
 }));
 
 vi.mock("@mantine/core", () => ({

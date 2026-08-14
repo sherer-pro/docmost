@@ -655,8 +655,6 @@ function main() {
       "DATABASE_MIGRATION_MODE=external",
       "-e",
       "DRAWIO_URL=https://embed.diagrams.net",
-      "-e",
-      "DISABLE_TELEMETRY=true",
       "--mount",
       `type=bind,src=${appSecretFile},dst=/run/secrets/app_secret,readonly`,
       "--mount",

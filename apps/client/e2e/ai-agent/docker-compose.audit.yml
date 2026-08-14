@@ -5,7 +5,6 @@ services:
       AI_RETRIEVAL_ALLOWED_ORIGINS: ""
       AI_EXTERNAL_MCP_ENABLED: "false"
       AUTH_RATE_LIMIT_STORAGE: "redis"
-      DISABLE_TELEMETRY: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

@@ -4,13 +4,16 @@
     ".": {
       "entry": ["scripts/*.mjs", "package.json"],
       "project": ["*.cjs", "*.json", "scripts/*.mjs"],
-      "ignoreBinaries": ["cmd.exe"]
+      "ignoreBinaries": ["cmd.exe"],
+      "ignoreDependencies": ["@nx/js", "concurrently", "jscpd"]
     },
     "apps/server": {
       "entry": [
         "src/main.ts",
         "src/app.module.ts",
         "src/collaboration/server/collab-main.ts",
+        "src/database/migrate-latest.ts",
+        "src/database/preflight.ts",
         "src/database/migrations/*.ts",
         "src/**/*.spec.ts",
         "src/**/*.spec.tsx"
@@ -19,8 +22,13 @@
       "ignoreDependencies": ["pino-pretty"]
     },
     "apps/client": {
-      "entry": ["src/main.tsx", "src/**/*.test.ts", "src/**/*.test.tsx"],
-      "project": ["src/**/*.ts", "src/**/*.tsx"]
+      "entry": [
+        "src/main.tsx",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "e2e/**/*.mjs"
+      ],
+      "project": ["src/**/*.ts", "src/**/*.tsx", "e2e/**/*.mjs"]
     },
     "packages/api-contract": {
       "entry": ["src/index.ts"],
@@ -28,7 +36,8 @@
     },
     "packages/editor-ext": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],
-      "project": ["src/**/*.ts", "src/**/*.tsx"]
+      "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignoreDependencies": ["@types/turndown"]
     }
   },
   "ignore": [

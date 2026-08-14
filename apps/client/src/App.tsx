@@ -28,7 +28,6 @@ const AccountPreferences = lazy(
   () => import("@/pages/settings/account/account-preferences.tsx"),
 );
 const SpaceHome = lazy(() => import("@/pages/space/space-home.tsx"));
-const PageRedirect = lazy(() => import("@/pages/page/page-redirect.tsx"));
 const Layout = lazy(() => import("@/components/layouts/global/layout.tsx"));
 const InviteSignup = lazy(() => import("@/pages/auth/invite-signup.tsx"));
 const ForgotPassword = lazy(() => import("@/pages/auth/forgot-password.tsx"));
@@ -61,9 +60,6 @@ const SpaceDictionary = lazy(
 );
 const SpaceTemplates = lazy(() => import("@/pages/space/space-templates.tsx"));
 const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
-const DatabaseLegacyRedirect = lazy(
-  () => import("@/pages/database/database-legacy-redirect.tsx"),
-);
 const WorkspaceApiKeysSettings = lazy(
   () => import("@/features/api-key/pages/workspace-api-keys-settings"),
 );
@@ -118,8 +114,6 @@ export default function App() {
         </Route>
 
         <Route path={"/share/:shareId"} element={<ShareRedirect />} />
-        <Route path={"/p/:pageSlug"} element={<PageRedirect />} />
-
         <Route element={<Layout />}>
           <Route path={"/home"} element={<Home />} />
           <Route path={"/spaces"} element={<SpacesPage />} />
@@ -136,10 +130,6 @@ export default function App() {
           <Route
             path={"/s/:spaceSlug/db/:databaseSlug"}
             element={<DatabasePage />}
-          />
-          <Route
-            path={"/s/:spaceSlug/databases/:databaseId"}
-            element={<DatabaseLegacyRedirect />}
           />
           <Route path={"/s/:spaceSlug/p/:pageSlug"} element={<Page />} />
 

@@ -89,18 +89,6 @@ export function getDrawioUrl() {
   return getConfigValue("DRAWIO_URL", "https://embed.diagrams.net");
 }
 
-export function getPostHogHost() {
-  return getConfigValue("POSTHOG_HOST");
-}
-
-export function isPostHogEnabled(): boolean {
-  return Boolean(getPostHogHost() && getPostHogKey());
-}
-
-export function getPostHogKey() {
-  return getConfigValue("POSTHOG_KEY");
-}
-
 function getConfigValue(key: string, defaultValue: string = undefined): string {
   const rawValue = import.meta.env.DEV
     ? process?.env?.[key]
