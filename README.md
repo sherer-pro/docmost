@@ -394,7 +394,13 @@ The editor includes the following additional capabilities:
 
 - rich link previews;
 
-- regular and synchronized page templates with workspace, space, role, and group availability policies;
+- page templates presented by outcome as independent copies or linked pages, with a searchable responsive catalog, preview/details panel, archive and restore;
+
+- a two-step template creation flow and a single confirmation flow for choosing the template, page title, and same-space destination;
+
+- published, immutable linked-template revisions with content-only background synchronization, localized progress and recovery states, version comparison, and safe detach or independent-copy actions;
+
+- layered deployment, workspace, space, and group template policies with explicit effective results; workspace owners/admins and space admins ignore group overrides but still obey the higher-level feature switches;
 
 - synced blocks created from selected document fragments, with reference lookup and safe unsyncing;
 
