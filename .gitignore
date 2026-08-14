@@ -15,6 +15,11 @@ data
 # the repository is added deliberately with `git add -f`.
 /output/
 /tmp/
+
+# Local AI-generated audit and release-readiness narratives.
+/docs/audit/
+/docs/*-audit-*.md
+/docs/release-readiness-*.md
 # compiled output
 /dist
 /node_modules
@@ -35,8 +40,10 @@ lerna-debug.log*
 .DS_Store
 
 # Tests
-/coverage
-/.nyc_output
+**/coverage/
+**/.nyc_output/
+**/playwright-report/
+**/test-results/
 
 # IDEs and editors
 /.idea
