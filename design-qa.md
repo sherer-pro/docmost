@@ -1,37 +1,31 @@
-# Design QA
+# Design QA - Page templates
 
-## Source of truth
+## Reference and implementation
 
-- Selected direction: option 2.
-- Reference image: `C:\Users\Pavel\.codex\generated_images\019fd99a-491e-7552-87e6-74046b9c41bb\exec-7df0f0d9-4ad1-4376-a4bb-4c2eeda8a018.png`
-- Reference size: 1800 x 874 px.
-- Target state: assistant profile menu opened above the composer footer.
+- Reference: `C:/Users/Pavel/.codex/generated_images/01a000b6-1f04-7501-892b-623ec802ddea/exec-1474e405-762b-484b-a9af-6aa246b4eb54.png`.
+- Final desktop comparison: `output/audit/page-templates-redesign-final/manual-browser/catalog-drawer-final-matched-1536x1024.png`.
+- The final implementation preserves the selected composition: familiar Docmost navigation, a compact template list, outcome-based labels, and an on-demand details panel.
+- The desktop details panel keeps the catalogue visible without a dimmed overlay. The mobile details panel remains a full-height sheet.
 
-## Browser verification
+## Responsive and interaction checks
 
-- Runtime: authenticated Chrome session on the local Vite preview.
-- Verified composer width: 463 px at a 1823 x 1311 viewport, DPR 1.5.
-- Verified narrow composer width: 422 px; footer `clientWidth` and `scrollWidth` were both 422 px, so no horizontal overflow was present.
-- Verified profile trigger, preferences action, templates action, formatting action, and send action in the footer.
-- Verified the opened menu contains the heading `Профиль помощника` and the options `Помощник пространства`, `Милаха · v4`, and `Работяга · v2`.
-- Verified opened menu geometry: 260 x 143 px, positioned above the profile trigger.
+- Browser checks covered 320, 390, 767, 768, 1440, and 1536 CSS-pixel widths without document-level horizontal overflow.
+- The 720 CSS-pixel Playwright check represents the effective layout width of a 1440-pixel viewport at 200% browser zoom.
+- Desktop row selection opens the right-side details panel and returns focus to the selected row after closing.
+- Mobile row selection opens a full-height sheet at both 320 and 390 pixel widths.
+- The two-step creation wizard defaults to `Independent copy`, keeps creation behind the final confirmation, and supports keyboard navigation.
+- Workspace and space policy surfaces expose deployment, workspace, space, group, and effective-result states without changing policy during QA.
 
-## Visual comparison
+## Evidence
 
-- Full-view prototype screenshot: unavailable. Chrome `Page.captureScreenshot` timed out repeatedly, including through the browser screenshot API and a raw CDP capture.
-- The in-app browser could capture pixels but did not have an authenticated Docmost session, so it could not render the target state.
-- Because no browser-rendered prototype pixels were available, the reference and implementation could not be placed in the same comparison input.
-- No pixel-level mismatch findings are recorded; this is a capture limitation, not a passing visual comparison.
+- Page-template Playwright lifecycle: 24/24 passed across desktop Chromium, desktop Firefox, Mobile Chromium, and Mobile WebKit.
+- Template catalogue component tests: 18/18 passed.
+- Axe checks in the lifecycle cover the catalogue, linked-instance status, and recovery states.
+- Manual browser captures are stored under `output/audit/page-templates-redesign-final/manual-browser`.
 
-## Checks completed
+## Boundaries
 
-- Client tests: passed, 120 files and 559 tests.
-- Client lint: passed with two unrelated existing warnings.
-- Client production build: passed.
-- DOM and geometry checks: passed for the target interaction and the 422-463 px composer widths.
+- The full editor browser matrix completed 41/45. Four failures are the same unrelated Draw.io iframe availability assertion in two desktop scenarios across Chromium and Firefox; all 24 page-template cases in that matrix passed.
+- Hosted CI, physical devices, and production deployment were not exercised.
 
-## Final result
-
-final result: blocked
-
-The implementation is functionally verified, but Product Design visual QA remains blocked until an authenticated browser-rendered screenshot can be captured and compared with the selected reference.
+final result: passed
