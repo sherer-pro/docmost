@@ -1538,7 +1538,7 @@
           "operations": "Create den Schlüssel RAG und kopieren Sie ihn einmal|Test /api/rag/pages und Cursor-Fortsetzung|Starten Sie den externen Indexer||Die Antworten geben 200, stabile Cursor und nur den live lesbaren Bereich des Schlüsselerstellers zurück||Widerrufen Sie den Schlüssel und stoppen Sie den Indexer. Erstellen Sie einen neuen Schlüssel für die Wiederherstellung"
         },
         "ragSync": {
-          "facts": "Bereitstellungsbetreiber und Raumadministrator||RAG_SYNC_ENABLED, ein zulässiger Open WebUI-Ursprung, Knowledge ID und ein Writer-Schlüssel||Docmost behält inkrementell den ausgewählten Open WebUI Knowledge Base bei",
+          "facts": "Bereitstellungsbetreiber und Raumadministrator||RAG_SYNC_ENABLED, ein zulässiger Open WebUI-Ursprung, Knowledge ID und ein Writer-Schlüssel||Docmost behält inkrementell den ausgewählten Open WebUI Knowledge Base bei; nur PDF-, DOCX-, TXT- und Markdown-Anhänge gelangen in den portablen Dokumentindex",
           "operations": "Save die Anmeldeinformationen des Ziels und des Autors|Führen Sie Test für das aktuelle Ziel aus|Enable die Bindung||Der letzte Erfolg schreitet voran und es bleibt kein Bereinigungs- oder Zielinkongruenzstatus bestehen||Deaktivieren Sie die Bindung und schließen Sie die Bereinigung ab. Für ein Notfall-Rollback deaktivieren Sie RAG_SYNC_ENABLED und starten Sie neu"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 Dienst nicht verfügbar||Stellen Sie zuerst Redis, den Anbieter oder das externe Ziel wieder her. Die Zulassung schlägt fehl, wenn Redis die Grenzen nicht schützen kann.",
         "leaseLost": "Redis-Leasing verloren||Behandeln Sie die aktive Anfrage als abgebrochen, überprüfen Sie die Redis-Stabilität und die Eigentumsabgrenzung und versuchen Sie es dann idempotent erneut.",
         "sourceAccessChanged": "source_access_changed||Die teilweise Antwort und die Zitate wurden gelöscht, da sich der Zugriff geändert hat. Öffnen Sie die Quelle erst erneut, nachdem die Berechtigungen absichtlich wiederhergestellt wurden.",
+        "sourceRemoved": "Quelle entfernt||Eine Seite, Datenbank oder Anlage ist nach dem Feed-Snapshot verschwunden. RAG Sync behandelt dies als Löschung, entfernt verwaltete Dateien und fährt ohne interne Not-found-Wiederholungen fort.",
+        "runtimeStopped": "Synchronisierung angehalten||Ein nicht wiederholbarer Laufzeitfehler hat die Bindung deaktiviert. Beheben Sie die gemeldete Ursache; wenn das Ziel nicht verfügbar ist, testen Sie die Knowledge Base erneut, bevor Sie die Synchronisierung aktivieren.",
         "cleanupRequired": "Aufräumarbeiten erforderlich||Wechseln Sie noch nicht das Ziel und drehen Sie den APP_SECRET noch nicht. Stellen Sie den aktuellen Schreibzugriff wieder her, schließen Sie die Bereinigung ab, speichern und testen Sie dann das neue Ziel.",
         "consentRevoked": "MCP Einwilligung widerrufen||Der Benutzer muss erneut prüfen und sich anmelden. Durch eine URL-Änderung wird bewusst jede gespeicherte Einwilligung des bisherigen Empfängers widerrufen."
       }

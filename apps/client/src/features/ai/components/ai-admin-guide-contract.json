@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 6,
   "anchors": [
     "assistant",
     "retrieval",
@@ -115,6 +115,8 @@
     "troubleshooting.consentRevoked",
     "troubleshooting.leaseLost",
     "troubleshooting.sourceAccessChanged",
+    "troubleshooting.sourceRemoved",
+    "troubleshooting.runtimeStopped",
     "troubleshootingDescription",
     "troubleshootingTitle"
   ]

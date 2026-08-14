@@ -1538,7 +1538,7 @@
           "operations": "Create RAG 키를 한 번 복사합니다.|Test /api/rag/pages 및 커서 계속|외부 인덱서 시작||응답은 200, 안정적인 커서 및 키 작성자의 실시간 읽기 가능 범위만 반환합니다.||키를 취소하고 인덱서를 중지합니다. 복구를 위한 새 키 생성"
         },
         "ragSync": {
-          "facts": "배치 운영자 및 공간 관리자||RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키||Docmost는 선택된 Open WebUI Knowledge Base를 점진적으로 유지합니다.",
+          "facts": "배치 운영자 및 공간 관리자||RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키||Docmost는 선택된 Open WebUI Knowledge Base를 점진적으로 유지하며 PDF, DOCX, TXT 및 Markdown 첨부 파일만 이식 가능한 문서 인덱스에 추가합니다.",
           "operations": "Save 대상 및 작성자 자격 증명|현재 대상에 대해 Test를 실행하십시오.|Enable 바인딩||마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.||바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요."
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "503 서비스를 사용할 수 없습니다.||Redis, 공급자 또는 외부 대상을 먼저 복원하십시오. Redis가 한계를 보호할 수 없으면 승인이 실패합니다.",
         "leaseLost": "Redis 임대 손실||활성 요청을 중단된 것으로 처리하고 Redis 안정성과 소유권 펜싱을 확인한 다음 멱등적으로 재시도합니다.",
         "sourceAccessChanged": "source_access_changed||액세스 권한이 변경되어 부분 답변과 인용이 삭제되었습니다. 권한이 의도적으로 복원된 후에만 소스를 다시 엽니다.",
+        "sourceRemoved": "소스 삭제됨||피드 스냅샷 이후 페이지, 데이터베이스 또는 첨부 파일이 사라졌습니다. RAG Sync는 이를 삭제로 처리하고 관리 파일을 제거한 뒤 내부 not found 오류를 재시도하지 않고 계속합니다.",
+        "runtimeStopped": "동기화 중지됨||재시도할 수 없는 런타임 오류로 바인딩이 비활성화되었습니다. 보고된 원인을 해결하고, 대상을 사용할 수 없다면 동기화를 활성화하기 전에 Knowledge Base를 다시 테스트하세요.",
         "cleanupRequired": "정리 필요||아직 대상을 전환하거나 APP_SECRET를 회전하지 마십시오. 현재 작성자 액세스를 복원하고 정리를 마친 다음 새 대상을 저장하고 테스트합니다.",
         "consentRevoked": "MCP 동의가 취소되었습니다.||사용자는 다시 검토하고 선택해야 합니다. URL을 변경하면 이전 수신자에 대해 저장된 모든 동의가 의도적으로 취소됩니다."
       }

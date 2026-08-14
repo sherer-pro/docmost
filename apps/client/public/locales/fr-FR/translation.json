@@ -1538,7 +1538,7 @@
           "operations": "Create la clé RAG et copiez-la une fois|Test /api/rag/pages et suite du curseur|Démarrer l'indexeur externe||Les réponses renvoient 200 curseurs stables et uniquement la portée lisible en direct du créateur de la clé.||Révoquer la clé et arrêter l'indexeur ; créer une nouvelle clé pour la récupération"
         },
         "ragSync": {
-          "facts": "Opérateur de déploiement et administrateur d'espace||RAG_SYNC_ENABLED, une origine Open WebUI autorisée, Knowledge ID et une clé d'écriture||Docmost maintient progressivement le Open WebUI Knowledge Base sélectionné",
+          "facts": "Opérateur de déploiement et administrateur d'espace||RAG_SYNC_ENABLED, une origine Open WebUI autorisée, Knowledge ID et une clé d'écriture||Docmost maintient progressivement le Open WebUI Knowledge Base sélectionné ; seuls les fichiers PDF, DOCX, TXT et Markdown entrent dans l'index de documents portable",
           "operations": "Save la cible et les informations d'identification du rédacteur|Exécutez Test pour la cible actuelle|Enable la reliure||Le dernier succès avance et il ne reste aucun état de nettoyage ou de non-concordance de cible.||Désactivez la liaison et terminez le nettoyage ; pour une restauration d'urgence, désactivez RAG_SYNC_ENABLED et redémarrez"
         },
         "inboundMcp": {
@@ -1592,6 +1592,8 @@
         "503": "Service 503 indisponible||Restaurez d'abord Redis, le fournisseur ou la cible externe. L'admission échoue lorsque le Redis ne peut pas protéger les limites.",
         "leaseLost": "Bail Redis perdu||Traitez la demande active comme abandonnée, vérifiez la stabilité et la clôture de propriété du Redis, puis réessayez de manière idempotente.",
         "sourceAccessChanged": "source_access_changed||La réponse partielle et les citations ont été effacées car l'accès a changé. Rouvrez la source uniquement après que les autorisations ont été intentionnellement restaurées.",
+        "sourceRemoved": "source supprimée||Une page, une base de données ou une pièce jointe a disparu après l'instantané du flux. RAG Sync la traite comme une suppression, retire les fichiers gérés et continue sans réessayer une erreur interne not found.",
+        "runtimeStopped": "synchronisation arrêtée||Une erreur d'exécution non réessayable a désactivé la liaison. Corrigez la cause signalée ; si la cible est indisponible, testez à nouveau la Knowledge Base avant d'activer la synchronisation.",
         "cleanupRequired": "nettoyage requis||Ne changez pas de cible et ne faites pas encore pivoter le APP_SECRET. Restaurez l'accès écrivain actuel, terminez le nettoyage, puis enregistrez et testez la nouvelle cible.",
         "consentRevoked": "Consentement MCP révoqué||L'utilisateur doit vérifier et s'inscrire à nouveau. Une modification d'URL révoque intentionnellement tout consentement enregistré pour le destinataire précédent."
       }
