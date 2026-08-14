@@ -104,12 +104,13 @@
 - Build the entire monorepo: `pnpm build`
 - Targeted root builds: `pnpm server:build`, `pnpm client:build`, `pnpm editor-ext:build`
 - Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
-- Full local verification (env contract + build → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
+- Full local verification (env contract + build → client bundle budget → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
 - Release-candidate verification (full local verification plus route/docs/text/audit contracts and AI/editor browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Enforce the permanent absence of external product telemetry code, configuration, and dependencies: `pnpm check:telemetry`
 - Compare Knip and jscpd findings with the reviewed, expiring maintenance baseline: `pnpm check:maintenance-audit`
+- Check the production Vite manifest against the general chunk cap and the exact lazy Excalidraw exception/importer graph: `pnpm check:client-bundle` (requires a current client build).
 - Check manifest, MCP runtime, and release-tag version consistency: `pnpm check:release-version`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
@@ -276,7 +277,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-- `.github/workflows/ci.yml` — PR validation (`install`, `build`, release-version, route/AI/RAG/text contract checks, `check:env`, permanent product-telemetry removal, maintenance baseline drift, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+- `.github/workflows/ci.yml` — PR validation (`install`, `build`, client bundle budget, release-version, route/AI/RAG/text contract checks, `check:env`, permanent product-telemetry removal, maintenance baseline drift, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.

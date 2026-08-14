@@ -36,7 +36,8 @@ export default defineConfig(({ mode }) => {
       exclude: [...configDefaults.exclude, "e2e/**"],
     },
     build: {
-      chunkSizeWarningLimit: 1500,
+      manifest: true,
+      chunkSizeWarningLimit: 1822,
     },
     resolve: {
       alias: {
