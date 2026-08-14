@@ -50,7 +50,7 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Build the release image
-        run: docker build --build-arg PNPM_OFFLINE=0 -t "shererpro/docmost:${VERSION}" .
+        run: docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${VERSION}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t "shererpro/docmost:${VERSION}" .
 
       - name: Push the immutable version first
         run: docker push "shererpro/docmost:${VERSION}"

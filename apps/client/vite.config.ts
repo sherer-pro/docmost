@@ -15,8 +15,6 @@ export default defineConfig(({ mode }) => {
     CLOUD,
     SUBDOMAIN_HOST,
     COLLAB_URL,
-    POSTHOG_HOST,
-    POSTHOG_KEY,
   } = loadEnv(mode, envPath, "");
 
   return {
@@ -30,8 +28,6 @@ export default defineConfig(({ mode }) => {
         CLOUD,
         SUBDOMAIN_HOST,
         COLLAB_URL,
-        POSTHOG_HOST,
-        POSTHOG_KEY,
       },
       APP_VERSION: JSON.stringify(process.env.npm_package_version),
     },

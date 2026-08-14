@@ -46,8 +46,6 @@ The client reads these values via `vite loadEnv`:
 - `DRAWIO_URL`
 - `CLOUD`
 - `SUBDOMAIN_HOST`
-- `POSTHOG_HOST`
-- `POSTHOG_KEY`
 
 In development these values come from repository root `.env*` files. In production/static serving, the backend serves the deployment/runtime subset from `/window-config.js` without mutating built client files.
 

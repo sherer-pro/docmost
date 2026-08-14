@@ -662,6 +662,12 @@ The fork includes its own maintenance and development infrastructure:
 
 - duplicate and unused code detection;
 
+- a blocking, expiring maintenance baseline that rejects new Knip or duplicate-code findings;
+
+- a permanent contract that prevents external product telemetry from being reintroduced;
+
+- OCI image version and source-revision labels for release provenance;
+
 - architecture documentation;
 
 - an `AGENTS.md` file for AI agents working with the repository;

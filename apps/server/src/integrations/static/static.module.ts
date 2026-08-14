@@ -81,8 +81,6 @@ export class StaticModule implements OnModuleInit {
           ? this.environmentService.getSubdomainHost()
           : undefined,
         COLLAB_URL: this.environmentService.getCollabUrl(),
-        POSTHOG_HOST: this.environmentService.getPostHogHost(),
-        POSTHOG_KEY: this.environmentService.getPostHogKey(),
       };
 
       const windowConfigScriptContent = `window.CONFIG=${JSON.stringify(configString)};`;

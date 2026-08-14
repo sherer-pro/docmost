@@ -79,7 +79,11 @@ test("RAG Sync harness keeps collaboration and PostgreSQL runtime prerequisites"
     ],
   ]) {
     const mutated = ragSyncComposeSource.replace(needle, "removed");
-    assert.notEqual(mutated, ragSyncComposeSource, `fixture must contain ${needle}`);
+    assert.notEqual(
+      mutated,
+      ragSyncComposeSource,
+      `fixture must contain ${needle}`,
+    );
     const errors = validateReleaseGateContract(
       inputs({ ragSyncComposeSource: mutated }),
     );
@@ -91,7 +95,9 @@ test("RAG Sync harness keeps collaboration and PostgreSQL runtime prerequisites"
     "postgres:18-alpine@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
   );
   assert.ok(
-    validateReleaseGateContract(inputs({ ragSyncComposeSource: alpine })).includes(
+    validateReleaseGateContract(
+      inputs({ ragSyncComposeSource: alpine }),
+    ).includes(
       "RAG Sync harness must not use the unsupported Alpine PostgreSQL runtime",
     ),
   );
@@ -269,7 +275,10 @@ test("production migrations resolve file-backed secrets before connecting", () =
 
 test("production runtime dependencies populate their own offline cache", () => {
   const command = "pnpm fetch --prod --frozen-lockfile";
-  assert.ok(dockerfileSource.includes(command), "Dockerfile fixture must fetch");
+  assert.ok(
+    dockerfileSource.includes(command),
+    "Dockerfile fixture must fetch",
+  );
   const errors = validateReleaseGateContract(
     inputs({
       dockerfileSource: dockerfileSource.replace(command, "removed-fetch"),
@@ -281,6 +290,28 @@ test("production runtime dependencies populate their own offline cache", () => {
     ),
   );
 });
+
+for (const [fragment, expectedError] of [
+  ["ARG BUILD_VERSION=dev", "Dockerfile must declare BUILD_VERSION"],
+  ["ARG BUILD_REVISION=unknown", "Dockerfile must declare BUILD_REVISION"],
+  [
+    'org.opencontainers.image.version="${BUILD_VERSION}"',
+    "Dockerfile must label the OCI image version",
+  ],
+  [
+    'org.opencontainers.image.revision="${BUILD_REVISION}"',
+    "Dockerfile must label the OCI image revision",
+  ],
+]) {
+  test(`rejects a Dockerfile without ${fragment}`, () => {
+    const errors = validateReleaseGateContract(
+      inputs({
+        dockerfileSource: dockerfileSource.replace(fragment, "removed"),
+      }),
+    );
+    assert.ok(errors.includes(expectedError));
+  });
+}
 
 const workflowMutations = [
   ["community boundary", "ciSource", "pnpm check:no-ee"],
@@ -294,6 +325,8 @@ const workflowMutations = [
   ["AI docs", "ciSource", "pnpm check:ai-docs"],
   ["text contracts", "ciSource", "pnpm test:text-contracts"],
   ["environment", "ciSource", "pnpm check:env"],
+  ["product telemetry removal", "ciSource", "pnpm check:telemetry"],
+  ["maintenance audit", "ciSource", "pnpm check:maintenance-audit"],
   ["lint", "ciSource", "pnpm lint"],
   ["client unit", "ciSource", "pnpm --filter ./apps/client test"],
   ["server unit", "ciSource", "pnpm --filter ./apps/server test"],
@@ -316,7 +349,7 @@ const workflowMutations = [
   [
     "production image build",
     "ciSource",
-    "docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .",
+    'docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${build_version}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t docmost:ci .',
   ],
   [
     "compiled production smoke",
@@ -364,7 +397,12 @@ const workflowMutations = [
   [
     "release image build",
     "dockerSource",
-    "docker build --build-arg PNPM_OFFLINE=0",
+    '--build-arg "BUILD_VERSION=${VERSION}"',
+  ],
+  [
+    "release image revision",
+    "dockerSource",
+    '--build-arg "BUILD_REVISION=${GITHUB_SHA}"',
   ],
   [
     "versioned image publish",
@@ -488,8 +526,11 @@ test("rejects fail-open command chaining in root verification scripts", () => {
 
 for (const [scriptName, command] of [
   ["verify:quick", "run check:release-version"],
+  ["verify:quick", "run check:telemetry"],
   ["verify:quick", "run test:security"],
   ["verify:full", "run check:release-version"],
+  ["verify:full", "run check:telemetry"],
+  ["verify:full", "run check:maintenance-audit"],
   ["verify:full", "run build"],
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run test:ai:e2e"],

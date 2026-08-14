@@ -47,13 +47,11 @@ describe('Environment validation', () => {
         AWS_S3_ENDPOINT: '',
         AWS_S3_URL: '',
         DRAWIO_URL: '',
-        POSTHOG_HOST: '',
       }),
     ).toMatchObject({
       AWS_S3_ENDPOINT: '',
       AWS_S3_URL: '',
       DRAWIO_URL: '',
-      POSTHOG_HOST: '',
     });
   });
 

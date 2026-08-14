@@ -15,6 +15,8 @@ const REQUIRED_JOB_COMMANDS = {
     "pnpm check:ai-docs",
     "pnpm test:text-contracts",
     "pnpm check:env",
+    "pnpm check:telemetry",
+    "pnpm check:maintenance-audit",
     "pnpm lint",
     "pnpm --filter ./apps/client test",
     "pnpm --filter ./apps/server test",
@@ -30,7 +32,8 @@ const REQUIRED_JOB_COMMANDS = {
     "pnpm --filter ./apps/server test:e2e",
   ],
   "production-smoke": [
-    "docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .",
+    'build_version="$(node -p "require(\'./package.json\').version")"',
+    'docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${build_version}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t docmost:ci .',
     "node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci",
     "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
@@ -80,6 +83,7 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run check:release-version",
     "run check:release-gates",
     "run check:env",
+    "run check:telemetry",
     "run check:ai-docs",
     "run lint",
     "run test",
@@ -92,6 +96,8 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run check:release-version",
     "run check:release-gates",
     "run check:env",
+    "run check:telemetry",
+    "run check:maintenance-audit",
     "run check:ai-docs",
     "run build",
     "run lint",
@@ -332,6 +338,20 @@ function validateAiGuideGateMetadata(errors, ciSource) {
 }
 
 function validateDockerfileDependencyInstall(errors, dockerfileSource) {
+  for (const [fragment, message] of [
+    ["ARG BUILD_VERSION=dev", "Dockerfile must declare BUILD_VERSION"],
+    ["ARG BUILD_REVISION=unknown", "Dockerfile must declare BUILD_REVISION"],
+    [
+      'org.opencontainers.image.version="${BUILD_VERSION}"',
+      "Dockerfile must label the OCI image version",
+    ],
+    [
+      'org.opencontainers.image.revision="${BUILD_REVISION}"',
+      "Dockerfile must label the OCI image revision",
+    ],
+  ]) {
+    if (!dockerfileSource.includes(fragment)) errors.push(message);
+  }
   const runtimeStart = dockerfileSource.indexOf(
     "FROM build-base AS runtime-dependencies",
   );
@@ -387,7 +407,9 @@ function validateRagSyncHarness(errors, ragSyncComposeSource) {
     }
   }
   if (/postgres:18-alpine/u.test(ragSyncComposeSource)) {
-    errors.push("RAG Sync harness must not use the unsupported Alpine PostgreSQL runtime");
+    errors.push(
+      "RAG Sync harness must not use the unsupported Alpine PostgreSQL runtime",
+    );
   }
 }
 
@@ -426,7 +448,8 @@ export function validateReleaseGateContract({
   for (const command of [
     'manifest_version="$(node -p "require(\'./package.json\').version")"',
     'test "$tag" = "$expected_tag"',
-    "docker build --build-arg PNPM_OFFLINE=0",
+    '--build-arg "BUILD_VERSION=${VERSION}"',
+    '--build-arg "BUILD_REVISION=${GITHUB_SHA}"',
     'docker push "shererpro/docmost:${VERSION}"',
     "docker push shererpro/docmost:latest",
   ]) {
@@ -460,7 +483,10 @@ async function main() {
   );
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   const dockerfileSource = await readFile("Dockerfile", "utf8");
-  const ragSyncComposeSource = await readFile("tests/rag-sync/compose.yml", "utf8");
+  const ragSyncComposeSource = await readFile(
+    "tests/rag-sync/compose.yml",
+    "utf8",
+  );
   const errors = validateReleaseGateContract({
     ciSource: workflowSources["ci.yml"],
     dockerSource: workflowSources["docker.yml"],

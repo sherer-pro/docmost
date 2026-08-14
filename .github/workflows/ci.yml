@@ -70,6 +70,12 @@ jobs:
       - name: Environment contract check
         run: pnpm check:env
 
+      - name: Product telemetry removal contract
+        run: pnpm check:telemetry
+
+      - name: Maintenance audit baseline
+        run: pnpm check:maintenance-audit
+
       - name: Lint
         run: pnpm lint
 
@@ -129,7 +135,6 @@ jobs:
       DATABASE_URL: postgresql://docmost:docmost-ci-password@127.0.0.1:5432/docmost
       REDIS_URL: redis://127.0.0.1:6379
       AUTH_RATE_LIMIT_STORAGE: redis
-      DISABLE_TELEMETRY: "true"
 
     steps:
       - name: Checkout
@@ -193,7 +198,9 @@ jobs:
           pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: Build the production image once
-        run: docker build --build-arg PNPM_OFFLINE=0 -t docmost:ci .
+        run: |
+          build_version="$(node -p "require('./package.json').version")"
+          docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${build_version}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t docmost:ci .
 
       - name: PostgreSQL runtime migration negative and positive smoke
         run: node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci
@@ -262,7 +269,6 @@ jobs:
             -e RAG_SYNC_PROCESSING_TIMEOUT_MS=30000 \
             -e RAG_SYNC_RECONCILE_INTERVAL_MS=60000 \
             -e RAG_SYNC_SHUTDOWN_TIMEOUT_MS=5000 \
-            -e DISABLE_TELEMETRY=true \
             docmost:ci
           docker run -d --name docmost-app-replica --network docmost-ci \
             --add-host host.docker.internal:host-gateway \
@@ -291,7 +297,6 @@ jobs:
             -e RAG_SYNC_PROCESSING_TIMEOUT_MS=30000 \
             -e RAG_SYNC_RECONCILE_INTERVAL_MS=60000 \
             -e RAG_SYNC_SHUTDOWN_TIMEOUT_MS=5000 \
-            -e DISABLE_TELEMETRY=true \
             docmost:ci
           docker run -d --name docmost-collab --network docmost-ci -p 3001:3001 \
             -v docmost-ci-storage:/app/data/storage \
@@ -306,7 +311,6 @@ jobs:
             -e DATABASE_MIGRATION_MODE=external \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
-            -e DISABLE_TELEMETRY=true \
             --entrypoint node docmost:ci \
             apps/server/dist/apps/server/src/collaboration/server/collab-main.js
 

@@ -38,7 +38,6 @@ x-docmost-app: &docmost-app
     RAG_SYNC_PROCESSING_TIMEOUT_MS: "30000"
     RAG_SYNC_RECONCILE_INTERVAL_MS: "60000"
     RAG_SYNC_SHUTDOWN_TIMEOUT_MS: "5000"
-    DISABLE_TELEMETRY: "true"
 
 services:
   postgres:

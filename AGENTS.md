@@ -33,7 +33,7 @@
 
 - `apps/server/src` — main backend code.
 - `apps/server/src/core/rag-sync` — optional built-in per-space Open WebUI Knowledge synchronizer with PostgreSQL configuration and Redis-fenced runtime state.
-- `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, security, and telemetry.
+- `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, and security.
 - `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
 - `apps/server/src/core/ai` — per-space AI configuration, persistent private chat, async generation, chat files, and optional external retrieval.
 - `apps/server/src/core/database` — Notion-like database API, rows/properties/views, conversion, markdown/export support.
@@ -50,7 +50,7 @@
 - `apps/server/src/core/session` — user session API and active session revocation.
 - `apps/server/src/core/sso` — core OIDC, SAML, and LDAP provider management and authentication.
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
-- `apps/server/src/integrations/{import,export,static,security,telemetry}` — import/export jobs, static frontend serving, security/version/robots helpers, and telemetry.
+- `apps/server/src/integrations/{import,export,static,security}` — import/export jobs, static frontend serving, and security/version/robots helpers.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
 - `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. The administrator-facing projection is `/settings/ai/guide`, implemented by `apps/client/src/features/ai/components/ai-admin-guide.tsx`; its structured scenarios and Mermaid sources live in `ai-admin-guide-content.ts`, while stable anchors, the explicit `ai.adminGuide.*` locale manifest, and shared version live in `ai-admin-guide-contract.json`. Whenever changing production AI/RAG/RAG Sync/MCP/API-key behavior, configuration, routes/contracts, limits, security boundaries, tools, recovery procedures, related migrations, shared API contracts, or environment contracts, update the canonical document, structured guide, contract version, and all 12 locales in the same change. CI passes `AI_GUIDE_BASE_SHA`/`AI_GUIDE_HEAD_SHA` to `check:ai-docs` with full checkout history so the strict diff gate can enforce the coupling; local runs without those variables still validate routes, flags, anchors, manifest coverage, localized field structure, and version equality.
 - `docs/AI_INTEGRATION.md` — operator setup and troubleshooting guide; link to the canonical AI document instead of copying changing limits and recovery rules.
@@ -108,6 +108,8 @@
 - Release-candidate verification (full local verification plus route/docs/text/audit contracts and AI/editor browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
+- Enforce the permanent absence of external product telemetry code, configuration, and dependencies: `pnpm check:telemetry`
+- Compare Knip and jscpd findings with the reviewed, expiring maintenance baseline: `pnpm check:maintenance-audit`
 - Check manifest, MCP runtime, and release-tag version consistency: `pnpm check:release-version`
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
@@ -177,6 +179,7 @@
 - Built-in Open WebUI sync uses the ordinary `docker compose up -d --build` stack. `RAG_SYNC_ENABLED` and runtime limits are deployment env, while target identifiers and encrypted writer keys are configured per space in the UI. There is no separate profile, service, or image.
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.
+- Production and CI builds pass `BUILD_VERSION` and `BUILD_REVISION`; the final image carries them as `org.opencontainers.image.version` and `org.opencontainers.image.revision` labels.
 - Local file storage resolves to `<repo-or-runtime-root>/data/storage`; the Docker image uses runtime root `/app`, and Compose mounts the `docmost` volume at `/app/data/storage`.
 
 > `DATABASE_URL`, `REDIS_URL`, and `APP_SECRET` are required for migrations, backend startup, and part of the integration functionality (see `.env.example`).
@@ -251,7 +254,7 @@ Minimum:
 - Reverse proxy attribution: `TRUSTED_PROXIES` is a comma-separated list of trusted proxy IPs/CIDRs or proxy-addr keywords (`loopback`, `linklocal`, `uniquelocal`). Leave it empty unless Docmost is behind a controlled proxy; `X-Forwarded-*` headers are ignored when it is empty.
 - Auth throttling storage: `AUTH_RATE_LIMIT_STORAGE` may be `memory` for local development, but production validation requires `redis`.
 - Embed iframe allowlist: `EMBED_ALLOWED_ORIGINS` is a comma-separated list of exact trusted `http(s)` origins for generic iframe embeds. Built-in providers are allowlisted separately; keep this empty unless the origin is trusted.
-- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `POSTHOG_*`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
+- Frontend build-time defines are loaded via `vite loadEnv`; deployment/runtime defines such as `APP_URL`, `COLLAB_URL`, `SUBDOMAIN_HOST`, `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT`, `EMBED_ALLOWED_ORIGINS`, and `DRAWIO_URL` are served by the backend from `/window-config.js` without mutating built client files. Keep this contract in sync with `pnpm check:env`.
 
 ---
 
@@ -264,6 +267,7 @@ Minimum:
   - baseline: `pnpm audit`
   - account for root `package.json` `pnpm.overrides` (used to pin vulnerable/conflicting package versions).
   - architecture reports: `pnpm audit:deps`, `pnpm audit:dead-code`, `pnpm audit:duplicates`, `pnpm audit:architecture` use `dependency-cruiser`, `knip`, and `jscpd`; they are non-blocking local audit commands.
+  - `pnpm check:maintenance-audit` is the blocking counterpart: it rejects new or silently resolved Knip/jscpd fingerprints and an overdue `docs/maintenance-audit-baseline.json` review date.
 - Dependency patches: keep and maintain them in `patches/` and root `package.json` `pnpm.patchedDependencies`.
 
 ---
@@ -272,7 +276,7 @@ Minimum:
 
 - The repository includes GitHub Actions workflows:
   - `.github/workflows/docker.yml` — release/docker build and push.
-- `.github/workflows/ci.yml` — PR validation (`install`, `build`, release-version, route/AI/RAG/text contract checks, `check:env`, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+- `.github/workflows/ci.yml` — PR validation (`install`, `build`, release-version, route/AI/RAG/text contract checks, `check:env`, permanent product-telemetry removal, maintenance baseline drift, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.

@@ -354,10 +354,6 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsIn(['true', 'false'])
-  DISABLE_TELEMETRY: string;
-
-  @IsOptional()
-  @IsIn(['true', 'false'])
   DEBUG_MODE: string;
 
   @IsOptional()
@@ -372,15 +368,6 @@ export class EnvironmentVariables {
   @ValidateIf((_obj, value) => value !== '' && value != null)
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   DRAWIO_URL: string;
-
-  @IsOptional()
-  @ValidateIf((_obj, value) => value !== '' && value != null)
-  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
-  POSTHOG_HOST: string;
-
-  @IsOptional()
-  @IsString()
-  POSTHOG_KEY: string;
 
   @IsOptional()
   @IsUrl(
