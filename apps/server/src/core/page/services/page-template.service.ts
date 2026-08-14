@@ -9,7 +9,6 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { createHash } from 'node:crypto';
 import { v7 as uuid7, validate as isUuid } from 'uuid';
 import { Fragment, Slice } from '@tiptap/pm/model';
 import { Transform } from '@tiptap/pm/transform';
@@ -49,33 +48,27 @@ import {
 import { PageService } from './page.service';
 import { executeTx } from '@docmost/db/utils';
 import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
-import { getAttachmentIds } from '../../../common/helpers/prosemirror/utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
 import type { TemplateKind } from '@docmost/api-contract';
 import {
-  collectTemplateFields,
   createTemplateInstanceContent,
   detachTemplateContent,
-  isTemplateFieldFilled,
   normalizeTemplateDraft,
-  summarizeTemplateDiff,
 } from '@docmost/editor-ext/server';
 import {
   DetachSyncedTemplateDto,
   PublishPageTemplateDto,
 } from '../dto/page-template.dto';
+import { PageTemplateContentService } from './page-template-content.service';
+import {
+  PageTemplateOperationKind,
+  PageTemplateOperationService,
+} from './page-template-operation.service';
+import { PageTemplatePublicationService } from './page-template-publication.service';
 
-type OperationKind =
-  | 'snapshot'
-  | 'embed_insert'
-  | 'embed_detach'
-  | 'template_sync'
-  | 'template_detach'
-  | 'legacy_embed_migration';
 const OPERATION_LEASE_MS = 5 * 60 * 1000;
-const PUBLISH_CONFIRMATION_TTL_MS = 10 * 60 * 1000;
 
 type LegacyAttachmentCopyPlan = {
   source: Page;
@@ -91,6 +84,9 @@ type LegacyMigrationIssue = {
 @Injectable()
 export class PageTemplateService {
   private readonly logger = new Logger(PageTemplateService.name);
+  private readonly content: PageTemplateContentService;
+  private readonly operations: PageTemplateOperationService;
+  private readonly publication: PageTemplatePublicationService;
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
@@ -109,7 +105,25 @@ export class PageTemplateService {
     private readonly transclusionService: TransclusionService,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     @Optional() private readonly queueOutbox?: QueueOutboxService,
-  ) {}
+  ) {
+    this.content = new PageTemplateContentService(
+      pageRepo,
+      pageAccessService,
+      spaceAbility,
+      databaseRepo,
+      databaseRowRepo,
+      attachmentRepo,
+      storageService,
+      collaborationGateway,
+    );
+    this.operations = new PageTemplateOperationService(
+      db,
+      pageRepo,
+      attachmentRepo,
+      storageService,
+    );
+    this.publication = new PageTemplatePublicationService(db);
+  }
 
   async getProvenance(pageId: string, user: User) {
     const page = await this.pageRepo.findById(pageId);
@@ -1592,79 +1606,13 @@ export class PageTemplateService {
     issueConfirmation: boolean,
     suppliedDraft?: unknown,
   ) {
-    const draft = this.normalizeDraftForPublication(
-      suppliedDraft ?? (await this.getLiveContent(template.id, user)),
+    return this.publication.buildPublishPreflight(
+      template,
+      user,
+      issueConfirmation,
+      (pageId, actor) => this.getLiveContent(pageId, actor),
+      suppliedDraft,
     );
-    const draftHash = hashProseMirrorJson(draft as any);
-    const latest = await this.db
-      .selectFrom('pageTemplateRevisions')
-      .selectAll()
-      .where('templatePageId', '=', template.id)
-      .orderBy('revision', 'desc')
-      .executeTakeFirst();
-    const diff = summarizeTemplateDiff(
-      latest?.content ?? { type: 'doc', content: [] },
-      draft,
-    );
-    const removedFieldIds = new Set(
-      diff.removedFields.map((field) => field.fieldId),
-    );
-    const instances = await this.db
-      .selectFrom('pageTemplateInstances as instance')
-      .innerJoin('pages as child', 'child.id', 'instance.childPageId')
-      .select(['instance.id', 'instance.childPageId', 'child.content'])
-      .where('instance.templatePageId', '=', template.id)
-      .where('instance.instanceKind', '=', 'synced')
-      .where('instance.status', 'in', ['active', 'syncing', 'error'])
-      .where('child.deletedAt', 'is', null)
-      .execute();
-    let filledRemovedFieldInstanceCount = 0;
-    for (const instance of instances) {
-      const liveContent = await this.getLiveContent(
-        instance.childPageId,
-        user,
-      ).catch(() => instance.content);
-      const fields = collectTemplateFields(liveContent);
-      if (
-        [...removedFieldIds].some((fieldId) =>
-          isTemplateFieldFilled(fields.get(fieldId)),
-        )
-      ) {
-        filledRemovedFieldInstanceCount += 1;
-      }
-    }
-    let confirmationToken: string | null = null;
-    let confirmationExpiresAt: Date | null = null;
-    const requiresDestructiveConfirmation =
-      removedFieldIds.size > 0 && instances.length > 0;
-    if (issueConfirmation && requiresDestructiveConfirmation) {
-      confirmationExpiresAt = new Date(
-        Date.now() + PUBLISH_CONFIRMATION_TTL_MS,
-      );
-      const confirmation = await this.db
-        .insertInto('pageTemplatePublishConfirmations')
-        .values({
-          templatePageId: template.id,
-          requestedById: user.id,
-          draftHash,
-          removedFieldIds: [...removedFieldIds] as any,
-          filledInstanceCount: filledRemovedFieldInstanceCount,
-          expiresAt: confirmationExpiresAt,
-        })
-        .returning('id')
-        .executeTakeFirstOrThrow();
-      confirmationToken = confirmation.id;
-    }
-    return {
-      draftHash,
-      nextRevision: Number(latest?.revision ?? 0) + 1,
-      diff,
-      activeInstanceCount: instances.length,
-      filledRemovedFieldInstanceCount,
-      requiresDestructiveConfirmation,
-      confirmationToken,
-      confirmationExpiresAt: confirmationExpiresAt?.toISOString() ?? null,
-    };
   }
 
   private async requireManagedTemplate(
@@ -1697,46 +1645,15 @@ export class PageTemplateService {
   }
 
   private serializeRevision(revision: any, includeContent = false) {
-    return {
-      id: revision.id,
-      templatePageId: revision.templatePageId,
-      revision: revision.revision,
-      contentHash: revision.contentHash,
-      publishedById: revision.publishedById,
-      createdAt: new Date(revision.createdAt).toISOString(),
-      ...(includeContent ? { content: revision.content } : {}),
-    };
+    return this.publication.serializeRevision(revision, includeContent);
   }
 
   private normalizeDraftForPublication(content: unknown): unknown {
-    const seed = this.hashRequest(content);
-    let index = 0;
-    return normalizeTemplateDraft(content, () => {
-      const hex = createHash('sha256')
-        .update(`${seed}:${index++}`)
-        .digest('hex')
-        .slice(0, 32);
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    });
+    return this.publication.normalizeDraftForPublication(content);
   }
 
   private serializeSyncRun(run: any) {
-    return {
-      id: run.id,
-      templatePageId: run.templatePageId,
-      revision: run.revision,
-      status: run.status,
-      totalCount: Number(run.totalCount),
-      processedCount: Number(run.processedCount),
-      succeededCount: Number(run.succeededCount),
-      failedCount: Number(run.failedCount),
-      errorCode: run.errorCode,
-      startedAt: run.startedAt ? new Date(run.startedAt).toISOString() : null,
-      completedAt: run.completedAt
-        ? new Date(run.completedAt).toISOString()
-        : null,
-      createdAt: new Date(run.createdAt).toISOString(),
-    };
+    return this.publication.serializeSyncRun(run);
   }
 
   async findLegacyPageEmbedCandidates(): Promise<
@@ -2514,9 +2431,7 @@ export class PageTemplateService {
   }
 
   private async getLiveContent(pageId: string, user: User): Promise<any> {
-    return this.collaborationGateway.getPageContent(`page.${pageId}`, {
-      user,
-    }) as Promise<any>;
+    return this.content.getLiveContent(pageId, user);
   }
 
   private async applyMutation(
@@ -2529,18 +2444,15 @@ export class PageTemplateService {
     user: User,
     systemSyncRevision?: number,
   ): Promise<{ beforeHash: string; afterHash: string }> {
-    return this.collaborationGateway.applyPageTemplateMutation(
-      `page.${pageId}`,
-      {
-        originalContent,
-        nextContent,
-        baseContentHash,
-        mutationId,
-        operationLeaseToken,
-        workspaceId: user.workspaceId,
-        systemSyncRevision,
-        user,
-      },
+    return this.content.applyMutation(
+      pageId,
+      originalContent,
+      nextContent,
+      baseContentHash,
+      mutationId,
+      operationLeaseToken,
+      user,
+      systemSyncRevision,
     );
   }
 
@@ -2548,56 +2460,21 @@ export class PageTemplateService {
     pageId: string,
     user: User,
   ): Promise<Page> {
-    const page = await this.requirePlainDocument(pageId, user.workspaceId);
-    await this.pageAccessService.assertCanReadPage(page, user);
-    if (!page.templateKind) {
-      throw new BadRequestException({
-        code: 'page_template_marker_required',
-        message: 'The source page is not a template',
-      });
-    }
-    return page;
+    return this.content.requireTemplateSource(pageId, user);
   }
 
   private async requirePlainDocument(
     pageId: string,
     workspaceId: string,
   ): Promise<Page> {
-    const page = await this.pageRepo.findById(pageId, { includeContent: true });
-    if (!page || page.deletedAt || page.workspaceId !== workspaceId) {
-      throw new NotFoundException('Page not found');
-    }
-    const [database, row] = await Promise.all([
-      this.databaseRepo.findByPageId(page.id, workspaceId),
-      this.databaseRowRepo.findActiveByPageId(page.id, workspaceId),
-    ]);
-    if (database || row) {
-      throw new BadRequestException({
-        code: 'page_template_document_only',
-        message: 'Page templates support document pages only',
-      });
-    }
-    return page;
+    return this.content.requirePlainDocument(pageId, workspaceId);
   }
 
   private async findReadablePlainDocument(
     pageId: string,
     user: User,
   ): Promise<Page | null> {
-    let page: Page;
-    try {
-      page = await this.requirePlainDocument(pageId, user.workspaceId);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        return null;
-      }
-      throw error;
-    }
-    const access = await this.pageAccessService.getEffectiveAccess(page, user);
-    return access.capabilities.canRead ? page : null;
+    return this.content.findReadablePlainDocument(pageId, user);
   }
 
   private async assertCanCreate(
@@ -2605,20 +2482,7 @@ export class PageTemplateService {
     parentPageId: string | undefined,
     user: User,
   ): Promise<void> {
-    if (parentPageId) {
-      const parent = await this.requirePlainDocument(
-        parentPageId,
-        user.workspaceId,
-      );
-      if (parent.spaceId !== spaceId)
-        throw new NotFoundException('Parent page not found');
-      await this.pageAccessService.assertCanCreateChild(parent, user);
-      return;
-    }
-    const ability = await this.spaceAbility.createForUser(user, spaceId);
-    if (ability.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)) {
-      throw new ForbiddenException();
-    }
+    return this.content.assertCanCreate(spaceId, parentPageId, user);
   }
 
   private findPageEmbed(content: unknown, referenceNodeId: string) {
@@ -2665,212 +2529,48 @@ export class PageTemplateService {
     copiedPaths: string[],
     insertRows: boolean,
   ): Promise<any[]> {
-    if (copies.length === 0) return [];
-    const originals = await this.attachmentRepo.findByIds(
-      copies.map((copy) => copy.oldAttachmentId),
+    return this.content.copyAttachments(
+      copies,
+      source,
+      targetPageId,
+      targetSpaceId,
+      user,
+      copiedPaths,
+      insertRows,
     );
-    const byId = new Map(
-      originals
-        .filter((attachment) => attachment.pageId === source.id)
-        .map((attachment) => [attachment.id, attachment]),
-    );
-    const rows: any[] = [];
-    for (const copy of copies) {
-      const original = byId.get(copy.oldAttachmentId);
-      if (!original) {
-        throw this.conflict(
-          'page_template_attachment_unavailable',
-          'A referenced attachment is unavailable',
-        );
-      }
-      const filePath = original.filePath
-        .split(copy.oldAttachmentId)
-        .join(copy.newAttachmentId);
-      await this.storageService.copy(original.filePath, filePath);
-      copiedPaths.push(filePath);
-      const row = {
-        id: copy.newAttachmentId,
-        type: original.type,
-        filePath,
-        fileName: original.fileName,
-        fileSize: original.fileSize,
-        mimeType: original.mimeType,
-        fileExt: original.fileExt,
-        creatorId: user.id,
-        workspaceId: user.workspaceId,
-        pageId: targetPageId,
-        spaceId: targetSpaceId,
-        textContent: original.textContent,
-      };
-      rows.push(row);
-      if (insertRows) await this.attachmentRepo.insertAttachment(row);
-    }
-    return rows;
   }
 
   private async beginOperation(
-    kind: OperationKind,
+    kind: PageTemplateOperationKind,
     idempotencyKey: string,
     user: User,
     request: unknown,
     fields: Record<string, unknown>,
   ): Promise<any> {
-    await this.reconcileExpiredOperations(user.workspaceId);
-    const requestHash = this.hashRequest(request);
-    const leaseExpiresAt = new Date(Date.now() + OPERATION_LEASE_MS);
-    const leaseToken = uuid7();
-    let inserted: any;
-    try {
-      inserted = await this.db
-        .insertInto('pageTemplateOperations')
-        .values({
-          workspaceId: user.workspaceId,
-          requestedById: user.id,
-          operationKind: kind,
-          idempotencyKey,
-          requestHash,
-          status: 'pending',
-          leaseToken,
-          leaseExpiresAt,
-          ...(fields as any),
-        })
-        .onConflict((conflict) =>
-          conflict
-            .columns([
-              'workspaceId',
-              'requestedById',
-              'operationKind',
-              'idempotencyKey',
-            ])
-            .doNothing(),
-        )
-        .returningAll()
-        .executeTakeFirst();
-    } catch (error) {
-      if (kind === 'embed_detach' && (error as any)?.code === '23505') {
-        const active = await this.db
-          .selectFrom('pageTemplateOperations')
-          .selectAll()
-          .where('workspaceId', '=', user.workspaceId)
-          .where('operationKind', '=', 'embed_detach')
-          .where('consumerPageId', '=', fields.consumerPageId as string)
-          .where('referenceNodeId', '=', fields.referenceNodeId as string)
-          .where('status', '=', 'pending')
-          .executeTakeFirst();
-        if (active) {
-          const settled = await this.waitForOperationToSettle(active.id);
-          if (settled?.status === 'completed') return settled;
-          throw this.conflict(
-            'page_template_operation_in_progress',
-            'Another detach operation is still running',
-          );
-        }
-      }
-      throw error;
-    }
-    if (inserted) return inserted;
-    const existing = await this.findOperation(kind, idempotencyKey, user);
-    if (!existing || existing.requestHash !== requestHash) {
-      throw this.conflict(
-        'page_template_idempotency_conflict',
-        'Idempotency key was used for a different request',
-      );
-    }
-    if (existing.status === 'failed') {
-      try {
-        const claimed = await this.db
-          .updateTable('pageTemplateOperations')
-          .set({
-            status: 'pending',
-            errorCode: null,
-            leaseToken,
-            leaseExpiresAt,
-            attemptCount: existing.attemptCount + 1,
-            updatedAt: new Date(),
-          })
-          .where('id', '=', existing.id)
-          .where('status', '=', 'failed')
-          .returningAll()
-          .executeTakeFirst();
-        if (claimed) return claimed;
-      } catch (error) {
-        if (kind === 'embed_detach' && (error as any)?.code === '23505') {
-          const active = await this.findActiveDetachOperation(
-            user.workspaceId,
-            fields,
-          );
-          if (active) {
-            const settled = await this.waitForOperationToSettle(active.id);
-            if (settled?.status === 'completed') return settled;
-            throw this.conflict(
-              'page_template_operation_in_progress',
-              'Another detach operation is still running',
-            );
-          }
-        }
-        throw error;
-      }
-    }
-    if (existing.status === 'pending') {
-      if (
-        existing.leaseToken &&
-        (await this.recoverOperationResult(existing, existing.leaseToken))
-      ) {
-        return this.findOperation(kind, idempotencyKey, user);
-      }
-      const claimed = await this.db
-        .updateTable('pageTemplateOperations')
-        .set({
-          leaseToken,
-          leaseExpiresAt,
-          attemptCount: existing.attemptCount + 1,
-          updatedAt: new Date(),
-        })
-        .where('id', '=', existing.id)
-        .where('status', '=', 'pending')
-        .where((eb) =>
-          eb.or([
-            eb('leaseExpiresAt', 'is', null),
-            eb('leaseExpiresAt', '<=', new Date()),
-          ]),
-        )
-        .returningAll()
-        .executeTakeFirst();
-      if (claimed) return claimed;
-      throw this.conflict(
-        'page_template_operation_in_progress',
-        'An operation with this idempotency key is already running',
-      );
-    }
-    return existing;
+    return this.operations.beginOperation(
+      kind,
+      idempotencyKey,
+      user,
+      request,
+      fields,
+    );
   }
 
-  private findOperation(kind: OperationKind, key: string, user: User) {
-    return this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', user.workspaceId)
-      .where('requestedById', '=', user.id)
-      .where('operationKind', '=', kind)
-      .where('idempotencyKey', '=', key)
-      .executeTakeFirst();
+  private findOperation(
+    kind: PageTemplateOperationKind,
+    key: string,
+    user: User,
+  ) {
+    return this.operations.findOperation(kind, key, user);
   }
 
   private async findCompletedOperation(
-    kind: OperationKind,
+    kind: PageTemplateOperationKind,
     key: string,
     user: User,
     request: unknown,
   ): Promise<any | undefined> {
-    const operation = await this.findOperation(kind, key, user);
-    if (!operation) return undefined;
-    if (operation.requestHash !== this.hashRequest(request)) {
-      throw this.conflict(
-        'page_template_idempotency_conflict',
-        'Idempotency key was used for a different request',
-      );
-    }
-    return operation.status === 'completed' ? operation : undefined;
+    return this.operations.findCompletedOperation(kind, key, user, request);
   }
 
   private findCompletedDetach(
@@ -2878,47 +2578,11 @@ export class PageTemplateService {
     referenceNodeId: string,
     user: User,
   ) {
-    return this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', user.workspaceId)
-      .where('operationKind', '=', 'embed_detach')
-      .where('consumerPageId', '=', consumerPageId)
-      .where('referenceNodeId', '=', referenceNodeId)
-      .where('status', '=', 'completed')
-      .orderBy('updatedAt', 'desc')
-      .executeTakeFirst();
-  }
-
-  private findActiveDetachOperation(
-    workspaceId: string,
-    fields: Record<string, unknown>,
-  ) {
-    return this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', workspaceId)
-      .where('operationKind', '=', 'embed_detach')
-      .where('consumerPageId', '=', fields.consumerPageId as string)
-      .where('referenceNodeId', '=', fields.referenceNodeId as string)
-      .where('status', '=', 'pending')
-      .executeTakeFirst();
-  }
-
-  private async waitForOperationToSettle(
-    operationId: string,
-  ): Promise<any | undefined> {
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      const operation = await this.db
-        .selectFrom('pageTemplateOperations')
-        .selectAll()
-        .where('id', '=', operationId)
-        .executeTakeFirst();
-      if (!operation || operation.status !== 'pending') return operation;
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    }
-    return undefined;
+    return this.operations.findCompletedDetach(
+      consumerPageId,
+      referenceNodeId,
+      user,
+    );
   }
 
   private async completeOperation(
@@ -2926,38 +2590,11 @@ export class PageTemplateService {
     fields: Record<string, unknown>,
     leaseToken?: string | null,
   ): Promise<boolean> {
-    let query = this.db
-      .updateTable('pageTemplateOperations')
-      .set({
-        status: 'completed',
-        errorCode: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date(),
-        ...(fields as any),
-      })
-      .where('id', '=', id)
-      .where('status', 'in', ['pending', 'failed']);
-    if (leaseToken) query = query.where('leaseToken', '=', leaseToken);
-    return Boolean(await query.returning('id').executeTakeFirst());
+    return this.operations.completeOperation(id, fields, leaseToken);
   }
 
   private async failOperation(id: string, code: string, leaseToken?: string) {
-    await this.db
-      .updateTable('pageTemplateOperations')
-      .set({
-        status: 'failed',
-        errorCode: code,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', id)
-      .where('status', '=', 'pending')
-      .$if(Boolean(leaseToken), (query) =>
-        query.where('leaseToken', '=', leaseToken!),
-      )
-      .execute();
+    return this.operations.failOperation(id, code, leaseToken);
   }
 
   private async stageMaterializedContent(
@@ -2968,268 +2605,55 @@ export class PageTemplateService {
     targetPageId: string,
     storedMapping: unknown,
   ) {
-    const existingMapping = new Map(
-      this.readAttachmentMapping(storedMapping).map((item) => [
-        item.oldAttachmentId,
-        item.newAttachmentId,
-      ]),
-    );
-    const regenerated = materializePageContent(liveSource, {
+    return this.operations.stageMaterializedContent(
+      operationId,
+      leaseToken,
+      liveSource,
       sourcePageId,
       targetPageId,
-    });
-    const rewritten = rewriteAttachmentsForUnsync(
-      regenerated,
-      (oldAttachmentId) =>
-        existingMapping.get(oldAttachmentId ?? '') ?? uuid7(),
+      storedMapping,
     );
-    await this.db
-      .updateTable('pageTemplateOperations')
-      .set({
-        stagedContent: rewritten.content as any,
-        attachmentMapping: rewritten.copies as any,
-        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
-        updatedAt: new Date(),
-      })
-      .where('id', '=', operationId)
-      .where('status', '=', 'pending')
-      .where('leaseToken', '=', leaseToken)
-      .where('leaseExpiresAt', '>', new Date())
-      .executeTakeFirstOrThrow();
-    return rewritten;
   }
 
   private async assertOperationLease(
     operationId: string,
     leaseToken: string,
   ): Promise<void> {
-    if (!(await this.ownsOperationLease(operationId, leaseToken))) {
-      throw this.conflict(
-        'page_template_operation_lease_lost',
-        'The page template operation lease was lost',
-      );
-    }
+    return this.operations.assertOperationLease(operationId, leaseToken);
   }
 
   private async ownsOperationLease(
     operationId: string,
     leaseToken: string | null | undefined,
   ): Promise<boolean> {
-    if (!leaseToken) return false;
-    const operation = await this.db
-      .selectFrom('pageTemplateOperations')
-      .select('id')
-      .where('id', '=', operationId)
-      .where('status', '=', 'pending')
-      .where('leaseToken', '=', leaseToken)
-      .where('leaseExpiresAt', '>', new Date())
-      .executeTakeFirst();
-    return Boolean(operation);
-  }
-
-  private async reconcileExpiredOperations(workspaceId: string): Promise<void> {
-    const expired = await this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', workspaceId)
-      .where('status', '=', 'pending')
-      .where((eb) =>
-        eb.or([
-          eb('leaseExpiresAt', 'is', null),
-          eb('leaseExpiresAt', '<=', new Date()),
-        ]),
-      )
-      .orderBy('updatedAt', 'asc')
-      .limit(10)
-      .execute();
-    for (const operation of expired) {
-      const cleanupToken = uuid7();
-      const claimed = await this.db
-        .updateTable('pageTemplateOperations')
-        .set({
-          leaseToken: cleanupToken,
-          leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
-          updatedAt: new Date(),
-        })
-        .where('id', '=', operation.id)
-        .where('status', '=', 'pending')
-        .where((eb) =>
-          eb.or([
-            eb('leaseExpiresAt', 'is', null),
-            eb('leaseExpiresAt', '<=', new Date()),
-          ]),
-        )
-        .returningAll()
-        .executeTakeFirst();
-      if (!claimed) continue;
-      try {
-        if (await this.recoverOperationResult(claimed, cleanupToken)) continue;
-        await this.cleanupAbandonedOperation(claimed);
-        await this.failOperation(
-          claimed.id,
-          'page_template_operation_abandoned',
-          cleanupToken,
-        );
-      } catch {
-        await this.failOperation(
-          claimed.id,
-          'page_template_operation_recovery_failed',
-          cleanupToken,
-        );
-      }
-    }
-  }
-
-  private async recoverOperationResult(
-    operation: any,
-    leaseToken: string,
-  ): Promise<boolean> {
-    const pageId =
-      operation.operationKind === 'snapshot'
-        ? operation.resultPageId
-        : operation.consumerPageId;
-    if (!pageId) return false;
-    const page = await this.pageRepo.findById(pageId, { includeContent: true });
-    if (!page || page.deletedAt) return false;
-    if (operation.operationKind === 'snapshot') {
-      return this.completeOperation(
-        operation.id,
-        { resultPageId: page.id },
-        leaseToken,
-      );
-    }
-    if (operation.operationKind === 'legacy_embed_migration') {
-      if (this.containsNodeType(page.content, 'pageEmbed')) return false;
-      return this.completeOperation(
-        operation.id,
-        { afterContentHash: hashProseMirrorJson(page.content as any) },
-        leaseToken,
-      );
-    }
-    if (operation.operationKind === 'template_detach') {
-      const instance = await this.db
-        .selectFrom('pageTemplateInstances')
-        .select('status')
-        .where('childPageId', '=', page.id)
-        .executeTakeFirst();
-      if (
-        instance?.status !== 'detached' &&
-        (this.containsNodeType(page.content, 'templateManagedBlock') ||
-          this.containsNodeType(page.content, 'templateField'))
-      ) {
-        return false;
-      }
-      return this.completeOperation(
-        operation.id,
-        { afterContentHash: hashProseMirrorJson(page.content as any) },
-        leaseToken,
-      );
-    }
-    if (operation.operationKind === 'template_sync') return false;
-    const occurrence = this.findPageEmbed(
-      page.content,
-      operation.referenceNodeId,
-    );
-    const completed =
-      operation.operationKind === 'embed_insert'
-        ? occurrence?.sourcePageId === operation.sourcePageId
-        : !occurrence;
-    if (!completed) return false;
-    return this.completeOperation(
-      operation.id,
-      { afterContentHash: hashProseMirrorJson(page.content as any) },
-      leaseToken,
-    );
-  }
-
-  private async cleanupAbandonedOperation(operation: any): Promise<void> {
-    const mapping = this.readAttachmentMapping(operation.attachmentMapping);
-    if (mapping.length === 0) return;
-    const targetPageId = operation.resultPageId ?? operation.consumerPageId;
-    const targetPage = targetPageId
-      ? await this.pageRepo.findById(targetPageId, { includeContent: true })
-      : null;
-    const referencedIds = new Set(
-      targetPage ? getAttachmentIds(targetPage.content) : [],
-    );
-    const targetIds = mapping.map((item) => item.newAttachmentId);
-    const targetRows = await this.attachmentRepo.findByIds(targetIds);
-    const targetRowById = new Map(targetRows.map((row) => [row.id, row]));
-    const sourceRows = await this.attachmentRepo.findByIds(
-      mapping.map((item) => item.oldAttachmentId),
-    );
-    const sourceRowById = new Map(sourceRows.map((row) => [row.id, row]));
-    for (const item of mapping) {
-      if (referencedIds.has(item.newAttachmentId)) continue;
-      const targetRow = targetRowById.get(item.newAttachmentId);
-      const filePath =
-        targetRow?.filePath ??
-        sourceRowById
-          .get(item.oldAttachmentId)
-          ?.filePath.split(item.oldAttachmentId)
-          .join(item.newAttachmentId);
-      if (filePath) {
-        await this.storageService.delete(filePath).catch(() => undefined);
-      }
-      if (targetRow && targetRow.pageId === targetPageId) {
-        await this.attachmentRepo.deleteAttachmentById(targetRow.id);
-      }
-    }
+    return this.operations.ownsOperationLease(operationId, leaseToken);
   }
 
   private readAttachmentMapping(value: unknown): Array<{
     oldAttachmentId: string;
     newAttachmentId: string;
   }> {
-    if (!Array.isArray(value)) return [];
-    return value.filter(
-      (item): item is { oldAttachmentId: string; newAttachmentId: string } =>
-        Boolean(
-          item &&
-            typeof item === 'object' &&
-            typeof item.oldAttachmentId === 'string' &&
-            typeof item.newAttachmentId === 'string',
-        ),
-    );
+    return this.operations.readAttachmentMapping(value);
   }
 
   private assertIdempotencyKey(key: string): void {
-    if (!key || key.length > 200) {
-      throw new BadRequestException({
-        code: 'idempotency_key_required',
-        message: 'A valid Idempotency-Key header is required',
-      });
-    }
+    this.operations.assertIdempotencyKey(key);
   }
 
   private hashRequest(request: unknown): string {
-    return createHash('sha256').update(JSON.stringify(request)).digest('hex');
+    return this.operations.hashRequest(request);
   }
 
   private encodeCursor(offset: number): string {
-    return Buffer.from(String(offset)).toString('base64url');
+    return this.operations.encodeCursor(offset);
   }
 
   private decodeCursor(cursor?: string): number {
-    if (!cursor) return 0;
-    const value = Number(Buffer.from(cursor, 'base64url').toString('utf8'));
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new BadRequestException('Invalid cursor');
-    }
-    return value;
+    return this.operations.decodeCursor(cursor);
   }
 
   errorCode(error: unknown): string {
-    const response =
-      error && typeof error === 'object' && 'getResponse' in error
-        ? (error as any).getResponse()
-        : undefined;
-    const code = response?.code;
-    return typeof code === 'string' &&
-      code.length <= 120 &&
-      /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(code)
-      ? code
-      : 'page_template_operation_failed';
+    return this.operations.errorCode(error);
   }
 
   private conflict(code: string, message: string): ConflictException {
@@ -3239,12 +2663,6 @@ export class PageTemplateService {
   private async releaseGraphLease(
     graphLease: PageEmbedGraphLease | undefined,
   ): Promise<void> {
-    if (!graphLease) return;
-    try {
-      await graphLease.release();
-    } catch {
-      // Ownership is verified inside the transaction immediately before commit.
-      // A release failure after commit must not turn a durable success into a retry.
-    }
+    return this.operations.releaseGraphLease(graphLease);
   }
 }
