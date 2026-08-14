@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 import {
+  buildTree,
   buildTreeWithChildren,
   deleteTreeNode,
   dropTreeNode,
@@ -143,6 +144,26 @@ describe("tree node mappers", () => {
     assert.equal(node.name, "Database title");
     assert.equal(node.icon, "D");
     assert.equal(node.parentPageId, "parent-id");
+  });
+
+  it("preserves linked-template instance metadata from the sidebar contract", () => {
+    const [node] = buildTree([
+      {
+        id: "linked-page-id",
+        nodeType: "page",
+        slugId: "linked-page",
+        databaseId: null,
+        title: "Linked page",
+        icon: null,
+        position: "a0",
+        hasChildren: false,
+        spaceId: "space-1",
+        parentPageId: null,
+        isLinkedTemplateInstance: true,
+      },
+    ]);
+
+    assert.equal(node.isLinkedTemplateInstance, true);
   });
 });
 

@@ -1,6 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AuthenticationExtension } from './authentication.extension';
 import { JwtType } from '../../core/auth/dto/jwt-payload';
+import { Connection, Document, OutgoingMessage } from '@hocuspocus/server';
+import * as Y from 'yjs';
 
 /**
  * Collab tokens grant read and write access to page content over the websocket.
@@ -27,6 +29,7 @@ describe('AuthenticationExtension collab token session binding', () => {
         id: PAGE_ID,
         spaceId: 'space-1',
         workspaceId: 'workspace-1',
+        templateKind: null,
       })),
     };
     const pageAccessService = {
@@ -49,6 +52,9 @@ describe('AuthenticationExtension collab token session binding', () => {
       })),
       evaluateAuthentication: jest.fn(() => ({ satisfied: true })),
     };
+    const pageTemplatePolicy = {
+      assertAction: jest.fn().mockResolvedValue(undefined),
+    };
 
     const extension = new AuthenticationExtension(
       tokenService as any,
@@ -57,6 +63,7 @@ describe('AuthenticationExtension collab token session binding', () => {
       pageAccessService as any,
       userSessionRepo as any,
       spacePolicy as any,
+      pageTemplatePolicy as any,
     );
 
     return {
@@ -65,6 +72,7 @@ describe('AuthenticationExtension collab token session binding', () => {
       pageRepo,
       pageAccessService,
       spacePolicy,
+      pageTemplatePolicy,
     };
   }
 
@@ -154,9 +162,9 @@ describe('AuthenticationExtension collab token session binding', () => {
       type: JwtType.COLLAB,
     });
 
-    await expect(extension.onAuthenticate(authPayload())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      extension.onAuthenticate(authPayload()),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(pageRepo.findById).not.toHaveBeenCalled();
   });
 
@@ -169,9 +177,9 @@ describe('AuthenticationExtension collab token session binding', () => {
     });
     userSessionRepo.findActiveById.mockResolvedValue(undefined as any);
 
-    await expect(extension.onAuthenticate(authPayload())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      extension.onAuthenticate(authPayload()),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(pageRepo.findById).not.toHaveBeenCalled();
   });
 
@@ -188,9 +196,9 @@ describe('AuthenticationExtension collab token session binding', () => {
       workspaceId: 'workspace-1',
     } as any);
 
-    await expect(extension.onAuthenticate(authPayload())).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      extension.onAuthenticate(authPayload()),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('downgrades the connection to read-only when write access is missing', async () => {
@@ -208,5 +216,86 @@ describe('AuthenticationExtension collab token session binding', () => {
     await extension.onAuthenticate(data);
 
     expect(data.connectionConfig.readOnly).toBe(true);
+  });
+
+  it('rejects a malicious Yjs update before it changes a denied template document', async () => {
+    const { extension, pageRepo, pageAccessService, pageTemplatePolicy } =
+      createExtension({
+        sub: 'user-1',
+        workspaceId: 'workspace-1',
+        sessionId: 'session-1',
+        pageId: PAGE_ID,
+        type: JwtType.COLLAB,
+      });
+    pageRepo.findById.mockResolvedValue({
+      id: PAGE_ID,
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+      templateKind: 'synced',
+    } as any);
+    pageAccessService.getEffectiveAccess.mockResolvedValue({
+      capabilities: { canRead: true, canWrite: true },
+    } as any);
+    const authentication = authPayload();
+    const context = await extension.onAuthenticate(authentication);
+    expect(authentication.connectionConfig.readOnly).toBe(false);
+    pageTemplatePolicy.assertAction.mockRejectedValue(
+      new ForbiddenException({
+        code: 'page_template_policy_denied',
+        message: 'Template policy denied',
+      }),
+    );
+    const document = new Document(`page.${PAGE_ID}`);
+    document.getText('content').insert(0, 'safe');
+    const attacker = new Y.Doc();
+    Y.applyUpdate(attacker, Y.encodeStateAsUpdate(document));
+    attacker.getText('content').insert(4, '-malicious');
+    const update = Y.encodeStateAsUpdate(
+      attacker,
+      Y.encodeStateVector(document),
+    );
+    const webSocket = {
+      readyState: 1,
+      binaryType: 'nodebuffer',
+      send: jest.fn((_message, callback?: (error?: Error) => void) =>
+        callback?.(),
+      ),
+      close: jest.fn(),
+    } as any;
+    const connection = new Connection(
+      webSocket,
+      { headers: {} } as any,
+      document,
+      'socket-1',
+      context,
+      false,
+    );
+    connection.beforeHandleMessage((_connection, rawUpdate) =>
+      extension.beforeHandleMessage({
+        connection,
+        document,
+        documentName: document.name,
+        update: rawUpdate,
+      } as any),
+    );
+    const message = new OutgoingMessage(document.name)
+      .createSyncMessage()
+      .writeUpdate(update)
+      .toUint8Array();
+
+    connection.handleMessage(message);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(pageTemplatePolicy.assertAction).toHaveBeenCalledWith(
+      'workspace-1',
+      'space-1',
+      'user-1',
+      'manage_template',
+    );
+    expect(connection.readOnly).toBe(true);
+    expect(document.getText('content').toString()).toBe('safe');
+    connection.close();
+    document.destroy();
+    attacker.destroy();
   });
 });

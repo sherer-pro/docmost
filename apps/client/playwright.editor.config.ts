@@ -60,12 +60,12 @@ export default defineConfig({
     },
     {
       name: "mobile-chromium",
-      testMatch: /mobile-accessibility\.spec\.ts/,
+      testMatch: /(mobile-accessibility|templates-transclusion)\.spec\.ts/,
       use: { ...devices["Pixel 7"] },
     },
     {
       name: "mobile-webkit",
-      testMatch: /mobile-accessibility\.spec\.ts/,
+      testMatch: /(mobile-accessibility|templates-transclusion)\.spec\.ts/,
       use: { ...devices["iPhone 15"], baseURL: webkitBaseURL },
     },
   ],

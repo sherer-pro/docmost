@@ -1,8 +1,10 @@
 import { Hocuspocus } from '@hocuspocus/server';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import { StarterKit } from '@tiptap/starter-kit';
+import { ForbiddenException } from '@nestjs/common';
 import * as Y from 'yjs';
 import { PersistenceExtension } from './persistence.extension';
+import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
 
 jest.mock('../../common/helpers/prosemirror/utils', () => ({
   extractMentions: jest.fn(() => []),
@@ -41,9 +43,21 @@ function createHarness() {
     where: jest.fn().mockReturnThis(),
     executeTakeFirst: jest.fn().mockResolvedValue(undefined),
   };
+  const operationQuery = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    forUpdate: jest.fn().mockReturnThis(),
+    executeTakeFirst: jest.fn().mockResolvedValue({
+      id: 'operation-1',
+      operationKind: 'template_sync',
+      sourcePageId: 'source-1',
+    }),
+  };
   const trx = {
     updateTable: jest.fn(),
-    selectFrom: jest.fn().mockReturnValue(instanceQuery),
+    selectFrom: jest.fn((tableName: string) =>
+      tableName === 'pageTemplateOperations' ? operationQuery : instanceQuery,
+    ),
   };
   const db = {
     transaction: () => ({
@@ -72,6 +86,9 @@ function createHarness() {
   const collabPageUpdates = {
     publish: jest.fn().mockResolvedValue(undefined),
   };
+  const pageTemplatePolicy = {
+    assertAction: jest.fn().mockResolvedValue(undefined),
+  };
   const extension = new PersistenceExtension(
     pageRepo as never,
     db as never,
@@ -82,6 +99,7 @@ function createHarness() {
     pageEmbedService as never,
     eventEmitter as never,
     collabPageUpdates as never,
+    pageTemplatePolicy as never,
   );
   jest.spyOn(extension['logger'], 'debug').mockImplementation(() => undefined);
   jest.spyOn(extension['logger'], 'warn').mockImplementation(() => undefined);
@@ -95,7 +113,9 @@ function createHarness() {
     collabHistory,
     eventEmitter,
     collabPageUpdates,
+    pageTemplatePolicy,
     instanceQuery,
+    operationQuery,
     trx,
   };
 }
@@ -222,6 +242,156 @@ describe('PersistenceExtension failure boundary', () => {
 
     expect(trx.updateTable).toHaveBeenCalledWith('pageTemplateInstances');
     expect(pageRepo.updatePage).not.toHaveBeenCalled();
+  });
+
+  it('commits clean content, detach state and operation completion atomically', async () => {
+    const { extension, pageRepo, operationQuery, trx } = createHarness();
+    operationQuery.executeTakeFirst.mockResolvedValue({
+      id: 'operation-1',
+      operationKind: 'template_detach',
+      sourcePageId: 'template-1',
+    });
+    const detachSet = jest.fn();
+    const operationSet = jest.fn();
+    trx.updateTable.mockImplementation((tableName: string) => {
+      const query: any = {
+        set: (value: unknown) => {
+          if (tableName === 'pageTemplateInstances') detachSet(value);
+          if (tableName === 'pageTemplateOperations') operationSet(value);
+          return query;
+        },
+        where: () => query,
+        returning: () => query,
+        executeTakeFirst: async () =>
+          tableName === 'pageTemplateInstances'
+            ? { id: 'instance-1' }
+            : { id: 'operation-1' },
+      };
+      return query;
+    });
+    const payload = createStorePayload();
+    payload.context = {
+      user: { id: USER_ID },
+      pageTemplateMutationId: 'operation-1',
+      pageTemplateOperationLeaseToken: 'lease-1',
+    };
+
+    await extension.onStoreDocument(payload);
+
+    expect(detachSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'detached',
+        templatePageId: null,
+        detachedById: USER_ID,
+      }),
+    );
+    expect(pageRepo.updatePage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: doc('uncommitted') }),
+      PAGE_ID,
+      trx,
+    );
+    expect(operationSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed' }),
+    );
+    expect(trx.updateTable).toHaveBeenCalledWith('pageTemplateInstances');
+    expect(trx.updateTable).toHaveBeenCalledWith('pageTemplateOperations');
+  });
+
+  it('accepts a duplicate store after the same template mutation completed', async () => {
+    const { extension, pageRepo, operationQuery, trx } = createHarness();
+    pageRepo.findById.mockResolvedValue({
+      ...persistedPage(),
+      content: doc('uncommitted'),
+    });
+    operationQuery.executeTakeFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        id: 'operation-1',
+        afterContentHash: hashProseMirrorJson(doc('uncommitted')),
+      });
+    const payload = createStorePayload();
+    payload.context = {
+      user: { id: USER_ID },
+      pageTemplateMutationId: 'operation-1',
+      pageTemplateOperationLeaseToken: 'expired-lease',
+    };
+
+    await expect(extension.onStoreDocument(payload)).resolves.toBeUndefined();
+
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+    expect(trx.updateTable).not.toHaveBeenCalled();
+  });
+
+  it('rejects a completed template mutation when the document no longer matches', async () => {
+    const { extension, pageRepo, operationQuery } = createHarness();
+    pageRepo.findById.mockResolvedValue({
+      ...persistedPage(),
+      content: doc('uncommitted'),
+    });
+    operationQuery.executeTakeFirst
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        id: 'operation-1',
+        afterContentHash: hashProseMirrorJson(doc('different')),
+      });
+    const payload = createStorePayload();
+    payload.context = {
+      user: { id: USER_ID },
+      pageTemplateMutationId: 'operation-1',
+      pageTemplateOperationLeaseToken: 'expired-lease',
+    };
+
+    await expect(extension.onStoreDocument(payload)).rejects.toMatchObject({
+      response: { code: 'page_template_operation_lease_lost' },
+    });
+
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+  });
+
+  it('requires manage_template policy before persisting source template edits', async () => {
+    const { extension, pageRepo, pageTemplatePolicy } = createHarness();
+    pageRepo.findById.mockResolvedValue({
+      ...persistedPage(),
+      templateKind: 'synced',
+    });
+    pageTemplatePolicy.assertAction.mockRejectedValue(
+      new ForbiddenException({
+        code: 'page_template_policy_denied',
+        message: 'Template policy denied',
+      }),
+    );
+    const payload = createStorePayload();
+    const socket = { close: jest.fn() };
+    payload.document.connections.set(socket, {});
+    const restorePersistedDocument = jest
+      .spyOn(extension as any, 'restorePersistedDocument')
+      .mockResolvedValue(undefined);
+
+    await expect(extension.onStoreDocument(payload)).resolves.toBeUndefined();
+
+    expect(pageTemplatePolicy.assertAction).toHaveBeenCalledWith(
+      'workspace-1',
+      'space-1',
+      USER_ID,
+      'manage_template',
+    );
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+    expect(restorePersistedDocument).toHaveBeenCalledWith(
+      payload.document,
+      PAGE_ID,
+    );
+    expect(payload.document.broadcastStateless).toHaveBeenCalledWith(
+      JSON.stringify({
+        type: 'page_content_integrity_error',
+        code: 'page_template_policy_denied',
+      }),
+    );
+    expect(socket.close).toHaveBeenCalledWith(
+      4409,
+      'page_content_integrity_error',
+    );
+    expect(extension['dirtyDocuments'].has(DOCUMENT_NAME)).toBe(false);
+    expect(extension['dirtyRetryTimers'].has(DOCUMENT_NAME)).toBe(false);
   });
 
   it('does not let a post-commit dependency failure reject the store hook', async () => {

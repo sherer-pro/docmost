@@ -27,10 +27,22 @@ describe('PageService movePageToSpace transaction boundary', () => {
       ]),
     ),
   };
+  const linkedInstanceQuery: any = {
+    select: jest.fn(),
+    where: jest.fn(),
+    limit: jest.fn(),
+    executeTakeFirst: jest.fn(),
+  };
+  for (const method of ['select', 'where', 'limit']) {
+    linkedInstanceQuery[method].mockReturnValue(linkedInstanceQuery);
+  }
   const trxStub: any = new Proxy(function () {}, {
     get: (_target, property) => {
       if (property === 'then') return undefined;
-      if (property === 'selectFrom') return () => spaceQuery;
+      if (property === 'selectFrom') {
+        return (table: string) =>
+          table === 'spaces' ? spaceQuery : linkedInstanceQuery;
+      }
       if (property === 'execute' || property === 'executeTakeFirst') {
         return () => Promise.resolve([]);
       }
@@ -77,7 +89,7 @@ describe('PageService movePageToSpace transaction boundary', () => {
   };
 
   function createService() {
-    return new PageService(
+    const service = new PageService(
       pageRepo as any,
       attachmentRepo as any,
       db as any,
@@ -103,6 +115,10 @@ describe('PageService movePageToSpace transaction boundary', () => {
       {} as any,
       {} as any,
     );
+    jest
+      .spyOn(service as any, 'hasTemplateInPageTree')
+      .mockResolvedValue(false);
+    return service;
   }
 
   beforeEach(() => {
@@ -128,6 +144,7 @@ describe('PageService movePageToSpace transaction boundary', () => {
       { id: 'space-1', archivedAt: null },
       { id: 'space-2', archivedAt: null },
     ]);
+    linkedInstanceQuery.executeTakeFirst.mockResolvedValue(undefined);
   });
 
   it('does not emit a phantom update when a downstream transaction step fails', async () => {
@@ -194,6 +211,40 @@ describe('PageService movePageToSpace transaction boundary', () => {
       'Source or destination space not found',
     );
 
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-space move when the page tree contains a linked instance', async () => {
+    const service = createService();
+    jest.spyOn(service, 'nextPagePosition').mockResolvedValue('a2');
+    linkedInstanceQuery.executeTakeFirst.mockResolvedValue({ id: 'instance' });
+
+    await expect(
+      service.movePageToSpace(rootPage, 'space-2'),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({
+        code: 'page_template_linked_page_move_forbidden',
+      }),
+    });
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('rejects moving an ordinary ancestor whose subtree contains a template source', async () => {
+    const service = createService();
+    jest.spyOn(service, 'nextPagePosition').mockResolvedValue('a2');
+    (service as any).hasTemplateInPageTree.mockResolvedValue(true);
+
+    await expect(
+      service.movePageToSpace(rootPage, 'space-2'),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({
+        code: 'page_template_source_move_forbidden',
+      }),
+    });
     expect(pageRepo.updatePage).not.toHaveBeenCalled();
     expect(eventEmitter.emit).not.toHaveBeenCalled();
   });

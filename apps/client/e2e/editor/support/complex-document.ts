@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { APIRequestContext } from "@playwright/test";
 import {
   attachmentUrl,
-  apiPost,
+  apiPostWithHeaders,
   buildSilentWav,
   buildTinyPdf,
   createPage,
@@ -53,7 +54,7 @@ export async function seedComplexDocument(
   browserName: string,
 ): Promise<SeededComplexDocument> {
   const sourceTransclusionId = uniqueId("transclusion");
-  const { page: sourcePage } = await apiPost<{ page: PageRecord }>(
+  const { page: sourcePage } = await apiPostWithHeaders<{ page: PageRecord }>(
     api,
     "/api/pages/templates/actions/create",
     {
@@ -61,6 +62,7 @@ export async function seedComplexDocument(
       kind: "regular",
       title: `${browserName} linked source`,
     },
+    { "Idempotency-Key": randomUUID() },
   );
   await updatePageContent(api, sourcePage.id, {
     type: "doc",
