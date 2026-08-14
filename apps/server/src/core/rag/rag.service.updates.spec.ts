@@ -251,11 +251,28 @@ describe('RagService getUpdates SQL generation', () => {
         (query) =>
           query.includes('from "attachments"') &&
           query.includes(
-            'order by date_trunc(\'milliseconds\', "updated_at") asc',
+            'order by date_trunc(\'milliseconds\', "attachments"."updated_at") asc',
           ) &&
           query.includes('limit $'),
       ),
     ).toBe(true);
+  });
+
+  it('excludes attachment updates whose parent page is unavailable', async () => {
+    await service.getAttachmentUpdates(scope, 0, { limit: 500 });
+
+    const attachmentQuery = queries.find((query) =>
+      query.includes('from "attachments"'),
+    );
+
+    expect(attachmentQuery).toContain(
+      'inner join "pages" as "attachment_pages" on "attachment_pages"."id" = "attachments"."page_id"',
+    );
+    expect(attachmentQuery).toContain('"attachment_pages"."workspace_id" = $');
+    expect(attachmentQuery).toContain('"attachment_pages"."space_id" = $');
+    expect(attachmentQuery).toContain(
+      '"attachment_pages"."deleted_at" is null',
+    );
   });
 
   it('pushes optional page listing pagination into both SQL streams', async () => {

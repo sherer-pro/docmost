@@ -1238,42 +1238,53 @@ export class RagContentExportService {
     );
     const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
-    const updatedAtMs = this.millisecondTimestamp('updatedAt');
+    const updatedAtMs = this.millisecondTimestamp('attachments.updatedAt');
     let rowsQuery = this.db
       .selectFrom('attachments')
-      .select([
-        'id',
-        'fileName',
-        'fileSize',
-        'fileExt',
-        'mimeType',
-        'pageId',
-        'spaceId',
-        'createdAt',
-        'updatedAt',
-      ])
-      .where('workspaceId', '=', scope.workspace.id)
-      .where('spaceId', '=', scope.space.id)
-      .where('pageId', 'is not', null)
-      .$if(Boolean(readablePageIds), (qb) =>
-        qb.where('pageId', 'in', [...readablePageIds!]),
+      .innerJoin(
+        'pages as attachmentPages',
+        'attachmentPages.id',
+        'attachments.pageId',
       )
-      .where('deletedAt', 'is', null)
-      .where('updatedAt', '>=', new Date(updatedSinceMs))
+      .select([
+        'attachments.id',
+        'attachments.fileName',
+        'attachments.fileSize',
+        'attachments.fileExt',
+        'attachments.mimeType',
+        'attachments.pageId',
+        'attachments.spaceId',
+        'attachments.createdAt',
+        'attachments.updatedAt',
+      ])
+      .where('attachments.workspaceId', '=', scope.workspace.id)
+      .where('attachments.spaceId', '=', scope.space.id)
+      .where('attachments.pageId', 'is not', null)
+      .where('attachmentPages.workspaceId', '=', scope.workspace.id)
+      .where('attachmentPages.spaceId', '=', scope.space.id)
+      .where('attachmentPages.deletedAt', 'is', null)
+      .$if(Boolean(readablePageIds), (qb) =>
+        qb.where('attachments.pageId', 'in', [...readablePageIds!]),
+      )
+      .where('attachments.deletedAt', 'is', null)
+      .where('attachments.updatedAt', '>=', new Date(updatedSinceMs))
       .where(updatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs));
     if (cursor) {
       const cursorDate = new Date(cursor.timestampMs);
       rowsQuery = rowsQuery.where((eb) =>
         eb.or([
           eb(updatedAtMs, '>', cursorDate),
-          eb.and([eb(updatedAtMs, '=', cursorDate), eb('id', '>', cursor.id)]),
+          eb.and([
+            eb(updatedAtMs, '=', cursorDate),
+            eb('attachments.id', '>', cursor.id),
+          ]),
         ]),
       );
     }
     if (queryLimit) {
       rowsQuery = rowsQuery
         .orderBy(updatedAtMs, 'asc')
-        .orderBy('id', 'asc')
+        .orderBy('attachments.id', 'asc')
         .limit(queryLimit);
     }
     const rows = readablePageIds?.size === 0 ? [] : await rowsQuery.execute();

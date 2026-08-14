@@ -1,5 +1,9 @@
 import { RagSyncBindingRuntime } from './rag-sync-binding-runtime.service';
-import type { RagSyncRuntimeBinding } from './rag-sync-runtime.types';
+import {
+  RagSyncDiagnosticError,
+  RagSyncRuntimeBinding,
+  RagSyncRuntimeError,
+} from './rag-sync-runtime.types';
 
 const binding: RagSyncRuntimeBinding = {
   id: 'binding-id',
@@ -99,6 +103,29 @@ describe('RagSyncBindingRuntime', () => {
 
     expect(processor.processQuantum).not.toHaveBeenCalled();
     expect(state.releaseGlobalSlot).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a non-retryable code through safe diagnostics', async () => {
+    const { lease, state, processor, runtime } = createRuntime();
+    processor.processQuantum.mockRejectedValue(
+      new RagSyncDiagnosticError(
+        'scope',
+        'binding',
+        new RagSyncRuntimeError('rag_sync_scope_unavailable', false),
+      ),
+    );
+
+    await expect(
+      runtime.run(binding, new AbortController().signal),
+    ).rejects.toBeInstanceOf(RagSyncDiagnosticError);
+
+    expect(state.setStatus).toHaveBeenLastCalledWith(
+      lease,
+      expect.objectContaining({
+        health: 'error',
+        errorCode: 'rag_sync_scope_unavailable',
+      }),
+    );
   });
 
   it('aborts the active quantum as soon as lease renewal loses ownership', async () => {

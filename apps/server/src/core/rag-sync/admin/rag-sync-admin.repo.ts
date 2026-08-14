@@ -221,6 +221,28 @@ export class RagSyncAdminRepo {
       .execute();
   }
 
+  async stopForRuntimeError(
+    bindingId: string,
+    expectedConfigVersion: number,
+    expectedTargetVersion: number,
+    resetTargetTest: boolean,
+  ): Promise<boolean> {
+    const result = await this.db
+      .updateTable('ragSyncBindings')
+      .set({
+        state: 'disabled',
+        configVersion: expectedConfigVersion + 1,
+        ...(resetTargetTest ? { lastTestedAt: null } : {}),
+        updatedAt: sql`clock_timestamp()`,
+      })
+      .where('id', '=', bindingId)
+      .where('state', '=', 'enabled')
+      .where('configVersion', '=', expectedConfigVersion)
+      .where('targetVersion', '=', expectedTargetVersion)
+      .executeTakeFirst();
+    return result.numUpdatedRows === 1n;
+  }
+
   async completeCleanup(
     bindingId: string,
     expectedConfigVersion: number,

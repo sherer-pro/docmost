@@ -3,6 +3,7 @@ import {
   RagSyncSupervisorService,
   retryDelay,
 } from './rag-sync-supervisor.service';
+import { RagSyncRuntimeError } from './rag-sync-runtime.types';
 
 function runtimeBinding(id: string) {
   return {
@@ -64,6 +65,7 @@ describe('RagSyncSupervisorService', () => {
         .fn()
         .mockResolvedValue([runtimeBinding('first'), runtimeBinding('second')]),
       completeDrain: jest.fn(),
+      stopForRuntimeError: jest.fn(),
     };
     const supervisor = new RagSyncSupervisorService(
       {
@@ -82,6 +84,50 @@ describe('RagSyncSupervisorService', () => {
     await jest.advanceTimersByTimeAsync(1);
 
     expect(calls.slice(0, 3)).toEqual(['first', 'second', 'first']);
+    await supervisor.onModuleDestroy();
+    jest.useRealTimers();
+  });
+
+  it('stops a target-unavailable binding without scheduling another retry', async () => {
+    jest.useFakeTimers();
+    const runtime = {
+      run: jest
+        .fn()
+        .mockRejectedValue(
+          new RagSyncRuntimeError('rag_sync_target_unavailable', false),
+        ),
+    };
+    const registry = {
+      listRunnableBindings: jest
+        .fn()
+        .mockResolvedValueOnce([runtimeBinding('first')])
+        .mockResolvedValue([]),
+      completeDrain: jest.fn(),
+      stopForRuntimeError: jest.fn().mockResolvedValue(true),
+    };
+    const supervisor = new RagSyncSupervisorService(
+      {
+        enabled: true,
+        maxConcurrentBindings: 1,
+        pollIntervalMs: 60_000,
+        discoveryIntervalMs: 30_000,
+        shutdownTimeoutMs: 1_000,
+      } as any,
+      runtime as any,
+      registry,
+    );
+
+    await supervisor.refreshNow();
+    await jest.advanceTimersByTimeAsync(1);
+    await jest.advanceTimersByTimeAsync(60_000);
+
+    expect(registry.stopForRuntimeError).toHaveBeenCalledWith(
+      'first',
+      1,
+      1,
+      true,
+    );
+    expect(runtime.run).toHaveBeenCalledTimes(1);
     await supervisor.onModuleDestroy();
     jest.useRealTimers();
   });
@@ -113,6 +159,7 @@ describe('RagSyncSupervisorService', () => {
           .fn()
           .mockResolvedValue([runtimeBinding('first')]),
         completeDrain: jest.fn(),
+        stopForRuntimeError: jest.fn(),
       },
     );
 
@@ -144,6 +191,7 @@ describe('RagSyncSupervisorService', () => {
         .fn()
         .mockResolvedValue([runtimeBinding('first')]),
       completeDrain: jest.fn(),
+      stopForRuntimeError: jest.fn(),
     };
     const supervisor = new RagSyncSupervisorService(
       {
