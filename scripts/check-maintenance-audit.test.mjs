@@ -4,6 +4,7 @@ import {
   compareFingerprints,
   normalizeJscpdDuplicates,
   normalizeKnipIssues,
+  validateKnipReviewGroups,
 } from "./check-maintenance-audit.mjs";
 
 test("Knip fingerprints ignore source locations and remain deterministic", () => {
@@ -42,4 +43,63 @@ test("baseline comparison reports both added and resolved findings", () => {
     added: ["added"],
     resolved: ["old"],
   });
+});
+
+test("Knip review groups provide one owner and review path per finding", () => {
+  assert.doesNotThrow(() =>
+    validateKnipReviewGroups(
+      [
+        "exports|apps/client/src/feature.ts|publicFeature",
+        "types|apps/server/src/database/types/entity.types.ts|Entity",
+      ],
+      [
+        {
+          id: "client",
+          owner: "apps/client",
+          classification: "reusable-contract",
+          rationale: "Reviewed against client consumers before removal.",
+          pathPattern: "^apps/client/",
+          reviewBy: "2026-11-14",
+        },
+        {
+          id: "database",
+          owner: "apps/server/src/database/types",
+          classification: "generated-contract",
+          rationale: "Reviewed after database type regeneration.",
+          pathPattern: "^apps/server/src/database/types/",
+          reviewBy: "2026-11-14",
+        },
+      ],
+      new Date("2026-08-14T00:00:00Z"),
+    ),
+  );
+});
+
+test("Knip review groups reject uncovered and overlapping findings", () => {
+  const group = {
+    id: "client",
+    owner: "apps/client",
+    classification: "reusable-contract",
+    rationale: "Reviewed against client consumers before removal.",
+    pathPattern: "^apps/client/",
+    reviewBy: "2026-11-14",
+  };
+  assert.throws(
+    () =>
+      validateKnipReviewGroups(
+        ["exports|apps/server/src/feature.ts|publicFeature"],
+        [group],
+        new Date("2026-08-14T00:00:00Z"),
+      ),
+    /exactly one review group \(0 matched\)/,
+  );
+  assert.throws(
+    () =>
+      validateKnipReviewGroups(
+        ["exports|apps/client/src/feature.ts|publicFeature"],
+        [group, { ...group, id: "client-overlap" }],
+        new Date("2026-08-14T00:00:00Z"),
+      ),
+    /exactly one review group \(2 matched\)/,
+  );
 });

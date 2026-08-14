@@ -27,7 +27,7 @@ import {
 import { getDictionaryImportSuccessMessage } from "@/features/dictionary/utils/dictionary-import-notification";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
-export const DICTIONARY_QUERY_KEYS = {
+const DICTIONARY_QUERY_KEYS = {
   terms: (spaceId?: string): string[] =>
     ["dictionaryTerms", spaceId].filter(Boolean) as string[],
   wordFormGenerationStatus: (spaceId?: string): string[] =>

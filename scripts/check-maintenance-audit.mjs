@@ -63,6 +63,112 @@ export function compareFingerprints(current, accepted) {
   };
 }
 
+export function validateKnipReviewGroups(
+  accepted,
+  reviewGroups,
+  now = new Date(),
+) {
+  if (!Array.isArray(reviewGroups) || reviewGroups.length === 0) {
+    throw new Error("Knip baseline reviewGroups must be a non-empty array.");
+  }
+  const ids = new Set();
+  const compiledGroups = reviewGroups.map((group) => {
+    for (const field of [
+      "id",
+      "owner",
+      "classification",
+      "rationale",
+      "pathPattern",
+      "reviewBy",
+    ]) {
+      if (typeof group?.[field] !== "string" || !group[field].trim()) {
+        throw new Error(`Knip review group is missing a non-empty ${field}.`);
+      }
+    }
+    if (ids.has(group.id)) {
+      throw new Error(`Duplicate Knip review group id: ${group.id}`);
+    }
+    ids.add(group.id);
+    const reviewBy = new Date(`${group.reviewBy}T23:59:59Z`);
+    if (!Number.isFinite(reviewBy.getTime()) || reviewBy < now) {
+      throw new Error(
+        `Knip review group ${group.id} is overdue: ${group.reviewBy}`,
+      );
+    }
+    let pathPattern;
+    try {
+      pathPattern = new RegExp(group.pathPattern, "u");
+    } catch (error) {
+      throw new Error(
+        `Knip review group ${group.id} has an invalid pathPattern: ${error.message}`,
+      );
+    }
+    return { ...group, pathPattern };
+  });
+
+  const matchedGroupIds = new Set();
+  for (const fingerprint of accepted) {
+    const path = fingerprint.split("|")[1] ?? "";
+    const matches = compiledGroups.filter((group) =>
+      group.pathPattern.test(path),
+    );
+    if (matches.length !== 1) {
+      throw new Error(
+        `Knip finding must match exactly one review group (${matches.length} matched): ${fingerprint}`,
+      );
+    }
+    matchedGroupIds.add(matches[0].id);
+  }
+  for (const group of compiledGroups) {
+    if (!matchedGroupIds.has(group.id)) {
+      throw new Error(
+        `Knip review group has no accepted findings: ${group.id}`,
+      );
+    }
+  }
+}
+
+function defaultKnipReviewGroups() {
+  return [
+    {
+      id: "client-application-contracts",
+      owner: "apps/client",
+      classification: "reusable-or-compatibility-contract",
+      rationale:
+        "Private client exports are reviewed against cross-feature imports, tests, and compatibility aliases before removal.",
+      pathPattern: "^apps/client/",
+      reviewBy: "2026-11-14",
+    },
+    {
+      id: "server-generated-database-types",
+      owner: "apps/server/src/database/types",
+      classification: "generated-contract-surface",
+      rationale:
+        "Generated Kysely entity aliases mirror the database schema and are reviewed after migration type regeneration.",
+      pathPattern: "^apps/server/src/database/types/",
+      reviewBy: "2026-11-14",
+    },
+    {
+      id: "server-framework-and-domain-contracts",
+      owner: "apps/server",
+      classification: "framework-or-reusable-contract",
+      rationale:
+        "Server findings are reviewed with Nest reflection, module wiring, protocol constants, and route contracts before removal.",
+      pathPattern: "^apps/server/(?!src/database/types/)",
+      reviewBy: "2026-11-14",
+    },
+    {
+      id: "editor-package-contracts",
+      owner: "packages/editor-ext",
+      classification: "public-package-contract",
+      rationale:
+        "Editor extension findings are reviewed against the package entry point and downstream editor consumers before removal.",
+      pathPattern: "^packages/editor-ext/",
+      reviewBy: "2026-11-14",
+    },
+  ];
+}
+
 function stableJsonWithoutLocations(value) {
   if (!value || typeof value !== "object") return JSON.stringify(value);
   const result = {};
@@ -167,16 +273,7 @@ function writeBaseline(audit) {
     },
     knip: {
       accepted: audit.knip,
-      rationaleByCategory: {
-        duplicates:
-          "Compatibility aliases expose both named and default exports.",
-        enumMembers:
-          "Reserved protocol and domain states remain part of stable enums.",
-        exports:
-          "Public, test, framework, and reflection entry points are reviewed before removal.",
-        types:
-          "Generated database and reusable contract types intentionally exceed direct imports.",
-      },
+      reviewGroups: defaultKnipReviewGroups(),
     },
     jscpd: {
       accepted: audit.jscpd.map((fingerprint) => ({
@@ -201,6 +298,7 @@ function checkBaseline(audit) {
       `Maintenance audit baseline review is overdue: ${baseline.reviewBy}`,
     );
   }
+  validateKnipReviewGroups(baseline.knip.accepted, baseline.knip.reviewGroups);
   const knip = compareFingerprints(audit.knip, baseline.knip.accepted);
   const acceptedDuplicates = baseline.jscpd.accepted.map(
     (entry) => entry.fingerprint,
