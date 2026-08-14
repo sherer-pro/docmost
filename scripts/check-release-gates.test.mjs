@@ -18,6 +18,7 @@ const [
   editorMobileSource,
   aiContextAuditSource,
   dockerfileSource,
+  ragSyncComposeSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -33,6 +34,7 @@ const [
   readFile("apps/client/e2e/editor/specs/mobile-accessibility.spec.ts", "utf8"),
   readFile("apps/client/e2e/ai-context/run-ai-context-audit.mjs", "utf8"),
   readFile("Dockerfile", "utf8"),
+  readFile("tests/rag-sync/compose.yml", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -48,11 +50,51 @@ function inputs(overrides = {}) {
     workflowSources: workflows,
     packageJson: overrides.packageJson ?? packageJson,
     dockerfileSource: overrides.dockerfileSource ?? dockerfileSource,
+    ragSyncComposeSource:
+      overrides.ragSyncComposeSource ?? ragSyncComposeSource,
   };
 }
 
 test("accepts the checked-in release gate contract", () => {
   assert.deepEqual(validateReleaseGateContract(inputs()), []);
+});
+
+test("RAG Sync harness keeps collaboration and PostgreSQL runtime prerequisites", () => {
+  for (const [needle, expectedError] of [
+    [
+      "COLLAB_INTERNAL_URL: http://collab:3001",
+      "RAG Sync harness must configure the internal collaboration URL",
+    ],
+    [
+      "apps/server/dist/apps/server/src/collaboration/server/collab-main.js",
+      "RAG Sync harness must start the dedicated collaboration process",
+    ],
+    [
+      "postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+      "RAG Sync harness must use the supported pinned PostgreSQL runtime",
+    ],
+    [
+      "docmost-audit-storage:/app/data/storage",
+      "RAG Sync harness replicas must share persistent attachment storage",
+    ],
+  ]) {
+    const mutated = ragSyncComposeSource.replace(needle, "removed");
+    assert.notEqual(mutated, ragSyncComposeSource, `fixture must contain ${needle}`);
+    const errors = validateReleaseGateContract(
+      inputs({ ragSyncComposeSource: mutated }),
+    );
+    assert.ok(errors.includes(expectedError));
+  }
+
+  const alpine = ragSyncComposeSource.replace(
+    "postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+    "postgres:18-alpine@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+  );
+  assert.ok(
+    validateReleaseGateContract(inputs({ ragSyncComposeSource: alpine })).includes(
+      "RAG Sync harness must not use the unsupported Alpine PostgreSQL runtime",
+    ),
+  );
 });
 
 test("AI documentation gate keeps full history and base/head revisions", () => {

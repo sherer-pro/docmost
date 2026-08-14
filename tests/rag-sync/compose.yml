@@ -4,6 +4,8 @@ x-docmost-app: &docmost-app
   image: docmost:rag-audit
   build:
     context: ../..
+  volumes:
+    - docmost-audit-storage:/app/data/storage
   depends_on:
     postgres:
       condition: service_healthy
@@ -17,6 +19,9 @@ x-docmost-app: &docmost-app
     NODE_ENV: production
     APP_URL: http://127.0.0.1:3200
     APP_SECRET: isolated-rag-audit-secret-at-least-32-characters
+    COLLAB_URL: http://127.0.0.1:3201
+    COLLAB_INTERNAL_URL: http://collab:3001
+    COLLAB_INTERNAL_SECRET: isolated-rag-audit-collab-secret-at-least-32-characters
     DATABASE_URL: postgresql://docmost:docmost-test-password@postgres:5432/docmost
     REDIS_URL: redis://redis:6379
     AUTH_RATE_LIMIT_STORAGE: redis
@@ -37,7 +42,7 @@ x-docmost-app: &docmost-app
 
 services:
   postgres:
-    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    image: postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
     environment:
       POSTGRES_DB: docmost
       POSTGRES_USER: docmost
@@ -99,6 +104,8 @@ services:
         condition: service_healthy
       toxiproxy:
         condition: service_started
+      collab:
+        condition: service_healthy
     ports:
       - "3200:3000"
 
@@ -113,6 +120,26 @@ services:
         condition: service_healthy
       toxiproxy:
         condition: service_started
+      collab:
+        condition: service_healthy
+
+  collab:
+    <<: *docmost-app
+    command:
+      - node
+      - apps/server/dist/apps/server/src/collaboration/server/collab-main.js
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "3201:3001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3001/api/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   open-webui:
     profiles: ["real-open-webui"]
@@ -123,3 +150,6 @@ services:
       WEBUI_SECRET_KEY: isolated-open-webui-test-secret
     ports:
       - "18082:8080"
+
+volumes:
+  docmost-audit-storage:
