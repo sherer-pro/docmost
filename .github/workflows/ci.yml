@@ -52,6 +52,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Client bundle budget
+        run: pnpm check:client-bundle
+
       - name: API route inventory drift check
         run: pnpm routes:inventory:check
 

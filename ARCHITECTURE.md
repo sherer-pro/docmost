@@ -74,7 +74,7 @@ Synced blocks use `transclusionSource` and `transclusionReference` nodes. The ed
 
 Page templates are deployment-disabled by default through `PAGE_TEMPLATES_ENABLED=false`. The current template kinds are `regular` snapshots and `synced` template instances; workspace, space, role, and group policies only narrow the deployment gate. There is no public whole-page live-embed creation workflow or page-embed API. The `pageEmbed` node and its bounded graph services remain registered only to validate and safely materialize legacy persisted or schema-v3 archive data. Cycles, excessive depth, missing sources, and inaccessible or broader-audience targets become neutral content without reading or disclosing the source.
 
-`PageTemplateService` remains the stable controller/runtime facade. Publication/preflight serialization, live-content and access operations, and idempotency/lease recovery are isolated in `page-template-publication.service.ts`, `page-template-content.service.ts`, and `page-template-operation.service.ts`. This keeps the HTTP and queue contracts stable while separating mutation recovery from policy and publication behavior.
+`PageTemplateService` remains the stable controller facade and delegates to injectable instance-lifecycle, synchronization, and page-embed command services. Publication/preflight serialization, live-content and access operations, idempotency/lease recovery, and legacy page-embed migration are isolated in dedicated injectable collaborators. `PageTemplateRuntimeService` consumes the synchronization, operation, and legacy-migration collaborators directly. This keeps the HTTP and queue contracts stable while separating runtime recovery from policy, publication, instance lifecycle, and legacy migration behavior.
 
 The product does not initialize or transmit external usage telemetry from either the browser or the server. `pnpm check:telemetry` rejects reintroduction of the removed dependency, runtime symbols, endpoint, and environment contract. Privacy-safe local operational logs and metrics remain part of security, queue, AI, and runtime diagnostics; they are not sent to an external product analytics collector.
 
@@ -147,6 +147,8 @@ Baseline local verification:
 Root composite scripts call `corepack pnpm` internally. If the local `pnpm` shim is missing, run root/package checks with `corepack pnpm ...`; enable Corepack first only when a direct `pnpm` command is required.
 
 Security regression coverage is available through `pnpm test:security`, and production dependency audit is run in CI with `pnpm audit --prod --audit-level high`.
+
+The client build emits a Vite manifest and `pnpm check:client-bundle` enforces a 1,500,000-byte raw cap for ordinary JavaScript chunks. The only larger allowance is the measured lazy `@excalidraw/excalidraw` font-subsetting chunk, which has independent raw/gzip limits plus exact importer and initial-load boundary checks. CI and `verify:full` run this gate after the client build; Vite's display threshold is not the enforcement mechanism.
 
 Backend e2e coverage uses disposable PostgreSQL and Redis services. The CI integration stage first applies every migration to an empty database, then verifies transactional outbox deduplication, expired-lease recovery, and owner fencing and runs two collaboration instances against real Redis to prove owner-checked lease renewal and release. CI additionally starts the production API and collaboration images and waits for both health endpoints.
 
