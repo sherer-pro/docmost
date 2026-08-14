@@ -349,7 +349,7 @@ export class PageRepo {
   async restorePage(
     pageIdentifier: PageIdentifier,
     workspaceId: string,
-  ): Promise<void> {
+  ): Promise<string[]> {
     let restoredPageIds: string[] = [];
 
     await executeTx(this.db, async (trx) => {
@@ -428,6 +428,7 @@ export class PageRepo {
         workspaceId,
       });
     }
+    return restoredPageIds;
   }
 
   async getRecentPagesInSpace(spaceId: string, pagination: PaginationOptions) {

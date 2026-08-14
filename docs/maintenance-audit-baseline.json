@@ -267,8 +267,6 @@
       "types|apps/client/src/features/page-history/utils/history-summary.ts|IHistoryEventDetailRow",
       "types|apps/client/src/features/page-template/types/page-template.types.ts|TemplateDraftDiff",
       "types|apps/client/src/features/page-template/types/page-template.types.ts|TemplateInstanceInfo",
-      "types|apps/client/src/features/page-template/types/page-template.types.ts|TemplateInstanceStatus",
-      "types|apps/client/src/features/page-template/types/page-template.types.ts|TemplateSyncRunStatus",
       "types|apps/client/src/features/page/components/reading-time/reading-time.ts|ReadingTimeKind",
       "types|apps/client/src/features/page/queries/cache-invalidation.ts|SidebarKeyParams",
       "types|apps/client/src/features/page/types/page.types.ts|PageAccessCapabilities",
@@ -528,6 +526,31 @@
       {
         "fingerprint": "typescript|core/notification/services/comment.notification.ts|core/notification/services/page.notification.ts|27|148",
         "classification": "delivery-variant",
+        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+      },
+      {
+        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|26|146",
+        "classification": "parallel-product-flow",
+        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+      },
+      {
+        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|28|146",
+        "classification": "parallel-product-flow",
+        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+      },
+      {
+        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|31|163",
+        "classification": "parallel-product-flow",
+        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+      },
+      {
+        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|35|179",
+        "classification": "parallel-product-flow",
+        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+      },
+      {
+        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|46|170",
+        "classification": "parallel-product-flow",
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {

@@ -24,6 +24,8 @@ export const TrailingNode = Extension.create<TrailingNodeExtensionOptions>({
       node: 'paragraph',
       notAfter: [
         'paragraph',
+        'templateManagedBlock',
+        'templateField',
       ],
     };
   },

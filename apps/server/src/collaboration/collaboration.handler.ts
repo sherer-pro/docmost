@@ -17,6 +17,7 @@ import {
   applyAiPageOperation,
   hashProseMirrorJson,
 } from '../common/helpers/prosemirror/ai-page-operation';
+import { hashPageTemplateInstanceContent } from '../common/helpers/prosemirror/page-template-content-hash';
 import { strictJsonToNode } from './collaboration.util';
 import { PageEmbedService } from '../core/page/transclusion/page-embed.service';
 import type {
@@ -202,10 +203,10 @@ export class CollaborationHandler {
             },
             (doc) => {
               const current = TiptapTransformer.fromYdoc(doc, 'default');
-              const beforeHash = hashProseMirrorJson(current);
+              const beforeHash = hashPageTemplateInstanceContent(current);
               if (beforeHash !== baseContentHash) {
                 throw new ConflictException({
-                  code: 'page_embed_stale',
+                  code: 'page_template_stale',
                   message: 'The document changed',
                 });
               }

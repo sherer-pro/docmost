@@ -100,6 +100,9 @@ export function buildTree(nodes: Array<ISidebarNode | IPage>): SpaceTreeNode[] {
       slugId: isSidebarNode ? (node.slugId ?? null) : node.slugId,
       databaseId: isSidebarNode ? (node.databaseId ?? null) : null,
       access: isSidebarNode ? (node.access ?? undefined) : undefined,
+      isLinkedTemplateInstance: isSidebarNode
+        ? node.isLinkedTemplateInstance === true
+        : false,
     });
   });
 
@@ -183,9 +186,7 @@ export function findTreeNodesByIds(
   return matches;
 }
 
-export function orderBreadcrumbNodes(
-  nodes: SpaceTreeNode[],
-): SpaceTreeNode[] {
+export function orderBreadcrumbNodes(nodes: SpaceTreeNode[]): SpaceTreeNode[] {
   if (nodes.length < 2) {
     return nodes;
   }
@@ -207,8 +208,7 @@ export function orderBreadcrumbNodes(
     visitedNodeIds.add(currentNode.id);
     currentNode = nodes.find(
       (node) =>
-        node.parentPageId === currentNode?.id &&
-        !visitedNodeIds.has(node.id),
+        node.parentPageId === currentNode?.id && !visitedNodeIds.has(node.id),
     );
   }
 

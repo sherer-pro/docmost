@@ -23,11 +23,29 @@ export type TemplateFieldSummary = {
   placeholder: string;
 };
 
+export function serializeTemplateDraftSeed(input: unknown): string {
+  return stableJson(stripNoopTemplateAttributes(input));
+}
+
+export function serializeTemplateInstanceContentForHash(
+  input: unknown,
+): string {
+  return stableJson(stripTemplateInstanceHashAttributes(input));
+}
+
+export function formatTemplateDraftId(hexDigest: string): string {
+  const hex = hexDigest.slice(0, 32);
+  if (!/^[a-f0-9]{32}$/i.test(hex)) {
+    throw new Error('template_draft_digest_invalid');
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function normalizeTemplateDraft(
   input: unknown,
   createId: () => string = defaultId,
 ): JSONContent {
-  const document = asDocument(input);
+  const document = asDocument(stripNoopTemplateAttributes(input));
   const usedIds = new Set<string>();
   const normalizedContent = (document.content ?? []).map((node) => {
     if (node.type === TEMPLATE_MANAGED_BLOCK_TYPE) {
@@ -143,12 +161,30 @@ export function validateTemplateInstanceMutation(
   );
 }
 
+export function assertNormalizedTemplateDraft(input: unknown): JSONContent {
+  const document = asDocument(input);
+  const usedIds = new Set<string>();
+  for (const node of document.content ?? []) {
+    const id =
+      node.type === TEMPLATE_MANAGED_BLOCK_TYPE
+        ? asString(node.attrs?.templateBlockId)
+        : node.type === TEMPLATE_FIELD_TYPE
+          ? asString(node.attrs?.fieldId)
+          : null;
+    if (!id || usedIds.has(id)) {
+      throw new Error('template_diff_requires_normalized_draft');
+    }
+    usedIds.add(id);
+  }
+  return document;
+}
+
 export function summarizeTemplateDiff(
   previousPublished: unknown,
   nextDraft: unknown,
 ): TemplateDiffSummary {
-  const previous = normalizeTemplateDraft(previousPublished, defaultId);
-  const next = normalizeTemplateDraft(nextDraft, defaultId);
+  const previous = assertNormalizedTemplateDraft(previousPublished);
+  const next = assertNormalizedTemplateDraft(nextDraft);
   const previousManaged = keyedNodes(
     previous,
     TEMPLATE_MANAGED_BLOCK_TYPE,
@@ -161,17 +197,11 @@ export function summarizeTemplateDiff(
   );
   const previousFields = keyedNodes(previous, TEMPLATE_FIELD_TYPE, 'fieldId');
   const nextFields = keyedNodes(next, TEMPLATE_FIELD_TYPE, 'fieldId');
-  const previousOrder = nodeOrder(previous);
-  const nextOrder = nodeOrder(next);
 
   return {
     addedBlockIds: missingKeys(nextManaged, previousManaged),
     removedBlockIds: missingKeys(previousManaged, nextManaged),
-    movedBlockIds: [...previousOrder.entries()]
-      .filter(
-        ([id, position]) => nextOrder.has(id) && nextOrder.get(id) !== position,
-      )
-      .map(([id]) => id),
+    movedBlockIds: movedKeys(previousManaged, nextManaged),
     changedBlockIds: changedKeys(previousManaged, nextManaged),
     addedFields: missingKeys(nextFields, previousFields).map((fieldId) =>
       summarizeField(fieldId, nextFields.get(fieldId)),
@@ -297,18 +327,39 @@ function changedKeys(
   });
 }
 
-function nodeOrder(document: JSONContent): Map<string, number> {
-  const result = new Map<string, number>();
-  (document.content ?? []).forEach((node, index) => {
-    const id =
-      node.type === TEMPLATE_MANAGED_BLOCK_TYPE
-        ? asString(node.attrs?.templateBlockId)
-        : node.type === TEMPLATE_FIELD_TYPE
-          ? asString(node.attrs?.fieldId)
-          : null;
-    if (id) result.set(id, index);
+function movedKeys(
+  previous: Map<string, JSONContent>,
+  next: Map<string, JSONContent>,
+): string[] {
+  const nextPositions = new Map(
+    [...next.keys()].map((id, index) => [id, index] as const),
+  );
+  const commonIds = [...previous.keys()].filter((id) => nextPositions.has(id));
+  const positions = commonIds.map((id) => nextPositions.get(id)!);
+  const tails: number[] = [];
+  const tailIndices: number[] = [];
+  const predecessors = positions.map(() => -1);
+
+  positions.forEach((position, index) => {
+    let left = 0;
+    let right = tails.length;
+    while (left < right) {
+      const middle = Math.floor((left + right) / 2);
+      if (tails[middle] < position) left = middle + 1;
+      else right = middle;
+    }
+    if (left > 0) predecessors[index] = tailIndices[left - 1];
+    tails[left] = position;
+    tailIndices[left] = index;
   });
-  return result;
+
+  const unchangedIndices = new Set<number>();
+  let current = tailIndices[tails.length - 1] ?? -1;
+  while (current >= 0) {
+    unchangedIndices.add(current);
+    current = predecessors[current];
+  }
+  return commonIds.filter((_, index) => !unchangedIndices.has(index));
 }
 
 function summarizeField(
@@ -365,9 +416,79 @@ function stableJson(value: unknown): string {
   }
   return `{${Object.entries(value as Record<string, unknown>)
     .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
     .join(',')}}`;
+}
+
+function stripNoopTemplateAttributes(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripNoopTemplateAttributes);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => {
+      if (key !== 'attrs' || !item || typeof item !== 'object') {
+        return [[key, stripNoopTemplateAttributes(item)]];
+      }
+      const attrs = Object.fromEntries(
+        Object.entries(item as Record<string, unknown>)
+          .filter(
+            ([, attribute]) => attribute !== null && attribute !== undefined,
+          )
+          .map(([attribute, attributeValue]) => [
+            attribute,
+            stripNoopTemplateAttributes(attributeValue),
+          ]),
+      );
+      return Object.keys(attrs).length > 0 ? [[key, attrs]] : [];
+    }),
+  );
+}
+
+function stripTemplateInstanceHashAttributes(value: unknown): unknown {
+  const stripped = stripNoopTemplateAttributes(value);
+  if (Array.isArray(stripped)) {
+    return stripped.map(stripTemplateInstanceHashAttributes);
+  }
+  if (!stripped || typeof stripped !== 'object') {
+    return stripped;
+  }
+
+  const node = stripped as Record<string, unknown>;
+  const nodeType = typeof node.type === 'string' ? node.type : '';
+  const attrs =
+    node.attrs && typeof node.attrs === 'object'
+      ? (node.attrs as Record<string, unknown>)
+      : null;
+  const normalizedAttrs = attrs
+    ? Object.fromEntries(
+        Object.entries(attrs).filter(
+          ([key]) =>
+            key !== 'id' ||
+            ![
+              'paragraph',
+              'heading',
+              'transclusionSource',
+              'pageEmbed',
+            ].includes(nodeType),
+        ),
+      )
+    : null;
+
+  return Object.fromEntries(
+    Object.entries(node).flatMap(([key, item]) => {
+      if (key === 'attrs') {
+        return normalizedAttrs && Object.keys(normalizedAttrs).length > 0
+          ? [[key, normalizedAttrs]]
+          : [];
+      }
+      return [[key, stripTemplateInstanceHashAttributes(item)]];
+    }),
+  );
 }
 
 function clone<T>(value: T): T {

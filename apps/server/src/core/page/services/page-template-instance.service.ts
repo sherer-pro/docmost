@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import { v7 as uuid7 } from 'uuid';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
 import type { Page, User } from '@docmost/db/types/entity.types';
@@ -14,6 +15,7 @@ import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { strictJsonToNode } from '../../../collaboration/collaboration.util';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
+import { hashPageTemplateInstanceContent } from '../../../common/helpers/prosemirror/page-template-content-hash';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
 import {
   SpaceCaslAction,
@@ -27,10 +29,12 @@ import { materializePageContent } from '../transclusion/utils/page-embed-materia
 import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-unsync.util';
 import {
   CreateFromTemplateDto,
+  CreateIndependentPageCopyDto,
   CreatePageTemplateDto,
   DetachSyncedTemplateDto,
   PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
+  PageTemplatePaginationDto,
 } from '../dto/page-template.dto';
 import { PageService } from './page.service';
 import { executeTx } from '@docmost/db/utils';
@@ -44,6 +48,10 @@ import {
 } from '@docmost/editor-ext/server';
 import { PageTemplateContentService } from './page-template-content.service';
 import { PageTemplateOperationService } from './page-template-operation.service';
+import {
+  PageAccessEffect,
+  PageAccessPrincipalType,
+} from '../../../common/helpers/types/permission';
 
 @Injectable()
 export class PageTemplateInstanceService {
@@ -79,6 +87,11 @@ export class PageTemplateInstanceService {
       .selectAll()
       .where('childPageId', '=', page.id)
       .executeTakeFirst();
+    const canCreateIndependentCopy = await this.resolveCanCreateIndependentCopy(
+      page,
+      instance,
+      user,
+    );
     const legacyOperation = instance
       ? null
       : await this.db
@@ -86,6 +99,8 @@ export class PageTemplateInstanceService {
           .select(['sourcePageId'])
           .where('workspaceId', '=', user.workspaceId)
           .where('operationKind', '=', 'snapshot')
+          .where('idempotencyKey', 'not like', 'create-template:%')
+          .where('idempotencyKey', 'not like', 'independent-copy:%')
           .where('status', '=', 'completed')
           .where('resultPageId', '=', page.id)
           .orderBy('createdAt', 'asc')
@@ -110,19 +125,40 @@ export class PageTemplateInstanceService {
         status: instance?.status ?? 'snapshot',
         appliedRevision: instance?.appliedRevision ?? null,
         latestRevision: latestRevision?.revision ?? null,
+        provenanceState: 'invalid',
         sourceTemplate: null,
         canReadTemplate: false,
         canDetach:
-          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+          this.isDetachableStatus(instance?.status) &&
+          pageAccess.capabilities.canWrite,
+        canCreateIndependentCopy,
+        lastErrorCode: this.safeErrorCode(instance?.lastErrorCode),
       };
     }
 
     const source = await this.pageRepo.findById(sourcePageId, {
       includeSpace: true,
     });
+    if (!source || source.deletedAt) {
+      return {
+        createdFromTemplate: true,
+        kind: instance?.instanceKind ?? 'regular',
+        status: instance?.status ?? 'snapshot',
+        appliedRevision: instance?.appliedRevision ?? null,
+        latestRevision: latestRevision?.revision ?? null,
+        provenanceState: 'source_missing',
+        sourceTemplate: null,
+        canReadTemplate: false,
+        canDetach:
+          this.isDetachableStatus(instance?.status) &&
+          pageAccess.capabilities.canWrite,
+        canCreateIndependentCopy,
+        lastErrorCode:
+          this.safeErrorCode(instance?.lastErrorCode) ??
+          'page_template_source_missing',
+      };
+    }
     if (
-      !source ||
-      source.deletedAt ||
       source.workspaceId !== page.workspaceId ||
       source.spaceId !== page.spaceId
     ) {
@@ -132,10 +168,16 @@ export class PageTemplateInstanceService {
         status: instance?.status ?? 'snapshot',
         appliedRevision: instance?.appliedRevision ?? null,
         latestRevision: latestRevision?.revision ?? null,
+        provenanceState: 'invalid',
         sourceTemplate: null,
         canReadTemplate: false,
         canDetach:
-          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+          this.isDetachableStatus(instance?.status) &&
+          pageAccess.capabilities.canWrite,
+        canCreateIndependentCopy,
+        lastErrorCode:
+          this.safeErrorCode(instance?.lastErrorCode) ??
+          'page_template_source_invalid',
       };
     }
 
@@ -150,10 +192,14 @@ export class PageTemplateInstanceService {
         status: instance?.status ?? 'snapshot',
         appliedRevision: instance?.appliedRevision ?? null,
         latestRevision: latestRevision?.revision ?? null,
+        provenanceState: 'restricted',
         sourceTemplate: null,
         canReadTemplate: false,
         canDetach:
-          instance?.status === 'active' && pageAccess.capabilities.canWrite,
+          this.isDetachableStatus(instance?.status) &&
+          pageAccess.capabilities.canWrite,
+        canCreateIndependentCopy,
+        lastErrorCode: this.safeErrorCode(instance?.lastErrorCode),
       };
     }
 
@@ -163,9 +209,13 @@ export class PageTemplateInstanceService {
       status: instance?.status ?? 'snapshot',
       appliedRevision: instance?.appliedRevision ?? null,
       latestRevision: latestRevision?.revision ?? null,
+      provenanceState: 'linked',
       canReadTemplate: true,
       canDetach:
-        instance?.status === 'active' && pageAccess.capabilities.canWrite,
+        this.isDetachableStatus(instance?.status) &&
+        pageAccess.capabilities.canWrite,
+      canCreateIndependentCopy,
+      lastErrorCode: this.safeErrorCode(instance?.lastErrorCode),
       sourceTemplate: {
         id: source.id,
         slugId: source.slugId,
@@ -181,33 +231,9 @@ export class PageTemplateInstanceService {
   async discover(dto: PageTemplateDiscoveryDto, user: User) {
     const limit = dto.limit ?? 20;
     const candidateLimit = Math.min(limit * 5 + 1, 251);
-    const offset = this.operations.decodeCursor(dto.cursor);
-    const effective = await this.policy.resolveForUser(
-      user.workspaceId,
-      dto.spaceId,
-      user.id,
-    );
-    const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
-    const enabled =
-      effective.systemEnabled &&
-      effective.workspaceEnabled &&
-      effective.templatesEnabled;
-    const capabilities = {
-      enabled,
-      createTemplate:
-        enabled &&
-        effective.allowCreateTemplate &&
-        effective.allowedActions.includes('create_template') &&
-        ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
-      useRegular:
-        enabled &&
-        effective.allowRegularTemplate &&
-        effective.allowedActions.includes('use_regular_template'),
-      useSynced:
-        enabled &&
-        effective.allowSyncedTemplate &&
-        effective.allowedActions.includes('use_synced_template'),
-    };
+    const cursor = this.operations.decodePageCursor(dto.cursor);
+    const { capabilities } = await this.resolveCapabilities(dto.spaceId, user);
+    const enabled = capabilities.enabled;
     if (!enabled) {
       return { items: [], nextCursor: null, capabilities };
     }
@@ -221,6 +247,9 @@ export class PageTemplateInstanceService {
         'page.title',
         'page.icon',
         'page.spaceId',
+        'page.workspaceId',
+        'page.parentPageId',
+        'page.deletedAt',
         'page.updatedAt',
         'page.templateKind',
         'page.templateArchivedAt',
@@ -233,19 +262,57 @@ export class PageTemplateInstanceService {
       .where('page.deletedAt', 'is', null);
     query = this.excludeDatabasePages(query)
       .orderBy('page.updatedAt', 'desc')
-      .orderBy('page.id', 'desc')
-      .offset(offset)
-      .limit(candidateLimit);
+      .orderBy('page.id', 'desc');
     if (dto.kind) {
       query = query.where('page.templateKind', '=', dto.kind);
     }
-    if (!dto.includeArchived) {
+    if (dto.archiveState === 'active') {
+      query = query.where('page.templateArchivedAt', 'is', null);
+    } else if (dto.archiveState === 'archived') {
+      query = query.where('page.templateArchivedAt', 'is not', null);
+    } else if (!dto.includeArchived) {
       query = query.where('page.templateArchivedAt', 'is', null);
     }
     if (dto.query?.trim()) {
       query = query.where('page.title', 'ilike', `%${dto.query.trim()}%`);
     }
-    const candidates = await query.execute();
+    if (cursor) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('page.updatedAt', '<', cursor.updatedAt),
+          eb.and([
+            eb('page.updatedAt', '=', cursor.updatedAt),
+            eb('page.id', '<', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    const visibleEntries: Array<{
+      candidate: any;
+      page: Page;
+      access: any;
+    }> = [];
+    let lastScannedCandidate: any = null;
+    const candidateWindow = await query.limit(candidateLimit).execute();
+    const pages = candidateWindow.filter(
+      (candidate): candidate is (typeof candidateWindow)[number] =>
+        !candidate.deletedAt,
+    ) as unknown as Page[];
+    const pageById = new Map(pages.map((page) => [page.id, page] as const));
+    const accessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+    for (const candidate of candidateWindow) {
+      lastScannedCandidate = candidate;
+      const page = pageById.get(candidate.id);
+      if (!page) continue;
+      const access = accessByPageId.get(page.id);
+      if (!access) continue;
+      if (!access.capabilities.canRead) continue;
+      visibleEntries.push({ candidate, page, access });
+      if (visibleEntries.length > limit) break;
+    }
+    const returnedEntries = visibleEntries.slice(0, limit);
+    const candidates = returnedEntries.map((entry) => entry.candidate);
     const candidateIds = candidates.map((candidate) => candidate.id);
     const [favoriteRows, recentPages, revisionRows, instanceRows] =
       await Promise.all([
@@ -282,7 +349,7 @@ export class PageTemplateInstanceService {
               .select(['templatePageId', 'status'])
               .select((eb) => eb.fn.countAll<number>().as('count'))
               .where('templatePageId', 'in', candidateIds)
-              .where('status', 'in', ['active', 'syncing', 'error'])
+              .where('status', 'in', ['snapshot', 'active', 'syncing', 'error'])
               .groupBy(['templatePageId', 'status'])
               .execute()
           : [],
@@ -294,69 +361,90 @@ export class PageTemplateInstanceService {
     );
     const instanceCounts = new Map<
       string,
-      { active: number; failed: number }
+      { usage: number; active: number; failed: number }
     >();
     for (const row of instanceRows) {
       if (!row.templatePageId) continue;
       const counts = instanceCounts.get(row.templatePageId) ?? {
+        usage: 0,
         active: 0,
         failed: 0,
       };
-      counts.active += Number(row.count);
+      counts.usage += Number(row.count);
+      if (row.status !== 'snapshot') counts.active += Number(row.count);
       if (row.status === 'error') counts.failed += Number(row.count);
       instanceCounts.set(row.templatePageId, counts);
     }
-    const items: any[] = [];
-    let consumed = 0;
-    for (const candidate of candidates) {
-      if (items.length >= limit) break;
-      consumed += 1;
-      const page = await this.pageRepo.findById(candidate.id);
-      if (!page) continue;
-      const access = await this.pageAccessService.getEffectiveAccess(
-        page,
-        user,
-      );
-      if (!access.capabilities.canRead) continue;
-      items.push({
-        ...candidate,
-        kind: candidate.templateKind,
-        archivedAt: candidate.templateArchivedAt,
-        publishedRevision:
-          revisionByTemplate.get(candidate.id)?.revision ?? null,
-        draftChanged:
-          !revisionByTemplate.has(candidate.id) ||
-          candidate.updatedAt >
-            (revisionByTemplate.get(candidate.id)?.publishedAt ?? new Date(0)),
-        activeInstanceCount: instanceCounts.get(candidate.id)?.active ?? 0,
-        failedInstanceCount: instanceCounts.get(candidate.id)?.failed ?? 0,
-        favorite: favoritePageIds.has(page.id),
-        recent: recentPageIds.has(page.id),
-        actions: {
-          use:
-            candidate.templateKind === 'regular'
-              ? capabilities.useRegular
-              : capabilities.useSynced &&
-                revisionByTemplate.has(candidate.id) &&
-                !candidate.templateArchivedAt,
-          manage:
-            access.capabilities.canWrite &&
-            effective.allowCreateTemplate &&
-            effective.allowedActions.includes('manage_template'),
-        },
-      });
-    }
+    const items = returnedEntries.map(({ candidate, page, access }) => ({
+      ...candidate,
+      kind: candidate.templateKind,
+      archivedAt: candidate.templateArchivedAt,
+      archiveState: candidate.templateArchivedAt ? 'archived' : 'active',
+      publishedRevision: revisionByTemplate.get(candidate.id)?.revision ?? null,
+      draftChanged:
+        !revisionByTemplate.has(candidate.id) ||
+        candidate.updatedAt >
+          (revisionByTemplate.get(candidate.id)?.publishedAt ?? new Date(0)),
+      activeInstanceCount: instanceCounts.get(candidate.id)?.active ?? 0,
+      usageCount: instanceCounts.get(candidate.id)?.usage ?? 0,
+      failedInstanceCount: instanceCounts.get(candidate.id)?.failed ?? 0,
+      favorite: favoritePageIds.has(page.id),
+      recent: recentPageIds.has(page.id),
+      actions: {
+        use:
+          !candidate.templateArchivedAt &&
+          (candidate.templateKind === 'regular'
+            ? capabilities.useRegular
+            : capabilities.useSynced && revisionByTemplate.has(candidate.id)),
+        manage: access.capabilities.canWrite && capabilities.manageTemplate,
+        archive:
+          access.capabilities.canWrite &&
+          capabilities.manageTemplate &&
+          !candidate.templateArchivedAt,
+        restore:
+          access.capabilities.canWrite &&
+          capabilities.manageTemplate &&
+          Boolean(candidate.templateArchivedAt),
+      },
+    }));
     return {
       items,
       nextCursor:
-        candidates.length > consumed || candidates.length === candidateLimit
-          ? this.operations.encodeCursor(offset + consumed)
-          : null,
+        visibleEntries.length > limit
+          ? this.operations.encodePageCursor(returnedEntries.at(-1)!.candidate)
+          : candidateWindow.length === candidateLimit && lastScannedCandidate
+            ? this.operations.encodePageCursor(lastScannedCandidate)
+            : null,
       capabilities,
     };
   }
 
-  async createTemplate(dto: CreatePageTemplateDto, user: User) {
+  async getCapabilities(spaceId: string, user: User) {
+    const { capabilities } = await this.resolveCapabilities(spaceId, user);
+    return { capabilities };
+  }
+
+  async createTemplate(
+    dto: CreatePageTemplateDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    this.operations.assertIdempotencyKey(idempotencyKey);
+    const operationKey = `create-template:${idempotencyKey}`;
+    const completedOperation = await this.operations.findCompletedOperation(
+      'snapshot',
+      operationKey,
+      user,
+      dto,
+    );
+    if (completedOperation?.resultPageId) {
+      const completedPage = await this.replayCreatedPageOperation(
+        completedOperation,
+        user,
+        'Completed template result not found',
+      );
+      return { page: completedPage, idempotent: true };
+    }
     await this.policy.assertAction(
       user.workspaceId,
       dto.spaceId,
@@ -375,24 +463,76 @@ export class PageTemplateInstanceService {
       if (source.spaceId !== dto.spaceId) {
         throw new NotFoundException('Source page not found');
       }
+      await this.assertTemplateSourceIsNotLinked(source.id);
     }
-    const sourceContent = source
-      ? await this.content.getLiveContent(source.id, user)
-      : { type: 'doc', content: [{ type: 'paragraph' }] };
-    const targetPageId = uuid7();
-    const materialized = source
-      ? materializePageContent(sourceContent, {
-          sourcePageId: source.id,
-          targetPageId,
-        })
-      : sourceContent;
-    const normalized =
-      dto.kind === 'synced'
-        ? normalizeTemplateDraft(materialized, uuid7)
-        : materialized;
-    const rewritten = source
-      ? rewriteAttachmentsForUnsync(normalized, () => uuid7())
-      : { content: normalized, copies: [] };
+    const proposedTargetPageId = uuid7();
+    const operation = await this.operations.beginOperation(
+      'snapshot',
+      operationKey,
+      user,
+      dto,
+      {
+        ...(source ? { sourcePageId: source.id } : {}),
+        resultPageId: proposedTargetPageId,
+      },
+    );
+    if (operation.status === 'completed' && operation.resultPageId) {
+      const existing = await this.replayCreatedPageOperation(
+        operation,
+        user,
+        'Completed template result not found',
+      );
+      return { page: existing, idempotent: true };
+    }
+    const targetPageId = operation.resultPageId as string;
+    const recoveredPage = await this.pageRepo.findById(targetPageId);
+    if (recoveredPage && !recoveredPage.deletedAt) {
+      const completed = await this.operations.completeOperation(
+        operation.id,
+        { resultPageId: targetPageId },
+        operation.leaseToken,
+      );
+      if (!completed) {
+        throw this.conflict(
+          'page_template_operation_lease_lost',
+          'The page template operation lease was lost',
+        );
+      }
+      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
+      return { page: recoveredPage, idempotent: true };
+    }
+    const rewritten = operation.stagedContent
+      ? {
+          content: operation.stagedContent,
+          copies: this.operations.readAttachmentMapping(
+            operation.attachmentMapping,
+          ),
+        }
+      : await (async () => {
+          const sourceContent = source
+            ? await this.content.getLiveContent(source.id, user)
+            : { type: 'doc', content: [{ type: 'paragraph' }] };
+          const materialized = source
+            ? materializePageContent(sourceContent, {
+                sourcePageId: source.id,
+                targetPageId,
+              })
+            : sourceContent;
+          const normalized =
+            dto.kind === 'synced'
+              ? normalizeTemplateDraft(materialized, uuid7)
+              : materialized;
+          const staged = source
+            ? rewriteAttachmentsForUnsync(normalized, () => uuid7())
+            : { content: normalized, copies: [] };
+          await this.operations.stageCreatedPageContent(
+            operation.id,
+            operation.leaseToken,
+            staged.content,
+            staged.copies,
+          );
+          return staged;
+        })();
     const content = rewritten.content;
     strictJsonToNode(content as any);
     const copiedPaths: string[] = [];
@@ -409,6 +549,15 @@ export class PageTemplateInstanceService {
           )
         : [];
       const page = await executeTx(this.db, async (trx) => {
+        await this.operations.completeOperationInTransaction(
+          trx,
+          operation.id,
+          operation.leaseToken,
+          {
+            resultPageId: targetPageId,
+            attachmentMapping: rewritten.copies as any,
+          },
+        );
         const created = await this.pageService.create(
           user.id,
           user.workspaceId,
@@ -451,53 +600,126 @@ export class PageTemplateInstanceService {
         );
         return created;
       });
-      await this.pageService.finalizeCreatedPage(page, user.id);
-      return { page };
+      await this.finalizeCreatedPageOperation(operation, page, user);
+      return { page, idempotent: false };
     } catch (error) {
-      await Promise.allSettled(
-        copiedPaths.map((path) => this.storageService.delete(path)),
+      const ownsLease = await this.operations.ownsOperationLease(
+        operation.id,
+        operation.leaseToken,
       );
+      if (ownsLease) {
+        await this.operations.failOperation(
+          operation.id,
+          this.operations.errorCode(error),
+          operation.leaseToken,
+        );
+        await this.db
+          .deleteFrom('pages')
+          .where('id', '=', targetPageId)
+          .where('creatorId', '=', user.id)
+          .execute();
+        await Promise.allSettled(
+          copiedPaths.map((path) => this.storageService.delete(path)),
+        );
+      }
       throw error;
     }
   }
 
   async listDestinations(dto: PageTemplateDestinationsDto, user: User) {
+    const limit = dto.limit ?? 20;
+    const candidateLimit = Math.min(limit * 5 + 1, 251);
+    const cursor = this.operations.decodePageCursor(dto.cursor);
     const ability = await this.spaceAbility.createForUser(user, dto.spaceId);
     let query = this.db
       .selectFrom('pages as page')
-      .select('page.id')
+      .select(['page.id', 'page.updatedAt'])
       .where('page.workspaceId', '=', user.workspaceId)
       .where('page.spaceId', '=', dto.spaceId)
       .where('page.deletedAt', 'is', null)
       .where('page.templateKind', 'is', null);
     query = this.excludeDatabasePages(query)
       .orderBy('page.updatedAt', 'desc')
-      .orderBy('page.id', 'desc')
-      .limit(Math.min((dto.limit ?? 20) * 5, 250));
+      .orderBy('page.id', 'desc');
+    if (dto.pageId) {
+      query = query.where('page.id', '=', dto.pageId);
+    }
     if (dto.query?.trim()) {
       query = query.where('page.title', 'ilike', `%${dto.query.trim()}%`);
     }
-    const candidates = await query.execute();
+    if (dto.purpose === 'source') {
+      query = query.where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('pageTemplateInstances as sourceInstance')
+              .select('sourceInstance.id')
+              .whereRef('sourceInstance.childPageId', '=', 'page.id')
+              .where('sourceInstance.instanceKind', '=', 'synced')
+              .where('sourceInstance.status', 'in', [
+                'active',
+                'syncing',
+                'error',
+              ]),
+          ),
+        ),
+      );
+    }
+    if (cursor) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('page.updatedAt', '<', cursor.updatedAt),
+          eb.and([
+            eb('page.updatedAt', '=', cursor.updatedAt),
+            eb('page.id', '<', cursor.id),
+          ]),
+        ]),
+      );
+    }
+    const visibleEntries: Array<{ candidate: any; page: Page }> = [];
+    let lastScannedCandidate: any = null;
+    const candidateWindow = await query.limit(candidateLimit).execute();
     const pages = (
-      await Promise.all(candidates.map(({ id }) => this.pageRepo.findById(id)))
+      await Promise.all(
+        candidateWindow.map(({ id }) => this.pageRepo.findById(id)),
+      )
     ).filter((page): page is Page => Boolean(page && !page.deletedAt));
+    const pageById = new Map(pages.map((page) => [page.id, page] as const));
     const accessByPageId =
       await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+    for (const candidate of candidateWindow) {
+      lastScannedCandidate = candidate;
+      const page = pageById.get(candidate.id);
+      if (!page) continue;
+      const capabilities = accessByPageId.get(page.id)?.capabilities;
+      const visible =
+        dto.purpose === 'source'
+          ? capabilities?.canRead === true
+          : capabilities?.canCreateChild === true;
+      if (!visible) continue;
+      visibleEntries.push({ candidate, page });
+      if (visibleEntries.length > limit) break;
+    }
+    const returnedEntries = visibleEntries.slice(0, limit);
+    const items = returnedEntries.map(({ page }) => ({
+      id: page.id,
+      slugId: page.slugId,
+      title: page.title ?? null,
+      icon: page.icon ?? null,
+      parentPageId: page.parentPageId ?? null,
+    }));
     return {
-      rootAllowed: ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
-      items: pages
-        .filter(
-          (page) =>
-            accessByPageId.get(page.id)?.capabilities.canCreateChild === true,
-        )
-        .slice(0, dto.limit ?? 20)
-        .map((page) => ({
-          id: page.id,
-          slugId: page.slugId,
-          title: page.title ?? null,
-          icon: page.icon ?? null,
-          parentPageId: page.parentPageId ?? null,
-        })),
+      rootAllowed:
+        dto.purpose === 'source'
+          ? false
+          : ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
+      items,
+      nextCursor:
+        visibleEntries.length > limit
+          ? this.operations.encodePageCursor(returnedEntries.at(-1)!.candidate)
+          : candidateWindow.length === candidateLimit && lastScannedCandidate
+            ? this.operations.encodePageCursor(lastScannedCandidate)
+            : null,
     };
   }
 
@@ -527,6 +749,70 @@ export class PageTemplateInstanceService {
       );
   }
 
+  private async replayCreatedPageOperation(
+    operation: any,
+    user: User,
+    notFoundMessage: string,
+  ): Promise<Page> {
+    const page = operation.resultPageId
+      ? await this.pageRepo.findById(operation.resultPageId)
+      : null;
+    if (!page || page.deletedAt || page.workspaceId !== user.workspaceId) {
+      throw new NotFoundException(notFoundMessage);
+    }
+    await this.pageAccessService.assertCanReadPage(page, user);
+    await this.finalizeCreatedPageOperation(operation, page, user);
+    return page;
+  }
+
+  private async assertTemplateSourceIsNotLinked(pageId: string): Promise<void> {
+    const linkedInstance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .select('id')
+      .where('childPageId', '=', pageId)
+      .where('instanceKind', '=', 'synced')
+      .where('status', 'in', ['active', 'syncing', 'error'])
+      .executeTakeFirst();
+    if (linkedInstance) {
+      throw this.conflict(
+        'page_template_linked_source_forbidden',
+        'A linked synchronized page cannot be used as a template source',
+      );
+    }
+  }
+
+  private async finalizeCreatedPageOperation(
+    operation: any,
+    page: Page,
+    user: User,
+  ): Promise<void> {
+    if (operation.afterContentHash) return;
+    const leaseToken = await this.operations.claimCreatedPageFinalization(
+      operation.id,
+    );
+    if (!leaseToken) return;
+    try {
+      await this.pageService.finalizeCreatedPage(page, user.id);
+      const completed = await this.operations.completeCreatedPageFinalization(
+        operation.id,
+        leaseToken,
+        page.content,
+      );
+      if (!completed) {
+        throw this.conflict(
+          'page_template_finalization_lease_lost',
+          'The created page finalization lease was lost',
+        );
+      }
+    } catch (error) {
+      await this.operations.releaseCreatedPageFinalization(
+        operation.id,
+        leaseToken,
+      );
+      throw error;
+    }
+  }
+
   async createFromTemplate(
     dto: CreateFromTemplateDto,
     idempotencyKey: string,
@@ -540,13 +826,11 @@ export class PageTemplateInstanceService {
       dto,
     );
     if (completedOperation?.resultPageId) {
-      const completedPage = await this.pageRepo.findById(
-        completedOperation.resultPageId,
+      const completedPage = await this.replayCreatedPageOperation(
+        completedOperation,
+        user,
+        'Completed template result not found',
       );
-      if (!completedPage || completedPage.deletedAt) {
-        throw new NotFoundException('Completed template result not found');
-      }
-      await this.pageAccessService.assertCanReadPage(completedPage, user);
       return { page: completedPage, idempotent: true };
     }
     const source = await this.content.requireTemplateSource(
@@ -605,18 +889,29 @@ export class PageTemplateInstanceService {
       { sourcePageId: source.id, resultPageId: proposedTargetPageId },
     );
     if (operation.status === 'completed' && operation.resultPageId) {
-      const existing = await this.pageRepo.findById(operation.resultPageId);
-      if (existing) return { page: existing, idempotent: true };
+      const existing = await this.replayCreatedPageOperation(
+        operation,
+        user,
+        'Completed template result not found',
+      );
+      return { page: existing, idempotent: true };
     }
 
     const targetPageId = operation.resultPageId as string;
     const recoveredPage = await this.pageRepo.findById(targetPageId);
     if (recoveredPage && !recoveredPage.deletedAt) {
-      await this.operations.completeOperation(
+      const completed = await this.operations.completeOperation(
         operation.id,
         { resultPageId: targetPageId },
         operation.leaseToken,
       );
+      if (!completed) {
+        throw this.conflict(
+          'page_template_operation_lease_lost',
+          'The page template operation lease was lost',
+        );
+      }
+      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
       return { page: recoveredPage, idempotent: true };
     }
     const copiedPaths: string[] = [];
@@ -666,6 +961,56 @@ export class PageTemplateInstanceService {
         operation.leaseToken,
       );
       const page = await executeTx(this.db, async (trx) => {
+        const lockedSource = await this.pageRepo.findById(source.id, {
+          withLock: true,
+          trx,
+        });
+        if (
+          !lockedSource ||
+          lockedSource.deletedAt ||
+          lockedSource.workspaceId !== user.workspaceId ||
+          lockedSource.spaceId !== dto.spaceId ||
+          lockedSource.templateKind !== templateKind
+        ) {
+          throw this.conflict(
+            'page_template_source_changed',
+            'The template source changed while the page was being created',
+          );
+        }
+        if (lockedSource.templateArchivedAt) {
+          throw this.conflict(
+            'page_template_archived',
+            'Archived templates cannot be used',
+          );
+        }
+        if (templateKind === 'synced') {
+          const lockedRevision = await trx
+            .selectFrom('pageTemplateRevisions')
+            .select(['id', 'revision', 'contentHash'])
+            .where('templatePageId', '=', lockedSource.id)
+            .orderBy('revision', 'desc')
+            .executeTakeFirst();
+          if (
+            !lockedRevision ||
+            lockedRevision.id !== publishedRevision?.id ||
+            lockedRevision.revision !== publishedRevision?.revision ||
+            lockedRevision.contentHash !== publishedRevision?.contentHash
+          ) {
+            throw this.conflict(
+              'page_template_source_changed',
+              'The published template changed while the page was being created',
+            );
+          }
+        }
+        await this.operations.completeOperationInTransaction(
+          trx,
+          operation.id,
+          operation.leaseToken,
+          {
+            resultPageId: targetPageId,
+            attachmentMapping: rewritten.copies as any,
+          },
+        );
         const createdPage = await this.pageService.create(
           user.id,
           user.workspaceId,
@@ -747,15 +1092,7 @@ export class PageTemplateInstanceService {
         }
         return createdPage;
       });
-      await this.operations.completeOperation(
-        operation.id,
-        {
-          resultPageId: page.id,
-          attachmentMapping: rewritten.copies as any,
-        },
-        operation.leaseToken,
-      );
-      await this.pageService.finalizeCreatedPage(page, user.id);
+      await this.finalizeCreatedPageOperation(operation, page, user);
       return { page, idempotent: false };
     } catch (error) {
       const ownsLease = await this.operations.ownsOperationLease(
@@ -783,44 +1120,226 @@ export class PageTemplateInstanceService {
     }
   }
 
-  async listUsages(pageId: string, user: User) {
+  async listUsages(pageId: string, dto: PageTemplatePaginationDto, user: User) {
     const template = await this.requireManagedTemplate(pageId, user);
-    const rows = await this.db
-      .selectFrom('pageTemplateInstances as instance')
-      .innerJoin('pages as child', 'child.id', 'instance.childPageId')
-      .select([
-        'instance.childPageId',
-        'instance.status',
-        'instance.appliedRevision',
-        'child.slugId',
-        'child.title',
-        'child.icon',
-        'child.updatedAt',
-      ])
-      .where('instance.templatePageId', '=', template.id)
-      .where('child.deletedAt', 'is', null)
-      .orderBy('child.updatedAt', 'desc')
-      .execute();
-    const pages = (
-      await Promise.all(
-        rows.map((row) => this.pageRepo.findById(row.childPageId)),
-      )
-    ).filter((page): page is Page => Boolean(page));
-    const access = await this.pageAccessService.getEffectiveAccessForPages(
-      pages,
+    const limit = dto.limit ?? 20;
+    const cursor = this.decodeUsageCursor(dto.cursor);
+    const workspaceBypass = this.pageAccessService.isWorkspaceBypassUser(
       user,
+      template.workspaceId,
     );
-    const readableIds = new Set(
-      pages
-        .filter((page) => access.get(page.id)?.capabilities.canRead === true)
-        .map((page) => page.id),
-    );
-    return {
-      totalCount: rows.length,
-      hiddenCount: rows.filter((row) => !readableIds.has(row.childPageId))
-        .length,
-      items: rows.filter((row) => readableIds.has(row.childPageId)),
-    };
+    const readablePredicate = workspaceBypass
+      ? sql<boolean>`true`
+      : this.buildUsageReadablePredicate(user.id);
+    return this.db
+      .transaction()
+      .setIsolationLevel('repeatable read')
+      .execute(async (trx) => {
+        const counts = await trx
+          .selectFrom('pageTemplateInstances as instance')
+          .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+          .select((eb) => [
+            eb.fn.countAll<number>().as('totalCount'),
+            sql<number>`count(*) filter (where ${readablePredicate})`.as(
+              'readableCount',
+            ),
+          ])
+          .where('instance.templatePageId', '=', template.id)
+          .where('instance.workspaceId', '=', template.workspaceId)
+          .where('child.workspaceId', '=', template.workspaceId)
+          .where('instance.status', 'in', [
+            'snapshot',
+            'active',
+            'syncing',
+            'error',
+          ])
+          .where('child.deletedAt', 'is', null)
+          .executeTakeFirst();
+        const totalCount = Number(counts?.totalCount ?? 0);
+        const readableCount = Number(counts?.readableCount ?? 0);
+        if (readableCount === 0) {
+          return {
+            totalCount,
+            hiddenCount: totalCount,
+            items: [],
+            nextCursor: null,
+          };
+        }
+
+        const query = trx
+          .selectFrom('pageTemplateInstances as instance')
+          .innerJoin('pages as child', 'child.id', 'instance.childPageId')
+          .select([
+            'instance.childPageId',
+            'instance.status',
+            'instance.appliedRevision',
+            'instance.lastErrorCode',
+            'child.slugId',
+            'child.title',
+            'child.icon',
+            'child.updatedAt',
+            'child.workspaceId',
+            'child.spaceId',
+            'child.parentPageId',
+            'child.deletedAt',
+          ])
+          .where('instance.templatePageId', '=', template.id)
+          .where('instance.status', 'in', [
+            'snapshot',
+            'active',
+            'syncing',
+            'error',
+          ])
+          .where('child.deletedAt', 'is', null)
+          .where('instance.workspaceId', '=', template.workspaceId)
+          .where('child.workspaceId', '=', template.workspaceId)
+          .where(readablePredicate)
+          .$if(Boolean(cursor), (builder) =>
+            builder.where((eb) =>
+              eb.or([
+                eb('child.updatedAt', '<', cursor!.updatedAt),
+                eb.and([
+                  eb('child.updatedAt', '=', cursor!.updatedAt),
+                  eb('child.id', '<', cursor!.id),
+                ]),
+              ]),
+            ),
+          )
+          .orderBy('child.updatedAt', 'desc')
+          .orderBy('child.id', 'desc')
+          .limit(limit + 1);
+        const rows = await query.execute();
+        const hasMore = rows.length > limit;
+        const scannedRows = rows.slice(0, limit);
+        const items = scannedRows.map((row) => ({
+          childPageId: row.childPageId,
+          status: row.status,
+          appliedRevision: row.appliedRevision,
+          lastErrorCode: this.safeErrorCode(row.lastErrorCode),
+          slugId: row.slugId,
+          title: row.title,
+          icon: row.icon,
+          updatedAt: row.updatedAt,
+        }));
+        return {
+          totalCount,
+          hiddenCount: totalCount - readableCount,
+          items,
+          nextCursor: hasMore
+            ? this.encodeUsageCursor(scannedRows.at(-1)!)
+            : null,
+        };
+      });
+  }
+
+  private buildUsageReadablePredicate(userId: string) {
+    return sql<boolean>`(
+      exists (
+        select 1
+        from page_access_rules as usage_user_allow
+        where usage_user_allow.page_id = ${sql.ref('child.id')}
+          and usage_user_allow.principal_type = ${PageAccessPrincipalType.USER}
+          and usage_user_allow.user_id = ${userId}
+          and usage_user_allow.effect = ${PageAccessEffect.ALLOW}
+      )
+      or (
+        not exists (
+          select 1
+          from page_access_rules as usage_user_rule
+          where usage_user_rule.page_id = ${sql.ref('child.id')}
+            and usage_user_rule.principal_type = ${PageAccessPrincipalType.USER}
+            and usage_user_rule.user_id = ${userId}
+        )
+        and (
+          (
+            exists (
+              select 1
+              from page_access_rules as usage_group_allow
+              inner join group_users as usage_group_allow_member
+                on usage_group_allow_member.group_id = usage_group_allow.group_id
+              where usage_group_allow.page_id = ${sql.ref('child.id')}
+                and usage_group_allow.principal_type = ${PageAccessPrincipalType.GROUP}
+                and usage_group_allow_member.user_id = ${userId}
+                and usage_group_allow.effect = ${PageAccessEffect.ALLOW}
+            )
+            and not exists (
+              select 1
+              from page_access_rules as usage_group_deny
+              inner join group_users as usage_group_deny_member
+                on usage_group_deny_member.group_id = usage_group_deny.group_id
+              where usage_group_deny.page_id = ${sql.ref('child.id')}
+                and usage_group_deny.principal_type = ${PageAccessPrincipalType.GROUP}
+                and usage_group_deny_member.user_id = ${userId}
+                and usage_group_deny.effect = ${PageAccessEffect.DENY}
+            )
+          )
+          or (
+            not exists (
+              select 1
+              from page_access_rules as usage_group_rule
+              inner join group_users as usage_group_rule_member
+                on usage_group_rule_member.group_id = usage_group_rule.group_id
+              where usage_group_rule.page_id = ${sql.ref('child.id')}
+                and usage_group_rule.principal_type = ${PageAccessPrincipalType.GROUP}
+                and usage_group_rule_member.user_id = ${userId}
+            )
+            and exists (
+              select 1
+              from space_members as usage_space_member
+              where usage_space_member.space_id = ${sql.ref('child.spaceId')}
+                and (
+                  usage_space_member.user_id = ${userId}
+                  or exists (
+                    select 1
+                    from group_users as usage_space_group_member
+                    where usage_space_group_member.group_id = usage_space_member.group_id
+                      and usage_space_group_member.user_id = ${userId}
+                  )
+                )
+            )
+          )
+        )
+      )
+    )`;
+  }
+
+  private encodeUsageCursor(row: {
+    childPageId: string;
+    updatedAt: Date | string;
+  }): string {
+    return Buffer.from(
+      JSON.stringify({
+        version: 1,
+        updatedAt: new Date(row.updatedAt).toISOString(),
+        id: row.childPageId,
+      }),
+    ).toString('base64url');
+  }
+
+  private decodeUsageCursor(
+    cursor?: string,
+  ): { updatedAt: Date; id: string } | null {
+    if (!cursor) return null;
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(cursor, 'base64url').toString('utf8'),
+      ) as Record<string, unknown>;
+      const updatedAt =
+        typeof parsed.updatedAt === 'string'
+          ? new Date(parsed.updatedAt)
+          : new Date(Number.NaN);
+      if (
+        parsed.version !== 1 ||
+        typeof parsed.id !== 'string' ||
+        parsed.id.length === 0 ||
+        Number.isNaN(updatedAt.getTime())
+      ) {
+        throw new Error('invalid');
+      }
+      return { updatedAt, id: parsed.id };
+    } catch {
+      throw new BadRequestException('Invalid cursor');
+    }
   }
 
   async archive(pageId: string, user: User) {
@@ -835,7 +1354,277 @@ export class PageTemplateInstanceService {
         template.id,
       );
     }
-    return { pageId: template.id, archived: true };
+    return {
+      pageId: template.id,
+      archived: true,
+      archiveState: 'archived' as const,
+    };
+  }
+
+  async restore(pageId: string, user: User) {
+    const template = await this.requireManagedTemplate(pageId, user);
+    if (template.templateArchivedAt) {
+      await this.pageRepo.updatePage(
+        {
+          templateArchivedAt: null,
+          lastUpdatedById: user.id,
+          updatedAt: new Date(),
+        },
+        template.id,
+      );
+    }
+    return {
+      pageId: template.id,
+      archived: false,
+      archiveState: 'active' as const,
+    };
+  }
+
+  async createIndependentCopy(
+    pageId: string,
+    dto: CreateIndependentPageCopyDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    this.operations.assertIdempotencyKey(idempotencyKey);
+    const operationKey = `independent-copy:${idempotencyKey}`;
+    const request = { pageId, ...dto };
+    const completedOperation = await this.operations.findCompletedOperation(
+      'snapshot',
+      operationKey,
+      user,
+      request,
+    );
+    if (completedOperation?.resultPageId) {
+      const completedPage = await this.replayCreatedPageOperation(
+        completedOperation,
+        user,
+        'Completed independent copy not found',
+      );
+      return { page: completedPage, idempotent: true };
+    }
+    const source = await this.content.requirePlainDocument(
+      pageId,
+      user.workspaceId,
+    );
+    await this.pageAccessService.assertCanReadPage(source, user);
+    const instance = await this.db
+      .selectFrom('pageTemplateInstances')
+      .selectAll()
+      .where('childPageId', '=', source.id)
+      .where('instanceKind', '=', 'synced')
+      .where('status', 'in', ['active', 'syncing', 'error'])
+      .executeTakeFirst();
+    if (!instance) {
+      throw this.conflict(
+        'page_template_linked_instance_required',
+        'Only a linked synchronized page can be copied independently',
+      );
+    }
+
+    const parentPageId =
+      dto.parentPageId === undefined
+        ? (source.parentPageId ?? undefined)
+        : (dto.parentPageId ?? undefined);
+    await this.content.assertCanCreate(source.spaceId, parentPageId, user);
+
+    const proposedTargetPageId = uuid7();
+    const operation = await this.operations.beginOperation(
+      'snapshot',
+      operationKey,
+      user,
+      request,
+      { sourcePageId: source.id, resultPageId: proposedTargetPageId },
+    );
+    if (operation.status === 'completed' && operation.resultPageId) {
+      const existing = await this.replayCreatedPageOperation(
+        operation,
+        user,
+        'Completed independent copy not found',
+      );
+      return { page: existing, idempotent: true };
+    }
+
+    const targetPageId = operation.resultPageId as string;
+    const recoveredPage = await this.pageRepo.findById(targetPageId);
+    if (recoveredPage && !recoveredPage.deletedAt) {
+      const completed = await this.operations.completeOperation(
+        operation.id,
+        { resultPageId: targetPageId },
+        operation.leaseToken,
+      );
+      if (!completed) {
+        throw this.conflict(
+          'page_template_operation_lease_lost',
+          'The page template operation lease was lost',
+        );
+      }
+      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
+      return { page: recoveredPage, idempotent: true };
+    }
+
+    const copiedPaths: string[] = [];
+    let graphLease: PageEmbedGraphLease | undefined;
+    try {
+      const rewritten = operation.stagedContent
+        ? {
+            content: operation.stagedContent,
+            copies: this.operations.readAttachmentMapping(
+              operation.attachmentMapping,
+            ),
+          }
+        : await this.operations.stageMaterializedContent(
+            operation.id,
+            operation.leaseToken,
+            detachTemplateContent(
+              await this.content.getLiveContent(source.id, user),
+            ),
+            source.id,
+            targetPageId,
+            operation.attachmentMapping,
+          );
+      strictJsonToNode(rewritten.content as any);
+      const attachmentRows = await this.content.copyAttachments(
+        rewritten.copies,
+        source,
+        targetPageId,
+        source.spaceId,
+        user,
+        copiedPaths,
+        false,
+      );
+      graphLease = await this.pageEmbedService.prepareBulkPageReferences(
+        [
+          {
+            id: targetPageId,
+            workspaceId: source.workspaceId,
+            spaceId: source.spaceId,
+            content: rewritten.content,
+          },
+        ],
+        user,
+        'snapshot',
+      );
+      await this.operations.assertOperationLease(
+        operation.id,
+        operation.leaseToken,
+      );
+      const page = await executeTx(this.db, async (trx) => {
+        const lockedSource = await this.pageRepo.findById(source.id, {
+          withLock: true,
+          trx,
+        });
+        const lockedInstance = await trx
+          .selectFrom('pageTemplateInstances')
+          .select('id')
+          .where('id', '=', instance.id)
+          .where('childPageId', '=', source.id)
+          .where('instanceKind', '=', 'synced')
+          .where('status', 'in', ['active', 'syncing', 'error'])
+          .forUpdate()
+          .executeTakeFirst();
+        if (
+          !lockedSource ||
+          lockedSource.deletedAt ||
+          lockedSource.workspaceId !== source.workspaceId ||
+          lockedSource.spaceId !== source.spaceId ||
+          !lockedInstance
+        ) {
+          throw this.conflict(
+            'page_template_linked_instance_changed',
+            'The synchronized template link changed while the copy was being created',
+          );
+        }
+        await this.operations.completeOperationInTransaction(
+          trx,
+          operation.id,
+          operation.leaseToken,
+          {
+            resultPageId: targetPageId,
+            attachmentMapping: rewritten.copies as any,
+          },
+        );
+        const createdPage = await this.pageService.create(
+          user.id,
+          user.workspaceId,
+          {
+            title: dto.title ?? source.title ?? undefined,
+            icon: source.icon ?? undefined,
+            parentPageId,
+            spaceId: source.spaceId,
+            content: rewritten.content as object,
+            format: 'json',
+          },
+          {
+            pageId: targetPageId,
+            templateKind: null,
+            trx,
+            deferSideEffects: true,
+          },
+        );
+        for (const row of attachmentRows) {
+          await this.attachmentRepo.insertAttachment(row, trx);
+        }
+        await this.transclusionService.insertTransclusionsForPages(
+          [
+            {
+              id: createdPage.id,
+              workspaceId: createdPage.workspaceId,
+              content: createdPage.content,
+            },
+          ],
+          trx,
+        );
+        await this.transclusionService.insertReferencesForPages(
+          [
+            {
+              id: createdPage.id,
+              workspaceId: createdPage.workspaceId,
+              content: createdPage.content,
+            },
+          ],
+          trx,
+        );
+        await this.pageEmbedService.insertPageReferencesForPages(
+          [
+            {
+              id: createdPage.id,
+              workspaceId: createdPage.workspaceId,
+              spaceId: createdPage.spaceId,
+              content: createdPage.content,
+            },
+          ],
+          trx,
+          graphLease,
+        );
+        return createdPage;
+      });
+      await this.finalizeCreatedPageOperation(operation, page, user);
+      return { page, idempotent: false };
+    } catch (error) {
+      const ownsLease = await this.operations.ownsOperationLease(
+        operation.id,
+        operation.leaseToken,
+      );
+      if (ownsLease) {
+        await this.operations.failOperation(
+          operation.id,
+          this.operations.errorCode(error),
+          operation.leaseToken,
+        );
+        await this.db
+          .deleteFrom('pages')
+          .where('id', '=', targetPageId)
+          .where('creatorId', '=', user.id)
+          .execute();
+        await Promise.allSettled(
+          copiedPaths.map((path) => this.storageService.delete(path)),
+        );
+      }
+      throw error;
+    } finally {
+      await this.operations.releaseGraphLease(graphLease);
+    }
   }
 
   async detachTemplate(
@@ -884,6 +1673,7 @@ export class PageTemplateInstanceService {
         );
       }
       if (
+        instance.status !== 'detached' ||
         this.containsNodeType(current, 'templateManagedBlock') ||
         this.containsNodeType(current, 'templateField')
       ) {
@@ -892,25 +1682,6 @@ export class PageTemplateInstanceService {
           'The detach operation did not finish cleanly',
         );
       }
-      await this.db
-        .updateTable('pageTemplateInstances')
-        .set({
-          status: 'detached',
-          templatePageId: null,
-          detachedAt: new Date(),
-          detachedById: user.id,
-          lastErrorCode: null,
-          updatedAt: new Date(),
-        })
-        .where('id', '=', instance.id)
-        .where('status', '!=', 'detached')
-        .execute();
-      await this.pageHistoryRecorder.enqueuePageEvent({
-        pageId: page.id,
-        changeType: 'page.template.detached',
-        changeData: { templateKind: 'synced' },
-        actorId: user.id,
-      });
       return {
         pageId: page.id,
         detached: true,
@@ -918,7 +1689,8 @@ export class PageTemplateInstanceService {
         idempotent: true,
       };
     }
-    if (hashProseMirrorJson(current as any) !== dto.baseContentHash) {
+    const currentContentHash = hashPageTemplateInstanceContent(current);
+    if (currentContentHash !== dto.baseContentHash) {
       throw this.conflict('page_template_stale', 'The document changed');
     }
     const operation = await this.operations.beginOperation(
@@ -940,24 +1712,11 @@ export class PageTemplateInstanceService {
       page.id,
       current,
       next,
-      dto.baseContentHash,
+      currentContentHash,
       operation.id,
       operation.leaseToken,
       user,
     );
-    await this.db
-      .updateTable('pageTemplateInstances')
-      .set({
-        status: 'detached',
-        templatePageId: null,
-        detachedAt: new Date(),
-        detachedById: user.id,
-        lastErrorCode: null,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', instance.id)
-      .where('status', '!=', 'detached')
-      .execute();
     await this.pageHistoryRecorder.enqueuePageEvent({
       pageId: page.id,
       changeType: 'page.template.detached',
@@ -971,6 +1730,41 @@ export class PageTemplateInstanceService {
       idempotent: false,
     };
   }
+
+  private async resolveCapabilities(spaceId: string, user: User) {
+    const [effective, ability] = await Promise.all([
+      this.policy.resolveForUser(user.workspaceId, spaceId, user.id),
+      this.spaceAbility.createForUser(user, spaceId),
+    ]);
+    const enabled =
+      effective.systemEnabled &&
+      effective.workspaceEnabled &&
+      effective.templatesEnabled;
+    return {
+      effective,
+      capabilities: {
+        enabled,
+        createTemplate:
+          enabled &&
+          effective.allowCreateTemplate &&
+          effective.allowedActions.includes('create_template') &&
+          ability.can(SpaceCaslAction.Create, SpaceCaslSubject.Page),
+        manageTemplate:
+          enabled &&
+          effective.allowCreateTemplate &&
+          effective.allowedActions.includes('manage_template'),
+        useRegular:
+          enabled &&
+          effective.allowRegularTemplate &&
+          effective.allowedActions.includes('use_regular_template'),
+        useSynced:
+          enabled &&
+          effective.allowSyncedTemplate &&
+          effective.allowedActions.includes('use_synced_template'),
+      },
+    };
+  }
+
   private async requireManagedTemplate(
     pageId: string,
     user: User,
@@ -984,6 +1778,41 @@ export class PageTemplateInstanceService {
       'manage_template',
     );
     return template;
+  }
+
+  private isDetachableStatus(status: string | null | undefined): boolean {
+    return status === 'active' || status === 'syncing' || status === 'error';
+  }
+
+  private async resolveCanCreateIndependentCopy(
+    page: Page,
+    instance: any,
+    user: User,
+  ): Promise<boolean> {
+    if (
+      instance?.instanceKind !== 'synced' ||
+      !this.isDetachableStatus(instance.status)
+    ) {
+      return false;
+    }
+    try {
+      await this.content.assertCanCreate(
+        page.spaceId,
+        page.parentPageId ?? undefined,
+        user,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private safeErrorCode(value: unknown): string | null {
+    return typeof value === 'string' &&
+      value.length <= 120 &&
+      /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(value)
+      ? value
+      : null;
   }
 
   private containsNodeType(input: unknown, type: string): boolean {

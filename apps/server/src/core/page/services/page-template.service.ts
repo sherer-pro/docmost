@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import type { User } from '@docmost/db/types/entity.types';
 import {
   CreateFromTemplateDto,
+  CreateIndependentPageCopyDto,
   CreatePageTemplateDto,
   DetachPageEmbedDto,
   DetachSyncedTemplateDto,
   InsertPageEmbedDto,
   PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
+  PageTemplatePaginationDto,
   PublishPageTemplateDto,
 } from '../dto/page-template.dto';
 import { PageEmbedCommandService } from './page-embed-command.service';
@@ -30,8 +32,16 @@ export class PageTemplateService {
     return this.instances.discover(dto, user);
   }
 
-  createTemplate(dto: CreatePageTemplateDto, user: User) {
-    return this.instances.createTemplate(dto, user);
+  getCapabilities(spaceId: string, user: User) {
+    return this.instances.getCapabilities(spaceId, user);
+  }
+
+  createTemplate(
+    dto: CreatePageTemplateDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    return this.instances.createTemplate(dto, idempotencyKey, user);
   }
 
   listDestinations(dto: PageTemplateDestinationsDto, user: User) {
@@ -46,20 +56,25 @@ export class PageTemplateService {
     return this.instances.createFromTemplate(dto, idempotencyKey, user);
   }
 
-  listUsages(pageId: string, user: User) {
-    return this.instances.listUsages(pageId, user);
+  listUsages(pageId: string, dto: PageTemplatePaginationDto, user: User) {
+    return this.instances.listUsages(pageId, dto, user);
   }
 
   preflightPublish(pageId: string, user: User) {
     return this.sync.preflightPublish(pageId, user);
   }
 
-  publish(pageId: string, dto: PublishPageTemplateDto, user: User) {
-    return this.sync.publish(pageId, dto, user);
+  publish(
+    pageId: string,
+    dto: PublishPageTemplateDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    return this.sync.publish(pageId, dto, idempotencyKey, user);
   }
 
-  listRevisions(pageId: string, user: User) {
-    return this.sync.listRevisions(pageId, user);
+  listRevisions(pageId: string, dto: PageTemplatePaginationDto, user: User) {
+    return this.sync.listRevisions(pageId, dto, user);
   }
 
   listSyncRuns(pageId: string, user: User) {
@@ -72,6 +87,24 @@ export class PageTemplateService {
 
   archive(pageId: string, user: User) {
     return this.instances.archive(pageId, user);
+  }
+
+  restore(pageId: string, user: User) {
+    return this.instances.restore(pageId, user);
+  }
+
+  createIndependentCopy(
+    pageId: string,
+    dto: CreateIndependentPageCopyDto,
+    idempotencyKey: string,
+    user: User,
+  ) {
+    return this.instances.createIndependentCopy(
+      pageId,
+      dto,
+      idempotencyKey,
+      user,
+    );
   }
 
   detachTemplate(

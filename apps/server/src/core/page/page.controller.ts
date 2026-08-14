@@ -68,6 +68,7 @@ import {
 import { LinkPreviewService } from './services/link-preview.service';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
+import { PageTemplateSyncService } from './services/page-template-sync.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -83,6 +84,7 @@ export class PageController {
     private readonly labelService: LabelService,
     private readonly backlinkService: BacklinkService,
     private readonly linkPreviewService: LinkPreviewService,
+    private readonly pageTemplateSyncService: PageTemplateSyncService,
   ) {}
 
   private toAccessResponse(access: {
@@ -245,7 +247,14 @@ export class PageController {
 
     await this.pageAccessService.assertCanMoveDeleteShare(page, user);
 
-    await this.pageRepo.restorePage(page.id, workspace.id);
+    const restoredPageIds = await this.pageRepo.restorePage(
+      page.id,
+      workspace.id,
+    );
+    await this.pageTemplateSyncService.catchUpRestoredInstances(
+      restoredPageIds,
+      user,
+    );
 
     const restoredPage = await this.pageRepo.findById(page.id, {
       includeHasChildren: true,

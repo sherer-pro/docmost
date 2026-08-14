@@ -4,6 +4,7 @@ import {
   onAuthenticatePayload,
 } from '@hocuspocus/server';
 import {
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,6 +18,7 @@ import { getPageId } from '../collaboration.util';
 import { JwtCollabPayload, JwtType } from '../../core/auth/dto/jwt-payload';
 import { PageAccessService } from '../../core/page-access/page-access.service';
 import { SpacePolicyService } from '../../core/space-policy/space-policy.service';
+import { PageTemplatePolicyService } from '../../core/page/transclusion/page-template-policy.service';
 
 interface CollabAuthenticationContext {
   userId: string;
@@ -37,6 +39,7 @@ export class AuthenticationExtension implements Extension {
     private readonly pageAccessService: PageAccessService,
     private readonly userSessionRepo: UserSessionRepo,
     private readonly spacePolicy: SpacePolicyService,
+    private readonly pageTemplatePolicy: PageTemplatePolicyService,
   ) {}
 
   async onAuthenticate(data: onAuthenticatePayload) {
@@ -117,13 +120,17 @@ export class AuthenticationExtension implements Extension {
       throw new UnauthorizedException('Invalid collaboration context');
     }
 
-    const session = await this.userSessionRepo.findActiveById(context.sessionId);
+    const session = await this.userSessionRepo.findActiveById(
+      context.sessionId,
+    );
     if (
       !session ||
       session.userId !== context.userId ||
       session.workspaceId !== context.workspaceId
     ) {
-      throw new UnauthorizedException('Collab token session is no longer active');
+      throw new UnauthorizedException(
+        'Collab token session is no longer active',
+      );
     }
 
     const user = await this.userRepo.findById(
@@ -153,12 +160,25 @@ export class AuthenticationExtension implements Extension {
 
     const access = await this.pageAccessService.getEffectiveAccess(page, user);
     if (!access.capabilities.canRead) {
-      this.logger.warn(
-        `User not authorized to access page: ${context.pageId}`,
-      );
+      this.logger.warn(`User not authorized to access page: ${context.pageId}`);
       throw new UnauthorizedException();
     }
 
-    return { user, canWrite: access.capabilities.canWrite };
+    let canWrite = access.capabilities.canWrite;
+    if (canWrite && page.templateKind) {
+      try {
+        await this.pageTemplatePolicy.assertAction(
+          page.workspaceId,
+          page.spaceId,
+          user.id,
+          'manage_template',
+        );
+      } catch (error) {
+        if (!(error instanceof ForbiddenException)) throw error;
+        canWrite = false;
+      }
+    }
+
+    return { user, canWrite };
   }
 }

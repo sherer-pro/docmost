@@ -149,6 +149,7 @@
 | POST | `/pages/:pageId/actions/access/groups` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/resolve-users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/create-independent-copy` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/actions/detach-template` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/copy-markdown-with-comments` | `apps/server/src/integrations/export/export.controller.ts` |
@@ -182,15 +183,18 @@
 | POST | `/pages/templates/:pageId/actions/archive` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/templates/:pageId/actions/preflight-publish` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/templates/:pageId/actions/publish` | `apps/server/src/core/page/page-template.controller.ts` |
+| POST | `/pages/templates/:pageId/actions/restore` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/:pageId/actions/usages` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/:pageId/provenance` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/:pageId/revisions` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/:pageId/sync-runs` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/templates/:pageId/sync-runs/:runId/actions/retry` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/templates/actions/create` | `apps/server/src/core/page/page-template.controller.ts` |
+| GET | `/pages/templates/capabilities` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/destinations` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/policies/spaces/:spaceId` | `apps/server/src/core/page/page-template.controller.ts` |
 | PUT | `/pages/templates/policies/spaces/:spaceId` | `apps/server/src/core/page/page-template.controller.ts` |
+| GET | `/pages/templates/policies/spaces/:spaceId/groups` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/policies/spaces/:spaceId/groups/:groupId` | `apps/server/src/core/page/page-template.controller.ts` |
 | PUT | `/pages/templates/policies/spaces/:spaceId/groups/:groupId` | `apps/server/src/core/page/page-template.controller.ts` |
 | GET | `/pages/templates/policies/workspace` | `apps/server/src/core/page/page-template.controller.ts` |

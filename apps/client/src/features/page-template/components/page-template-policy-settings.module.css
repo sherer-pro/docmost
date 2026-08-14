@@ -1,0 +1,37 @@
+.policyCard {
+  overflow: hidden;
+}
+
+.hierarchy {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  flex-wrap: wrap;
+}
+
+.policyRow {
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.nestedPolicy {
+  padding-inline-start: var(--mantine-spacing-lg);
+  border-inline-start: 2px solid var(--mantine-color-default-border);
+}
+
+.nestedPolicy .policyRow + .policyRow {
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+@media (max-width: 48em) {
+  .nestedPolicy {
+    padding-inline-start: var(--mantine-spacing-xs);
+  }
+
+  .policyRow {
+    padding-inline: var(--mantine-spacing-sm);
+  }
+
+  .policyRow :global(.mantine-Group-root) {
+    align-items: flex-start;
+  }
+}

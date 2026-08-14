@@ -49,6 +49,7 @@ import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-op
 import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
 import { validateTemplateInstanceMutation } from '@docmost/editor-ext/server';
 import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
+import { PageTemplatePolicyService } from '../../core/page/transclusion/page-template-policy.service';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -82,6 +83,7 @@ export class PersistenceExtension implements Extension {
     private readonly pageEmbedService: PageEmbedService,
     private readonly eventEmitter: EventEmitter2,
     private readonly collabPageUpdates: CollabPageUpdatePublisherService,
+    private readonly pageTemplatePolicy: PageTemplatePolicyService,
   ) {}
 
   async onLoadDocument(data: onLoadDocumentPayload) {
@@ -194,8 +196,62 @@ export class PersistenceExtension implements Extension {
             return;
           }
 
-          if (isDeepStrictEqual(tiptapJson, lockedPage.content)) {
+          if (
+            !context?.pageTemplateMutationId &&
+            isDeepStrictEqual(tiptapJson, lockedPage.content)
+          ) {
             return;
+          }
+
+          const mutationOperation = context?.pageTemplateMutationId
+            ? await trx
+                .selectFrom('pageTemplateOperations')
+                .select(['id', 'operationKind', 'sourcePageId'])
+                .where('id', '=', context.pageTemplateMutationId)
+                .where('workspaceId', '=', lockedPage.workspaceId)
+                .where('requestedById', '=', context.user.id)
+                .where('consumerPageId', '=', pageId)
+                .where('status', '=', 'pending')
+                .where(
+                  'leaseToken',
+                  '=',
+                  context.pageTemplateOperationLeaseToken as string,
+                )
+                .where('leaseExpiresAt', '>', new Date())
+                .forUpdate()
+                .executeTakeFirst()
+            : null;
+          if (context?.pageTemplateMutationId && !mutationOperation) {
+            const completedMutation = await trx
+              .selectFrom('pageTemplateOperations')
+              .select(['id', 'afterContentHash'])
+              .where('id', '=', context.pageTemplateMutationId)
+              .where('workspaceId', '=', lockedPage.workspaceId)
+              .where('requestedById', '=', context.user.id)
+              .where('consumerPageId', '=', pageId)
+              .where('status', '=', 'completed')
+              .forUpdate()
+              .executeTakeFirst();
+            if (
+              completedMutation?.afterContentHash ===
+                hashProseMirrorJson(tiptapJson) &&
+              isDeepStrictEqual(tiptapJson, lockedPage.content)
+            ) {
+              return;
+            }
+            throw new ConflictException({
+              code: 'page_template_operation_lease_lost',
+              message: 'The page template operation lease was lost',
+            });
+          }
+
+          if (lockedPage.templateKind) {
+            await this.pageTemplatePolicy.assertAction(
+              lockedPage.workspaceId,
+              lockedPage.spaceId,
+              context.user.id,
+              'manage_template',
+            );
           }
 
           if (!context?.pageTemplateMutationId) {
@@ -251,6 +307,38 @@ export class PersistenceExtension implements Extension {
             }
           }
 
+          if (mutationOperation?.operationKind === 'template_detach') {
+            let detachQuery = trx
+              .updateTable('pageTemplateInstances')
+              .set({
+                status: 'detached',
+                templatePageId: null,
+                detachedAt: new Date(),
+                detachedById: context.user.id,
+                lastErrorCode: null,
+                updatedAt: new Date(),
+              })
+              .where('childPageId', '=', pageId)
+              .where('instanceKind', '=', 'synced')
+              .where('status', 'in', ['active', 'syncing', 'error']);
+            if (mutationOperation.sourcePageId) {
+              detachQuery = detachQuery.where(
+                'templatePageId',
+                '=',
+                mutationOperation.sourcePageId,
+              );
+            }
+            const detached = await detachQuery
+              .returning('id')
+              .executeTakeFirst();
+            if (!detached) {
+              throw new ConflictException({
+                code: 'page_template_detach_conflict',
+                message: 'The synchronized template link changed',
+              });
+            }
+          }
+
           const contributorIds = context?.pageTemplateSystemSyncRevision
             ? undefined
             : Array.from(
@@ -282,7 +370,7 @@ export class PersistenceExtension implements Extension {
             graphLease,
           );
 
-          if (context?.pageTemplateMutationId) {
+          if (mutationOperation) {
             const completedOperation = await trx
               .updateTable('pageTemplateOperations')
               .set({
@@ -293,7 +381,7 @@ export class PersistenceExtension implements Extension {
                 leaseExpiresAt: null,
                 updatedAt: new Date(),
               })
-              .where('id', '=', context.pageTemplateMutationId)
+              .where('id', '=', mutationOperation.id)
               .where('status', '=', 'pending')
               .where(
                 'leaseToken',
@@ -333,8 +421,11 @@ export class PersistenceExtension implements Extension {
           for (const socket of document.connections.keys()) {
             socket.close(4409, 'page_content_integrity_error');
           }
+          this.clearDocumentDirty(documentName);
+          this.removeContributors(documentName, editingUserIds);
+          return;
         }
-        if (context?.pageTemplateMutationId || integrityCode) {
+        if (context?.pageTemplateMutationId) {
           this.removeContributors(documentName, editingUserIds);
           throw err;
         }
@@ -634,7 +725,8 @@ export class PersistenceExtension implements Extension {
       const message = (error as Error)?.message;
       return typeof message === 'string' &&
         (message.startsWith('page_embed_') ||
-          message.startsWith('page_template_managed_'))
+          message.startsWith('page_template_managed_') ||
+          message === 'page_template_policy_denied')
         ? message
         : null;
     }
@@ -643,7 +735,8 @@ export class PersistenceExtension implements Extension {
     const code = (response as { code?: unknown }).code;
     return typeof code === 'string' &&
       (code.startsWith('page_embed_') ||
-        code.startsWith('page_template_managed_'))
+        code.startsWith('page_template_managed_') ||
+        code === 'page_template_policy_denied')
       ? code
       : null;
   }

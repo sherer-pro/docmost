@@ -8,6 +8,7 @@ import {
   removePageLabel,
 } from "@/features/page/services/page-service";
 import { getPageTemplateProvenance } from "@/features/page-template/services/page-template-api";
+import type { PageTemplateProvenance } from "@/features/page-template/types/page-template.types";
 
 export const PAGE_DETAILS_QUERY_KEYS = {
   labels: (pageId?: string) => ["page-details", "labels", pageId] as const,
@@ -84,5 +85,22 @@ export function usePageTemplateProvenanceQuery(
     queryKey: PAGE_DETAILS_QUERY_KEYS.templateProvenance(pageId),
     queryFn: () => getPageTemplateProvenance(pageId!),
     enabled: enabled && !!pageId,
+    refetchInterval: (query) =>
+      getTemplateProvenancePollingInterval(query.state.data),
   });
+}
+
+export function getTemplateProvenancePollingInterval(
+  provenance?: PageTemplateProvenance,
+): number | false {
+  if (!provenance?.createdFromTemplate || provenance.kind !== "synced") {
+    return false;
+  }
+
+  if (provenance.status === "syncing") return 2_500;
+  if (provenance.status === "active" || provenance.status === "error") {
+    return 30_000;
+  }
+
+  return false;
 }

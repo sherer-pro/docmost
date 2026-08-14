@@ -1165,7 +1165,10 @@ function NodeMenu({
       parentPageId: node.data.parentPageId,
       fullSpaceAccess,
     });
-  const canDuplicateMoveCopyNode = isExportableNode && canMoveDeleteShare;
+  const canDuplicateMoveCopyNode =
+    isExportableNode &&
+    canMoveDeleteShare &&
+    node.data.isLinkedTemplateInstance !== true;
   const canMoveNodeToTrash = isExportableNode && canMoveDeleteShare;
 
   const handleCopyLink = () => {

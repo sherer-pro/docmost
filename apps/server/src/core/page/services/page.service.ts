@@ -93,6 +93,7 @@ import {
 } from '../../database/utils/database-copy.utils';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 import type { TemplateKind } from '@docmost/api-contract';
+import { PageTemplatePolicyService } from '../transclusion/page-template-policy.service';
 
 interface IHistoryUserRef {
   id: string;
@@ -141,6 +142,8 @@ export class PageService {
     private readonly transclusionService?: TransclusionService,
     private readonly pageEmbedService?: PageEmbedService,
     @Optional() private readonly queueOutboxService?: QueueOutboxService,
+    @Optional()
+    private readonly pageTemplatePolicy?: PageTemplatePolicyService,
   ) {}
 
   async resolvePageDatabaseId(
@@ -840,6 +843,7 @@ export class PageService {
     updatePageDto: UpdatePageDto,
     user: User,
   ): Promise<Page> {
+    await this.assertCanManageTemplateSource(page, user);
     const contributors = new Set<string>(page.contributorIds);
     contributors.add(user.id);
     const contributorIds = Array.from(contributors);
@@ -978,6 +982,10 @@ export class PageService {
     format: ContentFormat,
     user: User,
   ): Promise<void> {
+    const sourcePage = await this.pageRepo.findById(pageId);
+    if (sourcePage) {
+      await this.assertCanManageTemplateSource(sourcePage, user);
+    }
     const prosemirrorJson = await this.parseProsemirrorContent(content, format);
     await this.assertTemplateInstanceContentMutation(
       pageId,
@@ -1063,27 +1071,74 @@ export class PageService {
       });
     }
     const database = await executeTx(this.db, async (trx) => {
+      const lockedPage = await this.pageRepo.findById(page.id, {
+        withLock: true,
+        trx,
+      });
+      if (
+        !lockedPage ||
+        lockedPage.deletedAt ||
+        lockedPage.workspaceId !== page.workspaceId ||
+        lockedPage.spaceId !== page.spaceId ||
+        lockedPage.templateKind !== null
+      ) {
+        throw new NotFoundException('Page to convert not found');
+      }
+      if (
+        await this.hasTemplateInPageTree(
+          lockedPage.id,
+          lockedPage.workspaceId,
+          trx,
+          false,
+        )
+      ) {
+        throw new ConflictException({
+          code: 'page_template_source_convert_forbidden',
+          message:
+            'Template source pages cannot be converted with their parent tree',
+        });
+      }
+      if (
+        await this.hasLinkedTemplateInstanceInPageTree(
+          lockedPage.id,
+          lockedPage.workspaceId,
+          trx,
+        )
+      ) {
+        throw new ConflictException({
+          code: 'page_template_linked_page_convert_forbidden',
+          message:
+            'Detach synchronized template links before converting this page tree to a database',
+        });
+      }
+      const descendants = await this.pageRepo.getPageAndDescendants(
+        lockedPage.id,
+        {
+          includeContent: false,
+          trx,
+        },
+      );
       const existingDatabase =
         await this.databaseRepo.findByPageIdIncludingDeleted(
-          page.id,
-          page.workspaceId,
+          lockedPage.id,
+          lockedPage.workspaceId,
         );
 
       const basePayload = {
-        spaceId: page.spaceId,
-        name: page.title?.trim() ?? '',
-        icon: page.icon,
+        spaceId: lockedPage.spaceId,
+        name: lockedPage.title?.trim() ?? '',
+        icon: lockedPage.icon,
         description: null,
-        workspaceId: page.workspaceId,
+        workspaceId: lockedPage.workspaceId,
         creatorId: actorId,
         lastUpdatedById: actorId,
-        pageId: page.id,
+        pageId: lockedPage.id,
       };
 
       const restoredOrCreatedDatabase = existingDatabase
         ? await this.databaseRepo.restoreDatabase(
             existingDatabase.id,
-            page.workspaceId,
+            lockedPage.workspaceId,
             { lastUpdatedById: actorId },
             trx,
           )
@@ -1092,28 +1147,24 @@ export class PageService {
       if (existingDatabase) {
         await this.databasePropertyRepo.restoreByDatabaseId(
           existingDatabase.id,
-          page.workspaceId,
+          lockedPage.workspaceId,
           trx,
         );
         await this.databaseViewRepo.restoreByDatabaseId(
           existingDatabase.id,
-          page.workspaceId,
+          lockedPage.workspaceId,
           trx,
         );
         await this.databaseCellRepo.restoreByDatabaseId(
           existingDatabase.id,
-          page.workspaceId,
+          lockedPage.workspaceId,
           trx,
         );
       }
 
-      const descendants = await this.pageRepo.getPageAndDescendants(page.id, {
-        includeContent: false,
-      });
-
       const descendantPageIds = descendants
         .map((descendant) => descendant.id)
-        .filter((descendantPageId) => descendantPageId !== page.id);
+        .filter((descendantPageId) => descendantPageId !== lockedPage.id);
 
       for (const descendantPageId of descendantPageIds) {
         const existingRow = await this.databaseRowRepo.findByDatabaseAndPage(
@@ -1125,7 +1176,7 @@ export class PageService {
           await this.databaseRowRepo.restoreRowLink(
             restoredOrCreatedDatabase.id,
             descendantPageId,
-            page.workspaceId,
+            lockedPage.workspaceId,
             actorId,
             trx,
           );
@@ -1136,7 +1187,7 @@ export class PageService {
           {
             databaseId: restoredOrCreatedDatabase.id,
             pageId: descendantPageId,
-            workspaceId: page.workspaceId,
+            workspaceId: lockedPage.workspaceId,
             createdById: actorId,
             updatedById: actorId,
           },
@@ -1173,6 +1224,7 @@ export class PageService {
         hasChildren: boolean;
         nodeType: string;
         databaseId: string | null;
+        isLinkedTemplateInstance: boolean;
       }
     >
   > {
@@ -1255,6 +1307,22 @@ export class PageService {
           then true
           else false
         end`.as('hasChildren'),
+        sql<boolean>`case
+          when ${eb.exists(
+            eb
+              .selectFrom('pageTemplateInstances as sidebarInstance')
+              .select('sidebarInstance.id')
+              .whereRef('sidebarInstance.childPageId', '=', 'pages.id')
+              .where('sidebarInstance.instanceKind', '=', 'synced')
+              .where('sidebarInstance.status', 'in', [
+                'active',
+                'syncing',
+                'error',
+              ]),
+          )}
+          then true
+          else false
+        end`.as('isLinkedTemplateInstance'),
       ])
       .where('pages.deletedAt', 'is', null)
       .where('pages.templateKind', 'is', null)
@@ -1336,6 +1404,7 @@ export class PageService {
               then true
               else false
             end`.as('hasChildren'),
+            sql<boolean>`false`.as('isLinkedTemplateInstance'),
           ])
           .where('databases.deletedAt', 'is', null)
           .where('databasePage.deletedAt', 'is', null)
@@ -1410,6 +1479,38 @@ export class PageService {
         trx,
       );
 
+      if (
+        await this.hasTemplateInPageTree(
+          lockedRootPage.id,
+          lockedRootPage.workspaceId,
+          trx,
+          true,
+        )
+      ) {
+        throw new ConflictException({
+          code: 'page_template_source_move_forbidden',
+          message:
+            'Move template source pages separately instead of moving their parent tree to another space',
+        });
+      }
+
+      const movedPages = await this.pageRepo.getPageAndDescendants(
+        lockedRootPage.id,
+        {
+          includeContent: false,
+          includeDeleted: true,
+          trx,
+        },
+      );
+      const movedPageIds = movedPages.map((page) => page.id);
+      if (await this.hasLinkedTemplateInstance(movedPageIds, trx)) {
+        throw new ConflictException({
+          code: 'page_template_linked_page_move_forbidden',
+          message:
+            'Detach synchronized template links before moving this page tree to another space',
+        });
+      }
+
       // Update root page
       const nextPosition = await this.nextPagePosition(spaceId, undefined, trx);
       await this.pageRepo.updatePage(
@@ -1418,13 +1519,6 @@ export class PageService {
         trx,
         false,
       );
-      const movedPageIds = await this.pageRepo
-        .getPageAndDescendants(lockedRootPage.id, {
-          includeContent: false,
-          includeDeleted: true,
-          trx,
-        })
-        .then((pages) => pages.map((page) => page.id));
       // The first id is the root page id
       if (movedPageIds.length > 1) {
         // Here we pass only the UUID `id`; The repository method also supports `slugId`.
@@ -1519,9 +1613,30 @@ export class PageService {
       nextPosition = await this.nextPagePosition(spaceId);
     }
 
+    if (
+      await this.hasTemplateInPageTree(
+        rootPage.id,
+        rootPage.workspaceId,
+        this.db,
+        false,
+      )
+    ) {
+      throw new ConflictException({
+        code: 'page_template_source_duplicate_forbidden',
+        message:
+          'Use a template action instead of duplicating a template source page or its parent tree',
+      });
+    }
     const pages = await this.pageRepo.getPageAndDescendants(rootPage.id, {
       includeContent: true,
     });
+    if (await this.hasLinkedTemplateInstance(pages.map((page) => page.id))) {
+      throw new ConflictException({
+        code: 'page_template_linked_page_duplicate_forbidden',
+        message:
+          'Use the independent copy action or detach synchronized template links before duplicating this page tree',
+      });
+    }
 
     const pageMap = new Map<string, CopyPageMapEntry>();
     pages.forEach((page) => {
@@ -1964,29 +2079,13 @@ export class PageService {
   }
 
   async forceDelete(pageId: string, workspaceId: string): Promise<void> {
-    await this.assertTemplateCanBeDeleted(pageId, workspaceId);
-    // Get all descendant IDs (including the page itself) using recursive CTE
-    const descendants = await this.db
-      .withRecursive('page_descendants', (db) =>
-        db
-          .selectFrom('pages')
-          .select(['id', sql<number>`0`.as('level')])
-          .where('id', '=', pageId)
-          .unionAll((exp) =>
-            exp
-              .selectFrom('pages as p')
-              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
-              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
-          ),
-      )
-      .selectFrom('page_descendants')
-      .select(['id'])
-      .execute();
+    const pageIds = await this.deletePageTreeAtomically({
+      pageId,
+      workspaceId,
+      hardDelete: true,
+    });
 
-    const pageIds = descendants.map((d) => d.id);
-
-    // Queue attachment deletion for all pages with unique job IDs to prevent duplicates
+    // Queue irreversible side effects only after the database transaction commits.
     for (const id of pageIds) {
       await this.attachmentQueue.add(
         QueueJob.DELETE_PAGE_ATTACHMENTS,
@@ -2005,7 +2104,6 @@ export class PageService {
     }
 
     if (pageIds.length > 0) {
-      await this.db.deleteFrom('pages').where('id', 'in', pageIds).execute();
       this.eventEmitter.emit(EventName.PAGE_DELETED, {
         pageIds: pageIds,
         workspaceId,
@@ -2018,36 +2116,239 @@ export class PageService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    await this.assertTemplateCanBeDeleted(pageId, workspaceId);
-    await this.pageRepo.removePage(pageId, userId, workspaceId);
+    const pageIds = await this.deletePageTreeAtomically({
+      pageId,
+      workspaceId,
+      deletedById: userId,
+      hardDelete: false,
+    });
+    if (pageIds.length > 0) {
+      this.eventEmitter.emit(EventName.PAGE_SOFT_DELETED, {
+        pageIds,
+        workspaceId,
+      });
+    }
   }
 
-  private async assertTemplateCanBeDeleted(
-    pageId: string,
-    workspaceId: string,
+  private async deletePageTreeAtomically(params: {
+    pageId: string;
+    workspaceId: string;
+    hardDelete: boolean;
+    deletedById?: string;
+  }): Promise<string[]> {
+    return executeTx(this.db, async (trx) => {
+      const descendants = await trx
+        .withRecursive('page_descendants', (db) =>
+          db
+            .selectFrom('pages')
+            .select(['id', sql<number>`0`.as('level')])
+            .where('id', '=', params.pageId)
+            .where('workspaceId', '=', params.workspaceId)
+            .unionAll((exp) =>
+              exp
+                .selectFrom('pages as child')
+                .select([
+                  'child.id',
+                  sql<number>`descendant.level + 1`.as('level'),
+                ])
+                .innerJoin(
+                  'page_descendants as descendant',
+                  'descendant.id',
+                  'child.parentPageId',
+                )
+                .where('child.workspaceId', '=', params.workspaceId)
+                .where(
+                  sql`descendant.level`,
+                  '<',
+                  sql.lit(MAX_PAGE_TREE_DEPTH),
+                ),
+            ),
+        )
+        .selectFrom('page_descendants')
+        .select('id')
+        .execute();
+      const pageIds = descendants.map(({ id }) => id);
+      if (pageIds.length === 0) return [];
+
+      // Lock template source rows before checking linkage. createFromTemplate
+      // takes the same source-page lock before inserting an instance, so either
+      // the create commits first and is observed here or it sees the deletion.
+      const lockedPages = await trx
+        .selectFrom('pages')
+        .select(['id', 'templateKind'])
+        .where('workspaceId', '=', params.workspaceId)
+        .where(sql<boolean>`${sql.ref('id')} = any(${pageIds}::uuid[])`)
+        .orderBy('id')
+        .forUpdate()
+        .execute();
+      const lockedPageIds = lockedPages.map(({ id }) => id);
+      const templatePageIds = lockedPages
+        .filter(({ templateKind }) => templateKind === 'synced')
+        .map(({ id }) => id);
+
+      if (templatePageIds.length > 0) {
+        const active = await trx
+          .selectFrom('pageTemplateInstances')
+          .select('id')
+          .where(
+            sql<boolean>`${sql.ref('templatePageId')} = any(${templatePageIds}::uuid[])`,
+          )
+          .where('status', 'in', ['active', 'syncing', 'error'])
+          .limit(1)
+          .executeTakeFirst();
+        if (active) {
+          throw new ConflictException({
+            code: 'page_template_has_active_instances',
+            message:
+              'Detach every linked page before deleting this synchronized template',
+          });
+        }
+      }
+
+      if (params.hardDelete) {
+        await trx
+          .deleteFrom('pages')
+          .where(sql<boolean>`${sql.ref('id')} = any(${lockedPageIds}::uuid[])`)
+          .execute();
+      } else {
+        const deletedAt = new Date();
+        await trx
+          .updateTable('pages')
+          .set({ deletedById: params.deletedById!, deletedAt })
+          .where(sql<boolean>`${sql.ref('id')} = any(${lockedPageIds}::uuid[])`)
+          .execute();
+        await trx
+          .deleteFrom('shares')
+          .where(
+            sql<boolean>`${sql.ref('pageId')} = any(${lockedPageIds}::uuid[])`,
+          )
+          .execute();
+      }
+
+      return lockedPageIds;
+    });
+  }
+
+  private async assertCanManageTemplateSource(
+    page: Page,
+    user: User,
   ): Promise<void> {
-    const page = await this.pageRepo.findById(pageId);
-    if (
-      !page ||
-      page.workspaceId !== workspaceId ||
-      page.templateKind !== 'synced'
-    ) {
-      return;
+    if (!page.templateKind) return;
+    if (!this.pageTemplatePolicy) {
+      throw new ConflictException({
+        code: 'page_template_policy_unavailable',
+        message: 'Page template policy is unavailable',
+      });
     }
-    const active = await this.db
+    await this.pageTemplatePolicy.assertAction(
+      page.workspaceId,
+      page.spaceId,
+      user.id,
+      'manage_template',
+    );
+  }
+
+  private async hasLinkedTemplateInstance(
+    pageIds: string[],
+    trx: KyselyTransaction | KyselyDB = this.db,
+  ): Promise<boolean> {
+    if (pageIds.length === 0) return false;
+    const instance = await trx
       .selectFrom('pageTemplateInstances')
       .select('id')
-      .where('templatePageId', '=', page.id)
+      .where('childPageId', 'in', pageIds)
+      .where('instanceKind', '=', 'synced')
       .where('status', 'in', ['active', 'syncing', 'error'])
       .limit(1)
       .executeTakeFirst();
-    if (active) {
-      throw new ConflictException({
-        code: 'page_template_has_active_instances',
-        message:
-          'Archive this template or detach every linked page before deleting it',
-      });
-    }
+    return Boolean(instance);
+  }
+
+  private async hasLinkedTemplateInstanceInPageTree(
+    pageId: string,
+    workspaceId: string,
+    trx: KyselyTransaction | KyselyDB = this.db,
+  ): Promise<boolean> {
+    const instance = await trx
+      .withRecursive('page_descendants', (db) =>
+        db
+          .selectFrom('pages')
+          .select(['id', sql<number>`0`.as('level')])
+          .where('id', '=', pageId)
+          .where('workspaceId', '=', workspaceId)
+          .where('deletedAt', 'is', null)
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as child')
+              .select([
+                'child.id',
+                sql<number>`descendant.level + 1`.as('level'),
+              ])
+              .innerJoin(
+                'page_descendants as descendant',
+                'descendant.id',
+                'child.parentPageId',
+              )
+              .where('child.workspaceId', '=', workspaceId)
+              .where('child.deletedAt', 'is', null)
+              .where(sql`descendant.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
+          ),
+      )
+      .selectFrom('page_descendants as descendant')
+      .innerJoin(
+        'pageTemplateInstances as instance',
+        'instance.childPageId',
+        'descendant.id',
+      )
+      .select('instance.id')
+      .where('instance.instanceKind', '=', 'synced')
+      .where('instance.status', 'in', ['active', 'syncing', 'error'])
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(instance);
+  }
+
+  private async hasTemplateInPageTree(
+    pageId: string,
+    workspaceId: string,
+    trx: KyselyTransaction | KyselyDB = this.db,
+    includeDeleted = false,
+  ): Promise<boolean> {
+    const template = await trx
+      .withRecursive('page_descendants', (db) =>
+        db
+          .selectFrom('pages')
+          .select(['id', sql<number>`0`.as('level')])
+          .where('id', '=', pageId)
+          .where('workspaceId', '=', workspaceId)
+          .$if(!includeDeleted, (query) => query.where('deletedAt', 'is', null))
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as child')
+              .select([
+                'child.id',
+                sql<number>`descendant.level + 1`.as('level'),
+              ])
+              .innerJoin(
+                'page_descendants as descendant',
+                'descendant.id',
+                'child.parentPageId',
+              )
+              .where('child.workspaceId', '=', workspaceId)
+              .$if(!includeDeleted, (query) =>
+                query.where('child.deletedAt', 'is', null),
+              )
+              .where(sql`descendant.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
+          ),
+      )
+      .selectFrom('page_descendants as descendant')
+      .innerJoin('pages as template', 'template.id', 'descendant.id')
+      .select('template.id')
+      .where('template.workspaceId', '=', workspaceId)
+      .where('template.templateKind', 'is not', null)
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(template);
   }
 
   private async parseProsemirrorContent(
