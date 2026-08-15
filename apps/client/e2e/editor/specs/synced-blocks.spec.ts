@@ -66,6 +66,72 @@ async function closeOverlayAside(page: import("@playwright/test").Page) {
   await expect(aside).not.toBeVisible();
 }
 
+async function installClipboardCapture(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    (window as any).__syncedClipboard = null;
+    if (typeof ClipboardItem === "undefined") {
+      class AuditClipboardItem {
+        readonly types: string[];
+        constructor(private readonly entries: Record<string, Blob>) {
+          this.types = Object.keys(entries);
+        }
+        async getType(type: string) {
+          return this.entries[type];
+        }
+      }
+      Object.defineProperty(window, "ClipboardItem", {
+        configurable: true,
+        value: AuditClipboardItem,
+      });
+    }
+    const clipboard = {
+      write: async (items: ClipboardItem[]) => {
+        const item = items[0];
+        const html = await (await item.getType("text/html")).text();
+        const text = await (await item.getType("text/plain")).text();
+        (window as any).__syncedClipboard = { html, text };
+      },
+      writeText: async (text: string) => {
+        (window as any).__syncedClipboard = { html: "", text };
+      },
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+  });
+}
+
+async function copyPageMarkdown(
+  page: import("@playwright/test").Page,
+  menuItem: "Copy as Markdown" | "Copy Markdown with comments",
+) {
+  await page.evaluate(() => {
+    (window as any).__syncedClipboard = null;
+  });
+  await page
+    .getByRole("button", { name: "Open menu", exact: true })
+    .last()
+    .click();
+  await page.getByRole("menuitem", { name: menuItem, exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            (window as any).__syncedClipboard as {
+              html: string;
+              text: string;
+            } | null
+          )?.text ?? null,
+      ),
+    )
+    .not.toBeNull();
+  return page.evaluate(
+    () => (window as any).__syncedClipboard as { html: string; text: string },
+  );
+}
+
 async function reloadAfterAccessChange(page: import("@playwright/test").Page) {
   const currentUrl = page.url();
   try {
@@ -262,11 +328,12 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       );
       if (format === "markdown" || format === "html") {
         const extension = format === "markdown" ? ".md" : ".html";
-        const entry = Object.keys(exportZip.files).find((name) =>
-          name.endsWith(extension),
-        );
-        expect(entry).toBeTruthy();
-        const rendered = await exportZip.file(entry!)!.async("string");
+        const entry = `${consumer.title}${extension}`;
+        expect(
+          exportZip.file(entry),
+          `${format} consumer entry`,
+        ).not.toBeNull();
+        const rendered = await exportZip.file(entry)!.async("string");
         for (const expected of [
           `Shared text ${suffix}`,
           `Shared list ${suffix}`,
@@ -409,6 +476,21 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     await expect(mainEditor(page)).toContainText(`Shared table ${suffix}`);
     await expect(page.getByAltText(`Shared media ${suffix}`)).toBeVisible();
     await expect(mainEditor(page)).toContainText(`Shared diagram ${suffix}`);
+    await installClipboardCapture(page);
+    for (const menuItem of [
+      "Copy as Markdown",
+      "Copy Markdown with comments",
+    ] as const) {
+      const copied = await copyPageMarkdown(page, menuItem);
+      expect(copied.text).toContain("> **Synced block**");
+      expect(copied.text).toContain(`Shared text ${suffix}`);
+      expect(copied.text).toContain(`Shared list ${suffix}`);
+      expect(copied.text).toContain(`Shared table ${suffix}`);
+      expect(copied.text).toContain(`Shared diagram ${suffix}`);
+      expect(copied.text).not.toContain("transclusionReference");
+      expect(copied.text).not.toContain("data-source-page-id");
+      expect(copied.text).not.toContain("data-transclusion-id");
+    }
     await makeEditable(page);
     const firstReference = page
       .locator('[data-type="transclusionReference"]')
@@ -595,39 +677,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
 
     await page.goto(pageUrl(state, source));
     await makeEditable(page);
-    await page.evaluate(() => {
-      (window as any).__syncedClipboard = null;
-      if (typeof ClipboardItem === "undefined") {
-        class AuditClipboardItem {
-          readonly types: string[];
-          constructor(private readonly entries: Record<string, Blob>) {
-            this.types = Object.keys(entries);
-          }
-          async getType(type: string) {
-            return this.entries[type];
-          }
-        }
-        Object.defineProperty(window, "ClipboardItem", {
-          configurable: true,
-          value: AuditClipboardItem,
-        });
-      }
-      const clipboard = {
-        write: async (items: ClipboardItem[]) => {
-          const item = items[0];
-          const html = await (await item.getType("text/html")).text();
-          const text = await (await item.getType("text/plain")).text();
-          (window as any).__syncedClipboard = { html, text };
-        },
-        writeText: async (text: string) => {
-          (window as any).__syncedClipboard = { html: "", text };
-        },
-      };
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: clipboard,
-      });
-    });
+    await installClipboardCapture(page);
     const firstSource = page
       .locator('[data-type="transclusionSource"]')
       .first();

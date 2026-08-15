@@ -166,7 +166,7 @@ describe('DatabaseService mixed tree flows', () => {
         format === ExportFormat.HTML
           ? '<html><body><article>Root content</article></body></html>'
           : format === ExportFormat.Markdown
-            ? '# Root\n\nRoot content'
+            ? '# Root\n\n> **Synced block**\n>\n> Materialized shared text\n\nRoot content'
             : 'root-pdf-original';
       const zip = new JSZip();
       zip.file(rootPath, Buffer.from(rootContent));
@@ -768,7 +768,11 @@ describe('DatabaseService mixed tree flows', () => {
     );
     const rootEntry = zip.file('Root.md');
     expect(rootEntry).toBeDefined();
-    expect(await rootEntry?.async('text')).toContain(
+    const rootMarkdown = await rootEntry?.async('text');
+    expect(rootMarkdown).toContain(
+      '> **Synced block**\n>\n> Materialized shared text',
+    );
+    expect(rootMarkdown).toContain(
       '## Rows\n\n| Title | Code |\n| --- | --- |\n| Visible row | KEEP |',
     );
   });

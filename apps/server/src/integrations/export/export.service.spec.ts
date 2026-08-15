@@ -1,3 +1,10 @@
+jest.mock('@docmost/editor-ext/server', () => ({
+  ...jest.requireActual('../../../test/mocks/editor-ext.mock'),
+  htmlToMarkdown: jest.requireActual(
+    '../../../../../packages/editor-ext/src/lib/markdown/utils/turndown.utils',
+  ).htmlToMarkdown,
+}));
+
 jest.mock('../../collaboration/collaboration.util', () => ({
   jsonToHtml: (input: any) => {
     const render = (node: any): string => {
@@ -313,6 +320,101 @@ describe('ExportService PDF export', () => {
     );
 
     expect(exported).toContain('Содержимое недоступно');
+    expect(exported).not.toContain('Secret source content');
+  });
+
+  it('exports an available synced reference as a Markdown blockquote', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionReference',
+          attrs: { sourcePageId: 'source-1', transclusionId: 'block-1' },
+        },
+      ],
+    };
+    const user = { id: 'user-1', workspaceId: 'ws-1' } as any;
+    transclusionService.lookup.mockResolvedValue({
+      items: [
+        {
+          sourcePageId: 'source-1',
+          transclusionId: 'block-1',
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Shared Markdown text' }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const exported = await service.exportPage(
+      ExportFormat.Markdown,
+      page as any,
+      true,
+      'en-US',
+      undefined,
+      undefined,
+      user,
+    );
+
+    expect(exported).toContain('> **Synced block**');
+    expect(exported).toContain('> Shared Markdown text');
+    expect(exported).not.toContain('transclusionReference');
+    expect(exported).not.toContain('sourcePageId');
+    expect(exported).not.toContain('transclusionId');
+  });
+
+  it('exports an unavailable synced reference as an explicit Markdown placeholder', async () => {
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionReference',
+          attrs: { sourcePageId: 'source-1', transclusionId: 'block-1' },
+        },
+      ],
+    };
+    transclusionService.lookup.mockResolvedValue({
+      items: [
+        {
+          sourcePageId: 'source-1',
+          transclusionId: 'block-1',
+          status: 'no_access',
+        },
+      ],
+    });
+
+    const exported = await service.exportPage(
+      ExportFormat.Markdown,
+      page as any,
+      true,
+      'en-US',
+      undefined,
+      undefined,
+      { id: 'user-1', workspaceId: 'ws-1' } as any,
+    );
+
+    expect(exported).toContain('> **Synced block**');
+    expect(exported).toContain('> Synced block content is unavailable');
     expect(exported).not.toContain('Secret source content');
   });
 

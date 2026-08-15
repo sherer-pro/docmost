@@ -86,6 +86,22 @@ describe('CopyMarkdownWithCommentsService', () => {
     );
   });
 
+  it('preserves materialized synced blocks in Markdown with comments', async () => {
+    const materializedMarkdown = [
+      '# Page title',
+      '',
+      '> **Synced block**',
+      '>',
+      '> Shared Markdown text',
+    ].join('\n');
+    exportService.exportPage.mockResolvedValue(materializedMarkdown);
+    commentRepo.findAllPageCommentsWithActors.mockResolvedValue([]);
+
+    await expect(service.build(page as any, user, 'en-US')).resolves.toBe(
+      materializedMarkdown,
+    );
+  });
+
   it('appends inline, page-level, resolved, and reply comments', async () => {
     commentRepo.findAllPageCommentsWithActors.mockResolvedValue([
       createComment({
