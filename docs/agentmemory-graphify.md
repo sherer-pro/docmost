@@ -1,5 +1,21 @@
 # AgentMemory and Graphify development setup
 
+## Unified local profile
+
+The tracked `.graphify-local.json` is the schema-v1 source for the root corpus,
+Graphify `0.9.33`, and the local semantic profile. `corepack pnpm
+graphify:rebuild` discovers the active loopback LM Studio endpoint, requires
+`google/gemma-4-26b-a4b-qat`, builds in `graphify-out.next`, runs provenance and
+integrity gates, and promotes only a valid graph. This large corpus uses
+`--no-viz`; `graphify:refresh` remains the fast AST-only operation.
+
+Query memory lives outside the corpus at `~/.graphify/query-memory/docmost` and
+the save/reflect scripts pass it explicitly. AgentMemory stays on the shared
+loopback `0.9.29` noop/local profile with the project MCP pin
+`@agentmemory/mcp@0.9.28` and a 120-second startup timeout. Git and Codex hooks
+never launch the LLM. Use `context:rebuild`, `context:refresh`, and
+`context:verify` for the combined flows.
+
 This document describes the development-only AgentMemory integration that complements the existing Graphify knowledge graph. It does not change Docmost application runtime dependencies or Graphify's model/backend configuration.
 
 ## Verified toolchain
@@ -132,7 +148,7 @@ args = ["-y", "@agentmemory/mcp@0.9.28"]
 env = { AGENTMEMORY_URL = "http://127.0.0.1:3111", AGENTMEMORY_TOOLS = "core" }
 enabled = true
 required = true
-startup_timeout_sec = 30
+startup_timeout_sec = 120
 ```
 
 This choice avoids inventing a missing plugin/marketplace and pins the last published shim version that was tested against the live `0.9.29` server. Do not install or enable the plugin while this manual section is active; plugin plus manual registration would duplicate the server.

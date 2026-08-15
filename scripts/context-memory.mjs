@@ -912,11 +912,10 @@ async function verify() {
     const projectHooksPath = join(root, '.codex', 'hooks.json');
     const projectHooksRaw = readFileSync(projectHooksPath, 'utf8');
     const projectHooks = inspectJsonFile(projectHooksPath);
+    const graphifyHookPattern = /(?:graphify\.exe|run-graphify-lmstudio\.mjs)\s+hook-check/iu;
     const graphifyPreserved =
-      projectHooksRaw.includes('graphify.EXE hook-check') &&
-      hookCommands(projectHooks, 'PreToolUse').some((command) =>
-        command.includes('graphify.EXE hook-check'),
-      );
+      graphifyHookPattern.test(projectHooksRaw) &&
+      hookCommands(projectHooks, 'PreToolUse').some((command) => graphifyHookPattern.test(command));
     check(
       'AgentMemory hooks and project Graphify hook',
       hooksOk && graphifyPreserved,
