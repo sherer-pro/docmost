@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\Pavel\\.local\\bin\\graphify.EXE hook-check"
+            "command": "node scripts/run-graphify-lmstudio.mjs hook-check"
           }
         ]
       }

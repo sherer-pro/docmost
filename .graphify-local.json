@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "graphifyVersion": "0.9.33",
+  "corpusRoot": ".",
+  "outputDir": "graphify-out",
+  "model": "google/gemma-4-26b-a4b-qat",
+  "mode": "deep",
+  "tokenBudget": 16000,
+  "apiTimeoutSeconds": 900,
+  "maxConcurrency": 1,
+  "maxWorkers": 1,
+  "generateHtml": false,
+  "queryMemoryKey": "docmost"
+}
