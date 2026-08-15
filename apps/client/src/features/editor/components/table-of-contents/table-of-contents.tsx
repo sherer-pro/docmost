@@ -1,5 +1,4 @@
 import { NodePos, useEditor } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
 import React, { FC, useEffect, useRef, useState } from "react";
 import classes from "./table-of-contents.module.css";
 import clsx from "clsx";
@@ -19,7 +18,6 @@ export type HeadingLink = {
   label: string;
   level: number;
   element: HTMLElement;
-  position: number;
 };
 
 const recalculateLinks = (nodePos: NodePos[], numberingEnabled: boolean) => {
@@ -41,8 +39,6 @@ const recalculateLinks = (nodePos: NodePos[], numberingEnabled: boolean) => {
         : heading.text,
       level: heading.level,
       element: item.element,
-      //@ts-ignore
-      position: item.resolvedPos.pos,
     };
   });
   return { links, nodes };
@@ -55,15 +51,13 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
   const [activeElement, setActiveElement] = useState<HTMLElement | null>(null);
   const headerPaddingRef = useRef<HTMLDivElement | null>(null);
 
-  const handleScrollToHeading = (position: number) => {
-    const { view } = props.editor;
-
-    const headerOffset = parseInt(
+  const handleScrollToHeading = (element: HTMLElement) => {
+    const parsedHeaderOffset = parseInt(
       window.getComputedStyle(headerPaddingRef.current).getPropertyValue("top"),
     );
-
-    const { node } = view.domAtPos(position);
-    const element = node as HTMLElement;
+    const headerOffset = Number.isFinite(parsedHeaderOffset)
+      ? parsedHeaderOffset
+      : 0;
     const scrollPosition =
       element.getBoundingClientRect().top + window.scrollY - headerOffset;
 
@@ -71,11 +65,6 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
       top: scrollPosition,
       behavior: "smooth",
     });
-
-    const tr = view.state.tr;
-    tr.setSelection(new TextSelection(tr.doc.resolve(position)));
-    view.dispatch(tr);
-    view.focus();
   };
 
   const handleUpdate = () => {
@@ -179,7 +168,7 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
         {links.map((item, idx) => (
           <Box<"button">
             component="button"
-            onClick={() => handleScrollToHeading(item.position)}
+            onClick={() => handleScrollToHeading(item.element)}
             key={idx}
             className={clsx(classes.link, {
               [classes.linkActive]: item.element === activeElement,
