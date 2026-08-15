@@ -9,7 +9,10 @@ Hocuspocus document.
 - `COLLAB_URL` is the browser-visible HTTP(S) origin. The client converts it to
   `ws:` or `wss:` and appends `/collab`.
 - `COLLAB_INTERNAL_URL` is the API-to-collab HTTP origin. In Compose it is
-  `http://collab:3001`; it does not need to be browser-reachable.
+  fixed to `http://collab:3001`; it does not need to be browser-reachable. The
+  fixed value prevents a host-development `.env` from resolving `localhost`
+  inside the API container. Custom container topologies must override the
+  service environment explicitly.
 - `COLLAB_INTERNAL_SECRET` is an independent credential of at least 32
   characters. Container deployments should use
   `COLLAB_INTERNAL_SECRET_FILE` and grant the secret to both application roles.
@@ -21,7 +24,9 @@ Never log the internal URL query values, the secret, or command payloads.
 `pnpm dev` starts frontend, API, and collab. Individual roles remain available
 through `pnpm server:dev` and `pnpm collab:dev`. API liveness is intentionally
 independent of collab liveness; operations that need a live document return
-`503` while collab is unavailable.
+`503` with `code: collaboration_unavailable` while collab is unavailable. The
+local Compose stack waits for the collaboration health check before starting
+the API, while keeping their liveness endpoints independent.
 
 Check both roles before accepting a deployment:
 

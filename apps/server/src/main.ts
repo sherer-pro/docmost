@@ -170,9 +170,16 @@ function getSecurityHeaders(
   const cspDirectives = shouldUseRelaxedCsp(requestUrl)
     ? buildRelaxedCspDirectives()
     : buildBaseCspDirectives();
+  const effectiveCspDirectives = isHttps
+    ? cspDirectives
+    : Object.fromEntries(
+        Object.entries(cspDirectives).filter(
+          ([directive]) => directive !== 'upgradeInsecureRequests',
+        ),
+      );
 
   const headers: Record<string, string> = {
-    'content-security-policy': buildCspHeaderValue(cspDirectives),
+    'content-security-policy': buildCspHeaderValue(effectiveCspDirectives),
     'referrer-policy': 'strict-origin-when-cross-origin',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'SAMEORIGIN',

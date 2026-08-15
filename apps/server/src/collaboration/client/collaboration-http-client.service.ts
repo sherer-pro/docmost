@@ -14,6 +14,10 @@ import type {
 } from '../collaboration-document.port';
 
 const COLLABORATION_COMMAND_TIMEOUT_MS = 30_000;
+const COLLABORATION_UNAVAILABLE_RESPONSE = {
+  code: 'collaboration_unavailable',
+  message: 'Collaboration service is unavailable',
+} as const;
 
 type CollaborationCommandResponse<T> = {
   result: T;
@@ -114,7 +118,7 @@ export class CollaborationHttpClientService
           throw new ConflictException(remoteError);
         }
         throw new ServiceUnavailableException(
-          'Collaboration service is unavailable',
+          COLLABORATION_UNAVAILABLE_RESPONSE,
         );
       }
 
@@ -135,9 +139,7 @@ export class CollaborationHttpClientService
       this.logger.warn(
         `Collaboration command failed: ${eventName}; document=${documentName}`,
       );
-      throw new ServiceUnavailableException(
-        'Collaboration service is unavailable',
-      );
+      throw new ServiceUnavailableException(COLLABORATION_UNAVAILABLE_RESPONSE);
     } finally {
       clearTimeout(timeout);
     }

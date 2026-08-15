@@ -72,3 +72,25 @@ test("rejects replacing a file-backed secret with a raw environment value", () =
   assert.equal(result.status, 1);
   assert.match(result.stderr, /APP_SECRET/);
 });
+
+test("rejects forwarding the host collaboration URL into Compose", () => {
+  const result = runContractWithCompose(
+    composeSource.replace(
+      "  COLLAB_INTERNAL_URL: http://collab:3001",
+      '  COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:3001}"',
+    ),
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /COLLAB_INTERNAL_URL/);
+});
+
+test("requires the API to wait for healthy collaboration", () => {
+  const result = runContractWithCompose(
+    composeSource.replace(
+      "      collab:\n        condition: service_healthy\n",
+      "",
+    ),
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /collaboration service health check/);
+});

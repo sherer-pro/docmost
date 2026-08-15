@@ -34,6 +34,9 @@ const NON_DOCMOST_RUNTIME_KEYS = new Set([
 ]);
 const SYNTHETIC_WINDOW_CONFIG_KEYS = new Set(["ENV"]);
 const DOCMOST_ENVIRONMENT_ANCHOR = "x-docmost-environment";
+const FIXED_COMPOSE_RUNTIME_VALUES = new Map([
+  ["COLLAB_INTERNAL_URL", "http://collab:3001"],
+]);
 
 const FILE_SECRET_BINDINGS = new Map([
   [
@@ -312,7 +315,12 @@ reportDiff(
 
 if (existsSync(COMPOSE_ENV_PATH)) {
   const composeKeys = parseEnvKeys(COMPOSE_ENV_PATH);
-  const composeMissing = sortedDiff(exampleKeys, composeKeys);
+  const composeMissing = sortedDiff(
+    new Set(
+      [...exampleKeys].filter((key) => !FIXED_COMPOSE_RUNTIME_VALUES.has(key)),
+    ),
+    composeKeys,
+  );
   const composeExtra = sortedDiff(composeKeys, exampleKeys);
 
   issues.push(composeMissing, composeExtra);
@@ -361,6 +369,17 @@ if (existsSync(COMPOSE_PATH)) {
       continue;
     }
 
+    const fixedValue = FIXED_COMPOSE_RUNTIME_VALUES.get(key);
+    if (fixedValue) {
+      allowedComposeKeys.add(key);
+      if (composeRuntimeEnv.get(key) !== fixedValue) {
+        composeRuntimeNotForwarded.push(
+          `${key} must be fixed to ${fixedValue}`,
+        );
+      }
+      continue;
+    }
+
     allowedComposeKeys.add(key);
     const value = composeRuntimeEnv.get(key) || "";
     if (!value) {
@@ -393,6 +412,14 @@ if (existsSync(COMPOSE_PATH)) {
     if (!block.includes("secrets: *docmost-secrets")) {
       serviceContractErrors.push(
         `${serviceName} must mount required Docmost secrets`,
+      );
+    }
+    if (
+      serviceName === "docmost" &&
+      !block.includes("      collab:\n        condition: service_healthy")
+    ) {
+      serviceContractErrors.push(
+        "docmost must wait for the collaboration service health check",
       );
     }
   }

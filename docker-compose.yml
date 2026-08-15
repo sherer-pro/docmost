@@ -36,7 +36,7 @@ x-docmost-environment: &docmost-environment
   REDIS_URL_FILE: /run/secrets/docmost_redis_url
   JWT_TOKEN_EXPIRES_IN: "${JWT_TOKEN_EXPIRES_IN:-30d}"
   COLLAB_URL: "${COLLAB_URL:-http://localhost:3001}"
-  COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:3001}"
+  COLLAB_INTERNAL_URL: http://collab:3001
   COLLAB_INTERNAL_SECRET_FILE: /run/secrets/docmost_collab_internal_secret
   COLLAB_PORT: "${COLLAB_PORT:-3001}"
   COLLAB_DISABLE_REDIS: "${COLLAB_DISABLE_REDIS:-false}"
@@ -87,6 +87,8 @@ services:
       dockerfile: Dockerfile
     pull_policy: never
     depends_on:
+      collab:
+        condition: service_healthy
       db:
         condition: service_healthy
       redis:
