@@ -462,13 +462,22 @@ test.describe("page template lifecycle", () => {
     await page.goto(`/s/${state.spaceSlug}/p/${syncedTemplate.page.slugId}`);
     const statusBar = page.locator('section[aria-label="Template editor"]');
     await expect(statusBar).toContainText("Linked page");
-    await expect(
-      statusBar.getByRole("button", { name: "Review and publish" }),
-    ).toBeEnabled();
-    await statusBar.getByRole("button", { name: "Review and publish" }).click();
-    const publishDialog = page.getByRole("dialog", {
-      name: "Publish template version 1",
+    const reviewButton = statusBar.getByRole("button", {
+      name: "Review and publish",
     });
+    const publishDialog = page
+      .locator('[role="dialog"]:visible')
+      .filter({ hasText: "Publish template version 1" });
+    await expect
+      .poll(
+        async () => {
+          if (await publishDialog.isVisible()) return true;
+          if (await reviewButton.isEnabled()) await reviewButton.click();
+          return publishDialog.isVisible();
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
     await expect(publishDialog).toContainText("Template blocks");
     await publishDialog
       .getByRole("button", { name: "Publish version 1" })

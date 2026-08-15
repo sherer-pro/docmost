@@ -1,6 +1,7 @@
 services:
   docmost:
     environment:
+      COLLAB_INTERNAL_URL: "http://collab:${COLLAB_PORT:-3001}"
       AI_PROVIDER_ALLOWED_ORIGINS: "http://host.docker.internal:${DOCMOST_AI_AGENT_MODEL_PORT:-1180}"
       AI_RETRIEVAL_ALLOWED_ORIGINS: ""
       AI_EXTERNAL_MCP_ENABLED: "false"

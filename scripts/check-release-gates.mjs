@@ -38,6 +38,7 @@ const REQUIRED_JOB_COMMANDS = {
     "node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci",
     "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
+    "python -m pip install -r apps/client/e2e/requirements.txt",
     "pnpm test:editor:e2e",
     "pnpm test:ai:e2e",
     "pnpm test:ai-context:e2e",
@@ -55,6 +56,7 @@ const REQUIRED_JOB_METADATA = {
   "production-smoke": [
     "-e DRAWIO_URL=https://embed.diagrams.net",
     "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",
+    "cache-dependency-path: apps/client/e2e/requirements.txt",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
     "retention-days: 7",
   ],
@@ -121,6 +123,12 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run test:ai-agent:e2e",
     "run test:editor:e2e",
     "run test:ai-context:e2e",
+  ],
+};
+
+const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
+  "test:security": [
+    "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
   ],
 };
 
@@ -251,6 +259,21 @@ function requireJobCommands(errors, block, jobName) {
 }
 
 function validateVerificationScripts(errors, packageJson) {
+  for (const [scriptName, commands] of Object.entries(
+    REQUIRED_PACKAGE_SCRIPT_COMMANDS,
+  )) {
+    const script = packageJson?.scripts?.[scriptName];
+    if (typeof script !== "string") {
+      errors.push(`package.json must define ${scriptName}`);
+      continue;
+    }
+    for (const command of commands) {
+      if (!script.includes(command)) {
+        errors.push(`${scriptName} must include ${command}`);
+      }
+    }
+  }
+
   for (const [scriptName, commands] of Object.entries(
     REQUIRED_VERIFICATION_COMMANDS,
   )) {
@@ -415,6 +438,16 @@ function validateRagSyncHarness(errors, ragSyncComposeSource) {
   }
 }
 
+function validateAiAgentHarness(errors, aiAgentComposeSource) {
+  const internalCollaborationUrl =
+    'COLLAB_INTERNAL_URL: "http://collab:${COLLAB_PORT:-3001}"';
+  if (!aiAgentComposeSource.includes(internalCollaborationUrl)) {
+    errors.push(
+      "AI Agent harness must bind the API internal collaboration URL to the isolated collaboration port",
+    );
+  }
+}
+
 export function validateReleaseGateContract({
   ciSource,
   dockerSource,
@@ -422,6 +455,7 @@ export function validateReleaseGateContract({
   workflowSources = {},
   packageJson,
   ragSyncComposeSource = "",
+  aiAgentComposeSource = "",
 }) {
   const errors = [];
   const integration = jobBlock(ciSource, "integration");
@@ -466,6 +500,7 @@ export function validateReleaseGateContract({
   validateAiGuideGateMetadata(errors, ciSource);
   validateDockerfileDependencyInstall(errors, dockerfileSource);
   validateRagSyncHarness(errors, ragSyncComposeSource);
+  validateAiAgentHarness(errors, aiAgentComposeSource);
 
   return errors;
 }
@@ -489,6 +524,10 @@ async function main() {
     "tests/rag-sync/compose.yml",
     "utf8",
   );
+  const aiAgentComposeSource = await readFile(
+    "apps/client/e2e/ai-agent/docker-compose.audit.yml",
+    "utf8",
+  );
   const errors = validateReleaseGateContract({
     ciSource: workflowSources["ci.yml"],
     dockerSource: workflowSources["docker.yml"],
@@ -496,6 +535,7 @@ async function main() {
     packageJson,
     dockerfileSource,
     ragSyncComposeSource,
+    aiAgentComposeSource,
   });
   if (errors.length > 0) {
     for (const error of errors) {

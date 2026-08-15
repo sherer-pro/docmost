@@ -52,6 +52,8 @@ function inputs(overrides = {}) {
     dockerfileSource: overrides.dockerfileSource ?? dockerfileSource,
     ragSyncComposeSource:
       overrides.ragSyncComposeSource ?? ragSyncComposeSource,
+    aiAgentComposeSource:
+      overrides.aiAgentComposeSource ?? aiAgentComposeSource,
   };
 }
 
@@ -226,8 +228,8 @@ test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => 
     /COLLAB_INTERNAL_SECRET: collabInternalSecret,/u,
   );
   assert.match(
-    aiAgentAuditSource,
-    /COLLAB_INTERNAL_URL: `http:\/\/collab:\$\{collabPort\}`/u,
+    aiAgentComposeSource,
+    /COLLAB_INTERNAL_URL: "http:\/\/collab:\$\{COLLAB_PORT:-3001\}"/u,
   );
   assert.match(
     aiAgentAuditSource,
@@ -259,6 +261,21 @@ test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => 
   );
   assert.doesNotMatch(aiAgentComposeSource, /^\s+DATABASE_URL:/mu);
   assert.doesNotMatch(aiAgentComposeSource, /^\s+REDIS_URL:/mu);
+});
+
+test("AI Agent harness binds its internal collaboration URL to the isolated port", () => {
+  const required =
+    'COLLAB_INTERNAL_URL: "http://collab:${COLLAB_PORT:-3001}"';
+  const mutated = aiAgentComposeSource.replace(required, "removed");
+  assert.notEqual(mutated, aiAgentComposeSource);
+  const errors = validateReleaseGateContract(
+    inputs({ aiAgentComposeSource: mutated }),
+  );
+  assert.ok(
+    errors.includes(
+      "AI Agent harness must bind the API internal collaboration URL to the isolated collaboration port",
+    ),
+  );
 });
 
 test("production migrations resolve file-backed secrets before connecting", () => {
@@ -356,6 +373,16 @@ const workflowMutations = [
     "compiled production smoke",
     "ciSource",
     "node scripts/ci-production-smoke.mjs",
+  ],
+  [
+    "shared E2E Python dependency install",
+    "ciSource",
+    "python -m pip install -r apps/client/e2e/requirements.txt",
+  ],
+  [
+    "shared E2E Python dependency cache",
+    "ciSource",
+    "cache-dependency-path: apps/client/e2e/requirements.txt",
   ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
   [
@@ -523,6 +550,24 @@ test("rejects fail-open command chaining in root verification scripts", () => {
     inputs({ packageJson: mutatedPackage }),
   );
   assert.ok(errors.includes("verify:quick must include run test:security"));
+});
+
+test("rejects test:security without the hostile external MCP contract", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["test:security"] = mutatedPackage.scripts[
+    "test:security"
+  ].replace(
+    "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
+    "removed-hostile-external-mcp-contract",
+  );
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes(
+      "test:security must include node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
+    ),
+  );
 });
 
 for (const [scriptName, command] of [
