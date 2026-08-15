@@ -2497,6 +2497,7 @@
   "Could not detach page from template.": "Не удалось отвязать страницу от шаблона.",
   "Could not load template history.": "Не удалось загрузить историю шаблона.",
   "Could not prepare publication.": "Не удалось подготовить публикацию.",
+  "Live editing is temporarily unavailable. Your input is preserved. Try again.": "Сервис совместного редактирования временно недоступен. Введённые данные сохранены. Повторите попытку.",
   "Could not publish template.": "Не удалось опубликовать шаблон.",
   "Could not retry synchronization.": "Не удалось повторить синхронизацию.",
   "Create field": "Создать поле",

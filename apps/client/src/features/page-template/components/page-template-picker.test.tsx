@@ -202,6 +202,9 @@ vi.mock("../services/page-template-api", () => ({
   createPageFromTemplate: mocks.create,
   discoverPageTemplates: mocks.discover,
   getPageTemplateDestinations: mocks.destinations,
+  isCollaborationUnavailable: (error: any) =>
+    error?.response?.data?.code === "collaboration_unavailable" ||
+    error?.response?.status === 503,
 }));
 
 (
@@ -314,6 +317,73 @@ describe("TemplateUseModal", () => {
       title: "Meeting notes",
     });
     expect(mocks.onCreated).toHaveBeenCalledWith({ id: "created-page" });
+  });
+
+  it("preserves the use form and retries after collaboration is unavailable", async () => {
+    mocks.discover.mockResolvedValue({
+      items: [template()],
+      nextCursor: null,
+      capabilities: {},
+    });
+    mocks.create
+      .mockRejectedValueOnce({
+        response: {
+          status: 503,
+          data: { code: "collaboration_unavailable" },
+        },
+      })
+      .mockResolvedValueOnce({ page: { id: "recovered-page" } });
+    render();
+    await settle();
+
+    const templateButton = Array.from(
+      container?.querySelectorAll("button") ?? [],
+    ).find((button) => button.textContent?.includes("Meeting notes"));
+    await act(async () => templateButton?.click());
+    await settle();
+
+    const title = container?.querySelector(
+      'input[aria-label="Page title"]',
+    ) as HTMLInputElement | null;
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(title, "Recovered page title");
+      title?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent === "Create page")
+        ?.click(),
+    );
+    await settle();
+
+    expect(container?.textContent).toContain(
+      "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+    );
+    expect(title?.value).toBe("Recovered page title");
+    expect(
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent?.includes("Current page"))
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    await act(async () =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent === "Retry")
+        ?.click(),
+    );
+    await settle();
+
+    expect(mocks.create).toHaveBeenCalledTimes(2);
+    expect(mocks.create).toHaveBeenLastCalledWith({
+      templatePageId: "regular-1",
+      spaceId: "space-1",
+      parentPageId: "parent-1",
+      title: "Recovered page title",
+    });
+    expect(mocks.onCreated).toHaveBeenCalledWith({ id: "recovered-page" });
   });
 
   it("fails closed when the default parent is no longer a destination", async () => {

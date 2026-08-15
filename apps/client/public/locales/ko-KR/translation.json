@@ -2497,6 +2497,7 @@
   "Could not detach page from template.": "Could not detach page from template.",
   "Could not load template history.": "Could not load template history.",
   "Could not prepare publication.": "Could not prepare publication.",
+  "Live editing is temporarily unavailable. Your input is preserved. Try again.": "공동 편집 서비스를 일시적으로 사용할 수 없습니다. 입력한 내용은 유지됩니다. 다시 시도하세요.",
   "Could not publish template.": "Could not publish template.",
   "Could not retry synchronization.": "Could not retry synchronization.",
   "Create field": "Create field",

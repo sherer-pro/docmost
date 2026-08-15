@@ -2497,6 +2497,7 @@
   "Could not detach page from template.": "Could not detach page from template.",
   "Could not load template history.": "Could not load template history.",
   "Could not prepare publication.": "Could not prepare publication.",
+  "Live editing is temporarily unavailable. Your input is preserved. Try again.": "共同編集サービスは一時的に利用できません。入力内容は保持されています。もう一度お試しください。",
   "Could not publish template.": "Could not publish template.",
   "Could not retry synchronization.": "Could not retry synchronization.",
   "Create field": "Create field",

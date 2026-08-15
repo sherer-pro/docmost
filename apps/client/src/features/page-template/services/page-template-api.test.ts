@@ -13,6 +13,7 @@ import {
   getPageTemplateDestinations,
   getPageTemplatePolicyGroups,
   getPageTemplateCapabilities,
+  isCollaborationUnavailable,
   createPageFromTemplate,
   preflightPageTemplatePublish,
   restorePageTemplate,
@@ -64,6 +65,25 @@ describe("page template idempotency", () => {
     const nextOperationKey =
       post.mock.calls[2][2]?.headers?.["Idempotency-Key"];
     expect(nextOperationKey).not.toBe(firstKey);
+  });
+
+  it("recognizes collaboration outages across current and compatible responses", () => {
+    expect(
+      isCollaborationUnavailable({
+        response: {
+          status: 503,
+          data: { code: "collaboration_unavailable", statusCode: 503 },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isCollaborationUnavailable({ response: { status: 503, data: {} } }),
+    ).toBe(true);
+    expect(
+      isCollaborationUnavailable({
+        response: { status: 409, data: { code: "page_template_no_changes" } },
+      }),
+    ).toBe(false);
   });
 
   it("passes the required spaceId to discovery and destinations", async () => {

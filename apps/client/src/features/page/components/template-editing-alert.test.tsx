@@ -186,6 +186,9 @@ vi.mock("@/features/page-template/services/page-template-api", () => ({
   preflightPageTemplatePublish: mocks.preflight,
   publishPageTemplate: mocks.publish,
   retryPageTemplateSyncRun: mocks.retry,
+  isCollaborationUnavailable: (error: any) =>
+    error?.response?.data?.code === "collaboration_unavailable" ||
+    error?.response?.status === 503,
 }));
 
 vi.mock("@/features/page-template/services/page-template-draft-hash", () => ({
@@ -436,6 +439,49 @@ describe("TemplateEditingAlert", () => {
     expect(container?.textContent).toContain("Template blocks");
     expect(container?.textContent).toContain("Fields to fill");
     expect(container?.textContent).toContain("Owner");
+  });
+
+  it("keeps draft state and retries preflight after collaboration is unavailable", async () => {
+    mocks.hash.mockResolvedValue("changed-draft-hash");
+    mocks.preflight
+      .mockRejectedValueOnce({
+        response: {
+          status: 503,
+          data: { code: "collaboration_unavailable" },
+        },
+      })
+      .mockResolvedValueOnce({
+        draftHash: "draft-hash",
+        nextRevision: 3,
+        diff: {
+          addedBlockIds: ["block-1"],
+          removedBlockIds: [],
+          movedBlockIds: [],
+          changedBlockIds: [],
+          addedFields: [],
+          removedFields: [],
+          renamedFields: [],
+        },
+        activeInstanceCount: 4,
+        filledRemovedFieldInstanceCount: 0,
+        filledRemovedFieldInstanceCountExact: true,
+        requiresDestructiveConfirmation: false,
+        confirmationToken: null,
+        confirmationExpiresAt: null,
+      });
+    render();
+    await flush();
+    await act(async () => findButton("Review and publish")?.click());
+
+    expect(container?.textContent).toContain(
+      "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+    );
+    expect(container?.textContent).toContain("Draft changes");
+
+    await act(async () => findButton("Retry")?.click());
+
+    expect(mocks.preflight).toHaveBeenCalledTimes(2);
+    expect(container?.textContent).toContain("Template blocks");
   });
 
   it("labels a bounded destructive scan as an upper bound", async () => {
