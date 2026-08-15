@@ -211,8 +211,12 @@ export class HtmlPdfRendererService {
           const parser = new DOMParser();
           const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
           const parserError = svgDoc.querySelector('parsererror');
-          const svgRoot = svgDoc.documentElement;
+          let svgRoot: Element | null = svgDoc.documentElement;
           if (parserError || svgRoot?.tagName.toLowerCase() !== 'svg') {
+            const htmlDoc = parser.parseFromString(svg, 'text/html');
+            svgRoot = htmlDoc.querySelector('svg');
+          }
+          if (!svgRoot) {
             return null;
           }
 

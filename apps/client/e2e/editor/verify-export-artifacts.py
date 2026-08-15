@@ -12,8 +12,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import pdfplumber
 from lxml import html as lxml_html
-from pypdf import PdfReader
 
 try:
     from markdown_it import MarkdownIt
@@ -31,6 +31,13 @@ EXPECTED_SYNCED_TEXT = (
     "Shared list",
     "Shared table",
     "Shared diagram",
+)
+EXPECTED_EDITOR_MERMAID_TEXT = (
+    "Safe input",
+    "Second line",
+    "Validated?",
+    "Rendered locally",
+    "Visible error",
 )
 
 
@@ -122,14 +129,26 @@ def verify_html(archive_path: Path) -> dict[str, Any]:
 
 
 def verify_pdf(pdf_path: Path) -> dict[str, Any]:
-    reader = PdfReader(str(pdf_path))
-    assert reader.pages, "PDF contains no pages"
-    extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
+    with pdfplumber.open(pdf_path) as pdf:
+        assert pdf.pages, "PDF contains no pages"
+        extracted = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        page_count = len(pdf.pages)
     for expected in EXPECTED_SYNCED_TEXT:
         assert expected in extracted, f"PDF text omits {expected}"
     for forbidden in FORBIDDEN_PRESENTATION_TOKENS:
         assert forbidden not in extracted, f"PDF leaks {forbidden}"
-    return {"pages": len(reader.pages), "characters": len(extracted)}
+    return {"pages": page_count, "characters": len(extracted)}
+
+
+def verify_editor_pdf(pdf_path: Path) -> dict[str, Any]:
+    with pdfplumber.open(pdf_path) as pdf:
+        assert pdf.pages, "Editor PDF contains no pages"
+        extracted = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        page_count = len(pdf.pages)
+    for expected in EXPECTED_EDITOR_MERMAID_TEXT:
+        assert expected in extracted, f"Editor PDF omits Mermaid label {expected}"
+    assert "flowchart TD" not in extracted, "Editor PDF retains raw Mermaid source"
+    return {"pages": page_count, "characters": len(extracted)}
 
 
 def verify_docmost(archive_path: Path) -> dict[str, Any]:
@@ -186,12 +205,14 @@ def main() -> int:
         "html": "*-synced-html-export.zip",
         "pdf": "*-synced-export.pdf",
         "docmost": "*-synced-docmost-export.zip",
+        "editorPdf": "*-editor-export.pdf",
     }
     verifiers = {
         "markdown": verify_markdown,
         "html": verify_html,
         "pdf": verify_pdf,
         "docmost": verify_docmost,
+        "editorPdf": verify_editor_pdf,
     }
     for kind, pattern in patterns.items():
         files = sorted(downloads.glob(pattern))
