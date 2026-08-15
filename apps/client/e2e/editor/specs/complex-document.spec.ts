@@ -250,7 +250,11 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
         expect(executablePayloads).toEqual([]);
       }
       if (format === "pdf") {
-        const pdfName = names.find((name) => name.endsWith(".pdf"));
+        const pdfName = names.find(
+          (name) =>
+            name.endsWith(".pdf") &&
+            !name.replaceAll("\\", "/").startsWith("files/"),
+        );
         expect(pdfName).toBeTruthy();
         await fs.writeFile(
           path.join(downloadsDir, `${testInfo.project.name}-editor-export.pdf`),

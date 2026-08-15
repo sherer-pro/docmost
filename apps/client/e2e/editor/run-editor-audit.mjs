@@ -220,6 +220,20 @@ async function runPlaywright() {
   });
 }
 
+async function runExportVerification() {
+  const python = process.env.DOCMOST_PYTHON?.trim() || "python";
+  const verifier = path.join(import.meta.dirname, "verify-export-artifacts.py");
+  return new Promise((resolve, reject) => {
+    const child = spawn(python, [verifier, auditRoot], {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit",
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => resolve(code ?? 1));
+  });
+}
+
 await fs.mkdir(auditRoot, { recursive: true });
 for (const directory of [
   "axe-results",
@@ -233,6 +247,7 @@ for (const directory of [
   await fs.rm(generatedDirectory, { recursive: true, force: true });
   await fs.mkdir(generatedDirectory, { recursive: true });
 }
+await fs.rm(path.join(auditRoot, "export-verification.json"), { force: true });
 await fs.writeFile(defectsPath, "[]\n", "utf8");
 await ensureRuntimeAuth();
 const api = await createApi();
@@ -330,6 +345,23 @@ try {
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 
   exitCode = await runPlaywright();
+  if (selectedFiles.length === 0) {
+    try {
+      const verifierExitCode = await runExportVerification();
+      if (verifierExitCode !== 0) {
+        exitCode = exitCode === 0 ? verifierExitCode : exitCode;
+      }
+    } catch (error) {
+      console.error(
+        `Export artifact verification could not start: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      exitCode = exitCode === 0 ? 1 : exitCode;
+    }
+  } else {
+    console.log(
+      "Skipping export artifact verification for a focused editor audit run.",
+    );
+  }
   const sanitization = await sanitizeAuditArtifacts(auditRoot);
   if (sanitization.credentialFindings > 0) {
     throw new Error(
