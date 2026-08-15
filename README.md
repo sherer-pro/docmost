@@ -729,6 +729,13 @@ before the first production deployment or any PostgreSQL runtime change.
 `COLLAB_INTERNAL_URL` is the server-to-server origin. There is no supported
 fallback that hosts `/collab` on the API process.
 
+The local Compose topology fixes `COLLAB_INTERNAL_URL` to
+`http://collab:3001` and starts the API only after the collaboration health
+check passes. A host-development `.env` may therefore keep
+`COLLAB_INTERNAL_URL=http://localhost:3001` without redirecting traffic inside
+the API container. Custom container topologies should override the service
+environment in a non-versioned `docker-compose.override.yml`.
+
 Compose starts the API and dedicated collaboration process from the same
 application image. `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET`
 from `.env` are mounted as Docker

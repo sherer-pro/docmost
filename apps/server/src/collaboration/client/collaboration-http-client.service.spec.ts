@@ -40,10 +40,16 @@ describe('CollaborationHttpClientService', () => {
       .mockRejectedValue(new Error('connection reset'));
     const service = new CollaborationHttpClientService(environment as never);
 
-    await expect(
-      service.getPageContentHash('page.11111111-1111-1111-1111-111111111111', {
+    const error = await service
+      .getPageContentHash('page.11111111-1111-1111-1111-111111111111', {
         user: { id: 'user-1' },
-      }),
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      })
+      .catch((cause) => cause);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableException);
+    expect(error.getResponse()).toEqual({
+      code: 'collaboration_unavailable',
+      message: 'Collaboration service is unavailable',
+    });
   });
 });
