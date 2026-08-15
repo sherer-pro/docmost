@@ -311,21 +311,4 @@ export class AttachmentController {
       return;
     }
   }
-
-  async uploadAvatarOrLogoLegacy(
-    @Req() req: any,
-    @Res() res: FastifyReply,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.uploadAvatarOrLogo(req, res, user, workspace);
-  }
-
-  async removeIconLegacy(
-    @Body() dto: RemoveIconDto,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.removeIcon(dto, user, workspace);
-  }
 }
