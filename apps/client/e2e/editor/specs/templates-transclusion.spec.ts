@@ -23,6 +23,8 @@ import {
   type AuditMember,
 } from "../support/member";
 
+test.use({ serviceWorkers: "block" });
+
 type Page = {
   id: string;
   slugId: string;
@@ -76,6 +78,7 @@ test.describe("page template lifecycle", () => {
   let synchronizedContent: Record<string, unknown>;
   let secondPublish: any;
   let originalLocale: string | undefined;
+  const uiCreatedTemplateIds: string[] = [];
 
   test.beforeAll(async ({ browser }, testInfo) => {
     api = await createAdminApi();
@@ -156,6 +159,13 @@ test.describe("page template lifecycle", () => {
 
   test.afterAll(async () => {
     if (!api) return;
+    for (const templateId of uiCreatedTemplateIds) {
+      await apiPost(
+        api,
+        `/api/pages/templates/${templateId}/actions/archive`,
+        {},
+      ).catch(() => undefined);
+    }
     if (secondSpaceId) {
       await apiDelete(api, `/api/spaces/${secondSpaceId}`).catch(
         () => undefined,
@@ -173,6 +183,79 @@ test.describe("page template lifecycle", () => {
       }).catch(() => undefined);
     }
     await api.dispose();
+  });
+
+  test("creates and uses templates through the two-step UI", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const createdByKind = new Map<"regular" | "synced", Page>();
+
+    for (const kind of ["regular", "synced"] as const) {
+      const title = `UI ${kind} ${suffix}`;
+      await page.goto(`/s/${state.spaceSlug}/templates`);
+      await page.getByRole("button", { name: "Create template" }).click();
+      const dialog = page.getByRole("dialog", { name: "Create template" });
+      await dialog.getByRole("textbox", { name: "Template name" }).fill(title);
+      await dialog.getByText("Use an existing page", { exact: true }).click();
+      await dialog
+        .getByRole("textbox", { name: "Search pages" })
+        .fill(sourcePage.title);
+      await dialog.getByRole("button", { name: sourcePage.title }).click();
+      await expect(
+        dialog.getByRole("textbox", { name: "Template name" }),
+      ).toHaveValue(title);
+      await dialog.getByRole("button", { name: "Next" }).click();
+      await dialog
+        .getByRole("button", {
+          name: kind === "regular" ? /Independent copy/ : /Linked page/,
+        })
+        .click();
+      await Promise.all([
+        page.waitForURL(new RegExp(`/s/${state.spaceSlug}/p/`)),
+        dialog.getByRole("button", { name: "Create template" }).click(),
+      ]);
+
+      const catalog = await apiGet<{ items: Page[] }>(
+        api,
+        `/api/pages/templates?spaceId=${state.spaceId}&query=${encodeURIComponent(title)}&limit=20`,
+      );
+      const created = catalog.items.find((item) => item.title === title);
+      expect(created).toBeTruthy();
+      createdByKind.set(kind, created!);
+      uiCreatedTemplateIds.push(created!.id);
+    }
+
+    const regular = createdByKind.get("regular")!;
+    const instanceTitle = `UI regular instance ${suffix}`;
+    await page.goto(`/s/${state.spaceSlug}/templates`);
+    const search = page.getByRole("textbox", { name: "Search templates" });
+    await search.fill(regular.title);
+    const row = page
+      .getByRole("button")
+      .filter({ hasText: regular.title })
+      .first();
+    await expect(row).toBeVisible();
+    await row
+      .locator("xpath=following-sibling::*[1]")
+      .getByRole("button", { name: "Use", exact: true })
+      .click();
+    const useDialog = page.getByRole("dialog", {
+      name: "Create page from template",
+    });
+    await useDialog
+      .getByRole("textbox", { name: "Page title" })
+      .fill(instanceTitle);
+    const rootDestination = useDialog.getByRole("button", {
+      name: /Space root/,
+    });
+    await expect(rootDestination).toBeVisible();
+    await rootDestination.click();
+    await Promise.all([
+      page.waitForURL(new RegExp(`/s/${state.spaceSlug}/p/`)),
+      useDialog.getByRole("button", { name: "Create page" }).click(),
+    ]);
+    await expect(page.getByText(instanceTitle).first()).toBeVisible();
   });
 
   test("catalog is searchable, keyboard reachable, accessible, and responsive", async ({
@@ -376,23 +459,20 @@ test.describe("page template lifecycle", () => {
       ],
     };
     await updatePageContent(api, syncedTemplate.page.id, syncedV1);
-    const firstPreflight = await apiPost<any>(
-      api,
-      `/api/pages/templates/${syncedTemplate.page.id}/actions/preflight-publish`,
-      {},
-    );
-    expect(firstPreflight.nextRevision).toBe(1);
-    const firstPublish = await apiPostWithHeaders<any>(
-      api,
-      `/api/pages/templates/${syncedTemplate.page.id}/actions/publish`,
-      { draftHash: firstPreflight.draftHash },
-      { "Idempotency-Key": randomUUID() },
-    );
-    expect(firstPublish.revision.revision).toBe(1);
-
     await page.goto(`/s/${state.spaceSlug}/p/${syncedTemplate.page.slugId}`);
     const statusBar = page.locator('section[aria-label="Template editor"]');
     await expect(statusBar).toContainText("Linked page");
+    await expect(
+      statusBar.getByRole("button", { name: "Review and publish" }),
+    ).toBeEnabled();
+    await statusBar.getByRole("button", { name: "Review and publish" }).click();
+    const publishDialog = page.getByRole("dialog", {
+      name: "Publish template version 1",
+    });
+    await expect(publishDialog).toContainText("Template blocks");
+    await publishDialog
+      .getByRole("button", { name: "Publish version 1" })
+      .click();
     await expect(statusBar).toContainText("Published v1");
     await expect(statusBar.getByText("Saved", { exact: true })).toBeVisible();
     await expect(

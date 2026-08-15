@@ -26,7 +26,10 @@ export function apiOrigin(): string {
 export async function authenticateAdminContext(
   context: BrowserContext,
 ): Promise<void> {
-  const urls = [baseUrl(), process.env.DOCMOST_WEBKIT_BASE_URL]
+  const urls = [
+    baseUrl(),
+    process.env.DOCMOST_WEBKIT_BASE_URL ?? baseUrl(),
+  ]
     .filter((value): value is string => Boolean(value))
     .map((value) => new URL(value));
   const uniqueUrls = Array.from(

@@ -73,34 +73,6 @@ export const test = base.extend<{ evidence: void }>({
           },
         );
       }
-      if (testInfo.project.name.includes("webkit")) {
-        const webkitOrigin = new URL(
-          process.env.DOCMOST_WEBKIT_BASE_URL ?? "http://127.0.0.1:3000",
-        ).origin;
-        if (webkitOrigin.startsWith("http://")) {
-          testInfo.annotations.push({
-            type: "harness",
-            description:
-              "The HTTP-only local WebKit harness removes upgrade-insecure-requests; release CSP remains covered by production smoke checks.",
-          });
-          await page.route(`${webkitOrigin}/**`, async (route) => {
-            const response = await route.fetch();
-            const headers = response.headers();
-            const csp = headers["content-security-policy"];
-            if (csp) {
-              headers["content-security-policy"] = csp
-                .split(";")
-                .filter(
-                  (directive) =>
-                    directive.trim().toLowerCase() !==
-                    "upgrade-insecure-requests",
-                )
-                .join(";");
-            }
-            await route.fulfill({ response, headers });
-          });
-        }
-      }
       const events: ConsoleEvidence[] = [];
       page.on("console", (message) => {
         if (["warning", "error"].includes(message.type())) {
