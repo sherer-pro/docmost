@@ -119,6 +119,8 @@
 - Run dead-code audit (non-blocking report): `pnpm audit:dead-code`
 - Run duplicate-code audit (non-blocking report): `pnpm audit:duplicates`
 - Run all architecture audit reports (non-blocking): `pnpm audit:architecture`
+- Verify the backup CLI contract: `pnpm check:backup`
+- Create, verify, or restore a coordinated Compose backup: `pnpm backup -- create|verify|restore ...`; use absolute archive paths outside the repository and follow `docs/BACKUP_AND_RESTORE.md`.
 
 ### Development
 
@@ -178,6 +180,7 @@
 - Host development env: copy `.env.example` to `.env`, replace secrets, and point `DATABASE_URL`/`REDIS_URL` at local host services.
 - Docker Compose env: copy `.env.compose.example` to `.env`, replace both `REPLACE_WITH_LONG_SECRET` values and `STRONG_DB_PASSWORD`, keep `AUTH_RATE_LIMIT_STORAGE=redis`, then run `docker compose up -d --build`. Compose mounts `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET` as Docker secrets and starts the API plus dedicated collaboration process from the same application image. Optional integration secrets are granted only through a local Compose override as documented in `README.md`. Local Compose creates `docmost_edge`; a server using the existing external proxy network sets `EDGE_NETWORK_NAME=edge` and `EDGE_NETWORK_EXTERNAL=true`.
 - Local container startup: `docker compose up -d --build`
+- Coordinated local-storage backup/restore uses `pnpm backup -- ...`. Archives contain only `manifest.json`, `postgres.dump`, and `storage.tar.gz`; secrets must be escrowed separately, Redis is recreated empty, and restore requires `--replace --yes`.
 - Built-in Open WebUI sync uses the ordinary `docker compose up -d --build` stack. `RAG_SYNC_ENABLED` and runtime limits are deployment env, while target identifiers and encrypted writer keys are configured per space in the UI. There is no separate profile, service, or image.
 - Build the current code into an image: `docker build -t docmost:local .`
 - The production image starts the built backend directly with `node apps/server/dist/apps/server/src/main`; it should not invoke `pnpm start` or Corepack at runtime.

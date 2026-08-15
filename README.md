@@ -680,6 +680,8 @@ The fork includes its own maintenance and development infrastructure:
 
 - console-only recovery commands for rebuilding the search index and disabling broken SSO enforcement;
 
+- coordinated, secret-free PostgreSQL and local-storage backup verification and restore tooling;
+
 - Graphify support.
 
 ![Repository verification and recovery toolchain](./docs/images/fork-specific-enhancements/en/operations-development.svg)
@@ -723,6 +725,12 @@ and PostgreSQL image digests, external database/file volumes, an external
 one-shot schema migration, and fail-closed startup checks. Follow the
 [PostgreSQL production migration runbook](./apps/server/docs/postgresql-production-migration.md)
 before the first production deployment or any PostgreSQL runtime change.
+
+For coordinated application backups and restore rehearsals, including the
+legacy archive boundary and separate-secret requirement, follow the
+[backup and restore runbook](./docs/BACKUP_AND_RESTORE.md). The short commands
+are `corepack pnpm backup -- create|verify|restore`; restore never reuses Redis
+or a partially restored database volume.
 
 `pnpm dev` starts the frontend, API, and collaboration process separately.
 `COLLAB_URL` is the browser-visible collaboration origin, while
