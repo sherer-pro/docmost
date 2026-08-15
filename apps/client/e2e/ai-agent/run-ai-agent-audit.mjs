@@ -178,7 +178,6 @@ const composeEnv = {
   APP_URL: baseURL,
   COLLAB_PORT: String(collabPort),
   COLLAB_URL: collabURL,
-  COLLAB_INTERNAL_URL: `http://collab:${collabPort}`,
   COLLAB_INTERNAL_SECRET: collabInternalSecret,
   APP_SECRET: appSecret,
   POSTGRES_USER: "docmost",

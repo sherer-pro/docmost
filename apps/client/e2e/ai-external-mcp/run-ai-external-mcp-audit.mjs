@@ -218,6 +218,43 @@ async function adminApi() {
   return apiContext;
 }
 
+async function ensureRuntimeAuth() {
+  if (
+    process.env.DOCMOST_AUTH_TOKEN?.trim() &&
+    process.env.DOCMOST_CSRF_TOKEN?.trim()
+  ) {
+    return;
+  }
+  const email = required("DOCMOST_ADMIN_EMAIL");
+  const password = required("DOCMOST_ADMIN_PASSWORD");
+  const loginContext = await request.newContext({
+    baseURL,
+    extraHTTPHeaders: { Origin: appOrigin, Referer: `${appOrigin}/` },
+  });
+  try {
+    const response = await loginContext.post("/api/auth/login", {
+      data: { email, password },
+    });
+    if (!response.ok()) {
+      throw new Error(`Audit admin login failed with ${response.status()}`);
+    }
+    const storage = await loginContext.storageState();
+    const authToken = storage.cookies.find(
+      (cookie) => cookie.name === "authToken",
+    )?.value;
+    const csrfToken = storage.cookies.find(
+      (cookie) => cookie.name === "csrfToken",
+    )?.value;
+    if (!authToken || !csrfToken) {
+      throw new Error("Audit admin login did not return the required cookies");
+    }
+    process.env.DOCMOST_AUTH_TOKEN = authToken;
+    process.env.DOCMOST_CSRF_TOKEN = csrfToken;
+  } finally {
+    await loginContext.dispose();
+  }
+}
+
 async function api(method, url, data, { allowFailure = false } = {}) {
   const context = await adminApi();
   const response = await context.fetch(url, {
@@ -1800,8 +1837,7 @@ try {
     "apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
   ]);
   if (process.env.DOCMOST_AI_MCP_E2E_SKIP_LIVE !== "1") {
-    required("DOCMOST_AUTH_TOKEN");
-    required("DOCMOST_CSRF_TOKEN");
+    await ensureRuntimeAuth();
     await runLiveAudit();
   }
 } catch (error) {
