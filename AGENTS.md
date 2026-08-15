@@ -103,9 +103,9 @@
 - If the local `pnpm` shim is missing, use `corepack pnpm ...`; root composite scripts and explicit Nx build targets are Corepack-safe.
 - Build the entire monorepo: `pnpm build`
 - Targeted root builds: `pnpm server:build`, `pnpm client:build`, `pnpm editor-ext:build`
-- Quick local verification (env contract + lint + backend test + frontend smoke + security suite): `pnpm verify:quick`
-- Full local verification (env contract + build → client bundle budget → lint → backend tests + frontend smoke + frontend unit + security suite): `pnpm verify:full`
-- Release-candidate verification (full local verification plus route/docs/text/audit contracts and AI/editor browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
+- Quick local verification (CE/architecture/version/release/env/telemetry/AI-doc contracts → lint → backend test + frontend build smoke → hostile MCP/server/client security): `pnpm verify:quick`
+- Full local verification (quick contracts plus maintenance baseline → build → client bundle budget → lint → backend tests + frontend build/unit → hostile MCP/server/client security): `pnpm verify:full`
+- Release-candidate verification (full verification plus route/RAG/comments/audit/text/editor-extension/RAG Sync/inbound MCP/dependency contracts and AI/Agent/editor/AI-context browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Enforce the permanent absence of external product telemetry code, configuration, and dependencies: `pnpm check:telemetry`
@@ -139,16 +139,17 @@
 ### Tests
 
 - Combined default test stage (backend + frontend smoke): `pnpm test`
-- Full root test stage (default + frontend unit + RAG Sync): `pnpm test:all`
-- Security regression suite (server + client targeted tests): `pnpm test:security`
+- Full root test stage (default + frontend unit): `pnpm test:all`
+- Security regression suite (hostile external-MCP contract + server/client targeted tests): `pnpm test:security`
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, sensitive-log redaction, transactional invitation outbox, collaboration lease ownership, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
-- Editor browser acceptance matrix: `pnpm test:editor:e2e`
+- Editor browser acceptance matrix: `pnpm test:editor:e2e`; a full run verifies downloaded Markdown/HTML/PDF/Docmost artifacts and deletes its audit space only after both Playwright and artifact verification pass. Focused runs skip the necessarily incomplete artifact check. Any failed full run retains its audit space for inspection.
 - AI assistant browser acceptance matrix: `pnpm test:ai:e2e`
 - AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
+- Outbound external-MCP live audit: `pnpm test:ai-external-mcp:e2e`; this mutation-heavy Docker audit is intentionally separate from `verify:release`. It accepts runtime auth cookies or `DOCMOST_ADMIN_EMAIL`/`DOCMOST_ADMIN_PASSWORD`, temporarily recreates the application container and mutates MCP settings, then restores settings/environment and removes its synthetic containers and records. See `apps/client/e2e/ai-external-mcp/README.md`.
 - AI context, citations, retrieval, and editor-selection acceptance: `pnpm test:ai-context:e2e`
 - Cross-platform line-ending contract tests for generated docs and route inventory: `pnpm test:text-contracts`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
@@ -276,12 +277,14 @@ Minimum:
 ## 6) CI/CD and local reproduction
 
 - The repository includes GitHub Actions workflows:
-  - `.github/workflows/docker.yml` — release/docker build and push.
-- `.github/workflows/ci.yml` — PR validation (`install`, `build`, client bundle budget, release-version, route/AI/RAG/text contract checks, `check:env`, permanent product-telemetry removal, maintenance baseline drift, `lint`, client/server tests including embedded RAG Sync, production-image MCP/collaboration smoke, editor and AI browser acceptance, `pnpm test:security`, `check:comments:en`, exception-journal validation, and `pnpm audit --prod` fail on unignored high/critical). `pnpm check:release-gates` locks this command matrix, root `verify:*` composition, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+  - `.github/workflows/ci.yml` — reusable PR/release validation (`install`, contracts, build, client bundle budget, lint/tests/security, integration, production-image MCP/collaboration smoke, editor and AI browser acceptance, artifact sanitization, and production dependency audit).
+  - `.github/workflows/docker.yml` — release/docker gates, build, and push.
+  - `.github/workflows/rag-open-webui-compat.yml` — scheduled/manual Open WebUI compatibility audit with sanitized failure artifacts.
+- `pnpm check:release-gates` locks the three-workflow command matrix, root `verify:*` and security composition, shared E2E Python dependency install/cache contract, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
-  3. before PR: `pnpm verify:full` (build → lint → tests → security suite).
+  3. before PR: `pnpm verify:full` (contracts → build/bundle gate → lint → tests → security suite).
   4. before release candidates: `pnpm check:release-version`, then `pnpm verify:release` against the documented production-like runtime. The Docker release tag must equal `v${package.version}` exactly.
   5. for infrastructure changes — `docker build` and/or `docker compose up` smoke check.
 - Functional checks (`check:env`, `build`, `lint`, `test`, `test:security`) remain mandatory local pre-PR validation.
