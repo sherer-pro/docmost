@@ -73,18 +73,4 @@ export class LegacyFilesController {
       jwtToken,
     );
   }
-
-  async uploadFile(
-    @Req() req: any,
-    @Res() res: FastifyReply,
-    @AuthUser() user: User,
-    @AuthWorkspace() workspace: Workspace,
-  ) {
-    return this.attachmentFileAccessService.uploadFile(
-      req,
-      res,
-      user,
-      workspace,
-    );
-  }
 }
