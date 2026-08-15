@@ -10,7 +10,7 @@ const auditRoot = path.resolve(
 );
 const defaultBaseURL = process.env.DOCMOST_BASE_URL ?? "http://localhost:3000";
 const webkitBaseURL =
-  process.env.DOCMOST_WEBKIT_BASE_URL ?? "http://127.0.0.1:3000";
+  process.env.DOCMOST_WEBKIT_BASE_URL ?? defaultBaseURL;
 
 export default defineConfig({
   testDir: "./e2e/editor/specs",
