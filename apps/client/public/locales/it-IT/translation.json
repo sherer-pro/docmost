@@ -2497,6 +2497,7 @@
   "Could not detach page from template.": "Could not detach page from template.",
   "Could not load template history.": "Could not load template history.",
   "Could not prepare publication.": "Could not prepare publication.",
+  "Live editing is temporarily unavailable. Your input is preserved. Try again.": "Il servizio di modifica collaborativa è temporaneamente indisponibile. I dati inseriti sono stati conservati. Riprova.",
   "Could not publish template.": "Could not publish template.",
   "Could not retry synchronization.": "Could not retry synchronization.",
   "Create field": "Create field",

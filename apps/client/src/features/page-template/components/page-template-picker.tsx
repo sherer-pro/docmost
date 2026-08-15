@@ -39,6 +39,7 @@ import {
   createPageFromTemplate,
   discoverPageTemplates,
   getPageTemplateDestinations,
+  isCollaborationUnavailable,
 } from "../services/page-template-api";
 import type {
   PageTemplateDestination,
@@ -136,6 +137,8 @@ export function TemplateUseModal({
   const destinationRequestRef = useRef(0);
   const defaultParentResolvedRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  const [collaborationUnavailable, setCollaborationUnavailable] =
+    useState(false);
 
   const loadTemplates = useCallback(
     async (cursor?: string) => {
@@ -199,6 +202,7 @@ export function TemplateUseModal({
     setDestinationQuery("");
     setSelectedParent(undefined);
     defaultParentResolvedRef.current = false;
+    setCollaborationUnavailable(false);
   }, [initialTemplate, opened]);
 
   const loadDestinations = useCallback(
@@ -317,6 +321,7 @@ export function TemplateUseModal({
   const submit = async () => {
     if (submitting || !selectedTemplate || !selectedParent) return;
     setSubmitting(true);
+    setCollaborationUnavailable(false);
     try {
       const result = await createPageFromTemplate({
         templatePageId: selectedTemplate.id,
@@ -326,10 +331,17 @@ export function TemplateUseModal({
       });
       onCreated(result.page);
     } catch (error) {
-      notifications.show({
-        color: "red",
-        message: errorMessage(error, t("Could not create page from template.")),
-      });
+      if (isCollaborationUnavailable(error)) {
+        setCollaborationUnavailable(true);
+      } else {
+        notifications.show({
+          color: "red",
+          message: errorMessage(
+            error,
+            t("Could not create page from template."),
+          ),
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -569,6 +581,30 @@ export function TemplateUseModal({
               </Stack>
             )}
           </ScrollArea>
+          {collaborationUnavailable && (
+            <Alert
+              color="red"
+              icon={<IconAlertCircle size={18} />}
+              role="alert"
+            >
+              <Group justify="space-between" align="center" wrap="wrap">
+                <Text size="sm">
+                  {t(
+                    "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+                  )}
+                </Text>
+                <Button
+                  size="compact-sm"
+                  variant="light"
+                  leftSection={<IconRefresh size={15} />}
+                  loading={submitting}
+                  onClick={() => void submit()}
+                >
+                  {t("Retry")}
+                </Button>
+              </Group>
+            </Alert>
+          )}
           <Group justify="space-between" wrap="nowrap">
             <Button
               variant="default"

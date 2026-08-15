@@ -68,6 +68,7 @@ import {
   getPageTemplateRevisions,
   getPageTemplateSyncRuns,
   getPageTemplateUsages,
+  isCollaborationUnavailable,
   restorePageTemplate,
 } from "@/features/page-template/services/page-template-api";
 import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
@@ -1367,6 +1368,8 @@ export function CreateTemplateWizard({
   const [kind, setKind] = useState<TemplateKind>("regular");
   const [title, setTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [collaborationUnavailable, setCollaborationUnavailable] =
+    useState(false);
   const sourceRequestRef = useRef(0);
   const initialSourceResolvedRef = useRef(!initialSourcePageId);
   const selectedSourceRef = useRef<PageTemplateDestination | null>(null);
@@ -1481,6 +1484,7 @@ export function CreateTemplateWizard({
     selectedSourceRef.current = null;
     setKind("regular");
     setTitle("");
+    setCollaborationUnavailable(false);
   }, [initialSourcePageId, opened]);
 
   useEffect(() => {
@@ -1497,6 +1501,7 @@ export function CreateTemplateWizard({
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
+    setCollaborationUnavailable(false);
     try {
       const result = await createPageTemplate({
         spaceId,
@@ -1506,10 +1511,14 @@ export function CreateTemplateWizard({
       });
       onCreated(result.page);
     } catch (error) {
-      notifications.show({
-        color: "red",
-        message: errorMessage(error, t("Could not create template.")),
-      });
+      if (isCollaborationUnavailable(error)) {
+        setCollaborationUnavailable(true);
+      } else {
+        notifications.show({
+          color: "red",
+          message: errorMessage(error, t("Could not create template.")),
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1734,6 +1743,27 @@ export function CreateTemplateWizard({
               </Stack>
             </Paper>
           </Stack>
+        )}
+
+        {collaborationUnavailable && (
+          <Alert color="red" icon={<IconAlertCircle size={18} />} role="alert">
+            <Group justify="space-between" align="center" wrap="wrap">
+              <Text size="sm">
+                {t(
+                  "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+                )}
+              </Text>
+              <Button
+                size="compact-sm"
+                variant="light"
+                leftSection={<IconRefresh size={15} />}
+                loading={submitting}
+                onClick={() => void submit()}
+              >
+                {t("Retry")}
+              </Button>
+            </Group>
+          </Alert>
         )}
 
         <Group justify="space-between" wrap="nowrap">

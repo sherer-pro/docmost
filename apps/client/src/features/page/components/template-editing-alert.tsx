@@ -32,6 +32,7 @@ import {
   getPageTemplateRevisions,
   getPageTemplateSyncRuns,
   getPageTemplateUsages,
+  isCollaborationUnavailable,
   preflightPageTemplatePublish,
   publishPageTemplate,
   retryPageTemplateSyncRun,
@@ -104,6 +105,8 @@ export function TemplateEditingAlert({
     kind === "synced" && editable,
   );
   const [draftUpdateVersion, setDraftUpdateVersion] = useState(0);
+  const [collaborationRecoveryAction, setCollaborationRecoveryAction] =
+    useState<"preflight" | "publish" | null>(null);
 
   const loadMetadata = useCallback(
     async ({
@@ -231,16 +234,22 @@ export function TemplateEditingAlert({
       return;
     }
     setPreparing(true);
+    setCollaborationRecoveryAction(null);
     try {
       const nextPreflight = await preflightPageTemplatePublish(pageId);
       setPreflight(nextPreflight);
       setDestructiveConfirmed(false);
     } catch (error: any) {
-      notifications.show({
-        color: "red",
-        message:
-          error?.response?.data?.message ?? t("Could not prepare publication."),
-      });
+      if (isCollaborationUnavailable(error)) {
+        setCollaborationRecoveryAction("preflight");
+      } else {
+        notifications.show({
+          color: "red",
+          message:
+            error?.response?.data?.message ??
+            t("Could not prepare publication."),
+        });
+      }
     } finally {
       setPreparing(false);
     }
@@ -250,6 +259,7 @@ export function TemplateEditingAlert({
     if (!preflight) return;
     let refreshPreflight = false;
     setPublishing(true);
+    setCollaborationRecoveryAction(null);
     try {
       const result = await publishPageTemplate({
         pageId,
@@ -273,6 +283,8 @@ export function TemplateEditingAlert({
       if (error?.response?.data?.code === "page_template_draft_changed") {
         setPreflight(null);
         refreshPreflight = true;
+      } else if (isCollaborationUnavailable(error)) {
+        setCollaborationRecoveryAction("publish");
       } else {
         notifications.show({
           color: "red",
@@ -514,6 +526,35 @@ export function TemplateEditingAlert({
           <Text size="xs" c="dimmed" mt={4} ta="right">
             {publishDisabledReason}
           </Text>
+        )}
+        {collaborationRecoveryAction && editable && (
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size={18} />}
+            mt="sm"
+            role="alert"
+          >
+            <Group justify="space-between" align="center" wrap="wrap">
+              <Text size="sm">
+                {t(
+                  "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+                )}
+              </Text>
+              <Button
+                size="compact-sm"
+                variant="light"
+                leftSection={<IconRefresh size={15} />}
+                loading={preparing || publishing}
+                onClick={() =>
+                  collaborationRecoveryAction === "publish"
+                    ? void publish()
+                    : void preparePublish()
+                }
+              >
+                {t("Retry")}
+              </Button>
+            </Group>
+          </Alert>
         )}
       </Paper>
 

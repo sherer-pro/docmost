@@ -22,6 +22,22 @@ import type {
   TemplateSyncRun,
 } from "../types/page-template.types";
 
+export function isCollaborationUnavailable(error: unknown): boolean {
+  const response = (
+    error as {
+      response?: {
+        status?: number;
+        data?: { code?: string; statusCode?: number };
+      };
+    }
+  )?.response;
+  return (
+    response?.data?.code === "collaboration_unavailable" ||
+    response?.status === 503 ||
+    response?.data?.statusCode === 503
+  );
+}
+
 export async function discoverPageTemplates(params: {
   query?: string;
   spaceId: string;

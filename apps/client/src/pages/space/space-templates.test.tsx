@@ -338,6 +338,9 @@ vi.mock("@/features/page-template/services/page-template-api", () => ({
   getPageTemplateRevisions: mocks.revisions,
   getPageTemplateSyncRuns: mocks.runs,
   getPageTemplateUsages: mocks.usages,
+  isCollaborationUnavailable: (error: any) =>
+    error?.response?.data?.code === "collaboration_unavailable" ||
+    error?.response?.status === 503,
   restorePageTemplate: vi.fn(),
 }));
 
@@ -1088,6 +1091,77 @@ describe("space template catalog components", () => {
       title: "Meeting template",
     });
     expect(onCreated).toHaveBeenCalledWith({ id: "template-page" });
+  });
+
+  it("preserves the wizard and retries after collaboration is unavailable", async () => {
+    const onCreated = vi.fn();
+    mocks.createTemplate
+      .mockRejectedValueOnce({
+        response: {
+          status: 503,
+          data: { code: "collaboration_unavailable" },
+        },
+      })
+      .mockResolvedValueOnce({ page: { id: "recovered-template" } });
+    render(
+      <CreateTemplateWizard
+        opened
+        spaceId="space-1"
+        onClose={vi.fn()}
+        onCreated={onCreated}
+      />,
+    );
+
+    const name = container?.querySelector(
+      'input[aria-label="Template name"]',
+    ) as HTMLInputElement | null;
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(name, "Recovery template");
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent === "Next")
+        ?.click(),
+    );
+    act(() =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent?.includes("Linked page"))
+        ?.click(),
+    );
+
+    await act(async () =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent === "Create template")
+        ?.click(),
+    );
+    await settle();
+
+    expect(container?.textContent).toContain(
+      "Live editing is temporarily unavailable. Your input is preserved. Try again.",
+    );
+    expect(container?.textContent).toContain("Recovery template");
+    expect(container?.textContent).toContain("Linked page");
+    expect(onCreated).not.toHaveBeenCalled();
+
+    await act(async () =>
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent === "Retry")
+        ?.click(),
+    );
+    await settle();
+
+    expect(mocks.createTemplate).toHaveBeenCalledTimes(2);
+    expect(mocks.createTemplate).toHaveBeenLastCalledWith({
+      spaceId: "space-1",
+      kind: "synced",
+      sourcePageId: undefined,
+      title: "Recovery template",
+    });
+    expect(onCreated).toHaveBeenCalledWith({ id: "recovered-template" });
   });
 
   it("shows source loading, error, and retry with source-purpose discovery", async () => {
