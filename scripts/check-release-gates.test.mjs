@@ -19,6 +19,7 @@ const [
   aiContextAuditSource,
   dockerfileSource,
   ragSyncComposeSource,
+  e2eRequirementsSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -35,6 +36,7 @@ const [
   readFile("apps/client/e2e/ai-context/run-ai-context-audit.mjs", "utf8"),
   readFile("Dockerfile", "utf8"),
   readFile("tests/rag-sync/compose.yml", "utf8"),
+  readFile("apps/client/e2e/requirements.txt", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -59,6 +61,26 @@ function inputs(overrides = {}) {
 
 test("accepts the checked-in release gate contract", () => {
   assert.deepEqual(validateReleaseGateContract(inputs()), []);
+});
+
+test("production smoke keeps page templates enabled in collaboration", () => {
+  const marker = "docker run -d --name docmost-collab";
+  const start = ciSource.indexOf(marker);
+  assert.ok(start >= 0, "collaboration runtime fixture must exist");
+  const flag = "-e PAGE_TEMPLATES_ENABLED=true";
+  const flagIndex = ciSource.indexOf(flag, start);
+  assert.ok(flagIndex > start, "collaboration runtime must contain the flag");
+  const mutated = `${ciSource.slice(0, flagIndex)}removed-page-templates-flag${ciSource.slice(flagIndex + flag.length)}`;
+  const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+  assert.ok(
+    errors.includes(
+      "production-smoke collaboration runtime must enable page templates with the API runtimes",
+    ),
+  );
+});
+
+test("shared E2E requirements include the Markdown parser", () => {
+  assert.match(e2eRequirementsSource, /^markdown-it-py==4\.2\.0$/mu);
 });
 
 test("RAG Sync harness keeps collaboration and PostgreSQL runtime prerequisites", () => {
@@ -264,8 +286,7 @@ test("AI Agent acceptance supplies isolated file-backed Compose secrets", () => 
 });
 
 test("AI Agent harness binds its internal collaboration URL to the isolated port", () => {
-  const required =
-    'COLLAB_INTERNAL_URL: "http://collab:${COLLAB_PORT:-3001}"';
+  const required = 'COLLAB_INTERNAL_URL: "http://collab:${COLLAB_PORT:-3001}"';
   const mutated = aiAgentComposeSource.replace(required, "removed");
   assert.notEqual(mutated, aiAgentComposeSource);
   const errors = validateReleaseGateContract(

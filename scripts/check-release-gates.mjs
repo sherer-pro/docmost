@@ -362,6 +362,24 @@ function validateAiGuideGateMetadata(errors, ciSource) {
   }
 }
 
+function validateProductionSmokeCollaborationRuntime(errors, ciSource) {
+  const productionSmoke = jobBlock(ciSource, "production-smoke");
+  const start = productionSmoke.indexOf("docker run -d --name docmost-collab");
+  const commandEnd = productionSmoke.indexOf(
+    "apps/server/dist/apps/server/src/collaboration/server/collab-main.js",
+    start,
+  );
+  const collaborationCommand =
+    start >= 0 && commandEnd > start
+      ? productionSmoke.slice(start, commandEnd)
+      : "";
+  if (!collaborationCommand.includes("-e PAGE_TEMPLATES_ENABLED=true")) {
+    errors.push(
+      "production-smoke collaboration runtime must enable page templates with the API runtimes",
+    );
+  }
+}
+
 function validateDockerfileDependencyInstall(errors, dockerfileSource) {
   for (const [fragment, message] of [
     ["ARG BUILD_VERSION=dev", "Dockerfile must declare BUILD_VERSION"],
@@ -498,6 +516,7 @@ export function validateReleaseGateContract({
   validateVerificationScripts(errors, packageJson);
   validateWorkflowHygiene(errors, workflowSources);
   validateAiGuideGateMetadata(errors, ciSource);
+  validateProductionSmokeCollaborationRuntime(errors, ciSource);
   validateDockerfileDependencyInstall(errors, dockerfileSource);
   validateRagSyncHarness(errors, ragSyncComposeSource);
   validateAiAgentHarness(errors, aiAgentComposeSource);
