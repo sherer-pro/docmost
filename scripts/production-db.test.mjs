@@ -8,6 +8,7 @@ import {
   parseArguments,
   parseEnvFile,
   rollbackPreflightMatches,
+  rollbackPhaseCanRun,
   rollbackState,
   serializeEnvFile,
   storageArchiveDockerArgs,
@@ -93,6 +94,13 @@ test("rollback accepts only the recorded safe source preflight class", () => {
   assert.equal(rollbackPreflightMatches({ exitCode: 0 }, 20), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 30 }, 30), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 40 }, 40), false);
+});
+
+test("rollback can resume after its external hook was interrupted", () => {
+  assert.equal(rollbackPhaseCanRun("acceptance"), true);
+  assert.equal(rollbackPhaseCanRun("rollback_preflight"), true);
+  assert.equal(rollbackPhaseCanRun("rolled_back"), false);
+  assert.equal(rollbackPhaseCanRun("accepted"), false);
 });
 
 test("a rolled-back migration retries with the configured target image", () => {

@@ -956,6 +956,10 @@ export function rollbackPreflightMatches(report, expectedExitCode) {
   );
 }
 
+export function rollbackPhaseCanRun(phase) {
+  return phase === ACCEPTANCE_PHASE || phase === "rollback_preflight";
+}
+
 export function buildMigrationFailureReport({
   migrationId,
   error,
@@ -1360,11 +1364,13 @@ async function migrate(context) {
 function rollback(context) {
   requireLinux();
   if (!context.yes) throw new Error("rollback requires --yes");
-  if (context.state.MIGRATION_PHASE !== ACCEPTANCE_PHASE) {
+  if (!rollbackPhaseCanRun(context.state.MIGRATION_PHASE)) {
     throw new Error(
       "Automatic rollback is allowed only during acceptance before ingress opens",
     );
   }
+  const resumingRollback =
+    context.state.MIGRATION_PHASE === "rollback_preflight";
   const previousVolume = context.state.PREVIOUS_POSTGRES_VOLUME_NAME;
   const previousImage = context.state.PREVIOUS_DOCMOST_IMAGE;
   const previousPostgresImage = context.state.PREVIOUS_POSTGRES_IMAGE;
@@ -1380,17 +1386,19 @@ function rollback(context) {
     throw new Error("Rollback metadata is incomplete");
   }
   inspectVolume(previousVolume);
-  compose(context, ["stop", "docmost", "collab", "db"]);
-  const targetState = {
-    ...context.state,
-    POSTGRES_IMAGE: previousPostgresImage,
-    POSTGRES_VOLUME_NAME: previousVolume,
-    MIGRATION_PHASE: "rollback_preflight",
-  };
-  delete targetState.DOCMOST_IMAGE;
-  atomicWrite(context.stateFile, serializeEnvFile(targetState));
-  context.state = targetState;
-  context.childEnv = { ...process.env, ...context.baseEnv, ...targetState };
+  if (!resumingRollback) {
+    compose(context, ["stop", "docmost", "collab", "db"]);
+    const targetState = {
+      ...context.state,
+      POSTGRES_IMAGE: previousPostgresImage,
+      POSTGRES_VOLUME_NAME: previousVolume,
+      MIGRATION_PHASE: "rollback_preflight",
+    };
+    delete targetState.DOCMOST_IMAGE;
+    atomicWrite(context.stateFile, serializeEnvFile(targetState));
+    context.state = targetState;
+    context.childEnv = { ...process.env, ...context.baseEnv, ...targetState };
+  }
   const usedExternalRollback = runExternalRollbackHook(
     context,
     context.state.MIGRATION_ID,
