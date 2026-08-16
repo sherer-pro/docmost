@@ -84,9 +84,13 @@ export function serializeEnvFile(values) {
     .join("\n")}\n`;
 }
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
+  // pnpm 10 keeps the documented `--` separator in argv for package scripts.
+  // Accepting it here preserves the runbook command while direct Node execution
+  // remains available for recovery hosts where Corepack is not installed.
+  const args = argv[0] === "--" ? argv.slice(1) : argv;
   const options = {
-    command: argv[0],
+    command: args[0],
     composeFile: DEFAULT_COMPOSE_FILE,
     envFile: process.env.DOCMOST_PRODUCTION_ENV_FILE || DEFAULT_ENV_FILE,
     stateFile: process.env.DOCMOST_PRODUCTION_STATE_FILE || DEFAULT_STATE_FILE,
@@ -94,8 +98,8 @@ function parseArguments(argv) {
     json: false,
     yes: false,
   };
-  for (let index = 1; index < argv.length; index += 1) {
-    const argument = argv[index];
+  for (let index = 1; index < args.length; index += 1) {
+    const argument = args[index];
     if (argument === "--json") options.json = true;
     else if (argument === "--yes") options.yes = true;
     else if (
@@ -103,7 +107,7 @@ function parseArguments(argv) {
         argument,
       )
     ) {
-      const value = argv[index + 1];
+      const value = args[index + 1];
       if (!value) throw new Error(`${argument} requires a value`);
       index += 1;
       const key = {
