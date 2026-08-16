@@ -149,8 +149,11 @@ The operator performs these fail-closed steps:
    SHA-256 hashes, sizes, runtime versions, and an object manifest;
 4. validates the dump before creating a labelled candidate PostgreSQL volume;
 5. restores with `pg_restore --exit-on-error --no-owner --no-acl`;
-6. compares exact table row counts, sequence values, extension versions, large
-   object count, constraint definitions, index definitions, and invalid state;
+6. compares exact application-table row counts, sequence values, extension
+   versions, large-object count, not-null columns, stable constraint/index
+   structure, and invalid state. Temporary and physical TOAST objects are
+   excluded because their names and catalog representation change across major
+   versions; deparsed SQL text is not used as a cross-major invariant;
 7. runs the one-shot Kysely migration, `ANALYZE`, and require-latest preflight;
 8. atomically replaces the deployment state file, then starts PostgreSQL,
    collaboration, and API in that order;
