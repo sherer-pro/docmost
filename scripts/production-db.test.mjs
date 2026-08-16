@@ -167,6 +167,7 @@ test("compares restored database inventories by invariant", () => {
     sequences: { "public.pages_id_seq": "12" },
     extensions: { pg_trgm: "1.6" },
     largeObjects: 0,
+    notNullColumns: { "public.pages.id": true },
     constraints: { "public.pages.pages_pkey": "PRIMARY KEY (id)" },
     indexes: { "public.pages_pkey": "CREATE UNIQUE INDEX pages_pkey" },
     unvalidatedConstraints: 0,
@@ -182,5 +183,12 @@ test("compares restored database inventories by invariant", () => {
       tables: { "public.pages": 11 },
     }),
     ["tables"],
+  );
+  assert.deepEqual(
+    compareInventories(inventory, {
+      ...inventory,
+      notNullColumns: {},
+    }),
+    ["notNullColumns"],
   );
 });
