@@ -16,6 +16,7 @@ import {
   SearchDTO,
   SearchShareDTO,
   SearchSuggestionDTO,
+  SearchTagFacetDTO,
 } from './dto/search.dto';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -68,7 +69,8 @@ export class SearchController {
     if (
       this.environmentService.getSearchDriver() === 'typesense' &&
       !searchDto.labelId &&
-      !searchDto.tag
+      !searchDto.tag &&
+      !searchDto.tags?.length
     ) {
       return this.typesenseSearchService.searchPages(searchDto, {
         userId: user.id,
@@ -77,6 +79,35 @@ export class SearchController {
     }
 
     return this.searchService.searchPage(searchDto, {
+      userId: user.id,
+      workspaceId: workspace.id,
+    });
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
+  @Post('tag-facets')
+  async tagFacets(
+    @Body() dto: SearchTagFacetDTO,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (dto.spaceId) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          dto.spaceId,
+        );
+      if (!hasReadablePages) {
+        throw new ForbiddenException();
+      }
+    }
+
+    return this.searchService.getTagFacets(dto, {
       userId: user.id,
       workspaceId: workspace.id,
     });
@@ -97,6 +128,7 @@ export class SearchController {
     delete searchDto.shareId;
     delete searchDto.labelId;
     delete searchDto.tag;
+    delete searchDto.tags;
 
     if (!searchDto.query?.trim()) {
       throw new BadRequestException('query is required');
@@ -155,6 +187,7 @@ export class SearchController {
     delete searchDto.spaceId;
     delete searchDto.labelId;
     delete searchDto.tag;
+    delete searchDto.tags;
     if (!searchDto.shareId) {
       throw new BadRequestException('shareId is required');
     }

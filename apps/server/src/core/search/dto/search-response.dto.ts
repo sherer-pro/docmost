@@ -12,6 +12,25 @@ export class SearchLabelDto {
   type: string;
 }
 
+export type SearchContentKind = 'page' | 'database' | 'databaseRow';
+
+export class SearchTagMatchDto {
+  start: number;
+  end: number;
+  value: string;
+}
+
+export class SearchTagSnippetDto {
+  anchorId?: string;
+  text: string;
+  matches: SearchTagMatchDto[];
+}
+
+export class SearchTagFacetDto {
+  value: 'tbd' | 'todo' | 'done';
+  documentCount: number;
+}
+
 export class SearchResponseDto {
   id: string;
   slugId: string;
@@ -19,9 +38,12 @@ export class SearchResponseDto {
   icon: string;
   parentPageId: string;
   databaseId?: string | null;
+  contentKind: SearchContentKind;
   creatorId: string;
   rank: number;
   highlight: string;
+  tagMatchCount: number;
+  tagSnippets: SearchTagSnippetDto[];
   createdAt: Date;
   updatedAt: Date;
   breadcrumbs?: SearchBreadcrumbDto[];

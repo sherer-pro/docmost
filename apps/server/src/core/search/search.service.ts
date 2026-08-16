@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { SearchDTO, SearchSuggestionDTO } from './dto/search.dto';
+import {
+  BUILT_IN_SEARCH_TAGS,
+  SearchDTO,
+  SearchSuggestionDTO,
+  type BuiltInSearchTag,
+} from './dto/search.dto';
 import {
   AttachmentSearchResponseDto,
   SearchBreadcrumbDto,
+  SearchContentKind,
   SearchResponseDto,
+  SearchTagFacetDto,
 } from './dto/search-response.dto';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -21,6 +28,7 @@ import {
   SidebarAccessSnapshot,
 } from '../page-access/page-access.service';
 import { ShareService } from '../share/share.service';
+import { buildTagSearchMetadata } from './tag-search.utils';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
@@ -52,6 +60,7 @@ interface SearchAncestorRow {
 
 const DEFAULT_SEARCH_LIMIT = 25;
 const MAX_SEARCH_FETCH_BATCH = 100;
+const TAG_FACET_FETCH_BATCH = 1_000;
 const HIGHLIGHT_START = '__DOCMOST_TS_HIGHLIGHT_START_8C527D__';
 const HIGHLIGHT_END = '__DOCMOST_TS_HIGHLIGHT_END_8C527D__';
 const TS_HEADLINE_OPTIONS = `StartSel=${HIGHLIGHT_START}, StopSel=${HIGHLIGHT_END}, MinWords=9, MaxWords=10, MaxFragments=3`;
@@ -89,6 +98,31 @@ export class SearchService {
         highlight: escaped
           .replaceAll(HIGHLIGHT_START, '<mark>')
           .replaceAll(HIGHLIGHT_END, '</mark>'),
+      };
+    });
+  }
+
+  private getSelectedTags(searchParams: SearchDTO): string[] {
+    return [
+      ...new Set([
+        ...(searchParams.tags ?? []),
+        ...(searchParams.tag ? [searchParams.tag] : []),
+      ]),
+    ];
+  }
+
+  private attachTagMetadata(
+    searchResults: SearchResponseDto[],
+    tags: readonly string[],
+  ): SearchResponseDto[] {
+    return searchResults.map((searchResult) => {
+      const { content, ...result } = searchResult as SearchResponseDto & {
+        content?: unknown;
+      };
+
+      return {
+        ...result,
+        ...buildTagSearchMetadata(content, tags),
       };
     });
   }
@@ -319,12 +353,13 @@ export class SearchService {
       excludedPageIds?: ReadonlySet<string>;
     },
   ): Promise<{ items: SearchResponseDto[] }> {
-    const { labelId, tag } = searchParams;
+    const { labelId } = searchParams;
+    const tags = this.getSelectedTags(searchParams);
     const query = searchParams.query?.trim() ?? '';
     const searchQuery = query ? buildSearchTsQuery(query) : undefined;
     const hasTextQuery = searchQuery !== undefined;
 
-    if (!hasTextQuery && !labelId && !tag) {
+    if (!hasTextQuery && !labelId && tags.length === 0) {
       return { items: [] };
     }
 
@@ -348,8 +383,26 @@ export class SearchService {
         'updatedAt',
         rankExpression.as('rank'),
         highlightExpression.as('highlight'),
+        sql<SearchContentKind>`
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM databases AS search_database
+              WHERE search_database.page_id = pages.id
+                AND search_database.deleted_at IS NULL
+            ) THEN 'database'
+            WHEN EXISTS (
+              SELECT 1
+              FROM database_rows AS search_database_row
+              WHERE search_database_row.page_id = pages.id
+                AND search_database_row.archived_at IS NULL
+            ) THEN 'databaseRow'
+            ELSE 'page'
+          END
+        `.as('contentKind'),
       ])
       .select((eb) => this.pageRepo.withDatabaseId(eb))
+      .$if(tags.length > 0, (qb) => qb.select('content'))
       .$if(Boolean(searchParams.creatorId), (qb) =>
         qb.where('creatorId', '=', searchParams.creatorId),
       )
@@ -418,9 +471,17 @@ export class SearchService {
         );
     }
 
-    if (tag) {
+    if (tags.length > 0) {
       queryResults = queryResults.where(
-        sql<boolean>`jsonb_path_exists(${sql.ref('pages.content')}, '$.** ? (@.type == "tag" && @.attrs.value == $tag)', jsonb_build_object('tag', ${tag}::text))`,
+        sql<boolean>`${sql.ref('pages.tagValues')} && ${tags}::text[]`,
+      );
+      queryResults = queryResults.where(
+        sql<boolean>`NOT EXISTS (
+          SELECT 1
+          FROM database_rows AS archived_search_row
+          WHERE archived_search_row.page_id = pages.id
+            AND archived_search_row.archived_at IS NOT NULL
+        )`,
       );
     }
 
@@ -560,9 +621,13 @@ export class SearchService {
       const visiblePageIdsBySpaceId =
         this.buildVisiblePageIdsMap(snapshotBySpaceId);
 
+      const searchResultsWithTagMetadata = this.attachTagMetadata(
+        searchResults,
+        tags,
+      );
       const searchResultsWithBreadcrumbs =
         await this.attachBreadcrumbsToResults(
-          searchResults,
+          searchResultsWithTagMetadata,
           visiblePageIdsBySpaceId,
         );
 
@@ -572,9 +637,12 @@ export class SearchService {
         .limit(searchParams.limit || DEFAULT_SEARCH_LIMIT)
         .offset(searchParams.offset || 0)
         .execute();
-      const searchResults = this.normalizeSearchHighlights(
-        rawResults as unknown as SearchResponseDto[],
-      ).filter((result) => !opts.excludedPageIds?.has(result.id));
+      const searchResults = this.attachTagMetadata(
+        this.normalizeSearchHighlights(
+          rawResults as unknown as SearchResponseDto[],
+        ).filter((result) => !opts.excludedPageIds?.has(result.id)),
+        tags,
+      );
       const searchResultsWithBreadcrumbs =
         await this.attachBreadcrumbsToResults(searchResults);
 
@@ -582,6 +650,97 @@ export class SearchService {
         items: this.projectPublicShareResults(searchResultsWithBreadcrumbs),
       };
     }
+  }
+
+  async getTagFacets(
+    searchParams: { spaceId?: string },
+    opts: { userId: string; workspaceId: string },
+  ): Promise<{ items: SearchTagFacetDto[] }> {
+    const authUser = await this.userRepo.findById(
+      opts.userId,
+      opts.workspaceId,
+    );
+    if (!authUser) {
+      return { items: [] };
+    }
+
+    const counts = new Map<BuiltInSearchTag, number>(
+      BUILT_IN_SEARCH_TAGS.map((tag) => [tag, 0]),
+    );
+    const snapshotBySpaceId = new Map<string, SidebarAccessSnapshot>();
+    let lastId: string | undefined;
+
+    while (true) {
+      let candidates = this.db
+        .selectFrom('pages')
+        .select(['id', 'spaceId', 'tagValues'])
+        .where('workspaceId', '=', opts.workspaceId)
+        .where('deletedAt', 'is', null)
+        .where('templateKind', 'is', null)
+        .where(
+          sql<boolean>`${sql.ref('pages.tagValues')} && ${BUILT_IN_SEARCH_TAGS}::text[]`,
+        )
+        .where(
+          sql<boolean>`NOT EXISTS (
+            SELECT 1
+            FROM database_rows AS archived_facet_row
+            WHERE archived_facet_row.page_id = pages.id
+              AND archived_facet_row.archived_at IS NOT NULL
+          )`,
+        );
+
+      if (searchParams.spaceId) {
+        candidates = candidates.where('spaceId', '=', searchParams.spaceId);
+      } else {
+        candidates = candidates.where(
+          'spaceId',
+          'in',
+          this.spaceMemberRepo.getUserSpaceIdsQuery(opts.userId),
+        );
+      }
+      if (lastId) {
+        candidates = candidates.where('id', '>', lastId);
+      }
+
+      const batch = await candidates
+        .orderBy('id', 'asc')
+        .limit(TAG_FACET_FETCH_BATCH)
+        .execute();
+      if (batch.length === 0) {
+        break;
+      }
+
+      await this.buildSpaceAccessSnapshotMapForSpaceIds(
+        authUser,
+        batch.map((row) => row.spaceId),
+        snapshotBySpaceId,
+      );
+
+      batch.forEach((row) => {
+        const snapshot = snapshotBySpaceId.get(row.spaceId);
+        if (!snapshot?.readablePageIds.has(row.id)) {
+          return;
+        }
+
+        BUILT_IN_SEARCH_TAGS.forEach((tag) => {
+          if (row.tagValues.includes(tag)) {
+            counts.set(tag, (counts.get(tag) ?? 0) + 1);
+          }
+        });
+      });
+
+      lastId = batch[batch.length - 1].id;
+      if (batch.length < TAG_FACET_FETCH_BATCH) {
+        break;
+      }
+    }
+
+    return {
+      items: BUILT_IN_SEARCH_TAGS.map((value) => ({
+        value,
+        documentCount: counts.get(value) ?? 0,
+      })).filter((item) => item.documentCount > 0),
+    };
   }
 
   async searchAttachments(

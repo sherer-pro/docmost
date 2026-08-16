@@ -35,6 +35,35 @@ describe('SearchDTO', () => {
     expect(validateSync(dto)).toHaveLength(0);
   });
 
+  it('normalizes and accepts multiple built-in tags without a text query', () => {
+    const dto = plainToInstance(SearchDTO, {
+      query: '',
+      tags: ['TBD', 'todo'],
+    });
+
+    expect(dto.tags).toEqual(['tbd', 'todo']);
+    expect(validateSync(dto)).toHaveLength(0);
+  });
+
+  it('rejects duplicate, unknown, and oversized built-in tag lists', () => {
+    const duplicate = plainToInstance(SearchDTO, {
+      query: '',
+      tags: ['todo', 'TODO'],
+    });
+    const unknown = plainToInstance(SearchDTO, {
+      query: '',
+      tags: ['blocked'],
+    });
+    const oversized = plainToInstance(SearchDTO, {
+      query: '',
+      tags: ['tbd', 'todo', 'done', 'todo'],
+    });
+
+    expect(validateSync(duplicate).length).toBeGreaterThan(0);
+    expect(validateSync(unknown).length).toBeGreaterThan(0);
+    expect(validateSync(oversized).length).toBeGreaterThan(0);
+  });
+
   it('rejects unsafe tag filter values', () => {
     const dto = plainToInstance(SearchDTO, {
       query: '',

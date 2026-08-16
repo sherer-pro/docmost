@@ -206,6 +206,9 @@ function createSearchRow(overrides: Record<string, unknown> = {}) {
     rank: 0,
     highlight: '',
     databaseId: null,
+    contentKind: 'page',
+    tagMatchCount: 0,
+    tagSnippets: [],
     labels: [
       { id: 'label-1', name: 'urgent', spaceId: 'space-1', type: 'page' },
     ],
@@ -301,7 +304,7 @@ describe('SearchService', () => {
         'function',
     )?.[0] as { toOperationNode: () => { sqlFragments?: string[] } };
     expect(tagCondition.toOperationNode().sqlFragments?.join('')).toContain(
-      '::text',
+      '::text[]',
     );
     expect(state.orderByCalls).toEqual(
       expect.arrayContaining([
@@ -309,6 +312,83 @@ describe('SearchService', () => {
         ['id', 'desc'],
       ]),
     );
+  });
+
+  it('returns up to three anchored snippets and the total tag match count', async () => {
+    const row = createSearchRow({
+      content: {
+        type: 'doc',
+        content: Array.from({ length: 4 }, (_, index) => ({
+          type: 'paragraph',
+          attrs: { id: `block-${index}` },
+          content: [
+            { type: 'text', text: `Item ${index} ` },
+            { type: 'tag', attrs: { value: 'todo' } },
+          ],
+        })),
+      },
+    });
+    const { service } = createPageSearchService([row]);
+
+    const result = await service.searchPage(
+      { query: '', tags: ['todo'] } as any,
+      { userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+
+    expect(result.items[0]).not.toHaveProperty('content');
+    expect(result.items[0].tagMatchCount).toBe(4);
+    expect(result.items[0].tagSnippets).toHaveLength(3);
+    expect(result.items[0].tagSnippets[0]).toMatchObject({
+      anchorId: 'block-0',
+      text: 'Item 0 TODO',
+    });
+  });
+
+  it('counts tag facets only across readable pages', async () => {
+    const rows = [
+      {
+        id: 'page-1',
+        spaceId: 'space-1',
+        tagValues: ['todo', 'done'],
+      },
+      {
+        id: 'page-hidden',
+        spaceId: 'space-1',
+        tagValues: ['tbd', 'todo'],
+      },
+    ];
+    const { builder } = createAttachmentQueryBuilder(rows);
+    const service = new SearchService(
+      { selectFrom: jest.fn(() => builder) } as any,
+      {} as any,
+      {} as any,
+      { getUserSpaceIdsQuery: jest.fn(() => ['space-1']) } as any,
+      {
+        findById: jest.fn(async () => ({
+          id: 'user-1',
+          workspaceId: 'workspace-1',
+        })),
+      } as any,
+      {
+        getSidebarAccessSnapshot: jest.fn(async () => ({
+          readablePageIds: new Set(['page-1']),
+          visiblePageIds: new Set(['page-1']),
+        })),
+      } as any,
+      shareService as any,
+    );
+
+    await expect(
+      service.getTagFacets(
+        {},
+        { userId: 'user-1', workspaceId: 'workspace-1' },
+      ),
+    ).resolves.toEqual({
+      items: [
+        { value: 'todo', documentCount: 1 },
+        { value: 'done', documentCount: 1 },
+      ],
+    });
   });
 
   it('requires both full-text and label matching when query and label are provided', async () => {
