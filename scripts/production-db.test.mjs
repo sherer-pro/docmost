@@ -8,6 +8,7 @@ import {
   rollbackPreflightMatches,
   rollbackState,
   serializeEnvFile,
+  storageArchiveDockerArgs,
 } from "./production-db.mjs";
 
 test("accepts pnpm's documented argument separator", () => {
@@ -72,6 +73,34 @@ test("rollback accepts only the recorded safe source preflight class", () => {
   assert.equal(rollbackPreflightMatches({ exitCode: 0 }, 20), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 30 }, 30), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 40 }, 40), false);
+});
+
+test("archives root-owned storage with a privileged one-shot process", () => {
+  assert.deepEqual(
+    storageArchiveDockerArgs({
+      storageVolume: "docmost_storage",
+      migrationDir: "/var/backups/docmost/postgres/20260816",
+      image: `shererpro/docmost@sha256:${"a".repeat(64)}`,
+    }),
+    [
+      "run",
+      "--rm",
+      "--user",
+      "0:0",
+      "--mount",
+      "type=volume,src=docmost_storage,dst=/source,readonly",
+      "--mount",
+      "type=bind,src=/var/backups/docmost/postgres/20260816,dst=/backup",
+      "--entrypoint",
+      "tar",
+      `shererpro/docmost@sha256:${"a".repeat(64)}`,
+      "-C",
+      "/source",
+      "-czf",
+      "/backup/storage.tar.gz",
+      ".",
+    ],
+  );
 });
 
 test("requires capacity for both backup and candidate volume", () => {
