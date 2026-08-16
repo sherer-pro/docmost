@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCapacityPlan,
   buildMigrationFailureReport,
+  commandState,
   compareInventories,
   migrationRetryState,
   parseArguments,
@@ -118,6 +119,18 @@ test("a rolled-back migration retries with the configured target image", () => {
       .DOCMOST_IMAGE,
     state.DOCMOST_IMAGE,
   );
+});
+
+test("read-only retry checks use the configured target image", () => {
+  const state = {
+    DOCMOST_IMAGE: `shererpro/docmost@sha256:${"b".repeat(64)}`,
+    MIGRATION_PHASE: "rolled_back",
+    POSTGRES_VOLUME_NAME: "docmost-postgres-16",
+  };
+  assert.equal(commandState("preflight", state).DOCMOST_IMAGE, undefined);
+  assert.equal(commandState("plan", state).DOCMOST_IMAGE, undefined);
+  assert.equal(commandState("rollback", state), state);
+  assert.equal(commandState("accept", state), state);
 });
 
 test("archives root-owned storage with a privileged one-shot process", () => {
