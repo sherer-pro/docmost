@@ -1,5 +1,6 @@
 import type { CodeBlockOptions } from '@tiptap/extension-code-block';
 import CodeBlock from '@tiptap/extension-code-block';
+import { TextSelection } from '@tiptap/pm/state';
 
 import { LowlightPlugin } from './lowlight-plugin.js';
 import { normalizeBlockWidthMode } from '../block-width';
@@ -55,8 +56,52 @@ export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
   },
 
   addKeyboardShortcuts() {
+    const parentShortcuts = this.parent?.() || {};
+
     return {
-      ...this.parent?.(),
+      ...parentShortcuts,
+      Enter: (props) => {
+        const { editor } = props;
+        const { $from, empty } = editor.state.selection;
+        const isAtEnd = $from.parentOffset === $from.parent.content.size;
+
+        if (empty && $from.parent.type === this.type && isAtEnd) {
+          const currentLine = $from.parent.textContent.slice(
+            $from.parent.textContent.lastIndexOf('\n', $from.parentOffset - 1) +
+              1,
+            $from.parentOffset,
+          );
+
+          if (currentLine === '```' || currentLine === '~~~') {
+            const codeBlockEnd = $from.after();
+            const nodeAfter = editor.state.doc.nodeAt(codeBlockEnd);
+
+            if (nodeAfter?.isTextblock) {
+              return editor.commands.command(({ tr }) => {
+                tr.delete($from.pos - currentLine.length, $from.pos);
+
+                const mappedCodeBlockEnd = tr.mapping.map(codeBlockEnd);
+                tr.setSelection(
+                  TextSelection.create(tr.doc, mappedCodeBlockEnd + 1),
+                );
+                tr.scrollIntoView();
+                return true;
+              });
+            }
+
+            return editor
+              .chain()
+              .command(({ tr }) => {
+                tr.delete($from.pos - currentLine.length, $from.pos);
+                return true;
+              })
+              .exitCode()
+              .run();
+          }
+        }
+
+        return parentShortcuts.Enter?.(props) ?? false;
+      },
       Tab: () => {
         if (this.editor.isActive('codeBlock')) {
           this.editor
