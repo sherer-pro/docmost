@@ -87,7 +87,7 @@ test("rejects forwarding the host collaboration URL into Compose", () => {
 test("requires the API to wait for healthy collaboration", () => {
   const result = runContractWithCompose(
     composeSource.replace(
-      "      collab:\n        condition: service_healthy\n",
+      /      collab:\r?\n        condition: service_healthy\r?\n/u,
       "",
     ),
   );

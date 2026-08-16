@@ -72,6 +72,12 @@ export function validateProductionDatabaseContract({
   requireText(
     errors,
     productionCompose,
+    `image: "\${POSTGRES_IMAGE:-${POSTGRES_IMAGE}}"`,
+    "production Compose rollback PostgreSQL image",
+  );
+  requireText(
+    errors,
+    productionCompose,
     "DATABASE_MIGRATION_MODE: external",
     "production Compose",
   );
