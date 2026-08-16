@@ -251,7 +251,8 @@ function createContext(options) {
   const stateFile = resolve(options.stateFile);
   const backupDir = resolve(options.backupDir);
   const baseEnv = readEnvFile(envFile);
-  const state = readEnvFile(stateFile);
+  const storedState = readEnvFile(stateFile);
+  const state = commandState(options.command, storedState);
   const effective = { ...baseEnv, ...state, ...process.env };
 
   for (const key of [
@@ -306,6 +307,12 @@ function createContext(options) {
     effective,
     childEnv: { ...process.env, ...baseEnv, ...state },
   };
+}
+
+export function commandState(command, state) {
+  return ["preflight", "plan"].includes(command)
+    ? migrationRetryState(state)
+    : state;
 }
 
 function runOperatorHook(context, key, migrationId) {
@@ -541,6 +548,8 @@ BEGIN
     SELECT schemaname, tablename
     FROM pg_tables
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+      AND schemaname NOT LIKE 'pg_temp_%'
+      AND schemaname NOT LIKE 'pg_toast%'
     ORDER BY schemaname, tablename
   LOOP
     EXECUTE format(
@@ -557,27 +566,102 @@ SELECT jsonb_build_object(
   'sequences', COALESCE((SELECT jsonb_object_agg(schemaname || '.' || sequencename, COALESCE(last_value::text, 'null') ORDER BY schemaname, sequencename) FROM pg_sequences WHERE schemaname NOT IN ('pg_catalog', 'information_schema')), '{}'::jsonb),
   'extensions', COALESCE((SELECT jsonb_object_agg(extname, extversion ORDER BY extname) FROM pg_extension), '{}'::jsonb),
   'largeObjects', (SELECT count(*) FROM pg_largeobject_metadata),
+  'notNullColumns', COALESCE((
+    SELECT jsonb_object_agg(
+      quote_ident(namespace.nspname) || '.' || quote_ident(table_state.relname) || '.' || quote_ident(attribute_state.attname),
+      true
+      ORDER BY namespace.nspname, table_state.relname, attribute_state.attnum
+    )
+    FROM pg_attribute AS attribute_state
+    JOIN pg_class AS table_state ON table_state.oid = attribute_state.attrelid
+    JOIN pg_namespace AS namespace ON namespace.oid = table_state.relnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND namespace.nspname NOT LIKE 'pg_temp_%'
+      AND namespace.nspname NOT LIKE 'pg_toast%'
+      AND table_state.relkind IN ('r', 'p')
+      AND attribute_state.attnum > 0
+      AND NOT attribute_state.attisdropped
+      AND attribute_state.attnotnull
+  ), '{}'::jsonb),
   'constraints', COALESCE((
     SELECT jsonb_object_agg(
       quote_ident(namespace.nspname) || '.' || quote_ident(table_state.relname) || '.' || quote_ident(constraint_state.conname),
-      pg_get_constraintdef(constraint_state.oid, true)
+      jsonb_build_object(
+        'type', constraint_state.contype,
+        'validated', constraint_state.convalidated,
+        'deferrable', constraint_state.condeferrable,
+        'deferred', constraint_state.condeferred,
+        'noInherit', constraint_state.connoinherit,
+        'local', constraint_state.conislocal,
+        'columns', COALESCE((
+          SELECT jsonb_agg(attribute.attname ORDER BY key_position.ordinality)
+          FROM unnest(constraint_state.conkey) WITH ORDINALITY AS key_position(attnum, ordinality)
+          JOIN pg_attribute AS attribute
+            ON attribute.attrelid = constraint_state.conrelid
+           AND attribute.attnum = key_position.attnum
+        ), '[]'::jsonb),
+        'referencedTable', CASE
+          WHEN constraint_state.confrelid = 0 THEN NULL
+          ELSE quote_ident(referenced_namespace.nspname) || '.' || quote_ident(referenced_table.relname)
+        END,
+        'referencedColumns', COALESCE((
+          SELECT jsonb_agg(attribute.attname ORDER BY key_position.ordinality)
+          FROM unnest(constraint_state.confkey) WITH ORDINALITY AS key_position(attnum, ordinality)
+          JOIN pg_attribute AS attribute
+            ON attribute.attrelid = constraint_state.confrelid
+           AND attribute.attnum = key_position.attnum
+        ), '[]'::jsonb),
+        'matchType', constraint_state.confmatchtype,
+        'updateAction', constraint_state.confupdtype,
+        'deleteAction', constraint_state.confdeltype,
+        'hasExpression', constraint_state.conbin IS NOT NULL
+      )
       ORDER BY namespace.nspname, table_state.relname, constraint_state.conname
     )
     FROM pg_constraint AS constraint_state
     JOIN pg_class AS table_state ON table_state.oid = constraint_state.conrelid
     JOIN pg_namespace AS namespace ON namespace.oid = table_state.relnamespace
+    LEFT JOIN pg_class AS referenced_table ON referenced_table.oid = constraint_state.confrelid
+    LEFT JOIN pg_namespace AS referenced_namespace ON referenced_namespace.oid = referenced_table.relnamespace
     WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND namespace.nspname NOT LIKE 'pg_temp_%'
+      AND namespace.nspname NOT LIKE 'pg_toast%'
+      AND constraint_state.contype <> 'n'
   ), '{}'::jsonb),
   'indexes', COALESCE((
     SELECT jsonb_object_agg(
       quote_ident(namespace.nspname) || '.' || quote_ident(index_state.relname),
-      pg_get_indexdef(index_state.oid)
+      jsonb_build_object(
+        'table', quote_ident(table_namespace.nspname) || '.' || quote_ident(table_state.relname),
+        'accessMethod', access_method.amname,
+        'unique', index_metadata.indisunique,
+        'primary', index_metadata.indisprimary,
+        'exclusion', index_metadata.indisexclusion,
+        'immediate', index_metadata.indimmediate,
+        'clustered', index_metadata.indisclustered,
+        'valid', index_metadata.indisvalid,
+        'ready', index_metadata.indisready,
+        'live', index_metadata.indislive,
+        'replicaIdentity', index_metadata.indisreplident,
+        'keyAttributes', index_metadata.indnkeyatts,
+        'totalAttributes', index_metadata.indnatts,
+        'columns', COALESCE((
+          SELECT jsonb_agg(pg_get_indexdef(index_state.oid, position, true) ORDER BY position)
+          FROM generate_series(1, index_metadata.indnatts) AS position
+        ), '[]'::jsonb),
+        'partial', index_metadata.indpred IS NOT NULL
+      )
       ORDER BY namespace.nspname, index_state.relname
     )
     FROM pg_index AS index_metadata
     JOIN pg_class AS index_state ON index_state.oid = index_metadata.indexrelid
     JOIN pg_namespace AS namespace ON namespace.oid = index_state.relnamespace
+    JOIN pg_class AS table_state ON table_state.oid = index_metadata.indrelid
+    JOIN pg_namespace AS table_namespace ON table_namespace.oid = table_state.relnamespace
+    JOIN pg_am AS access_method ON access_method.oid = index_state.relam
     WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND namespace.nspname NOT LIKE 'pg_temp_%'
+      AND namespace.nspname NOT LIKE 'pg_toast%'
   ), '{}'::jsonb),
   'unvalidatedConstraints', (SELECT count(*) FROM pg_constraint WHERE NOT convalidated),
   'invalidIndexes', (SELECT count(*) FROM pg_index WHERE NOT indisvalid)
@@ -602,6 +686,7 @@ export function compareInventories(source, target) {
     "sequences",
     "extensions",
     "largeObjects",
+    "notNullColumns",
     "constraints",
     "indexes",
     "unvalidatedConstraints",
@@ -876,6 +961,34 @@ export function rollbackPreflightMatches(report, expectedExitCode) {
     [0, 20].includes(Number(expectedExitCode)) &&
     Number(report?.exitCode) === Number(expectedExitCode)
   );
+}
+
+export function rollbackPhaseCanRun(phase) {
+  return phase === ACCEPTANCE_PHASE || phase === "rollback_preflight";
+}
+
+export function buildMigrationFailureReport({
+  migrationId,
+  error,
+  rollbackError = null,
+  failedAt = new Date().toISOString(),
+}) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "Unknown error");
+  const rollbackMessage = rollbackError
+    ? rollbackError instanceof Error
+      ? rollbackError.message
+      : String(rollbackError)
+    : null;
+  return {
+    migrationId,
+    phase: "failed",
+    failedAt,
+    error: message,
+    rollback: rollbackMessage
+      ? { status: "failed", error: rollbackMessage }
+      : { status: "completed" },
+  };
 }
 
 async function migrate(context) {
@@ -1210,20 +1323,46 @@ async function migrate(context) {
       ...process.env,
     };
     context.childEnv = { ...process.env, ...context.baseEnv, ...restoredState };
-    if (!runExternalRollbackHook(context, migrationId)) {
-      compose(context, ["up", "-d", "db"]);
-      waitForComposeService(context, "db");
-      compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
-      waitForComposeService(context, "collab");
-      compose(context, [
-        "up",
-        "-d",
-        "--no-deps",
-        "--force-recreate",
-        "docmost",
-      ]);
-      waitForComposeService(context, "docmost");
-      runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+    let rollbackError = null;
+    try {
+      if (!runExternalRollbackHook(context, migrationId)) {
+        compose(context, ["up", "-d", "db"]);
+        waitForComposeService(context, "db");
+        compose(context, [
+          "up",
+          "-d",
+          "--no-deps",
+          "--force-recreate",
+          "collab",
+        ]);
+        waitForComposeService(context, "collab");
+        compose(context, [
+          "up",
+          "-d",
+          "--no-deps",
+          "--force-recreate",
+          "docmost",
+        ]);
+        waitForComposeService(context, "docmost");
+        runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+      }
+    } catch (candidateRollbackError) {
+      rollbackError = candidateRollbackError;
+    }
+    const failure = buildMigrationFailureReport({
+      migrationId,
+      error,
+      rollbackError,
+    });
+    atomicWrite(
+      resolve(migrationDir, "failure.json"),
+      `${JSON.stringify(failure, null, 2)}\n`,
+    );
+    if (rollbackError) {
+      throw new Error(
+        `Migration failed: ${failure.error}; automatic rollback failed: ${failure.rollback.error}`,
+        { cause: rollbackError },
+      );
     }
     throw error;
   }
@@ -1232,11 +1371,13 @@ async function migrate(context) {
 function rollback(context) {
   requireLinux();
   if (!context.yes) throw new Error("rollback requires --yes");
-  if (context.state.MIGRATION_PHASE !== ACCEPTANCE_PHASE) {
+  if (!rollbackPhaseCanRun(context.state.MIGRATION_PHASE)) {
     throw new Error(
       "Automatic rollback is allowed only during acceptance before ingress opens",
     );
   }
+  const resumingRollback =
+    context.state.MIGRATION_PHASE === "rollback_preflight";
   const previousVolume = context.state.PREVIOUS_POSTGRES_VOLUME_NAME;
   const previousImage = context.state.PREVIOUS_DOCMOST_IMAGE;
   const previousPostgresImage = context.state.PREVIOUS_POSTGRES_IMAGE;
@@ -1252,17 +1393,19 @@ function rollback(context) {
     throw new Error("Rollback metadata is incomplete");
   }
   inspectVolume(previousVolume);
-  compose(context, ["stop", "docmost", "collab", "db"]);
-  const targetState = {
-    ...context.state,
-    POSTGRES_IMAGE: previousPostgresImage,
-    POSTGRES_VOLUME_NAME: previousVolume,
-    MIGRATION_PHASE: "rollback_preflight",
-  };
-  delete targetState.DOCMOST_IMAGE;
-  atomicWrite(context.stateFile, serializeEnvFile(targetState));
-  context.state = targetState;
-  context.childEnv = { ...process.env, ...context.baseEnv, ...targetState };
+  if (!resumingRollback) {
+    compose(context, ["stop", "docmost", "collab", "db"]);
+    const targetState = {
+      ...context.state,
+      POSTGRES_IMAGE: previousPostgresImage,
+      POSTGRES_VOLUME_NAME: previousVolume,
+      MIGRATION_PHASE: "rollback_preflight",
+    };
+    delete targetState.DOCMOST_IMAGE;
+    atomicWrite(context.stateFile, serializeEnvFile(targetState));
+    context.state = targetState;
+    context.childEnv = { ...process.env, ...context.baseEnv, ...targetState };
+  }
   const usedExternalRollback = runExternalRollbackHook(
     context,
     context.state.MIGRATION_ID,

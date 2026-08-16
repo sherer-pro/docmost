@@ -2,15 +2,36 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCapacityPlan,
+  buildMigrationFailureReport,
+  commandState,
   compareInventories,
   migrationRetryState,
   parseArguments,
   parseEnvFile,
   rollbackPreflightMatches,
+  rollbackPhaseCanRun,
   rollbackState,
   serializeEnvFile,
   storageArchiveDockerArgs,
 } from "./production-db.mjs";
+
+test("preserves the primary migration error when automatic rollback fails", () => {
+  assert.deepEqual(
+    buildMigrationFailureReport({
+      migrationId: "20260816",
+      error: new Error("candidate inventory differs"),
+      rollbackError: new Error("legacy compose race"),
+      failedAt: "2026-08-16T08:30:00.000Z",
+    }),
+    {
+      migrationId: "20260816",
+      phase: "failed",
+      failedAt: "2026-08-16T08:30:00.000Z",
+      error: "candidate inventory differs",
+      rollback: { status: "failed", error: "legacy compose race" },
+    },
+  );
+});
 
 test("accepts pnpm's documented argument separator", () => {
   assert.deepEqual(parseArguments(["--", "preflight", "--json"]), {
@@ -76,6 +97,13 @@ test("rollback accepts only the recorded safe source preflight class", () => {
   assert.equal(rollbackPreflightMatches({ exitCode: 40 }, 40), false);
 });
 
+test("rollback can resume after its external hook was interrupted", () => {
+  assert.equal(rollbackPhaseCanRun("acceptance"), true);
+  assert.equal(rollbackPhaseCanRun("rollback_preflight"), true);
+  assert.equal(rollbackPhaseCanRun("rolled_back"), false);
+  assert.equal(rollbackPhaseCanRun("accepted"), false);
+});
+
 test("a rolled-back migration retries with the configured target image", () => {
   const state = {
     DOCMOST_IMAGE: `shererpro/docmost@sha256:${"b".repeat(64)}`,
@@ -87,9 +115,22 @@ test("a rolled-back migration retries with the configured target image", () => {
     POSTGRES_VOLUME_NAME: "docmost-postgres-16",
   });
   assert.equal(
-    migrationRetryState({ ...state, MIGRATION_PHASE: "acceptance" }).DOCMOST_IMAGE,
+    migrationRetryState({ ...state, MIGRATION_PHASE: "acceptance" })
+      .DOCMOST_IMAGE,
     state.DOCMOST_IMAGE,
   );
+});
+
+test("read-only retry checks use the configured target image", () => {
+  const state = {
+    DOCMOST_IMAGE: `shererpro/docmost@sha256:${"b".repeat(64)}`,
+    MIGRATION_PHASE: "rolled_back",
+    POSTGRES_VOLUME_NAME: "docmost-postgres-16",
+  };
+  assert.equal(commandState("preflight", state).DOCMOST_IMAGE, undefined);
+  assert.equal(commandState("plan", state).DOCMOST_IMAGE, undefined);
+  assert.equal(commandState("rollback", state), state);
+  assert.equal(commandState("accept", state), state);
 });
 
 test("archives root-owned storage with a privileged one-shot process", () => {
@@ -147,6 +188,7 @@ test("compares restored database inventories by invariant", () => {
     sequences: { "public.pages_id_seq": "12" },
     extensions: { pg_trgm: "1.6" },
     largeObjects: 0,
+    notNullColumns: { "public.pages.id": true },
     constraints: { "public.pages.pages_pkey": "PRIMARY KEY (id)" },
     indexes: { "public.pages_pkey": "CREATE UNIQUE INDEX pages_pkey" },
     unvalidatedConstraints: 0,
@@ -162,5 +204,12 @@ test("compares restored database inventories by invariant", () => {
       tables: { "public.pages": 11 },
     }),
     ["tables"],
+  );
+  assert.deepEqual(
+    compareInventories(inventory, {
+      ...inventory,
+      notNullColumns: {},
+    }),
+    ["notNullColumns"],
   );
 });
