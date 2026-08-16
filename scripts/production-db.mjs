@@ -251,7 +251,8 @@ function createContext(options) {
   const stateFile = resolve(options.stateFile);
   const backupDir = resolve(options.backupDir);
   const baseEnv = readEnvFile(envFile);
-  const state = readEnvFile(stateFile);
+  const storedState = readEnvFile(stateFile);
+  const state = commandState(options.command, storedState);
   const effective = { ...baseEnv, ...state, ...process.env };
 
   for (const key of [
@@ -306,6 +307,12 @@ function createContext(options) {
     effective,
     childEnv: { ...process.env, ...baseEnv, ...state },
   };
+}
+
+export function commandState(command, state) {
+  return ["preflight", "plan"].includes(command)
+    ? migrationRetryState(state)
+    : state;
 }
 
 function runOperatorHook(context, key, migrationId) {
