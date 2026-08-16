@@ -28,7 +28,7 @@ import {
   collabExtensions,
   createMainExtensions,
 } from "@/features/editor/extensions/extensions";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 import {
   currentUserAtom,
@@ -67,7 +67,10 @@ import { extractPageSlugId } from "@/lib";
 import { FIVE_MINUTES } from "@/lib/constants.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { resolvePageEditMode } from "@/features/user/utils/page-edit-mode.ts";
-import { searchSpotlight } from "@/features/search/constants.ts";
+import {
+  searchSpotlight,
+  searchSpotlightIntentAtom,
+} from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { usePageEditorInteractions } from "@/features/editor/hooks/use-page-editor-interactions";
 import { DictionaryHighlightLayer } from "@/features/dictionary/components/dictionary-highlight-layer";
@@ -135,6 +138,7 @@ export default function PageEditor({
   const [, setEditor] = useAtom(pageEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
   const [, setUnsyncedChanges] = useAtom(pageEditorUnsyncedChangesAtom);
+  const setSearchSpotlightIntent = useSetAtom(searchSpotlightIntentAtom);
   const [isLocalSynced, setIsLocalSynced] = useState(false);
   const [isRemoteSynced, setIsRemoteSynced] = useState(false);
   const [yjsConnectionStatus, setYjsConnectionStatus] = useAtom(
@@ -192,9 +196,18 @@ export default function PageEditor({
     () => getEnabledTagDefinitions(workspace?.settings?.tags),
     [workspace?.settings?.tags],
   );
+  const handleSearchTag = useCallback(
+    (tag: "tbd" | "todo" | "done") => {
+      if (!spaceId) return;
+      setSearchSpotlightIntent({ intent: { spaceId, tags: [tag] } });
+      searchSpotlight.open();
+    },
+    [setSearchSpotlightIntent, spaceId],
+  );
   const mainEditorExtensions = useMemo(
-    () => createMainExtensions({ tagDefinitions }),
-    [tagDefinitions],
+    () =>
+      createMainExtensions({ tagDefinitions, onSearchTag: handleSearchTag }),
+    [handleSearchTag, tagDefinitions],
   );
   const editorExtensions = useMemo(
     () => [...mainEditorExtensions, DictionaryHighlightExtension],

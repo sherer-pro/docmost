@@ -4,10 +4,12 @@ import {
   IPageSearch,
   IPageSearchParams,
   IPageSearchLabel,
+  ITagSearchFacet,
   ISuggestionResult,
   SearchLabelParams,
   SearchSuggestionParams,
-} from '@/features/search/types/search.types';
+  SearchTagFacetParams,
+} from "@/features/search/types/search.types";
 import { IPagination } from "@/lib/types";
 
 export async function searchPage(
@@ -27,14 +29,20 @@ export async function searchSuggestions(
 export async function searchShare(
   params: IPageSearchParams,
 ): Promise<IPageSearch[]> {
-  const req = await api.post<{ items: IPageSearch[] }>("/search/share-search", params);
+  const req = await api.post<{ items: IPageSearch[] }>(
+    "/search/share-search",
+    params,
+  );
   return req.data.items;
 }
 
 export async function searchAttachments(
   params: IPageSearchParams,
 ): Promise<IAttachmentSearch[]> {
-  const req = await api.post<{ items: IAttachmentSearch[] }>("/search/attachments", params);
+  const req = await api.post<{ items: IAttachmentSearch[] }>(
+    "/search/attachments",
+    params,
+  );
   return req.data.items;
 }
 
@@ -47,5 +55,15 @@ export async function searchLabels(
     query: params.query,
     spaceId: params.spaceId,
   });
+  return req.data.items;
+}
+
+export async function searchTagFacets(
+  params: SearchTagFacetParams,
+): Promise<ITagSearchFacet[]> {
+  const req = await api.post<{ items: ITagSearchFacet[] }>(
+    "/search/tag-facets",
+    params,
+  );
   return req.data.items;
 }

@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 const ACCESS_SENSITIVE_SEARCH_QUERY_ROOTS = [
   "unified-search",
   "page-search",
+  "search-tag-facets",
   "attachment-search",
   "search-suggestion",
 ] as const;

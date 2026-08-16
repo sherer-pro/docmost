@@ -52,9 +52,13 @@ function syncArchivedSpaceQueries(queryClient: QueryClient, space: ISpace) {
 
   queryClient.invalidateQueries({
     predicate: (item) =>
-      ["spaces", "recent-changes", "page-search", "search-suggestion"].includes(
-        item.queryKey[0] as string,
-      ),
+      [
+        "spaces",
+        "recent-changes",
+        "page-search",
+        "search-tag-facets",
+        "search-suggestion",
+      ].includes(item.queryKey[0] as string),
   });
 }
 

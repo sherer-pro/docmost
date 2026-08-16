@@ -1,11 +1,12 @@
 import { mergeAttributes, Node, nodeInputRule } from '@tiptap/core';
 import { builtInTagDefinitions, getTagLabel, getValidTagValue } from './utils';
-import type { TagDefinition, TagValue } from './utils';
+import type { BuiltInTagValue, TagDefinition, TagValue } from './utils';
 
 export interface TagOptions {
   HTMLAttributes: Record<string, any>;
   view: any;
   tagDefinitions: readonly TagDefinition[];
+  onSearch?: (value: BuiltInTagValue) => void;
 }
 
 export interface TagAttributes {
@@ -45,6 +46,7 @@ export const Tag = Node.create<TagOptions>({
       HTMLAttributes: {},
       view: null,
       tagDefinitions: builtInTagDefinitions,
+      onSearch: undefined,
     };
   },
 

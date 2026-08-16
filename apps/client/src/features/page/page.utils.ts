@@ -1,5 +1,5 @@
 import slugify from "@sindresorhus/slugify";
-import { resolvePageDatabaseIds } from './page-id-adapter.ts';
+import { resolvePageDatabaseIds } from "./page-id-adapter.ts";
 
 const buildPageSlug = (pageSlugId: string, pageTitle?: string): string => {
   const titleSlug = slugify(pageTitle?.substring(0, 70) || "untitled", {
@@ -20,8 +20,10 @@ export const buildDatabaseUrl = (
   spaceSlug: string,
   pageSlugId: string,
   pageTitle?: string,
+  anchorId?: string,
 ): string => {
-  return `/s/${spaceSlug}/db/${buildPageSlug(pageSlugId, pageTitle)}`;
+  const url = `/s/${spaceSlug}/db/${buildPageSlug(pageSlugId, pageTitle)}`;
+  return anchorId ? `${url}#${encodeURIComponent(anchorId)}` : url;
 };
 
 /**
@@ -58,7 +60,7 @@ export const buildPageUrl = (
   } else {
     url = `/s/${spaceName}/p/${buildPageSlug(pageSlugId, pageTitle)}`;
   }
-  return anchorId ? `${url}#${anchorId}` : url;
+  return anchorId ? `${url}#${encodeURIComponent(anchorId)}` : url;
 };
 
 export const buildSharedPageUrl = (opts: {

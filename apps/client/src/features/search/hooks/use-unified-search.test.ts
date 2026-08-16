@@ -38,12 +38,12 @@ describe("getUnifiedSearchType", () => {
     ).toBe(true);
   });
 
-  it("enables page search when a tag is selected without a text query", () => {
+  it("enables page search when tags are selected without a text query", () => {
     expect(
       isUnifiedSearchEnabled({
         query: "",
         contentType: "page",
-        tag: "done",
+        tags: ["tbd", "todo"],
       }),
     ).toBe(true);
   });
@@ -64,7 +64,7 @@ describe("getUnifiedSearchType", () => {
         query: "report",
         contentType: "attachment",
         labelId: "label-1",
-        tag: "done",
+        tags: ["done"],
         spaceId: "space-1",
       }),
     ).toEqual({

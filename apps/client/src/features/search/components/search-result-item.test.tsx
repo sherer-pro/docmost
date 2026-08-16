@@ -10,9 +10,14 @@ vi.mock("react-i18next", () => ({
 }));
 
 function getDetailsChildren(element: any) {
-  const group = element.props.children;
+  const headerAction = React.Children.toArray(element.props.children)[0] as any;
+  const group = headerAction.props.children;
   const details = group.props.children[1];
   return React.Children.toArray(details.props.children).filter(Boolean);
+}
+
+function getHeaderAction(element: any) {
+  return React.Children.toArray(element.props.children)[0] as any;
 }
 
 describe("SearchResultItem", () => {
@@ -29,6 +34,9 @@ describe("SearchResultItem", () => {
       updatedAt: new Date(),
       rank: 1,
       highlight: "",
+      contentKind: "database" as const,
+      tagMatchCount: 0,
+      tagSnippets: [],
       breadcrumbs: [
         { id: "root", title: "Root" },
         { id: "parent", title: "Parent" },
@@ -46,7 +54,7 @@ describe("SearchResultItem", () => {
       showSpace: true,
     });
 
-    expect(element.props.to).toBe(
+    expect(getHeaderAction(element).props.to).toBe(
       buildDatabaseUrl("engineering", "slug-1", "Database Page"),
     );
 
@@ -71,6 +79,9 @@ describe("SearchResultItem", () => {
       updatedAt: new Date(),
       rank: 1,
       highlight: "",
+      contentKind: "page" as const,
+      tagMatchCount: 0,
+      tagSnippets: [],
       breadcrumbs: [],
       space: {
         id: "space-1",
@@ -85,7 +96,7 @@ describe("SearchResultItem", () => {
       showSpace: true,
     });
 
-    expect(element.props.to).toBe(
+    expect(getHeaderAction(element).props.to).toBe(
       buildPageUrl("engineering", "slug-2", "Regular Page"),
     );
   });
@@ -103,6 +114,9 @@ describe("SearchResultItem", () => {
       updatedAt: new Date(),
       rank: 1,
       highlight: "",
+      contentKind: "page" as const,
+      tagMatchCount: 0,
+      tagSnippets: [],
       space: {
         id: "space-1",
         name: "Engineering",
@@ -139,8 +153,16 @@ describe("SearchResultItem", () => {
       updatedAt: new Date(),
       rank: 1,
       highlight: "",
+      contentKind: "page" as const,
+      tagMatchCount: 0,
+      tagSnippets: [],
       labels: [
-        { id: "label-1", name: "urgent", spaceId: "space-1", type: "page" as const },
+        {
+          id: "label-1",
+          name: "urgent",
+          spaceId: "space-1",
+          type: "page" as const,
+        },
       ],
       space: {
         id: "space-1",
@@ -215,5 +237,51 @@ describe("SearchResultItem", () => {
       "_blank",
     );
     vi.unstubAllGlobals();
+  });
+
+  it("renders anchored tag snippets separately from the document heading", () => {
+    const result = {
+      id: "page-1",
+      title: "Tagged Page",
+      icon: "",
+      parentPageId: null,
+      databaseId: null,
+      contentKind: "page" as const,
+      slugId: "slug-5",
+      creatorId: "user-1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rank: 1,
+      highlight: "",
+      tagMatchCount: 2,
+      tagSnippets: [
+        {
+          anchorId: "block-1",
+          text: "Review TODO",
+          matches: [{ start: 7, end: 11, value: "todo" }],
+        },
+      ],
+      space: {
+        id: "space-1",
+        name: "Engineering",
+        slug: "engineering",
+      },
+    };
+
+    const element = SearchResultItem({
+      result,
+      isAttachmentResult: false,
+    });
+    const children = React.Children.toArray(element.props.children) as any[];
+    const snippets = React.Children.toArray(children[1].props.children);
+    const snippetElement = snippets[0] as any;
+    const tagSnippet = snippetElement.type(snippetElement.props);
+
+    expect(getHeaderAction(element).props.to).toBe(
+      buildPageUrl("engineering", "slug-5", "Tagged Page"),
+    );
+    expect(tagSnippet.props.href ?? tagSnippet.props.to).toBe(
+      buildPageUrl("engineering", "slug-5", "Tagged Page", "block-1"),
+    );
   });
 });
