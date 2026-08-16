@@ -4,6 +4,8 @@ import {
   buildCapacityPlan,
   compareInventories,
   parseEnvFile,
+  rollbackPreflightMatches,
+  rollbackState,
   serializeEnvFile,
 } from "./production-db.mjs";
 
@@ -31,6 +33,32 @@ test("serializes only safe non-secret deployment state values", () => {
     () => serializeEnvFile({ VALUE: "$(unsafe)" }),
     /unsupported characters/u,
   );
+});
+
+test("rollback state restores both application and PostgreSQL images", () => {
+  assert.deepEqual(
+    rollbackState(
+      { state: { MIGRATION_PHASE: "acceptance" } },
+      "docmost-postgres-16",
+      `shererpro/docmost@sha256:${"a".repeat(64)}`,
+      `postgres@sha256:${"b".repeat(64)}`,
+      "20260816",
+    ),
+    {
+      DOCMOST_IMAGE: `shererpro/docmost@sha256:${"a".repeat(64)}`,
+      POSTGRES_IMAGE: `postgres@sha256:${"b".repeat(64)}`,
+      POSTGRES_VOLUME_NAME: "docmost-postgres-16",
+      MIGRATION_ID: "20260816",
+      MIGRATION_PHASE: "rolled_back",
+    },
+  );
+});
+
+test("rollback accepts only the recorded safe source preflight class", () => {
+  assert.equal(rollbackPreflightMatches({ exitCode: 20 }, 20), true);
+  assert.equal(rollbackPreflightMatches({ exitCode: 0 }, 20), false);
+  assert.equal(rollbackPreflightMatches({ exitCode: 30 }, 30), false);
+  assert.equal(rollbackPreflightMatches({ exitCode: 40 }, 40), false);
 });
 
 test("requires capacity for both backup and candidate volume", () => {

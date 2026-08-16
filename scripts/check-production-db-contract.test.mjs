@@ -40,3 +40,16 @@ test("rejects a fail-open production startup chain", async () => {
     ),
   );
 });
+
+test("requires the recorded PostgreSQL image rollback override", async () => {
+  const input = await fixture();
+  input.productionCompose = input.productionCompose.replace(
+    `\${POSTGRES_IMAGE:-${POSTGRES_IMAGE}}`,
+    POSTGRES_IMAGE,
+  );
+  assert.ok(
+    validateProductionDatabaseContract(input).some((error) =>
+      error.includes("rollback PostgreSQL image"),
+    ),
+  );
+});

@@ -97,7 +97,10 @@ services:
     restart: "no"
 
   db:
-    image: postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    # Оператор миграции временно возвращает сюда точный прежний image при rollback.
+    # Дефолт остаётся каноническим PostgreSQL 18, поэтому обычный deploy не зависит
+    # от state-файла, а физический том PostgreSQL 16 никогда не открывается версией 18.
+    image: "${POSTGRES_IMAGE:-postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636}"
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-docmost}"
       POSTGRES_USER: "${POSTGRES_USER:-docmost}"

@@ -256,6 +256,14 @@ function createContext(options) {
     const hook = assertSafeAbsolutePath(effective[key], key, repositoryRoot);
     accessSync(hook, fsConstants.X_OK);
   }
+  if (effective.DOCMOST_ROLLBACK_HOOK) {
+    const hook = assertSafeAbsolutePath(
+      effective.DOCMOST_ROLLBACK_HOOK,
+      "DOCMOST_ROLLBACK_HOOK",
+      repositoryRoot,
+    );
+    accessSync(hook, fsConstants.X_OK);
+  }
 
   return {
     ...options,
@@ -271,7 +279,7 @@ function createContext(options) {
   };
 }
 
-function runMaintenanceHook(context, key, migrationId) {
+function runOperatorHook(context, key, migrationId) {
   const hook = context.effective[key];
   commandResult(hook, [], {
     env: {
@@ -281,6 +289,12 @@ function runMaintenanceHook(context, key, migrationId) {
       DOCMOST_MIGRATION_ID: migrationId,
     },
   });
+}
+
+function runExternalRollbackHook(context, migrationId) {
+  if (!context.effective.DOCMOST_ROLLBACK_HOOK) return false;
+  runOperatorHook(context, "DOCMOST_ROLLBACK_HOOK", migrationId);
+  return true;
 }
 
 function parseLastJson(source) {
@@ -718,11 +732,11 @@ function composeNetwork(databaseInspection) {
   return preferred || names[0];
 }
 
-function runningApplicationImage(context) {
-  const id = composeServiceContainer(context, "docmost");
+function runningServiceImage(context, service, label) {
+  const id = composeServiceContainer(context, service);
   if (!id)
     throw new Error(
-      "The current Docmost container is required for rollback metadata",
+      `The current ${label} container is required for rollback metadata`,
     );
   const container = JSON.parse(
     commandResult("docker", ["inspect", id]).stdout,
@@ -731,6 +745,14 @@ function runningApplicationImage(context) {
     commandResult("docker", ["image", "inspect", container.Image]).stdout,
   )[0];
   return image.RepoDigests?.[0] || container.Config?.Image;
+}
+
+function runningApplicationImage(context) {
+  return runningServiceImage(context, "docmost", "Docmost");
+}
+
+function runningDatabaseImage(context) {
+  return runningServiceImage(context, "db", "PostgreSQL");
 }
 
 function candidateDatabaseUrl(context, containerName) {
@@ -794,14 +816,28 @@ function cleanupCandidate(containerName) {
   });
 }
 
-function rollbackState(context, previousVolume, previousImage, migrationId) {
+export function rollbackState(
+  context,
+  previousVolume,
+  previousImage,
+  previousPostgresImage,
+  migrationId,
+) {
   return {
     ...context.state,
     DOCMOST_IMAGE: previousImage,
+    POSTGRES_IMAGE: previousPostgresImage,
     POSTGRES_VOLUME_NAME: previousVolume,
     MIGRATION_ID: migrationId,
     MIGRATION_PHASE: "rolled_back",
   };
+}
+
+export function rollbackPreflightMatches(report, expectedExitCode) {
+  return (
+    [0, 20].includes(Number(expectedExitCode)) &&
+    Number(report?.exitCode) === Number(expectedExitCode)
+  );
 }
 
 async function migrate(context) {
@@ -837,6 +873,7 @@ async function migrate(context) {
   assertSafeName(candidateContainer, "Candidate container");
   const previousImage = runningApplicationImage(context);
   const database = ensureRunningDatabase(context);
+  const previousPostgresImage = runningDatabaseImage(context);
   const network = composeNetwork(database.inspected);
   const dumpPath = resolve(migrationDir, "database.dump");
   const storagePath = resolve(migrationDir, "storage.tar.gz");
@@ -855,6 +892,7 @@ async function migrate(context) {
         sourceVolume,
         candidateVolume,
         previousImage,
+        previousPostgresImage,
         targetImage: context.baseEnv.DOCMOST_IMAGE,
         postgresImage: POSTGRES_IMAGE,
         plan,
@@ -865,7 +903,7 @@ async function migrate(context) {
   );
 
   try {
-    runMaintenanceHook(context, "DOCMOST_MAINTENANCE_ENTER_HOOK", migrationId);
+    runOperatorHook(context, "DOCMOST_MAINTENANCE_ENTER_HOOK", migrationId);
     maintenanceEntered = true;
     compose(context, ["stop", "docmost", "collab"]);
     writersStopped = true;
@@ -943,6 +981,7 @@ async function migrate(context) {
           sourceVolume,
           candidateVolume,
           previousImage,
+          previousPostgresImage,
           targetImage: context.baseEnv.DOCMOST_IMAGE,
           postgresImage: POSTGRES_IMAGE,
           plan,
@@ -1044,7 +1083,10 @@ async function migrate(context) {
     const nextState = {
       ...context.state,
       POSTGRES_VOLUME_NAME: candidateVolume,
+      POSTGRES_IMAGE,
       PREVIOUS_POSTGRES_VOLUME_NAME: sourceVolume,
+      PREVIOUS_POSTGRES_IMAGE: previousPostgresImage,
+      PREVIOUS_POSTGRES_PREFLIGHT_EXIT_CODE: String(plan.preflight.exitCode),
       PREVIOUS_DOCMOST_IMAGE: previousImage,
       MIGRATION_ID: migrationId,
       MIGRATION_PHASE: "cutover",
@@ -1079,6 +1121,7 @@ async function migrate(context) {
           sourceVolume,
           candidateVolume,
           previousImage,
+          previousPostgresImage,
           targetImage: context.baseEnv.DOCMOST_IMAGE,
           postgresImage: POSTGRES_IMAGE,
           plan,
@@ -1111,11 +1154,7 @@ async function migrate(context) {
     rmSync(appSecretPath, { force: true });
     if (!writersStopped) {
       if (maintenanceEntered) {
-        runMaintenanceHook(
-          context,
-          "DOCMOST_MAINTENANCE_EXIT_HOOK",
-          migrationId,
-        );
+        runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
       }
       throw error;
     }
@@ -1123,6 +1162,7 @@ async function migrate(context) {
       context,
       sourceVolume,
       previousImage,
+      previousPostgresImage,
       migrationId,
     );
     atomicWrite(statePath, serializeEnvFile(restoredState));
@@ -1133,13 +1173,21 @@ async function migrate(context) {
       ...process.env,
     };
     context.childEnv = { ...process.env, ...context.baseEnv, ...restoredState };
-    compose(context, ["up", "-d", "db"]);
-    waitForComposeService(context, "db");
-    compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
-    waitForComposeService(context, "collab");
-    compose(context, ["up", "-d", "--no-deps", "--force-recreate", "docmost"]);
-    waitForComposeService(context, "docmost");
-    runMaintenanceHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+    if (!runExternalRollbackHook(context, migrationId)) {
+      compose(context, ["up", "-d", "db"]);
+      waitForComposeService(context, "db");
+      compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
+      waitForComposeService(context, "collab");
+      compose(context, [
+        "up",
+        "-d",
+        "--no-deps",
+        "--force-recreate",
+        "docmost",
+      ]);
+      waitForComposeService(context, "docmost");
+      runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+    }
     throw error;
   }
 }
@@ -1154,13 +1202,23 @@ function rollback(context) {
   }
   const previousVolume = context.state.PREVIOUS_POSTGRES_VOLUME_NAME;
   const previousImage = context.state.PREVIOUS_DOCMOST_IMAGE;
-  if (!previousVolume || !previousImage) {
+  const previousPostgresImage = context.state.PREVIOUS_POSTGRES_IMAGE;
+  const previousPreflightExitCode = Number(
+    context.state.PREVIOUS_POSTGRES_PREFLIGHT_EXIT_CODE,
+  );
+  if (
+    !previousVolume ||
+    !previousImage ||
+    !previousPostgresImage ||
+    ![0, 20].includes(previousPreflightExitCode)
+  ) {
     throw new Error("Rollback metadata is incomplete");
   }
   inspectVolume(previousVolume);
   compose(context, ["stop", "docmost", "collab", "db"]);
   const targetState = {
     ...context.state,
+    POSTGRES_IMAGE: previousPostgresImage,
     POSTGRES_VOLUME_NAME: previousVolume,
     MIGRATION_PHASE: "rollback_preflight",
   };
@@ -1168,36 +1226,49 @@ function rollback(context) {
   atomicWrite(context.stateFile, serializeEnvFile(targetState));
   context.state = targetState;
   context.childEnv = { ...process.env, ...context.baseEnv, ...targetState };
-  compose(context, ["up", "-d", "db"]);
-  waitForComposeService(context, "db");
+  const usedExternalRollback = runExternalRollbackHook(
+    context,
+    context.state.MIGRATION_ID,
+  );
+  if (!usedExternalRollback) {
+    compose(context, ["up", "-d", "db"]);
+    waitForComposeService(context, "db");
+  }
   const report = runPreflight(context, false);
-  if (report.exitCode !== 0) {
-    throw new Error("Previous database failed rollback preflight");
+  if (!rollbackPreflightMatches(report, previousPreflightExitCode)) {
+    throw new Error(
+      "Previous database rollback preflight differs from the recorded source result",
+    );
   }
 
   const finalState = rollbackState(
     context,
     previousVolume,
     previousImage,
+    previousPostgresImage,
     context.state.MIGRATION_ID,
   );
   atomicWrite(context.stateFile, serializeEnvFile(finalState));
   context.state = finalState;
   context.effective = { ...context.baseEnv, ...finalState, ...process.env };
   context.childEnv = { ...process.env, ...context.baseEnv, ...finalState };
-  compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
-  waitForComposeService(context, "collab");
-  compose(context, ["up", "-d", "--no-deps", "--force-recreate", "docmost"]);
-  waitForComposeService(context, "docmost");
-  runMaintenanceHook(
-    context,
-    "DOCMOST_MAINTENANCE_EXIT_HOOK",
-    context.state.MIGRATION_ID,
-  );
+  if (!usedExternalRollback) {
+    compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
+    waitForComposeService(context, "collab");
+    compose(context, ["up", "-d", "--no-deps", "--force-recreate", "docmost"]);
+    waitForComposeService(context, "docmost");
+    runOperatorHook(
+      context,
+      "DOCMOST_MAINTENANCE_EXIT_HOOK",
+      context.state.MIGRATION_ID,
+    );
+  }
   return {
     status: "rolled_back",
     activeVolume: previousVolume,
     activeImage: previousImage,
+    activePostgresImage: previousPostgresImage,
+    externalRollback: usedExternalRollback,
   };
 }
 
@@ -1228,7 +1299,7 @@ function accept(context) {
   if (openingState !== context.state) {
     atomicWrite(context.stateFile, serializeEnvFile(openingState));
   }
-  runMaintenanceHook(
+  runOperatorHook(
     context,
     "DOCMOST_MAINTENANCE_EXIT_HOOK",
     context.state.MIGRATION_ID,

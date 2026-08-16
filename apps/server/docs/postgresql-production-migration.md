@@ -25,6 +25,8 @@ The production host needs these files and resources:
 - one external PostgreSQL volume and one external Docmost file-storage volume;
 - the external ingress network named by `EDGE_NETWORK_NAME`;
 - executable maintenance enter/exit hooks outside the repository.
+- an executable rollback hook when the previous application image is not
+  compatible with the current production Compose topology.
 
 An initial state file is:
 
@@ -46,6 +48,13 @@ be idempotent:
   response and stop new WebSocket upgrades before it exits successfully.
 - `DOCMOST_MAINTENANCE_EXIT_HOOK` must restore normal ingress routing. It is
   called only after the selected API and collaboration containers are healthy.
+- optional `DOCMOST_ROLLBACK_HOOK` is required for legacy installations whose
+  previous image cannot run the dedicated collaboration command or the current
+  preflight entry point. It must restore the saved legacy Compose stack with
+  the untouched source volume and source PostgreSQL image, restore the previous
+  ingress, verify application and database health, and return only when the
+  rollback is usable. When configured, it owns rollback ingress restoration;
+  the maintenance exit hook is not called afterward.
 
 Do not put credentials in hook paths, arguments, output, or implementation.
 
@@ -121,6 +130,10 @@ Before the maintenance window:
 4. Confirm the old PostgreSQL volume has never been started with Alpine/musl.
 5. Make an off-host copy of the backup after it is created.
 6. Confirm the Draw.io release gate and every other release blocker separately.
+7. Inspect the previous application image for the current collaboration and
+   preflight entry points. If either is absent, configure and rehearse
+   `DOCMOST_ROLLBACK_HOOK` against the preserved legacy Compose directory before
+   entering maintenance.
 
 Start the migration:
 
@@ -145,6 +158,12 @@ The operator performs these fail-closed steps:
 
 The backup directory and source volume are never automatically deleted. Keep
 them for at least 14 days and until an independent restore has been verified.
+The operator also records the exact running source PostgreSQL image and its
+preflight exit class before cutover. Rollback restores that image together with
+the source volume; it never opens a PostgreSQL 16 physical volume with the
+PostgreSQL 18 binary. Exit `20` is valid during rollback only when it exactly
+matches the recorded source preflight result; unknown topology exits `30` and
+`40` remain blocked.
 If a dump is corrupt, disk space is insufficient, restore is interrupted,
 inventory differs, or postflight fails, the candidate is not selected. The
 operator restores the previous image/volume pair and reopens ingress only after
