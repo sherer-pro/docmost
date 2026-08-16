@@ -204,6 +204,31 @@ function composeArgs(context, ...args) {
   ];
 }
 
+export function storageArchiveDockerArgs({
+  storageVolume,
+  migrationDir,
+  image,
+}) {
+  return [
+    "run",
+    "--rm",
+    "--user",
+    "0:0",
+    "--mount",
+    `type=volume,src=${storageVolume},dst=/source,readonly`,
+    "--mount",
+    `type=bind,src=${migrationDir},dst=/backup`,
+    "--entrypoint",
+    "tar",
+    image,
+    "-C",
+    "/source",
+    "-czf",
+    "/backup/storage.tar.gz",
+    ".",
+  ];
+}
+
 function compose(context, args, options = {}) {
   return commandResult("docker", composeArgs(context, ...args), {
     env: context.childEnv,
@@ -944,22 +969,14 @@ async function migrate(context) {
       dumpPath,
       { env: context.childEnv },
     );
-    commandResult("docker", [
-      "run",
-      "--rm",
-      "--mount",
-      `type=volume,src=${context.effective.DOCMOST_STORAGE_VOLUME_NAME},dst=/source,readonly`,
-      "--mount",
-      `type=bind,src=${migrationDir},dst=/backup`,
-      "--entrypoint",
-      "tar",
-      context.baseEnv.DOCMOST_IMAGE,
-      "-C",
-      "/source",
-      "-czf",
-      "/backup/storage.tar.gz",
-      ".",
-    ]);
+    commandResult(
+      "docker",
+      storageArchiveDockerArgs({
+        storageVolume: context.effective.DOCMOST_STORAGE_VOLUME_NAME,
+        migrationDir,
+        image: context.baseEnv.DOCMOST_IMAGE,
+      }),
+    );
     commandResult("docker", [
       "run",
       "--rm",
