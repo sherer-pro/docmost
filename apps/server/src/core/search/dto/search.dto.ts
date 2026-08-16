@@ -1,8 +1,12 @@
 import {
+  ArrayMaxSize,
+  ArrayUnique,
   Max,
   MaxLength,
   Min,
   IsBoolean,
+  IsArray,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -24,15 +28,20 @@ function parseOptionalBoolean(value: unknown): unknown {
   return value;
 }
 
+export const BUILT_IN_SEARCH_TAGS = ['tbd', 'todo', 'done'] as const;
+export type BuiltInSearchTag = (typeof BUILT_IN_SEARCH_TAGS)[number];
+
+function hasDocumentFilter(dto: SearchDTO): boolean {
+  return Boolean(dto.labelId || dto.tag || dto.tags?.length);
+}
+
 export class SearchDTO {
   @ValidateIf((dto: SearchDTO) =>
     typeof dto.query === 'string'
-      ? dto.query.trim().length > 0 || (!dto.labelId && !dto.tag)
-      : !dto.labelId && !dto.tag,
+      ? dto.query.trim().length > 0 || !hasDocumentFilter(dto)
+      : !hasDocumentFilter(dto),
   )
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   @IsString()
   @MaxLength(512)
@@ -63,6 +72,20 @@ export class SearchDTO {
   tag?: string;
 
   @IsOptional()
+  @Transform(({ value }) =>
+    Array.isArray(value)
+      ? value.map((tag) =>
+          typeof tag === 'string' ? tag.trim().toLowerCase() : tag,
+        )
+      : value,
+  )
+  @IsArray()
+  @ArrayMaxSize(BUILT_IN_SEARCH_TAGS.length)
+  @ArrayUnique()
+  @IsIn(BUILT_IN_SEARCH_TAGS, { each: true })
+  tags?: BuiltInSearchTag[];
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
@@ -85,6 +108,12 @@ export class SearchShareDTO extends SearchDTO {
   @IsOptional()
   @IsUUID()
   spaceId: string;
+}
+
+export class SearchTagFacetDTO {
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
 }
 
 export class SearchSuggestionDTO {

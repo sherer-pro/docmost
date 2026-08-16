@@ -2,12 +2,14 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { sql } from 'kysely';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { SearchDTO } from './dto/search.dto';
 import {
   AttachmentSearchResponseDto,
+  SearchContentKind,
   SearchResponseDto,
 } from './dto/search-response.dto';
 import {
@@ -130,6 +132,8 @@ export class TypesenseSearchService {
             textContent,
             row.title,
           ]),
+          tagMatchCount: 0,
+          tagSnippets: [],
         } as SearchResponseDto);
         if (results.length >= limit) {
           break;
@@ -279,6 +283,25 @@ export class TypesenseSearchService {
         'pages.textContent',
       ])
       .select((eb) => this.pageRepo.withDatabaseId(eb))
+      .select(
+        sql<SearchContentKind>`
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM databases AS search_database
+              WHERE search_database.page_id = pages.id
+                AND search_database.deleted_at IS NULL
+            ) THEN 'database'
+            WHEN EXISTS (
+              SELECT 1
+              FROM database_rows AS search_database_row
+              WHERE search_database_row.page_id = pages.id
+                AND search_database_row.archived_at IS NULL
+            ) THEN 'databaseRow'
+            ELSE 'page'
+          END
+        `.as('contentKind'),
+      )
       .select((eb) => this.pageRepo.withSpace(eb))
       .where('pages.id', 'in', ids)
       .where('pages.workspaceId', '=', workspaceId)
@@ -410,11 +433,7 @@ export class TypesenseSearchService {
   ): string {
     const needles = [
       query.trim().toLocaleLowerCase(),
-      ...query
-        .trim()
-        .toLocaleLowerCase()
-        .split(/\s+/)
-        .filter(Boolean),
+      ...query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean),
     ];
 
     for (const candidate of candidates) {

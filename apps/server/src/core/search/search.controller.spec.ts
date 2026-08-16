@@ -13,6 +13,7 @@ describe('SearchController', () => {
   let searchService: {
     searchPage: jest.Mock;
     searchAttachments: jest.Mock;
+    getTagFacets: jest.Mock;
   };
   let typesenseSearchService: {
     searchPages: jest.Mock;
@@ -25,6 +26,7 @@ describe('SearchController', () => {
     searchService = {
       searchPage: jest.fn().mockResolvedValue({ items: [] }),
       searchAttachments: jest.fn().mockResolvedValue({ items: [] }),
+      getTagFacets: jest.fn().mockResolvedValue({ items: [] }),
     };
     typesenseSearchService = {
       searchPages: jest.fn().mockResolvedValue({ items: [] }),
@@ -91,6 +93,33 @@ describe('SearchController', () => {
 
     expect(searchService.searchPage).toHaveBeenCalled();
     expect(typesenseSearchService.searchPages).not.toHaveBeenCalled();
+  });
+
+  it('keeps multi-tag page search on PostgreSQL', async () => {
+    environmentService.getSearchDriver.mockReturnValue('typesense');
+
+    await controller.pageSearch(
+      { query: '', tags: ['tbd', 'todo'] } as any,
+      { id: 'user-1' } as any,
+      { id: 'workspace-1' } as any,
+    );
+
+    expect(searchService.searchPage).toHaveBeenCalled();
+    expect(typesenseSearchService.searchPages).not.toHaveBeenCalled();
+  });
+
+  it('returns access-filtered tag facets for the selected space', async () => {
+    await controller.tagFacets(
+      { spaceId: '11111111-1111-4111-8111-111111111111' },
+      { id: 'user-1' } as any,
+      { id: 'workspace-1' } as any,
+    );
+
+    expect(pageAccessService.hasAnyReadablePageInSpace).toHaveBeenCalled();
+    expect(searchService.getTagFacets).toHaveBeenCalledWith(
+      { spaceId: '11111111-1111-4111-8111-111111111111' },
+      { userId: 'user-1', workspaceId: 'workspace-1' },
+    );
   });
 
   it('routes attachment content search through Typesense when enabled', async () => {

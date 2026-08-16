@@ -917,6 +917,7 @@ export interface Pages {
   settings: Generated<Json | null>;
   slugId: string;
   spaceId: string;
+  tagValues: Generated<string[]>;
   textContent: string | null;
   templateArchivedAt: Timestamp | null;
   templateKind: string | null;

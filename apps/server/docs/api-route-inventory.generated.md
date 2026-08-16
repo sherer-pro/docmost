@@ -227,6 +227,7 @@
 | POST | `/search/attachments` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/share-search` | `apps/server/src/core/search/search.controller.ts` |
 | GET | `/search/suggest` | `apps/server/src/core/search/search.controller.ts` |
+| POST | `/search/tag-facets` | `apps/server/src/core/search/search.controller.ts` |
 | GET | `/sessions` | `apps/server/src/core/session/session.controller.ts` |
 | POST | `/sessions/revoke` | `apps/server/src/core/session/session.controller.ts` |
 | POST | `/sessions/revoke-all` | `apps/server/src/core/session/session.controller.ts` |
