@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCapacityPlan,
+  buildMigrationFailureReport,
   compareInventories,
   migrationRetryState,
   parseArguments,
@@ -11,6 +12,24 @@ import {
   serializeEnvFile,
   storageArchiveDockerArgs,
 } from "./production-db.mjs";
+
+test("preserves the primary migration error when automatic rollback fails", () => {
+  assert.deepEqual(
+    buildMigrationFailureReport({
+      migrationId: "20260816",
+      error: new Error("candidate inventory differs"),
+      rollbackError: new Error("legacy compose race"),
+      failedAt: "2026-08-16T08:30:00.000Z",
+    }),
+    {
+      migrationId: "20260816",
+      phase: "failed",
+      failedAt: "2026-08-16T08:30:00.000Z",
+      error: "candidate inventory differs",
+      rollback: { status: "failed", error: "legacy compose race" },
+    },
+  );
+});
 
 test("accepts pnpm's documented argument separator", () => {
   assert.deepEqual(parseArguments(["--", "preflight", "--json"]), {
@@ -87,7 +106,8 @@ test("a rolled-back migration retries with the configured target image", () => {
     POSTGRES_VOLUME_NAME: "docmost-postgres-16",
   });
   assert.equal(
-    migrationRetryState({ ...state, MIGRATION_PHASE: "acceptance" }).DOCMOST_IMAGE,
+    migrationRetryState({ ...state, MIGRATION_PHASE: "acceptance" })
+      .DOCMOST_IMAGE,
     state.DOCMOST_IMAGE,
   );
 });

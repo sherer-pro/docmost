@@ -878,6 +878,30 @@ export function rollbackPreflightMatches(report, expectedExitCode) {
   );
 }
 
+export function buildMigrationFailureReport({
+  migrationId,
+  error,
+  rollbackError = null,
+  failedAt = new Date().toISOString(),
+}) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? "Unknown error");
+  const rollbackMessage = rollbackError
+    ? rollbackError instanceof Error
+      ? rollbackError.message
+      : String(rollbackError)
+    : null;
+  return {
+    migrationId,
+    phase: "failed",
+    failedAt,
+    error: message,
+    rollback: rollbackMessage
+      ? { status: "failed", error: rollbackMessage }
+      : { status: "completed" },
+  };
+}
+
 async function migrate(context) {
   requireLinux();
   if (!context.yes) throw new Error("migrate requires --yes");
@@ -1210,20 +1234,46 @@ async function migrate(context) {
       ...process.env,
     };
     context.childEnv = { ...process.env, ...context.baseEnv, ...restoredState };
-    if (!runExternalRollbackHook(context, migrationId)) {
-      compose(context, ["up", "-d", "db"]);
-      waitForComposeService(context, "db");
-      compose(context, ["up", "-d", "--no-deps", "--force-recreate", "collab"]);
-      waitForComposeService(context, "collab");
-      compose(context, [
-        "up",
-        "-d",
-        "--no-deps",
-        "--force-recreate",
-        "docmost",
-      ]);
-      waitForComposeService(context, "docmost");
-      runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+    let rollbackError = null;
+    try {
+      if (!runExternalRollbackHook(context, migrationId)) {
+        compose(context, ["up", "-d", "db"]);
+        waitForComposeService(context, "db");
+        compose(context, [
+          "up",
+          "-d",
+          "--no-deps",
+          "--force-recreate",
+          "collab",
+        ]);
+        waitForComposeService(context, "collab");
+        compose(context, [
+          "up",
+          "-d",
+          "--no-deps",
+          "--force-recreate",
+          "docmost",
+        ]);
+        waitForComposeService(context, "docmost");
+        runOperatorHook(context, "DOCMOST_MAINTENANCE_EXIT_HOOK", migrationId);
+      }
+    } catch (candidateRollbackError) {
+      rollbackError = candidateRollbackError;
+    }
+    const failure = buildMigrationFailureReport({
+      migrationId,
+      error,
+      rollbackError,
+    });
+    atomicWrite(
+      resolve(migrationDir, "failure.json"),
+      `${JSON.stringify(failure, null, 2)}\n`,
+    );
+    if (rollbackError) {
+      throw new Error(
+        `Migration failed: ${failure.error}; automatic rollback failed: ${failure.rollback.error}`,
+        { cause: rollbackError },
+      );
     }
     throw error;
   }

@@ -205,6 +205,11 @@ DBA-approved point-in-time recovery procedure.
 
 ## Failure handling
 
+- A failed migration writes `failure.json` beside the backup manifest before it
+  returns. The report preserves the primary migration error and records whether
+  automatic rollback completed or failed, so a rollback-hook exception cannot
+  hide the original cause. It contains no credentials; keep it with the failed
+  candidate evidence.
 - Never edit `POSTGRES_VOLUME_NAME` while Compose processes are running.
 - Never reuse a partially restored candidate volume. The pipeline creates a new
   name on every attempt.
