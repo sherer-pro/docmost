@@ -10,9 +10,9 @@
     "semantic_hash": "15c8491910d318f099a71ce39d3da47a"
   },
   "apps/client/package.json": {
-    "mtime": 1786701953.4470048,
-    "ast_hash": "6a6cd42e639c1a3e6c3ba2518ab83757",
-    "semantic_hash": "6a6cd42e639c1a3e6c3ba2518ab83757"
+    "mtime": 1786843395.6370387,
+    "ast_hash": "1553b8f4e8f2b3fe3a31dfee0b9de18b",
+    "semantic_hash": ""
   },
   "apps/client/postcss.config.js": {
     "mtime": 1781298898.4053948,
@@ -2620,9 +2620,9 @@
     "semantic_hash": "fa439650fa28a1a7aa8c2b6d81c8cc20"
   },
   "apps/server/package.json": {
-    "mtime": 1786711992.1361089,
-    "ast_hash": "a7d7bdb738c6cf702854d544d555f1c8",
-    "semantic_hash": "a7d7bdb738c6cf702854d544d555f1c8"
+    "mtime": 1786843395.6380374,
+    "ast_hash": "93fa4960e9ce3334faf9aa877cc8221b",
+    "semantic_hash": ""
   },
   "apps/server/project.json": {
     "mtime": 1786486363.5357387,
@@ -5370,9 +5370,9 @@
     "semantic_hash": "15770c2c733df857645c216c3d54c0cf"
   },
   "package.json": {
-    "mtime": 1786794327.4543693,
-    "ast_hash": "3fc96a37533e48df10811532b1314fc1",
-    "semantic_hash": "3fc96a37533e48df10811532b1314fc1"
+    "mtime": 1786843395.636041,
+    "ast_hash": "f759b17ac7de1c1bafb467fc51fec429",
+    "semantic_hash": ""
   },
   "scripts/check-english-comments.mjs": {
     "mtime": 1781298898.5678556,
@@ -5420,9 +5420,9 @@
     "semantic_hash": "bbeea3cac6c29b4b0623fdd7b2ed7938"
   },
   "README.md": {
-    "mtime": 1786794327.4563987,
-    "ast_hash": "400cf1cf998b407c65c3478588fe7161",
-    "semantic_hash": "400cf1cf998b407c65c3478588fe7161"
+    "mtime": 1786843395.63904,
+    "ast_hash": "f7035465d2a786d2d3293d794660643b",
+    "semantic_hash": ""
   },
   "apps/client/README.md": {
     "mtime": 1786701827.8615594,
@@ -10175,9 +10175,9 @@
     "semantic_hash": "960c37d3d09f5b9d71c4eccbc4dba98a"
   },
   "scripts/check-release-version.test.mjs": {
-    "mtime": 1786646304.0057864,
-    "ast_hash": "576aec68f278b7990b460309f86b8212",
-    "semantic_hash": "576aec68f278b7990b460309f86b8212"
+    "mtime": 1786843573.2745297,
+    "ast_hash": "582a468cde1164412a9487c48bbd0a93",
+    "semantic_hash": ""
   },
   "apps/server/docs/release-notes/v1.1.0.md": {
     "mtime": 1786658210.927766,
@@ -10397,6 +10397,11 @@
   "docs/BACKUP_AND_RESTORE.md": {
     "mtime": 1786794327.4548876,
     "ast_hash": "f5b274869be340387ff0bfbaaa34170d",
+    "semantic_hash": ""
+  },
+  "apps/server/docs/release-notes/v1.1.1.md": {
+    "mtime": 1786843395.6400387,
+    "ast_hash": "09ee8f26e4e04735c95e787580332dbb",
     "semantic_hash": ""
   }
 }
