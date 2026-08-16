@@ -43,6 +43,7 @@ describe("invalidateAccessSensitiveSearchCaches", () => {
     const queryRoots = [
       "unified-search",
       "page-search",
+      "search-tag-facets",
       "attachment-search",
       "search-suggestion",
     ];

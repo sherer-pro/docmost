@@ -5,7 +5,8 @@ import {
   searchPage,
   searchShare,
   searchSuggestions,
-} from '@/features/search/services/search-service';
+  searchTagFacets,
+} from "@/features/search/services/search-service";
 import {
   IAttachmentSearch,
   IPageSearch,
@@ -14,7 +15,9 @@ import {
   ISuggestionResult,
   SearchLabelParams,
   SearchSuggestionParams,
-} from '@/features/search/types/search.types';
+  ITagSearchFacet,
+  SearchTagFacetParams,
+} from "@/features/search/types/search.types";
 
 export function hasNonWhitespaceSearchQuery(query: string) {
   return query.trim().length > 0;
@@ -29,7 +32,27 @@ export function usePageSearchQuery(
     enabled:
       hasNonWhitespaceSearchQuery(params.query) ||
       !!params.labelId ||
-      !!params.tag,
+      !!params.tag ||
+      Boolean(params.tags?.length),
+  });
+}
+
+export function getSearchTagFacetsQueryKey(params: SearchTagFacetParams) {
+  return ["search-tag-facets", { spaceId: params.spaceId ?? null }] as const;
+}
+
+export function useSearchTagFacetsQuery(
+  params: SearchTagFacetParams,
+  enabled = true,
+): UseQueryResult<ITagSearchFacet[], Error> {
+  return useQuery({
+    queryKey: getSearchTagFacetsQueryKey(params),
+    queryFn: () => searchTagFacets(params),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    enabled,
   });
 }
 

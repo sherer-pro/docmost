@@ -1,46 +1,68 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Avatar,
   Button,
+  Divider,
+  Group,
   Menu,
+  ScrollArea,
   Text,
   TextInput,
-  Divider,
-  ScrollArea,
-  Avatar,
-  Group,
   getDefaultZIndex,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
-  IconChevronDown,
   IconBuilding,
+  IconCheck,
+  IconChevronDown,
   IconFileDescription,
   IconSearch,
-  IconCheck,
   IconTag,
 } from "@tabler/icons-react";
-import { useTranslation } from "react-i18next";
 import { useDebouncedValue } from "@mantine/hooks";
+import { useTranslation } from "react-i18next";
+import {
+  builtInTagDefinitions,
+  builtInTagValues,
+  getTagLabel,
+} from "@docmost/editor-ext";
+import type { BuiltInTagValue } from "@docmost/editor-ext";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
-import classes from "./search-spotlight-filters.module.css";
-import { getSearchContentTypeOptions } from "./search-content-type-options";
-import { useSearchLabelsQuery } from "../queries/search-query";
-import { IPageSearchLabel } from "../types/search.types";
+import type { SearchSpotlightIntent } from "../constants";
+import {
+  useSearchLabelsQuery,
+  useSearchTagFacetsQuery,
+} from "../queries/search-query";
+import type { IPageSearchLabel } from "../types/search.types";
 import {
   getSearchFilterPayload,
-  SearchFilterPayload,
-  SelectedSearchLabel,
+  sameSearchTags,
+  shouldClearUnavailableSearchTags,
+  shouldShowSearchTagFilter,
+  type SearchFilterPayload,
+  type SelectedSearchLabel,
 } from "./search-filter-state";
-import { builtInTagDefinitions, getTagLabel } from "@docmost/editor-ext";
-import type { TagValue } from "@docmost/editor-ext";
+import { getSearchContentTypeOptions } from "./search-content-type-options";
+import classes from "./search-spotlight-filters.module.css";
 
 interface SearchSpotlightFiltersProps {
   onFiltersChange?: (filters: SearchFilterPayload) => void;
+  onIntentApplied?: () => void;
   spaceId?: string;
+  opened: boolean;
+  intent?: SearchSpotlightIntent | null;
+  clearTagsRequest?: number;
 }
+
+const OPEN_TAGS: BuiltInTagValue[] = ["tbd", "todo"];
 
 export function SearchSpotlightFilters({
   onFiltersChange,
+  onIntentApplied,
   spaceId,
+  opened,
+  intent,
+  clearTagsRequest = 0,
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
@@ -51,9 +73,10 @@ export function SearchSpotlightFilters({
   const [contentType, setContentType] = useState<string | null>("page");
   const [selectedLabel, setSelectedLabel] =
     useState<SelectedSearchLabel | null>(null);
-  const [selectedTag, setSelectedTag] = useState<TagValue | null>(null);
+  const [selectedTags, setSelectedTags] = useState<BuiltInTagValue[]>([]);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
+  const lastClearTagsRequest = useRef(clearTagsRequest);
   const arePageFiltersDisabled = contentType === "attachment";
   const isLabelFilterDisabled = arePageFiltersDisabled || !selectedSpaceId;
 
@@ -67,8 +90,13 @@ export function SearchSpotlightFilters({
       query: debouncedLabelQuery,
       spaceId: selectedSpaceId ?? undefined,
     },
-    !isLabelFilterDisabled,
+    opened && !isLabelFilterDisabled,
   );
+  const tagFacetsQuery = useSearchTagFacetsQuery(
+    { spaceId: selectedSpaceId ?? undefined },
+    opened && !arePageFiltersDisabled,
+  );
+  const tagFacets = tagFacetsQuery.data ?? [];
 
   const selectedSpaceData = useMemo(() => {
     if (!spacesData?.items || !selectedSpaceId) return null;
@@ -79,7 +107,6 @@ export function SearchSpotlightFilters({
     const spaces = spacesData?.items || [];
     if (!selectedSpaceId) return spaces;
 
-    // Sort to put selected space first
     return [...spaces].sort((a, b) => {
       if (a.id === selectedSpaceId) return -1;
       if (b.id === selectedSpaceId) return 1;
@@ -95,107 +122,180 @@ export function SearchSpotlightFilters({
       return labels;
     }
 
-    if (!selectedSpaceId) {
-      return labels;
-    }
-
+    if (!selectedSpaceId) return labels;
     return [
       { ...selectedLabel, type: "page", spaceId: selectedSpaceId },
       ...labels,
     ];
   }, [labels, selectedLabel, selectedSpaceId]);
 
+  const facetCounts = useMemo(
+    () => new Map(tagFacets.map((facet) => [facet.value, facet.documentCount])),
+    [tagFacets],
+  );
+  const visibleTagDefinitions = builtInTagDefinitions.filter(
+    (tag) => facetCounts.has(tag.value) || selectedTags.includes(tag.value),
+  );
+  const showTagFilter = shouldShowSearchTagFilter({
+    disabled: arePageFiltersDisabled,
+    selectedTags,
+    availableTags: visibleTagDefinitions.map((tag) => tag.value),
+  });
+
   const emitFilters = (
     nextSpaceId: string | null,
     nextContentType: string | null,
     nextLabel: SelectedSearchLabel | null,
-    nextTag: TagValue | null,
+    nextTags: BuiltInTagValue[],
   ) => {
     onFiltersChange?.(
       getSearchFilterPayload({
         spaceId: nextSpaceId,
         contentType: nextContentType,
         label: nextLabel,
-        tag: nextTag,
+        tags: nextTags,
       }),
     );
   };
 
+  const notifyTagReset = () => {
+    notifications.show({
+      id: "search-tag-filter-reset",
+      color: "gray",
+      message: t("Tag filter was cleared because this scope has no tags."),
+    });
+  };
+
   useEffect(() => {
-    emitFilters(selectedSpaceId, contentType, selectedLabel, selectedTag);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, selectedTags);
   }, []);
+
+  useEffect(() => {
+    if (!intent) return;
+
+    setSelectedSpaceId(intent.spaceId);
+    setContentType("page");
+    setSelectedLabel(null);
+    setSelectedTags(intent.tags);
+    emitFilters(intent.spaceId, "page", null, intent.tags);
+    onIntentApplied?.();
+  }, [intent, onIntentApplied]);
+
+  useEffect(() => {
+    if (lastClearTagsRequest.current === clearTagsRequest) return;
+    lastClearTagsRequest.current = clearTagsRequest;
+    if (selectedTags.length === 0) return;
+
+    setSelectedTags([]);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, []);
+  }, [
+    clearTagsRequest,
+    contentType,
+    selectedLabel,
+    selectedSpaceId,
+    selectedTags,
+  ]);
 
   useEffect(() => {
     const nextLabel =
       isLabelFilterDisabled && selectedLabel ? null : selectedLabel;
-    const nextTag = arePageFiltersDisabled && selectedTag ? null : selectedTag;
+    const shouldClearTags = arePageFiltersDisabled && selectedTags.length > 0;
+    if (nextLabel === selectedLabel && !shouldClearTags) return;
 
-    if (nextLabel === selectedLabel && nextTag === selectedTag) {
-      return;
+    if (nextLabel !== selectedLabel) setSelectedLabel(nextLabel);
+    if (shouldClearTags) {
+      setSelectedTags([]);
+      notifyTagReset();
     }
-
-    setSelectedLabel(nextLabel);
-    setSelectedTag(nextTag);
-    emitFilters(selectedSpaceId, contentType, nextLabel, nextTag);
+    emitFilters(
+      selectedSpaceId,
+      contentType,
+      nextLabel,
+      shouldClearTags ? [] : selectedTags,
+    );
   }, [
     arePageFiltersDisabled,
     contentType,
     isLabelFilterDisabled,
     selectedLabel,
-    selectedTag,
     selectedSpaceId,
+    selectedTags,
+  ]);
+
+  useEffect(() => {
+    if (
+      !shouldClearUnavailableSearchTags({
+        disabled: arePageFiltersDisabled,
+        facetsLoaded: tagFacetsQuery.isSuccess,
+        selectedTags,
+        availableTags: tagFacets.map((facet) => facet.value),
+      })
+    ) {
+      return;
+    }
+
+    setSelectedTags([]);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, []);
+    notifyTagReset();
+  }, [
+    arePageFiltersDisabled,
+    contentType,
+    selectedLabel,
+    selectedSpaceId,
+    selectedTags,
+    tagFacets,
+    tagFacetsQuery.isSuccess,
   ]);
 
   const contentTypeOptions = getSearchContentTypeOptions(t);
 
-  const handleSpaceSelect = (spaceId: string | null) => {
-    setSelectedSpaceId(spaceId);
+  const handleSpaceSelect = (nextSpaceId: string | null) => {
+    setSelectedSpaceId(nextSpaceId);
     setSelectedLabel(null);
-    emitFilters(spaceId, contentType, null, selectedTag);
+    emitFilters(nextSpaceId, contentType, null, selectedTags);
   };
 
-  const handleFilterChange = (filterType: string, value: any) => {
-    let newSelectedSpaceId = selectedSpaceId;
-    let newContentType = contentType;
-    let newSelectedLabel = selectedLabel;
-    let newSelectedTag = selectedTag;
+  const handleContentTypeSelect = (nextContentType: string) => {
+    if (contentType === nextContentType) return;
 
-    switch (filterType) {
-      case "spaceId":
-        newSelectedSpaceId = value;
-        newSelectedLabel = null;
-        setSelectedSpaceId(value);
-        setSelectedLabel(null);
-        break;
-      case "contentType":
-        newContentType = value;
-        setContentType(value);
-        if (value === "attachment") {
-          newSelectedLabel = null;
-          newSelectedTag = null;
-          setSelectedLabel(null);
-          setSelectedTag(null);
-        }
-        break;
+    const nextLabel = nextContentType === "attachment" ? null : selectedLabel;
+    const nextTags = nextContentType === "attachment" ? [] : selectedTags;
+    setContentType(nextContentType);
+    setSelectedLabel(nextLabel);
+    setSelectedTags(nextTags);
+    if (selectedTags.length > 0 && nextContentType === "attachment") {
+      notifyTagReset();
     }
-
-    emitFilters(
-      newSelectedSpaceId,
-      newContentType,
-      newSelectedLabel,
-      newSelectedTag,
-    );
+    emitFilters(selectedSpaceId, nextContentType, nextLabel, nextTags);
   };
 
   const handleLabelSelect = (label: SelectedSearchLabel | null) => {
     setSelectedLabel(label);
-    emitFilters(selectedSpaceId, contentType, label, selectedTag);
+    emitFilters(selectedSpaceId, contentType, label, selectedTags);
   };
 
-  const handleTagSelect = (tag: TagValue | null) => {
-    setSelectedTag(tag);
-    emitFilters(selectedSpaceId, contentType, selectedLabel, tag);
+  const handleTagsSelect = (tags: BuiltInTagValue[]) => {
+    setSelectedTags(tags);
+    emitFilters(selectedSpaceId, contentType, selectedLabel, tags);
   };
+
+  const toggleTag = (tag: BuiltInTagValue) => {
+    handleTagsSelect(
+      selectedTags.includes(tag)
+        ? selectedTags.filter((value) => value !== tag)
+        : [...selectedTags, tag],
+    );
+  };
+
+  const tagButtonLabel = sameSearchTags(selectedTags, builtInTagValues)
+    ? `${t("Tags")}: ${t("All")}`
+    : sameSearchTags(selectedTags, OPEN_TAGS)
+      ? `${t("Tags")}: ${t("Open")}`
+      : selectedTags.length === 1
+        ? `${t("Tag")}: ${getTagLabel(selectedTags[0])}`
+        : selectedTags.length > 1
+          ? `${t("Tags")}: ${selectedTags.length}`
+          : t("Tags");
 
   return (
     <div className={classes.filtersContainer}>
@@ -224,16 +324,14 @@ export function SearchSpotlightFilters({
           <TextInput
             placeholder={t("Find a space")}
             data-autofocus
-            autoFocus
             leftSection={<IconSearch size={16} />}
             value={spaceSearchQuery}
-            onChange={(e) => setSpaceSearchQuery(e.target.value)}
+            onChange={(event) => setSpaceSearchQuery(event.target.value)}
             size="sm"
             variant="filled"
             radius="sm"
             styles={{ input: { marginBottom: 8 } }}
           />
-
           <ScrollArea.Autosize mah={280}>
             <Menu.Item onClick={() => handleSpaceSelect(null)}>
               <Group flex="1" gap="xs">
@@ -254,9 +352,7 @@ export function SearchSpotlightFilters({
                 {!selectedSpaceId && <IconCheck size={20} />}
               </Group>
             </Menu.Item>
-
             <Divider my="xs" />
-
             {availableSpaces.map((space) => (
               <Menu.Item
                 key={space.id}
@@ -306,16 +402,14 @@ export function SearchSpotlightFilters({
           <TextInput
             placeholder={t("Search...")}
             data-autofocus
-            autoFocus
             leftSection={<IconSearch size={16} />}
             value={labelSearchQuery}
-            onChange={(e) => setLabelSearchQuery(e.target.value)}
+            onChange={(event) => setLabelSearchQuery(event.target.value)}
             size="sm"
             variant="filled"
             radius="sm"
             styles={{ input: { marginBottom: 8 } }}
           />
-
           <ScrollArea.Autosize mah={280}>
             {selectedLabel && (
               <>
@@ -327,7 +421,6 @@ export function SearchSpotlightFilters({
                 <Divider my="xs" />
               </>
             )}
-
             {availableLabels.length === 0 ? (
               <Text size="sm" c="dimmed" px="sm" py="xs">
                 {t("No labels")}
@@ -353,53 +446,76 @@ export function SearchSpotlightFilters({
         </Menu.Dropdown>
       </Menu>
 
-      <Menu
-        shadow="md"
-        width={190}
-        position="bottom-start"
-        zIndex={getDefaultZIndex("max")}
-      >
-        <Menu.Target>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconTag size={16} />}
-            className={classes.filterButton}
-            fw={500}
-            disabled={arePageFiltersDisabled}
-          >
-            {selectedTag
-              ? `${t("Tag")}: ${getTagLabel(selectedTag)}`
-              : `${t("Tag")}: ${t("Not selected")}`}
-          </Button>
-        </Menu.Target>
-        <Menu.Dropdown>
-          <Menu.Item onClick={() => handleTagSelect(null)}>
-            <Group flex="1" gap="xs">
-              <Text size="sm" style={{ flex: 1 }}>
-                {t("Not selected")}
-              </Text>
-              {!selectedTag && <IconCheck size={20} />}
-            </Group>
-          </Menu.Item>
-          <Divider my="xs" />
-          {builtInTagDefinitions.map((tag) => (
-            <Menu.Item
-              key={tag.value}
-              onClick={() => handleTagSelect(tag.value)}
+      {showTagFilter && (
+        <Menu
+          shadow="md"
+          width={220}
+          position="bottom-start"
+          zIndex={getDefaultZIndex("max")}
+          closeOnItemClick={false}
+        >
+          <Menu.Target>
+            <Button
+              variant="subtle"
+              color="gray"
+              size="sm"
+              rightSection={<IconChevronDown size={14} />}
+              leftSection={<IconTag size={16} />}
+              className={classes.filterButton}
+              fw={500}
             >
+              {tagButtonLabel}
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item onClick={() => handleTagsSelect([])}>
               <Group flex="1" gap="xs">
-                <Text size="sm" fw={500} style={{ flex: 1 }}>
-                  {tag.label}
+                <Text size="sm" style={{ flex: 1 }}>
+                  {t("Clear tags")}
                 </Text>
-                {selectedTag === tag.value && <IconCheck size={20} />}
+                {selectedTags.length === 0 && <IconCheck size={20} />}
               </Group>
             </Menu.Item>
-          ))}
-        </Menu.Dropdown>
-      </Menu>
+            <Divider my="xs" />
+            <Menu.Item onClick={() => handleTagsSelect([...builtInTagValues])}>
+              <Group flex="1" gap="xs">
+                <Text size="sm" style={{ flex: 1 }}>
+                  {t("All")}
+                </Text>
+                {sameSearchTags(selectedTags, builtInTagValues) && (
+                  <IconCheck size={20} />
+                )}
+              </Group>
+            </Menu.Item>
+            <Menu.Item onClick={() => handleTagsSelect(OPEN_TAGS)}>
+              <Group flex="1" gap="xs">
+                <Text size="sm" style={{ flex: 1 }}>
+                  {t("Open")}
+                </Text>
+                {sameSearchTags(selectedTags, OPEN_TAGS) && (
+                  <IconCheck size={20} />
+                )}
+              </Group>
+            </Menu.Item>
+            <Divider my="xs" />
+            {visibleTagDefinitions.map((tag) => (
+              <Menu.Item key={tag.value} onClick={() => toggleTag(tag.value)}>
+                <Group flex="1" gap="xs">
+                  <Text size="sm" fw={500} style={{ flex: 1 }}>
+                    {tag.label}
+                  </Text>
+                  {facetCounts.has(tag.value) && (
+                    <Text size="xs" c="dimmed">
+                      {facetCounts.get(tag.value)}
+                    </Text>
+                  )}
+                  {selectedTags.includes(tag.value) && <IconCheck size={20} />}
+                </Group>
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+      )}
 
       <Menu
         shadow="md"
@@ -418,7 +534,7 @@ export function SearchSpotlightFilters({
             fw={500}
           >
             {contentType
-              ? `${t("Type")}: ${contentTypeOptions.find((opt) => opt.value === contentType)?.label || t(contentType === "page" ? "Pages" : "Attachments")}`
+              ? `${t("Type")}: ${contentTypeOptions.find((option) => option.value === contentType)?.label || t(contentType === "page" ? "Documents" : "Attachments")}`
               : t("Type")}
           </Button>
         </Menu.Target>
@@ -426,10 +542,7 @@ export function SearchSpotlightFilters({
           {contentTypeOptions.map((option) => (
             <Menu.Item
               key={option.value}
-              onClick={() =>
-                contentType !== option.value &&
-                handleFilterChange("contentType", option.value)
-              }
+              onClick={() => handleContentTypeSelect(option.value)}
             >
               <Group flex="1" gap="xs">
                 <Text size="sm">{option.label}</Text>

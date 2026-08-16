@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 import {
   getSearchLabelsQueryKey,
+  getSearchTagFacetsQueryKey,
   getSearchSuggestionQueryKey,
   hasNonWhitespaceSearchQuery,
 } from "./search-query";
@@ -11,6 +12,19 @@ describe("hasNonWhitespaceSearchQuery", () => {
     assert.equal(hasNonWhitespaceSearchQuery(""), false);
     assert.equal(hasNonWhitespaceSearchQuery(" \t\r\n"), false);
     assert.equal(hasNonWhitespaceSearchQuery(" PublicNeedle "), true);
+  });
+});
+
+describe("getSearchTagFacetsQueryKey", () => {
+  it("separates access-sensitive tag facets by space", () => {
+    assert.notDeepEqual(
+      getSearchTagFacetsQueryKey({ spaceId: "space-1" }),
+      getSearchTagFacetsQueryKey({ spaceId: "space-2" }),
+    );
+    assert.notDeepEqual(
+      getSearchTagFacetsQueryKey({ spaceId: "space-1" }),
+      getSearchTagFacetsQueryKey({}),
+    );
   });
 });
 

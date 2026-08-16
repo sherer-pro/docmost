@@ -1,0 +1,38 @@
+.blue {
+  color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-2));
+  background: light-dark(var(--mantine-color-blue-0), rgba(34, 139, 230, 0.14));
+  border-color: light-dark(
+    var(--mantine-color-blue-2),
+    rgba(116, 192, 252, 0.28)
+  );
+}
+
+.red {
+  color: light-dark(var(--mantine-color-red-8), var(--mantine-color-red-2));
+  background: light-dark(var(--mantine-color-red-0), rgba(250, 82, 82, 0.14));
+  border-color: light-dark(
+    var(--mantine-color-red-2),
+    rgba(255, 135, 135, 0.28)
+  );
+}
+
+.green {
+  color: light-dark(var(--mantine-color-dark-9), var(--mantine-color-green-2));
+  background: light-dark(var(--mantine-color-green-0), rgba(64, 192, 87, 0.14));
+  border-color: light-dark(
+    var(--mantine-color-green-2),
+    rgba(105, 219, 124, 0.28)
+  );
+}
+
+.gray {
+  color: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-2));
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    rgba(134, 142, 150, 0.14)
+  );
+  border-color: light-dark(
+    var(--mantine-color-gray-3),
+    rgba(173, 181, 189, 0.28)
+  );
+}

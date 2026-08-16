@@ -59,7 +59,7 @@ import {
   TemplateField,
   TemplateManagedBlock,
 } from "@docmost/editor-ext";
-import type { TagDefinition } from "@docmost/editor-ext";
+import type { BuiltInTagValue, TagDefinition } from "@docmost/editor-ext";
 import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
 import MathInlineView from "@/features/editor/components/math/math-inline.tsx";
@@ -374,16 +374,19 @@ export const transclusionContentExtensions = mainExtensions.filter(
 
 export interface MainExtensionsOptions {
   tagDefinitions?: readonly TagDefinition[];
+  onSearchTag?: (value: BuiltInTagValue) => void;
 }
 
 export const createMainExtensions = ({
   tagDefinitions = builtInTagDefinitions,
+  onSearchTag,
 }: MainExtensionsOptions = {}) =>
   mainExtensions.map((extension: any) =>
     extension.name === "tag"
       ? Tag.configure({
           view: ReactNodeViewRenderer(TagView),
           tagDefinitions,
+          onSearch: onSearchTag,
         })
       : extension,
   );

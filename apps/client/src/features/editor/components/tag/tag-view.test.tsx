@@ -41,6 +41,7 @@ describe("TagView accessibility", () => {
     const props = {
       node: { attrs: { value: "todo" } },
       selected: false,
+      extension: { options: {} },
     } as unknown as NodeViewProps;
 
     act(() => {
@@ -57,5 +58,43 @@ describe("TagView accessibility", () => {
     expect(tooltip).not.toBeNull();
     expect(tooltip?.id).toBeTruthy();
     expect(tag?.getAttribute("aria-describedby")).toBe(tooltip?.id);
+  });
+
+  it("offers a search action when the editor provides one", () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const onSearch = vi.fn();
+    const props = {
+      node: { attrs: { value: "todo" } },
+      selected: false,
+      extension: { options: { onSearch } },
+    } as unknown as NodeViewProps;
+
+    act(() => root?.render(<TagView {...props} />));
+    const tag = container.querySelector<HTMLElement>('[data-tag-value="todo"]');
+    act(() => tag?.focus());
+
+    const action = document.querySelector<HTMLButtonElement>("button");
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(action?.textContent).toBe("Find this tag in the space");
+    expect(tag?.getAttribute("aria-haspopup")).toBe("dialog");
+
+    const requestAnimationFrame = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    act(() => {
+      tag?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(document.activeElement).toBe(action);
+    requestAnimationFrame.mockRestore();
+
+    act(() => action?.click());
+    expect(onSearch).toHaveBeenCalledWith("todo");
   });
 });
