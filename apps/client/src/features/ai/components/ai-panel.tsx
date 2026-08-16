@@ -41,6 +41,7 @@ import {
   IconSend,
   IconSparkles,
   IconStar,
+  IconTemplate,
   IconTrash,
 } from "@tabler/icons-react";
 import type { Editor } from "@tiptap/core";
@@ -2314,7 +2315,7 @@ export function AiPanel() {
                     <Button
                       variant="subtle"
                       size="compact-sm"
-                      leftSection={<IconSparkles size={16} />}
+                      leftSection={<IconTemplate size={16} />}
                       disabled={Boolean(pendingRun)}
                       className={classes.composerFooterButton}
                       aria-label={t("ai.composer.templates")}
@@ -2332,7 +2333,7 @@ export function AiPanel() {
                         <Button
                           variant="subtle"
                           size="compact-sm"
-                          leftSection={<IconSparkles size={16} />}
+                          leftSection={<IconTemplate size={16} />}
                           rightSection={<IconChevronDown size={13} />}
                           disabled={Boolean(pendingRun)}
                           className={classes.composerFooterButton}

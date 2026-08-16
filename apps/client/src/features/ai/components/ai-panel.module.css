@@ -939,6 +939,10 @@
     padding-inline: 0;
   }
 
+  .composerFooterButton :global(.mantine-Button-section[data-position="left"]) {
+    margin-inline-end: 0;
+  }
+
   .composerFooterButton
     :global(.mantine-Button-section[data-position="right"]) {
     display: none;
