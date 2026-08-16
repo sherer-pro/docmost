@@ -314,6 +314,7 @@ jobs:
             -e DATABASE_MIGRATION_MODE=external \
             -e REDIS_URL=redis://docmost-redis:6379 \
             -e AUTH_RATE_LIMIT_STORAGE=redis \
+            -e PAGE_TEMPLATES_ENABLED=true \
             --entrypoint node docmost:ci \
             apps/server/dist/apps/server/src/collaboration/server/collab-main.js
 
