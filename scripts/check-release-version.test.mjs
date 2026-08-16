@@ -38,8 +38,10 @@ test("accepts the checked-in release version contract", () => {
 });
 
 test("rejects package manifest version drift", () => {
+  const driftedVersion =
+    clientPackage.version === "999.0.0" ? "998.0.0" : "999.0.0";
   const errors = validateReleaseVersionContract(
-    inputs({ clientPackage: { ...clientPackage, version: "1.1.1" } }),
+    inputs({ clientPackage: { ...clientPackage, version: driftedVersion } }),
   );
   assert.ok(
     errors.includes("root, client, and server package versions must match"),
