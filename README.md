@@ -144,12 +144,16 @@ Workspace administrators and operators can use the layered guide at
 `/settings/ai/guide` instead of reconstructing these paths from separate
 settings pages. Stable anchors cover the assistant, query-time retrieval,
 external RAG API clients, built-in Open WebUI RAG Sync, inbound `/mcp`, outbound
-MCP, security, and troubleshooting. Task cards identify the responsible role,
-prerequisites, expected result, and direct settings link; expandable instructions
-add Save/Test/Enable sequencing, success signals, rollback, copyable routes and
-environment controls, a credential matrix, and strict sanitized Mermaid diagrams
-with text alternatives. The API-key and per-space AI pages link back to their
-relevant guide sections.
+MCP, security, and troubleshooting. The default overview leads to one active
+scenario at a time through sticky grouped navigation on desktop or a section
+selector on narrow screens. Each scenario identifies the responsible role,
+prerequisites, expected result, setup sequence, success signal, rollback, and
+direct settings link. Relevant routes and environment controls stay in
+expandable technical details; the security matrix and grouped troubleshooting
+details are also disclosed on demand. Three strict, sanitized, vertical Mermaid
+diagrams explain path selection, the RAG data paths, and both MCP directions,
+with collapsed text alternatives. The API-key and per-space AI pages link back
+to their relevant guide sections.
 
 The guide makes three operational boundaries explicit: query-time retrieval is
 answer-time search; `/api/rag/*` is an API-key-only export surface that may stream
@@ -350,7 +354,8 @@ Search works across pages, databases, rows, and attachments while preserving cur
 
 - PDF and DOCX names and extracted text are searchable;
 
-- search filters cover spaces, content types, page labels, and inline TBD/TODO tags;
+- search filters cover spaces, content types, page labels, and multi-select inline TBD/TODO/DONE tags;
+- tag-aware document results group up to three anchored matching fragments and identify pages, databases, and database rows explicitly;
 
 - result breadcrumbs show where a page or database row sits in the content tree;
 

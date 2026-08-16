@@ -1461,138 +1461,260 @@
       "tab": "Handleiding",
       "title": "Hoe AI, RAG en MCP werken",
       "description": "Een operationele handleiding voor de assistent, extern zoeken, synchronisatie en de beveiligingsgrenzen van MCP.",
-      "overviewTitle": "Wat elk onderdeel doet",
-      "assistantDescription": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen.",
-      "retrievalDescription": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd. Er worden kandidaten opgevraagd bij een externe index, waarna Docmost elke bron opnieuw controleert aan de hand van de database, de huidige toegangsregels en AI-uitsluitingen. Als het ophalen mislukt, mislukt de chat niet.",
-      "ragDescription": "De alleen-lezen /api/rag/* API exporteert volledige en incrementele feeds naar een externe indexeerder en kan na autorisatie beveiligde bijlagestromen retourneren. Er worden geen vragen gezocht of beantwoord; elke RAG-sleutel is beperkt tot één spatie.",
-      "inboundMcpDescription": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel. Het is staatloos, geeft alleen toegestane leeshulpmiddelen weer en retourneert metagegevens van bijlagen in plaats van de inhoud van binaire bijlagen.",
-      "outboundMcpDescription": "De Docmost Agent kan tools op goedgekeurde externe MCP-servers aanroepen. Dit is de tegenovergestelde richting van inkomend MCP en gebruikt afzonderlijke instellingen en referenties.",
-      "setupTitle": "Waar u dit configureert",
-      "setupDescription": "Open het relevante instellingengebied. Allowlists en noodschakelaars van de implementatieomgeving blijven door de operator beheerd.",
-      "syncTitle": "Regelmatige updates van de RAG-index",
-      "syncDescription": "Ingebouwde Open WebUI RAG Sync draait binnen Docmost, leest PostgreSQL rechtstreeks via Docmost-services, coördineert met Redis en schrijft met een afzonderlijke gecodeerde referentie per ruimte. Het roept nooit de openbare /api/rag/* API aan; query- en schrijverreferenties blijven gescheiden.",
-      "syncStepDelta": "Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven.",
-      "riskTitle": "Afwegingen en risico’s",
-      "riskTiming": "De actualiteit bestaat uit het pollinginterval plus de verwerkingstijd van de cyclus. Een langer interval verhoogt de veroudering; een zeer kort interval verhoogt de belasting van Docmost, Redis en Open WebUI en kan tot 429/503-responses leiden.",
-      "riskDelivery": "Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid.",
-      "riskModel": "Een wijziging van het embeddingmodel of de segmentering in de externe index verandert de inhoudshashes van Docmost niet. RAG Sync slaat ongewijzigde bronnen over. Voer daarom de door het externe platform ondersteunde volledige herbouw uit wanneer het indexeringsmodel verandert.",
-      "securityTitle": "Beveiligingsgrenzen",
-      "securitySourceAccess": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt.",
-      "securityInbound": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd.",
-      "securityOutbound": "Uitgaand MCP blijft gesloten tenzij de implementatieschakelaar, workspace-schakelaar, ingeschakelde server, ruimtekoppeling, het groepsbeleid en de toestemming van de gebruiker dit allemaal toestaan. De noodschakelaar voor de implementatie is AI_EXTERNAL_MCP_ENABLED.",
-      "securityOutboundGroups": "Ruimtebeheerders beheren groepsregels per serverkoppeling. Een blokkade heeft voorrang; anders beperkt de geselecteerde groepslijst via doorsnede de toegestane lijsten van workspace en ruimte.",
-      "securityOutboundConsent": "Als de server-URL verandert, worden alle opgeslagen toestemmingen ingetrokken omdat de toestemming de ontvangende host noemt. Tijdens een actieve uitvoering kunnen gebruikers toestemming intrekken, maar geen nieuwe externe server inschakelen.",
-      "securitySecrets": "Referenties voor de provider, het ophalen, de Open WebUI-writer, RAG en inkomend en uitgaand MCP zijn afzonderlijke geheimen. Plaats referenties per ruimte niet in de Docker-omgeving of -metadata, logboeken of URLs. Schakel vóór het wijzigen van APP_SECRET alle RAG-bindings uit en wacht op de opschoning; het geheim ondertekent ook metadata over extern eigendom. Is het te vroeg gewijzigd, herstel dan vóór de opschoning de vorige waarde en voer daarna versleutelde referenties opnieuw in.",
-      "securityRemote": "Uitgaand MCP verzendt geselecteerde Docmost-gegevens naar een ander systeem. Externe beschrijvingen, schema’s en resultaten zijn niet vertrouwd; ‘alleen-lezen’ is een beleidsclassificatie van Docmost en geen bewijs dat de externe implementatie geen neveneffecten heeft.",
-      "operationsTitle": "Controlelijst voor beheerders",
-      "operationsSetup": "Configureer en test voor elke ruimte het model en de optionele ophaalfunctie. Keur eerst de implementatie-origins goed, laat zoeken uitgeschakeld totdat een adapter gereed is en gebruik het beleid voor ingebouwde en externe tools om de toegang te beperken. Schakel beeldherkenning in voordat afbeeldingen of PDF's met alleen afbeeldingen worden verzonden; anders weigert de server die invoer in plaats van deze stilzwijgend weg te laten.",
-      "operationsDictionaryForms": "Wanneer het model van een ruimte is ingeschakeld, kunnen woordenboekbewerkers vormen voor één term genereren zonder ze op te slaan. Werkruimte-eigenaren en beheerders kunnen vormen voor alle termen genereren en atomair opslaan. Bestaande vormen blijven behouden en aliassen die met een andere term conflicteren worden overgeslagen. Dit hulppad gebruikt de provider van de ruimte via een aparte generatiegrens en maakt geen chatgesprekken of AI-runs aan.",
-      "operationsProfileNames": "Namen van assistentprofielen moeten binnen elke ruimte uniek zijn. Een duplicaat geeft 409 met ai_profile_name_conflict terug; laad de lijst zo nodig opnieuw en kies een andere naam.",
-      "operationsRagMigration": "Stop bij het vervangen van de zelfstandige RAG-worker eerst die worker, migreer met RAG_SYNC_ENABLED=false en configureer, test en activeer daarna elke ruimte. De API weigert activering totdat het huidige doel de test heeft doorstaan. Oude omgevingsgeheimen worden niet geïmporteerd. Gebruik voor rollback de implementatieschakelaar, niet migration down.",
-      "operationsRecovery": "Herstel na een storing eerst de afhankelijkheden, houd PostgreSQL gezaghebbend en behoud de Knowledge Base tijdens het herstel van koppelingen. Een herhaalde upload van een privébestand met dezelfde Idempotency-Key hervat de gereserveerde batch na een processtoring zonder een extra bestandsrij te maken. Stel voor een noodrollback van RAG Sync RAG_SYNC_ENABLED=false in en start Docmost opnieuw; AI_EXTERNAL_MCP_ENABLED bestuurt alleen uitgaand MCP.",
-      "templateExportScope": "Items uit de sjablooncatalogus worden uitgesloten. Pagina's die vanuit sjablonen zijn gemaakt, worden als gewone gematerialiseerde pagina's geëxporteerd.",
-      "contractVersion": "Gidscontract v{{version}}",
-      "quickNavLabel": "AI geleidesecties",
-      "taskChooserTitle": "Kies wat u wilt instellen",
-      "taskChooserDescription": "Begin met het resultaat dat je nodig hebt. Elk pad identificeert de eigenaar, vereiste, verwachte resultaat en exacte instellingenpagina.",
-      "roleLabel": "Eigenaar",
-      "prerequisiteLabel": "Vereist",
-      "resultLabel": "Resultaat",
-      "detailsLabel": "Lees de stappen",
-      "openSettings": "Instellingen openen",
       "openRelevantGuide": "Open de relevante gids",
-      "architectureTitle": "Hoe de paden met elkaar verbonden zijn",
-      "architectureDescription": "In het overzicht worden het genereren, het ophalen van de query, het exporteren, de synchronisatie en beide MCP-richtingen gescheiden. PostgreSQL blijft gezaghebbend; Redis coördineert de toelating en verhuur.",
-      "setupSequence": "Standaardvolgorde: Save → Test → Enable. API-sleutelclients gebruiken Create → één keer kopiëren → testen → starten.",
-      "instructionsTitle": "Installatie, successignaal en terugdraaien",
-      "stepsTitle": "Opstellingsvolgorde",
-      "successTitle": "Succes lijkt",
-      "rollbackTitle": "Veilig terugdraaien",
-      "referencesTitle": "Routes en implementatiecontroles",
-      "referencesDescription": "Kopieer exacte openbare routes en omgevingsnamen. Geheime waarden horen thuis in een goedgekeurd geheim archief, nooit in deze handleiding of logboeken.",
-      "routeLabel": "Route",
-      "environmentLabel": "Omgevingsvariabele",
-      "securityMatrixTitle": "Referenties en beveiligingsgrenzen",
-      "securityMatrixDescription": "Elk pad heeft zijn eigen inloggegevens en live autorisatiecontroles. Gebruik query-, schrijver-, RAG-, inkomende MCP-, uitgaande MCP- of providergeheimen niet opnieuw.",
-      "securityScenarioLabel": "Pad",
-      "securityOwnerLabel": "Gecontroleerd door",
-      "securityBoundaryLabel": "Opslag en grens",
-      "troubleshootingTitle": "Problemen oplossen",
-      "troubleshootingDescription": "Begin met de stabiele foutcode of status, herstel de mislukte afhankelijkheids- of autorisatiegrens en probeer vervolgens de kleinste veilige bewerking opnieuw.",
-      "problemLabel": "Signaal",
-      "actionLabel": "Wat te doen",
+      "navigation": {
+        "label": "AI geleidesecties",
+        "selectLabel": "AI geleidesecties",
+        "overview": "Wat elk onderdeel doet",
+        "groups": {
+          "docmost": "Binnen Docmost",
+          "data": "Gegevens en indexen",
+          "mcp": "MCP-verbindingen",
+          "support": "Beveiliging en hulp"
+        }
+      },
+      "overview": {
+        "title": "Kies wat u wilt instellen",
+        "description": "Begin met het resultaat dat je nodig hebt. Elk pad identificeert de eigenaar, vereiste, verwachte resultaat en exacte instellingenpagina.",
+        "setupSequence": "Standaardvolgorde: Save → Test → Enable. API-sleutelclients gebruiken Create → één keer kopiëren → testen → starten."
+      },
+      "labels": {
+        "owner": "Eigenaar",
+        "prerequisite": "Vereist",
+        "result": "Resultaat",
+        "steps": "Opstellingsvolgorde",
+        "success": "Succes lijkt",
+        "rollback": "Veilig terugdraaien",
+        "openSettings": "Instellingen openen",
+        "technicalDetails": "Technische details",
+        "textAlternative": "Tekstalternatief",
+        "route": "Route",
+        "environment": "Omgevingsvariabele"
+      },
       "scenario": {
         "assistant": {
-          "facts": "Ruimtebeheerder||Goedgekeurde oorsprong, model en optioneel assistentprofiel van de provider||Chat en Agent gebruiken het geselecteerde model en alleen toegestaan gereedschap",
-          "operations": "Save provider-, model-, profiel- en beleidsinstellingen|Test Chat en Agent|Enable het ruimtemodel en de beoogde profielen||Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven||Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen"
+          "description": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld.",
+          "owner": "Ruimtebeheerder",
+          "prerequisite": "Goedgekeurde oorsprong, model en optioneel assistentprofiel van de provider",
+          "result": "Chat en Agent gebruiken het geselecteerde model en alleen toegestaan gereedschap",
+          "steps": {
+            "step1": "Save provider-, model-, profiel- en beleidsinstellingen",
+            "step2": "Test Chat en Agent",
+            "step3": "Enable het ruimtemodel en de beoogde profielen"
+          },
+          "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
+          "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen."
         },
         "retrieval": {
-          "facts": "Operator en ruimtebeheerder||Goedgekeurde ophaaloorsprong en een geconfigureerde adapter||Antwoorden mogen alleen externe kandidaten vermelden na live Docmost-controles",
-          "operations": "Save-eindpunt, adapter en queryreferentie|Test ophalen uit de ruimte-instellingen|Enable extern zoeken||De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen||Schakel extern zoeken uit; Chat gaat verder zonder ophalen"
+          "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",
+          "owner": "Operator en ruimtebeheerder",
+          "prerequisite": "Goedgekeurde ophaaloorsprong en een geconfigureerde adapter",
+          "result": "Antwoorden mogen alleen externe kandidaten vermelden na live Docmost-controles",
+          "steps": {
+            "step1": "Save-eindpunt, adapter en queryreferentie",
+            "step2": "Test ophalen uit de ruimte-instellingen",
+            "step3": "Enable extern zoeken"
+          },
+          "success": "De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen",
+          "rollback": "Schakel extern zoeken uit; Chat gaat verder zonder ophalen",
+          "technical": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt."
         },
         "ragApi": {
-          "facts": "Werkruimtebeheerder en indexeeroperator||Een in de ruimte ingedeelde RAG API-sleutel die bij het maken is gekopieerd||Een externe indexer ontvangt geautoriseerde feeds en beschermde bijlagestromen",
-          "operations": "Create de RAG-sleutel en kopieer deze één keer|Test /api/rag/pages en cursorvervolg|Start de externe indexeerder||Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker||Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel"
+          "description": "De alleen-lezen /api/rag/* API exporteert volledige en incrementele feeds naar een externe indexeerder en kan na autorisatie beveiligde bijlagestromen retourneren.",
+          "owner": "Werkruimtebeheerder en indexeeroperator",
+          "prerequisite": "Een in de ruimte ingedeelde RAG API-sleutel die bij het maken is gekopieerd",
+          "result": "Een externe indexer ontvangt geautoriseerde feeds en beschermde bijlagestromen",
+          "steps": {
+            "step1": "Create de RAG-sleutel en kopieer deze één keer",
+            "step2": "Test /api/rag/pages en cursorvervolg",
+            "step3": "Start de externe indexeerder"
+          },
+          "success": "Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker",
+          "rollback": "Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel",
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd."
         },
         "ragSync": {
-          "facts": "Implementatieoperator en ruimtebeheerder||RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel||Docmost onderhoudt stapsgewijs de geselecteerde Open WebUI Knowledge Base; alleen PDF-, DOCX-, TXT- en Markdown-bijlagen gaan naar de draagbare documentindex",
-          "operations": "Save de doel- en schrijverreferentie|Voer Test uit voor het huidige doel|Enable de binding||Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan||Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op"
+          "description": "Ingebouwde Open WebUI RAG Sync draait binnen Docmost, leest PostgreSQL rechtstreeks via Docmost-services, coördineert met Redis en schrijft met een afzonderlijke gecodeerde referentie per ruimte.",
+          "owner": "Implementatieoperator en ruimtebeheerder",
+          "prerequisite": "RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel",
+          "result": "Docmost onderhoudt stapsgewijs de geselecteerde Open WebUI Knowledge Base; alleen PDF-, DOCX-, TXT- en Markdown-bijlagen gaan naar de draagbare documentindex",
+          "steps": {
+            "step1": "Save de doel- en schrijverreferentie",
+            "step2": "Voer Test uit voor het huidige doel",
+            "step3": "Enable de binding"
+          },
+          "success": "Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan",
+          "rollback": "Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op",
+          "technical": "Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid."
         },
         "inboundMcp": {
-          "facts": "Werkruimtebeheerder en MCP-clienteigenaar||Een in de ruimte ingedeelde MCP-sleutel met een exacte toelatingslijst voor mogelijkheden||De klant kan geautoriseerde alleen-lezen Docmost-tools oproepen via /mcp",
-          "operations": "Create de MCP-sleutel en kopieer deze één keer|Test initialiseren, tools/list en één toegestane oproep|Start de klantintegratie||Toegestane tools werken; geweigerde mogelijkheden en het lezen van binaire bijlagen blijven niet beschikbaar||Trek de sleutel in of verwijder de maker uit de ruimte; actieve toegang wordt gesloten bij het volgende verzoek"
+          "description": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel.",
+          "owner": "Werkruimtebeheerder en MCP-clienteigenaar",
+          "prerequisite": "Een in de ruimte ingedeelde MCP-sleutel met een exacte toelatingslijst voor mogelijkheden",
+          "result": "De klant kan geautoriseerde alleen-lezen Docmost-tools oproepen via /mcp",
+          "steps": {
+            "step1": "Create de MCP-sleutel en kopieer deze één keer",
+            "step2": "Test initialiseren, tools/list en één toegestane oproep",
+            "step3": "Start de klantintegratie"
+          },
+          "success": "Toegestane tools werken; geweigerde mogelijkheden en het lezen van binaire bijlagen blijven niet beschikbaar",
+          "rollback": "Trek de sleutel in of verwijder de maker uit de ruimte; actieve toegang wordt gesloten bij het volgende verzoek",
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd."
         },
         "outboundMcp": {
-          "facts": "Implementatieoperator, werkruimtebeheerder, ruimtebeheerder en gebruiker||Beide oorsprongstoelatingslijsten, ingeschakelde server en binding, groepsbeleid en toestemming van de gebruiker||Docmost Agent kan de doorsneden externe MCP-gereedschapsset gebruiken",
-          "operations": "Save het server-, binding- en groepsbeleid|Test en ontdek gereedschappen|Enable de server en verzamel toestemming van de gebruiker||Alleen doorsneden gereedschappen verschijnen en het DNS-pinned-verzoek retourneert een niet-vertrouwd resultaat ter beoordeling||Schakel een autorisatielaag uit of trek de toestemming in; Als u de URL wijzigt, wordt alle opgeslagen toestemming ingetrokken"
+          "description": "De Docmost Agent kan tools op goedgekeurde externe MCP-servers aanroepen.",
+          "owner": "Implementatieoperator, werkruimtebeheerder, ruimtebeheerder en gebruiker",
+          "prerequisite": "Beide oorsprongstoelatingslijsten, ingeschakelde server en binding, groepsbeleid en toestemming van de gebruiker",
+          "result": "Docmost Agent kan de doorsneden externe MCP-gereedschapsset gebruiken",
+          "steps": {
+            "step1": "Save het server-, binding- en groepsbeleid",
+            "step2": "Test en ontdek gereedschappen",
+            "step3": "Enable de server en verzamel toestemming van de gebruiker"
+          },
+          "success": "Alleen doorsneden gereedschappen verschijnen en het DNS-pinned-verzoek retourneert een niet-vertrouwd resultaat ter beoordeling",
+          "rollback": "Schakel een autorisatielaag uit of trek de toestemming in; Als u de URL wijzigt, wordt alle opgeslagen toestemming ingetrokken",
+          "technical": "Uitgaand MCP blijft gesloten tenzij de implementatieschakelaar, workspace-schakelaar, ingeschakelde server, ruimtekoppeling, het groepsbeleid en de toestemming van de gebruiker dit allemaal toestaan. De noodschakelaar voor de implementatie is AI_EXTERNAL_MCP_ENABLED. Uitgaand MCP verzendt geselecteerde Docmost-gegevens naar een ander systeem. Externe beschrijvingen, schema’s en resultaten zijn niet vertrouwd; ‘alleen-lezen’ is een beleidsclassificatie van Docmost en geen bewijs dat de externe implementatie geen neveneffecten heeft."
         }
       },
       "diagram": {
         "expand": "Diagram volledig scherm openen",
         "invalid": "Het architectuurdiagram kon niet worden weergegeven. Gebruik de aangrenzende treden.",
-        "stepsTitle": "Equivalent stap-voor-stap-overzicht",
         "overview": {
           "label": "AI, RAG en MCP architectuuroverzicht",
           "caption": "Generatie, export, synchronisatie en de twee MCP-richtingen gebruiken verschillende toegangs- en referentiepaden.",
-          "textAlternative": "Configureer de assistent en optioneel ophalen van zoekopdrachten per ruimte|Gebruik /api/rag/* alleen voor externe alleen-lezen exportclients|Gebruik de ingebouwde RAG-synchronisatie voor directe Open WebUI-schrijfbewerkingen zonder de openbare RAG API aan te roepen|Gebruik /mcp voor inkomende leestools en externe MCP-instellingen voor uitgaande Agent-tools"
+          "textAlternative": {
+            "step1": "Configureer de assistent en optioneel ophalen van zoekopdrachten per ruimte",
+            "step2": "Gebruik /api/rag/* alleen voor externe alleen-lezen exportclients",
+            "step3": "Gebruik de ingebouwde RAG-synchronisatie voor directe Open WebUI-schrijfbewerkingen zonder de openbare RAG API aan te roepen",
+            "step4": "Gebruik /mcp voor inkomende leestools en externe MCP-instellingen voor uitgaande Agent-tools"
+          }
         },
         "rag": {
           "label": "RAG API en ingebouwde RAG Sync-architectuur",
           "caption": "Query-, openbare export- en schrijversreferenties zijn gescheiden; ingebouwde synchronisatie loopt niet door de /api/rag/*.",
-          "textAlternative": "Bij het ophalen van Chat wordt een queryreferentie gebruikt om de externe index op te vragen|Een externe indexer leest geautoriseerde inhoud via /api/rag/*|Ingebouwde RAG Sync leest de Docmost-status intern en schrijft met een schrijversleutel per spatie|Live ACL- en inhoudsbeleidscontroles blijven vóór geëxporteerde of gesynchroniseerde inhoud"
+          "textAlternative": {
+            "step1": "Bij het ophalen van Chat wordt een queryreferentie gebruikt om de externe index op te vragen",
+            "step2": "Een externe indexer leest geautoriseerde inhoud via /api/rag/*",
+            "step3": "Ingebouwde RAG Sync leest de Docmost-status intern en schrijft met een schrijversleutel per spatie",
+            "step4": "Live ACL- en inhoudsbeleidscontroles blijven vóór geëxporteerde of gesynchroniseerde inhoud"
+          },
+          "nodes": {
+            "question": "Chat-query",
+            "externalIndex": "Externe index",
+            "externalIndexer": "Externe indexeerder",
+            "liveChecks": "Live ACL en inhoudsbeleid"
+          }
         },
-        "inboundMcp": {
-          "label": "Inkomende autorisatiestroom MCP",
-          "caption": "Bij elk /mcp-verzoek wordt het sleutelbereik opnieuw gecontroleerd voordat de Redis wordt toegelaten en het gedeelde alleen-lezen toolbeleid wordt toegepast.",
-          "textAlternative": "Create een getypte MCP-sleutel met ruimtebereik|Valideer de live-sleutel, werkruimte, maker en ruimte|Schaf het Redis-tarief en gelijktijdigheidstoelating aan|Kruis het capaciteitsbeleid met de pagina-ACL en het inhoudsbeleid voordat u PostgreSQL leest"
-        },
-        "outboundMcp": {
-          "label": "Uitgaande autorisatiestroom MCP",
-          "caption": "Elke autorisatielaag moet het verzoek toestaan; toestemming volgt de ontvanger-URL en DNS-resolutie is vastgezet.",
-          "textAlternative": "Enable de implementatie en keur de oorsprong goed|Enable de werkruimteserver en ruimtebinding|Pas 'deny-first'-groepsbeleid en toestemming van de gebruiker toe|Los het goedgekeurde externe adres op en zet het vast, en behandel schema's en resultaten vervolgens als niet-vertrouwd"
-        },
-        "overviewNodes": "Gedeeld AI-toolregister|Externe systemen|Externe MCP-server",
-        "ragNodes": "Chat-query|Referentie opvragen|Externe index|Externe indexeerder|Live ACL en inhoudsbeleid|Schrijverreferentie|belt niet",
-        "inboundNodes": "API-sleutelinstellingen|Live-sleutel, werkruimte, gebruiker en ruimtebereik|Redis-tarief en gelijktijdigheidstoelating|Toolbeleid, pagina-ACL en inhoudsbeleid",
-        "outboundNodes": "Implementatiecontrole|Controle van de werkruimte|Ruimte bindend|Groepsbeleid eerst weigeren|Toestemming van de gebruiker|Exacte origin-toelatingslijsten|DNS-pinned verzoek op afstand"
+        "mcp": {
+          "label": "Inkomende autorisatiestroom MCP / Uitgaande autorisatiestroom MCP",
+          "caption": "Bij elk /mcp-verzoek wordt het sleutelbereik opnieuw gecontroleerd voordat de Redis wordt toegelaten en het gedeelde alleen-lezen toolbeleid wordt toegepast. Elke autorisatielaag moet het verzoek toestaan; toestemming volgt de ontvanger-URL en DNS-resolutie is vastgezet.",
+          "textAlternative": {
+            "step1": "Create een getypte MCP-sleutel met ruimtebereik",
+            "step2": "Valideer de live-sleutel, werkruimte, maker en ruimte",
+            "step3": "Pas 'deny-first'-groepsbeleid en toestemming van de gebruiker toe",
+            "step4": "Los het goedgekeurde externe adres op en zet het vast, en behandel schema's en resultaten vervolgens als niet-vertrouwd"
+          },
+          "nodes": {
+            "readTools": "Toolbeleid, pagina-ACL en inhoudsbeleid",
+            "approval": "Implementatiecontrole · Toestemming van de gebruiker",
+            "remoteServer": "Externe MCP-server"
+          }
+        }
       },
-      "securityOwner": {
-        "spaceAdmin": "Ruimtebeheerder; exploitant keurt de oorsprong goed",
-        "workspaceAdmin": "Eigenaar of beheerder van de werkruimte",
-        "operatorAndSpaceAdmin": "Implementatieoperator en ruimtebeheerder",
-        "layered": "Operator, werkruimtebeheerder, ruimtebeheerder, groepsbeleid en gebruiker"
+      "security": {
+        "title": "Beveiligingsgrenzen",
+        "description": "Elk pad heeft zijn eigen inloggegevens en live autorisatiecontroles. Gebruik query-, schrijver-, RAG-, inkomende MCP-, uitgaande MCP- of providergeheimen niet opnieuw.",
+        "principles": {
+          "leastPrivilege": {
+            "title": "Minimale rechten",
+            "description": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven."
+          },
+          "separateCredentials": {
+            "title": "Gescheiden referenties",
+            "description": "Referenties voor de provider, het ophalen, de Open WebUI-writer, RAG en inkomend en uitgaand MCP zijn afzonderlijke geheimen."
+          },
+          "liveChecks": {
+            "title": "Actuele controles",
+            "description": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd."
+          },
+          "stopControls": {
+            "title": "Snel uitschakelen",
+            "description": "Uitgaand MCP blijft gesloten tenzij de implementatieschakelaar, workspace-schakelaar, ingeschakelde server, ruimtekoppeling, het groepsbeleid en de toestemming van de gebruiker dit allemaal toestaan."
+          }
+        },
+        "matrixTitle": "Referenties en beveiligingsgrenzen",
+        "matrixDescription": "Elk pad heeft zijn eigen inloggegevens en live autorisatiecontroles. Gebruik query-, schrijver-, RAG-, inkomende MCP-, uitgaande MCP- of providergeheimen niet opnieuw.",
+        "scenarioLabel": "Pad",
+        "ownerLabel": "Gecontroleerd door",
+        "boundaryLabel": "Opslag en grens",
+        "owners": {
+          "spaceAdmin": "Ruimtebeheerder; exploitant keurt de oorsprong goed",
+          "workspaceAdmin": "Eigenaar of beheerder van de werkruimte",
+          "operatorAndSpaceAdmin": "Implementatieoperator en ruimtebeheerder",
+          "layered": "Operator, werkruimtebeheerder, ruimtebeheerder, groepsbeleid en gebruiker"
+        },
+        "boundaries": {
+          "provider": "Configureer en test voor elke ruimte het model en de optionele ophaalfunctie. Keur eerst de implementatie-origins goed, laat zoeken uitgeschakeld totdat een adapter gereed is en gebruik het beleid voor ingebouwde en externe tools om de toegang te beperken. Schakel beeldherkenning in voordat afbeeldingen of PDF's met alleen afbeeldingen worden verzonden; anders weigert de server die invoer in plaats van deze stilzwijgend weg te laten.",
+          "retrieval": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt.",
+          "ragApi": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd.",
+          "ragSync": "Referenties voor de provider, het ophalen, de Open WebUI-writer, RAG en inkomend en uitgaand MCP zijn afzonderlijke geheimen. Plaats referenties per ruimte niet in de Docker-omgeving of -metadata, logboeken of URLs. Schakel vóór het wijzigen van APP_SECRET alle RAG-bindings uit en wacht op de opschoning; het geheim ondertekent ook metadata over extern eigendom. Is het te vroeg gewijzigd, herstel dan vóór de opschoning de vorige waarde en voer daarna versleutelde referenties opnieuw in.",
+          "inboundMcp": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd.",
+          "outboundMcp": "Uitgaand MCP blijft gesloten tenzij de implementatieschakelaar, workspace-schakelaar, ingeschakelde server, ruimtekoppeling, het groepsbeleid en de toestemming van de gebruiker dit allemaal toestaan. De noodschakelaar voor de implementatie is AI_EXTERNAL_MCP_ENABLED. Uitgaand MCP verzendt geselecteerde Docmost-gegevens naar een ander systeem. Externe beschrijvingen, schema’s en resultaten zijn niet vertrouwd; ‘alleen-lezen’ is een beleidsclassificatie van Docmost en geen bewijs dat de externe implementatie geen neveneffecten heeft."
+        }
       },
       "troubleshooting": {
-        "401": "401 Ongeautoriseerd||Controleer het Bearer-sleuteltype, de vervaldatum, de intrekking, het live lidmaatschap van de maker en de exacte ruimte. Gebruikerscookies verifiëren RAG of MCP niet.",
-        "409": "409 Conflicten||Herlaad huidige status. Los dubbele profielnamen, verouderde versies, RAG-doelconflicten of onvolledige opschoning op voordat u het opnieuw probeert.",
-        "429": "429 Te veel verzoeken||Ga terug met jitter en verminder de parallelliteit. Controleer de RAG/MCP-tarief- en gelijktijdigheidslimieten en langlopende leaseovereenkomsten.",
-        "503": "503 Dienst niet beschikbaar||Herstel eerst Redis, de provider of het externe doel. Toegang mislukt gesloten wanneer Redis de grenzen niet kan beschermen.",
-        "leaseLost": "Redis huurcontract verloren||Behandel het actieve verzoek als afgebroken, controleer de stabiliteit van de Redis en de eigendomsafscheiding en probeer het vervolgens opnieuw idempotent.",
-        "sourceAccessChanged": "source_access_changed||Het gedeeltelijke antwoord en de citaten zijn verwijderd omdat de toegang is gewijzigd. Open de broncode pas opnieuw nadat de machtigingen opzettelijk zijn hersteld.",
-        "sourceRemoved": "bron verwijderd||Een pagina, database of bijlage verdween na de feed-snapshot. RAG Sync behandelt dit als een verwijdering, verwijdert beheerde bestanden en gaat door zonder een interne not-found-fout opnieuw te proberen.",
-        "runtimeStopped": "synchronisatie gestopt||Een niet-opnieuw-probeerbare runtimefout heeft de binding uitgeschakeld. Los de gemelde oorzaak op; test de Knowledge Base opnieuw voordat u synchronisatie inschakelt als het doel niet beschikbaar is.",
-        "cleanupRequired": "opruimen vereist||Wissel nog niet van doel en draai de APP_SECRET nog niet. Herstel de huidige schrijverstoegang, voltooi het opschonen, sla het nieuwe doel op en test het.",
-        "consentRevoked": "MCP toestemming ingetrokken||De gebruiker moet het opnieuw beoordelen en zich opnieuw aanmelden. Bij een URL-wijziging wordt opzettelijk elke opgeslagen toestemming van de vorige ontvanger ingetrokken."
+        "title": "Problemen oplossen",
+        "description": "Begin met de stabiele foutcode of status, herstel de mislukte afhankelijkheids- of autorisatiegrens en probeer vervolgens de kleinste veilige bewerking opnieuw.",
+        "groups": {
+          "access": "Toegang",
+          "limits": "Limieten en afhankelijkheden",
+          "ragSync": "RAG Sync",
+          "mcp": "MCP"
+        },
+        "rows": {
+          "401": {
+            "signal": "401 Ongeautoriseerd",
+            "action": "Controleer het Bearer-sleuteltype, de vervaldatum, de intrekking, het live lidmaatschap van de maker en de exacte ruimte. Gebruikerscookies verifiëren RAG of MCP niet."
+          },
+          "409": {
+            "signal": "409 Conflicten",
+            "action": "Herlaad huidige status. Los dubbele profielnamen, verouderde versies, RAG-doelconflicten of onvolledige opschoning op voordat u het opnieuw probeert."
+          },
+          "429": {
+            "signal": "429 Te veel verzoeken",
+            "action": "Ga terug met jitter en verminder de parallelliteit. Controleer de RAG/MCP-tarief- en gelijktijdigheidslimieten en langlopende leaseovereenkomsten."
+          },
+          "503": {
+            "signal": "503 Dienst niet beschikbaar",
+            "action": "Herstel eerst Redis, de provider of het externe doel. Toegang mislukt gesloten wanneer Redis de grenzen niet kan beschermen."
+          },
+          "leaseLost": {
+            "signal": "Redis huurcontract verloren",
+            "action": "Behandel het actieve verzoek als afgebroken, controleer de stabiliteit van de Redis en de eigendomsafscheiding en probeer het vervolgens opnieuw idempotent."
+          },
+          "sourceAccessChanged": {
+            "signal": "source_access_changed",
+            "action": "Het gedeeltelijke antwoord en de citaten zijn verwijderd omdat de toegang is gewijzigd. Open de broncode pas opnieuw nadat de machtigingen opzettelijk zijn hersteld."
+          },
+          "sourceRemoved": {
+            "signal": "bron verwijderd",
+            "action": "Een pagina, database of bijlage verdween na de feed-snapshot. RAG Sync behandelt dit als een verwijdering, verwijdert beheerde bestanden en gaat door zonder een interne not-found-fout opnieuw te proberen."
+          },
+          "runtimeStopped": {
+            "signal": "synchronisatie gestopt",
+            "action": "Een niet-opnieuw-probeerbare runtimefout heeft de binding uitgeschakeld. Los de gemelde oorzaak op; test de Knowledge Base opnieuw voordat u synchronisatie inschakelt als het doel niet beschikbaar is."
+          },
+          "cleanupRequired": {
+            "signal": "opruimen vereist",
+            "action": "Wissel nog niet van doel en draai de APP_SECRET nog niet. Herstel de huidige schrijverstoegang, voltooi het opschonen, sla het nieuwe doel op en test het."
+          },
+          "consentRevoked": {
+            "signal": "MCP toestemming ingetrokken",
+            "action": "De gebruiker moet het opnieuw beoordelen en zich opnieuw aanmelden. Bij een URL-wijziging wordt opzettelijk elke opgeslagen toestemming van de vorige ontvanger ingetrokken."
+          }
+        },
+        "recovery": "Herstel na een storing eerst de afhankelijkheden, houd PostgreSQL gezaghebbend en behoud de Knowledge Base tijdens het herstel van koppelingen. Een herhaalde upload van een privébestand met dezelfde Idempotency-Key hervat de gereserveerde batch na een processtoring zonder een extra bestandsrij te maken. Stel voor een noodrollback van RAG Sync RAG_SYNC_ENABLED=false in en start Docmost opnieuw; AI_EXTERNAL_MCP_ENABLED bestuurt alleen uitgaand MCP."
       }
     },
     "integrations": {
@@ -2630,5 +2752,16 @@
   "Uses hidden by permissions: {{count}}": "Door machtigingen verborgen gebruik: {{count}}",
   "Could not load source pages": "Bronpagina's konden niet worden geladen",
   "The selected source page is no longer available or readable.": "De geselecteerde bronpagina is niet meer beschikbaar of kan niet meer worden gelezen.",
-  "No pages": "Geen pagina's"
+  "No pages": "Geen pagina's",
+  "Documents": "Documenten",
+  "Open": "Open",
+  "Clear tags": "Tags wissen",
+  "Tag filter was cleared because this scope has no tags.": "Het tagfilter is gewist omdat dit bereik geen tags bevat.",
+  "Search is temporarily unavailable.": "Zoeken is tijdelijk niet beschikbaar.",
+  "No documents match the selected tags and filters.": "Geen documenten komen overeen met de geselecteerde tags en filters.",
+  "Database row": "Databaserij",
+  "Open tag match {{index}} in {{title}}": "Tagtreffer {{index}} in {{title}} openen",
+  "+{{count}} more tag matches": "+{{count}} meer tagtreffers",
+  "Tag actions": "Tagacties",
+  "Find this tag in the space": "Deze tag in de ruimte zoeken"
 }

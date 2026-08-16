@@ -7,10 +7,7 @@ import {
   resolveAiErrorMessage,
 } from "./ai-policies.ts";
 import guideContract from "@/features/ai/components/ai-admin-guide-contract.json";
-import {
-  buildAiAdminGuideDiagrams,
-  splitAiAdminGuideFields,
-} from "@/features/ai/components/ai-admin-guide-content.ts";
+import { buildAiAdminGuideDiagrams } from "@/features/ai/components/ai-admin-guide-content.ts";
 
 const LOCALES = [
   "de-DE",
@@ -40,10 +37,18 @@ const PROFILE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
   "fr-FR": new Set(["profiles.profileDescription", "profiles.instructions"]),
 };
 const GUIDE_IDENTICAL_VALUE_ALLOWLIST: Record<string, Set<string>> = {
-  "de-DE": new Set(["routeLabel", "problemLabel"]),
-  "fr-FR": new Set(["problemLabel"]),
-  "nl-NL": new Set(["routeLabel"]),
+  "de-DE": new Set(["labels.route"]),
+  "nl-NL": new Set(["labels.route"]),
 };
+const GUIDE_GLOBAL_IDENTICAL_VALUE_ALLOWLIST = new Set([
+  "troubleshooting.rows.401.signal",
+  "troubleshooting.rows.409.signal",
+  "troubleshooting.rows.429.signal",
+  "troubleshooting.rows.503.signal",
+  "troubleshooting.rows.sourceAccessChanged.signal",
+  "troubleshooting.groups.mcp",
+  "troubleshooting.groups.ragSync",
+]);
 const BUILTIN_TOOL_NAMES = [
   "search",
   "getTree",
@@ -230,7 +235,11 @@ describe("AI localization contract", () => {
       const allowlist = GUIDE_IDENTICAL_VALUE_ALLOWLIST[locale] ?? new Set();
       for (const key of manifestedKeys) {
         expect(localized[key]).toBeTruthy();
-        if (!allowlist.has(key.replace(/^adminGuide\./u, ""))) {
+        const guideKey = key.replace(/^adminGuide\./u, "");
+        if (
+          !allowlist.has(guideKey) &&
+          !GUIDE_GLOBAL_IDENTICAL_VALUE_ALLOWLIST.has(guideKey)
+        ) {
           expect(localized[key]).not.toBe(english[key]);
         }
         expect(localized[key].match(/{{[^}]+}}/g) ?? []).toEqual(
@@ -240,7 +249,7 @@ describe("AI localization contract", () => {
     }
   });
 
-  it("keeps compact guide fields and localized Mermaid sources valid", () => {
+  it("keeps explicit guide fields and localized Mermaid sources valid", () => {
     for (const locale of LOCALES) {
       const ai = readAiLocale(locale);
       const translate = ((key: string) => {
@@ -260,18 +269,22 @@ describe("AI localization contract", () => {
         "inboundMcp",
         "outboundMcp",
       ]) {
-        expect(
-          splitAiAdminGuideFields(
-            translate(`ai.adminGuide.scenario.${scenario}.facts`),
-            3,
-          ),
-        ).toHaveLength(3);
-        expect(
-          splitAiAdminGuideFields(
-            translate(`ai.adminGuide.scenario.${scenario}.operations`),
-            3,
-          ),
-        ).toHaveLength(3);
+        for (const field of [
+          "description",
+          "owner",
+          "prerequisite",
+          "result",
+          "steps.step1",
+          "steps.step2",
+          "steps.step3",
+          "success",
+          "rollback",
+          "technical",
+        ]) {
+          expect(
+            translate(`ai.adminGuide.scenario.${scenario}.${field}`),
+          ).toBeTruthy();
+        }
       }
 
       for (const row of [
@@ -281,26 +294,23 @@ describe("AI localization contract", () => {
         "503",
         "leaseLost",
         "sourceAccessChanged",
+        "sourceRemoved",
+        "runtimeStopped",
         "cleanupRequired",
         "consentRevoked",
       ]) {
         expect(
-          splitAiAdminGuideFields(
-            translate(`ai.adminGuide.troubleshooting.${row}`),
-            2,
-          ),
-        ).toHaveLength(2);
+          translate(`ai.adminGuide.troubleshooting.rows.${row}.signal`),
+        ).toBeTruthy();
+        expect(
+          translate(`ai.adminGuide.troubleshooting.rows.${row}.action`),
+        ).toBeTruthy();
       }
 
       const diagrams = buildAiAdminGuideDiagrams(translate);
-      expect(Object.keys(diagrams)).toEqual([
-        "overview",
-        "rag",
-        "inboundMcp",
-        "outboundMcp",
-      ]);
+      expect(Object.keys(diagrams)).toEqual(["overview", "rag", "mcp"]);
       for (const diagram of Object.values(diagrams)) {
-        expect(diagram.source).toMatch(/^flowchart LR/u);
+        expect(diagram.source).toMatch(/^flowchart TB/u);
         expect(diagram.source).not.toContain("<script");
       }
     }

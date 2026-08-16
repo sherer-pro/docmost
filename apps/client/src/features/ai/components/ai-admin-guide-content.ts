@@ -16,20 +16,48 @@ export const AI_ADMIN_GUIDE_ANCHORS =
   ];
 
 export type AiAdminGuideAnchor = (typeof AI_ADMIN_GUIDE_ANCHORS)[number];
+export type AiAdminGuidePanel = "overview" | AiAdminGuideAnchor;
+export type AiAdminGuideScenarioAnchor = Exclude<
+  AiAdminGuideAnchor,
+  "security" | "troubleshooting"
+>;
 
 export const AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS: Record<
-  AiAdminGuideAnchor,
+  AiAdminGuidePanel,
   string
 > = {
+  overview: "ai.adminGuide.navigation.overview",
   assistant: "ai.title",
   retrieval: "ai.settings.retrievalSection",
   "rag-api": "ai.integrations.ragTitle",
   "rag-sync": "ai.ragSync.title",
   "inbound-mcp": "ai.integrations.mcpTitle",
   "outbound-mcp": "ai.externalTools.title",
-  security: "ai.adminGuide.securityTitle",
-  troubleshooting: "ai.adminGuide.troubleshootingTitle",
+  security: "ai.adminGuide.security.title",
+  troubleshooting: "ai.adminGuide.troubleshooting.title",
 };
+
+export const AI_ADMIN_GUIDE_NAVIGATION_GROUPS = [
+  {
+    labelKey: "ai.adminGuide.navigation.groups.docmost",
+    panels: ["assistant", "retrieval"],
+  },
+  {
+    labelKey: "ai.adminGuide.navigation.groups.data",
+    panels: ["rag-api", "rag-sync"],
+  },
+  {
+    labelKey: "ai.adminGuide.navigation.groups.mcp",
+    panels: ["inbound-mcp", "outbound-mcp"],
+  },
+  {
+    labelKey: "ai.adminGuide.navigation.groups.support",
+    panels: ["security", "troubleshooting"],
+  },
+] as const satisfies readonly {
+  labelKey: string;
+  panels: readonly AiAdminGuidePanel[];
+}[];
 
 export function getAiAdminGuideAnchorFromHash(
   hash: string,
@@ -40,148 +68,151 @@ export function getAiAdminGuideAnchorFromHash(
     : null;
 }
 
+export function getAiAdminGuidePanelFromHash(hash: string): AiAdminGuidePanel {
+  return getAiAdminGuideAnchorFromHash(hash) ?? "overview";
+}
+
+export type AiAdminGuideCopyValue = {
+  kind: "route" | "environment";
+  value: string;
+};
+
 export type AiAdminGuideScenario = {
-  anchor: Exclude<AiAdminGuideAnchor, "security" | "troubleshooting">;
+  anchor: AiAdminGuideScenarioAnchor;
   titleKey: string;
-  descriptionKey: string;
-  factsKey: string;
-  operationsKey: string;
+  contentKey: string;
   settingsPath: string;
+  diagram: "rag" | "mcp" | null;
+  controls: readonly AiAdminGuideCopyValue[];
 };
 
 export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
   {
     anchor: "assistant",
     titleKey: "ai.title",
-    descriptionKey: "ai.adminGuide.assistantDescription",
-    factsKey: "ai.adminGuide.scenario.assistant.facts",
-    operationsKey: "ai.adminGuide.scenario.assistant.operations",
+    contentKey: "ai.adminGuide.scenario.assistant",
     settingsPath: "/settings/ai/spaces",
+    diagram: null,
+    controls: [{ kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" }],
   },
   {
     anchor: "retrieval",
     titleKey: "ai.settings.retrievalSection",
-    descriptionKey: "ai.adminGuide.retrievalDescription",
-    factsKey: "ai.adminGuide.scenario.retrieval.facts",
-    operationsKey: "ai.adminGuide.scenario.retrieval.operations",
+    contentKey: "ai.adminGuide.scenario.retrieval",
     settingsPath: "/settings/ai/spaces",
+    diagram: "rag",
+    controls: [{ kind: "environment", value: "AI_RETRIEVAL_ALLOWED_ORIGINS" }],
   },
   {
     anchor: "rag-api",
     titleKey: "ai.integrations.ragTitle",
-    descriptionKey: "ai.adminGuide.ragDescription",
-    factsKey: "ai.adminGuide.scenario.ragApi.facts",
-    operationsKey: "ai.adminGuide.scenario.ragApi.operations",
+    contentKey: "ai.adminGuide.scenario.ragApi",
     settingsPath: "/settings/keys/rag",
+    diagram: "rag",
+    controls: [{ kind: "route", value: "/api/rag/*" }],
   },
   {
     anchor: "rag-sync",
     titleKey: "ai.ragSync.title",
-    descriptionKey: "ai.adminGuide.syncDescription",
-    factsKey: "ai.adminGuide.scenario.ragSync.facts",
-    operationsKey: "ai.adminGuide.scenario.ragSync.operations",
+    contentKey: "ai.adminGuide.scenario.ragSync",
     settingsPath: "/settings/ai/spaces",
+    diagram: "rag",
+    controls: [
+      { kind: "environment", value: "RAG_SYNC_ENABLED" },
+      { kind: "environment", value: "RAG_SYNC_ALLOWED_ORIGINS" },
+    ],
   },
   {
     anchor: "inbound-mcp",
     titleKey: "ai.integrations.mcpTitle",
-    descriptionKey: "ai.adminGuide.inboundMcpDescription",
-    factsKey: "ai.adminGuide.scenario.inboundMcp.facts",
-    operationsKey: "ai.adminGuide.scenario.inboundMcp.operations",
+    contentKey: "ai.adminGuide.scenario.inboundMcp",
     settingsPath: "/settings/keys/mcp",
+    diagram: "mcp",
+    controls: [{ kind: "route", value: "/mcp" }],
   },
   {
     anchor: "outbound-mcp",
     titleKey: "ai.externalTools.title",
-    descriptionKey: "ai.adminGuide.outboundMcpDescription",
-    factsKey: "ai.adminGuide.scenario.outboundMcp.facts",
-    operationsKey: "ai.adminGuide.scenario.outboundMcp.operations",
+    contentKey: "ai.adminGuide.scenario.outboundMcp",
     settingsPath: "/settings/ai/external-tools",
+    diagram: "mcp",
+    controls: [
+      { kind: "environment", value: "AI_EXTERNAL_MCP_ENABLED" },
+      { kind: "environment", value: "AI_MCP_ALLOWED_ORIGINS" },
+    ],
   },
-] as const;
-
-export const AI_ADMIN_GUIDE_COPY_VALUES = [
-  { kind: "route", value: "/mcp" },
-  { kind: "route", value: "/api/rag/*" },
-  { kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" },
-  { kind: "environment", value: "AI_RETRIEVAL_ALLOWED_ORIGINS" },
-  { kind: "environment", value: "RAG_SYNC_ENABLED" },
-  { kind: "environment", value: "RAG_SYNC_ALLOWED_ORIGINS" },
-  { kind: "environment", value: "AI_EXTERNAL_MCP_ENABLED" },
-  { kind: "environment", value: "AI_MCP_ALLOWED_ORIGINS" },
 ] as const;
 
 export const AI_ADMIN_GUIDE_SECURITY_ROWS = [
   {
-    id: "dictionary",
-    nameKey: "Dictionary",
-    ownerKey: "ai.adminGuide.securityOwner.spaceAdmin",
-    boundaryKey: "ai.adminGuide.operationsDictionaryForms",
-  },
-  {
     id: "provider",
     nameKey: "ai.settings.providerSection",
-    ownerKey: "ai.adminGuide.securityOwner.spaceAdmin",
-    boundaryKey: "ai.adminGuide.operationsSetup",
+    ownerKey: "ai.adminGuide.security.owners.spaceAdmin",
+    boundaryKey: "ai.adminGuide.security.boundaries.provider",
   },
   {
     id: "retrieval",
     nameKey: "ai.settings.retrievalSection",
-    ownerKey: "ai.adminGuide.securityOwner.spaceAdmin",
-    boundaryKey: "ai.adminGuide.securitySourceAccess",
+    ownerKey: "ai.adminGuide.security.owners.spaceAdmin",
+    boundaryKey: "ai.adminGuide.security.boundaries.retrieval",
   },
   {
     id: "ragApi",
     nameKey: "ai.integrations.ragTitle",
-    ownerKey: "ai.adminGuide.securityOwner.workspaceAdmin",
-    boundaryKey: "ai.adminGuide.securityInbound",
+    ownerKey: "ai.adminGuide.security.owners.workspaceAdmin",
+    boundaryKey: "ai.adminGuide.security.boundaries.ragApi",
   },
   {
     id: "ragSync",
     nameKey: "ai.ragSync.title",
-    ownerKey: "ai.adminGuide.securityOwner.operatorAndSpaceAdmin",
-    boundaryKey: "ai.adminGuide.securitySecrets",
+    ownerKey: "ai.adminGuide.security.owners.operatorAndSpaceAdmin",
+    boundaryKey: "ai.adminGuide.security.boundaries.ragSync",
   },
   {
     id: "inboundMcp",
     nameKey: "ai.integrations.mcpTitle",
-    ownerKey: "ai.adminGuide.securityOwner.workspaceAdmin",
-    boundaryKey: "ai.adminGuide.securityInbound",
+    ownerKey: "ai.adminGuide.security.owners.workspaceAdmin",
+    boundaryKey: "ai.adminGuide.security.boundaries.inboundMcp",
   },
   {
     id: "outboundMcp",
     nameKey: "ai.externalTools.title",
-    ownerKey: "ai.adminGuide.securityOwner.layered",
-    boundaryKey: "ai.adminGuide.securityOutbound",
+    ownerKey: "ai.adminGuide.security.owners.layered",
+    boundaryKey: "ai.adminGuide.security.boundaries.outboundMcp",
   },
 ] as const;
 
-export const AI_ADMIN_GUIDE_TROUBLESHOOTING_ROWS = [
-  "401",
-  "409",
-  "429",
-  "503",
-  "leaseLost",
-  "sourceAccessChanged",
-  "sourceRemoved",
-  "runtimeStopped",
-  "cleanupRequired",
-  "consentRevoked",
+export const AI_ADMIN_GUIDE_SECURITY_PRINCIPLES = [
+  "leastPrivilege",
+  "separateCredentials",
+  "liveChecks",
+  "stopControls",
 ] as const;
 
-export function splitAiAdminGuideFields(
-  value: string,
-  expectedCount: number,
-): string[] {
-  const fields = value.split("||").map((item) => item.trim());
-  return fields.length === expectedCount && fields.every(Boolean) ? fields : [];
-}
+export const AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS = [
+  {
+    id: "access",
+    rows: ["401", "sourceAccessChanged"],
+  },
+  {
+    id: "limits",
+    rows: ["429", "503", "leaseLost"],
+  },
+  {
+    id: "ragSync",
+    rows: ["409", "sourceRemoved", "runtimeStopped", "cleanupRequired"],
+  },
+  {
+    id: "mcp",
+    rows: ["consentRevoked"],
+  },
+] as const;
 
 export type AiAdminGuideDiagram = {
   source: string;
   labelKey: string;
   captionKey: string;
-  textAlternativeKey: string;
+  textAlternativeKeys: readonly string[];
 };
 
 export function escapeMermaidLabel(value: string): string {
@@ -195,111 +226,68 @@ export function escapeMermaidLabel(value: string): string {
 
 export function buildAiAdminGuideDiagrams(
   t: TFunction,
-): Record<
-  "overview" | "rag" | "inboundMcp" | "outboundMcp",
-  AiAdminGuideDiagram
-> {
+): Record<"overview" | "rag" | "mcp", AiAdminGuideDiagram> {
   const label = (key: string) => escapeMermaidLabel(t(key));
-  const nodes = (key: string, expectedCount: number) => {
-    const values = t(key).split("|").map(escapeMermaidLabel);
-    if (values.length !== expectedCount || values.some((value) => !value)) {
-      throw new Error(`Invalid AI administrator guide diagram nodes: ${key}`);
-    }
-    return values;
-  };
-  const [toolRegistry, externalSystems, remoteMcp] = nodes(
-    "ai.adminGuide.diagram.overviewNodes",
-    3,
-  );
-  const [
-    chatQuery,
-    queryCredential,
-    externalIndex,
-    externalIndexer,
-    liveAcl,
-    writerCredential,
-    doesNotCall,
-  ] = nodes("ai.adminGuide.diagram.ragNodes", 7);
-  const [apiKeySettings, liveScope, redisAdmission, contentPolicy] = nodes(
-    "ai.adminGuide.diagram.inboundNodes",
-    4,
-  );
-  const [
-    deploymentGate,
-    workspaceGate,
-    spaceBinding,
-    groupPolicy,
-    userConsent,
-    originAllowlists,
-    dnsPinnedCall,
-  ] = nodes("ai.adminGuide.diagram.outboundNodes", 7);
+  const alternativeKeys = (diagram: "overview" | "rag" | "mcp") =>
+    [1, 2, 3, 4].map(
+      (index) =>
+        `ai.adminGuide.diagram.${diagram}.textAlternative.step${index}`,
+    );
 
   return {
     overview: {
       labelKey: "ai.adminGuide.diagram.overview.label",
       captionKey: "ai.adminGuide.diagram.overview.caption",
-      textAlternativeKey: "ai.adminGuide.diagram.overview.textAlternative",
-      source: `flowchart LR
-  UI["${label("ai.adminGuide.setupTitle")}"] --> Assistant["${label("ai.title")}"]
-  Assistant --> Retrieval["${label("ai.settings.retrievalSection")}"]
-  Assistant --> Registry["${toolRegistry}"]
-  Retrieval --> External["${externalSystems}"]
-  RagClient["${label("ai.integrations.ragTitle")}"] --> RAG["/api/rag/*"]
-  Sync["${label("ai.ragSync.title")}"] --> External
-  McpClient["${label("ai.integrations.mcpTitle")}"] --> MCP["/mcp"]
-  Agent["${label("ai.externalTools.title")}"] --> Remote["${remoteMcp}"]
-  RAG --> PG["PostgreSQL"]
-  MCP --> Redis["Redis"]
-  MCP --> Registry
-  Registry --> PG
-  Sync --> Redis
-  Sync --> PG`,
+      textAlternativeKeys: alternativeKeys("overview"),
+      source: `flowchart TB
+  Need["${label("ai.adminGuide.overview.title")}"]
+  subgraph DocmostPath["${label("ai.adminGuide.navigation.groups.docmost")}"]
+    direction TB
+    Assistant["${label("ai.title")}"]
+    Retrieval["${label("ai.settings.retrievalSection")}"]
+    Assistant ~~~ Retrieval
+  end
+  subgraph DataPath["${label("ai.adminGuide.navigation.groups.data")}"]
+    direction TB
+    RagApi["${label("ai.integrations.ragTitle")}"]
+    RagSync["${label("ai.ragSync.title")}"]
+    RagApi ~~~ RagSync
+  end
+  subgraph McpPath["${label("ai.adminGuide.navigation.groups.mcp")}"]
+    direction TB
+    Inbound["${label("ai.integrations.mcpTitle")}"]
+    Outbound["${label("ai.externalTools.title")}"]
+    Inbound ~~~ Outbound
+  end
+  Need --> Assistant
+  Need --> RagApi
+  Need --> Inbound
+  DocmostPath ~~~ DataPath
+  DataPath ~~~ McpPath`,
     },
     rag: {
       labelKey: "ai.adminGuide.diagram.rag.label",
       captionKey: "ai.adminGuide.diagram.rag.caption",
-      textAlternativeKey: "ai.adminGuide.diagram.rag.textAlternative",
-      source: `flowchart LR
-  Chat["${chatQuery}"] --> QueryKey["${queryCredential}"]
-  QueryKey --> Retrieval["${label("ai.settings.retrievalSection")}"]
-  Retrieval --> Index["${externalIndex}"]
-  Indexer["${externalIndexer}"] --> RAG["/api/rag/*"]
-  RAG --> ACL["${liveAcl}"]
-  ACL --> PG["PostgreSQL"]
-  Sync["${label("ai.ragSync.title")}"] --> WriterKey["${writerCredential}"]
-  WriterKey --> Index
-  Sync --> ACL
-  Sync -. "${doesNotCall}" .-> RAG`,
+      textAlternativeKeys: alternativeKeys("rag"),
+      source: `flowchart TB
+  Question["${label("ai.adminGuide.diagram.rag.nodes.question")}"] --> Retrieval["${label("ai.settings.retrievalSection")}"]
+  Retrieval --> Index["${label("ai.adminGuide.diagram.rag.nodes.externalIndex")}"]
+  Index --> Checks["${label("ai.adminGuide.diagram.rag.nodes.liveChecks")}"]
+  Indexer["${label("ai.adminGuide.diagram.rag.nodes.externalIndexer")}"] --> RagApi["/api/rag/*"]
+  RagApi --> ExportChecks["${label("ai.adminGuide.diagram.rag.nodes.liveChecks")}"]
+  Docmost["Docmost"] --> RagSync["${label("ai.ragSync.title")}"]
+  RagSync --> OpenWebUi["Open WebUI"]`,
     },
-    inboundMcp: {
-      labelKey: "ai.adminGuide.diagram.inboundMcp.label",
-      captionKey: "ai.adminGuide.diagram.inboundMcp.caption",
-      textAlternativeKey: "ai.adminGuide.diagram.inboundMcp.textAlternative",
-      source: `flowchart LR
-  KeyUI["${apiKeySettings}"] --> KeyAPI["/api/api-keys"]
-  KeyAPI --> KeyService["ApiKeyService"]
-  KeyService --> PG["PostgreSQL api_keys"]
-  Client["MCP client"] --> MCP["/mcp"]
-  MCP --> Guard["McpApiKeyAuthGuard"]
-  Guard --> Scope["${liveScope}"]
-  Scope --> Admission["${redisAdmission}"]
-  Admission --> Registry["${toolRegistry}"]
-  Registry --> Policy["${contentPolicy}"]
-  Policy --> PG`,
-    },
-    outboundMcp: {
-      labelKey: "ai.adminGuide.diagram.outboundMcp.label",
-      captionKey: "ai.adminGuide.diagram.outboundMcp.caption",
-      textAlternativeKey: "ai.adminGuide.diagram.outboundMcp.textAlternative",
-      source: `flowchart LR
-  Agent["Docmost Agent"] --> Deployment["${deploymentGate}"]
-  Deployment --> Workspace["${workspaceGate}"]
-  Workspace --> Space["${spaceBinding}"]
-  Space --> Group["${groupPolicy}"]
-  Group --> Consent["${userConsent}"]
-  Consent --> Origin["${originAllowlists}"]
-  Origin --> DNS["${dnsPinnedCall}"]
-  DNS --> Remote["${remoteMcp}"]`,
+    mcp: {
+      labelKey: "ai.adminGuide.diagram.mcp.label",
+      captionKey: "ai.adminGuide.diagram.mcp.caption",
+      textAlternativeKeys: alternativeKeys("mcp"),
+      source: `flowchart TB
+  Client["${label("ai.integrations.mcpTitle")}"] --> Inbound["/mcp"]
+  Inbound --> ReadTools["${label("ai.adminGuide.diagram.mcp.nodes.readTools")}"]
+  ReadTools --> Docmost["Docmost"]
+  Agent["${label("ai.externalTools.title")}"] --> Approval["${label("ai.adminGuide.diagram.mcp.nodes.approval")}"]
+  Approval --> Remote["${label("ai.adminGuide.diagram.mcp.nodes.remoteServer")}"]`,
     },
   };
 }

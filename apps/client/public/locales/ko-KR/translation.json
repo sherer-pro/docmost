@@ -1461,138 +1461,260 @@
       "tab": "가이드",
       "title": "AI, RAG 및 MCP 작동 방식",
       "description": "AI 도우미, 외부 검색, 동기화 및 MCP 보안 경계에 대한 실무 가이드입니다.",
-      "overviewTitle": "각 영역의 역할",
-      "assistantDescription": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다.",
-      "retrievalDescription": "스페이스 검색은 답변을 생성하는 동안 수행됩니다. 외부 인덱스에서 후보를 요청한 뒤 Docmost가 데이터베이스, 현재 접근 권한 및 AI 제외 규칙을 기준으로 각 소스를 다시 확인합니다. 검색 실패는 채팅을 중단하지 않습니다.",
-      "ragDescription": "읽기 전용 /api/rag/* API는 전체 및 증분 피드를 외부 인덱서로 내보내고 인증 후 보호된 첨부 파일 스트림을 반환할 수 있습니다. 질문을 검색하거나 답변하지 않습니다. 모든 RAG 키의 범위는 하나의 공백으로 지정됩니다.",
-      "inboundMcpDescription": "외부 보조자는 범위가 지정된 MCP 키를 사용하여 루트 /mcp 엔드포인트에 연결합니다. 이는 상태 비저장이며, 허용된 읽기 도구만 노출하고 바이너리 첨부 파일 콘텐츠가 아닌 첨부 파일 메타데이터를 반환합니다.",
-      "outboundMcpDescription": "Docmost 에이전트는 승인된 원격 MCP 서버의 도구를 호출할 수 있습니다. 이 방향은 인바운드 MCP와 반대이며 별도의 설정과 자격 증명을 사용합니다.",
-      "setupTitle": "설정 위치",
-      "setupDescription": "필요한 설정 섹션을 여세요. 배포 환경의 허용 주소 목록과 비상 스위치는 운영자가 관리합니다.",
-      "syncTitle": "RAG 인덱스 정기 업데이트",
-      "syncDescription": "내장된 Open WebUI RAG 동기화는 Docmost 내부에서 실행되고, Docmost 서비스를 통해 직접 PostgreSQL를 읽고, Redis와 조정하고, 별도의 암호화된 공간별 자격 증명으로 씁니다. 공개 /api/rag/* API를 호출하지 않습니다. 쿼리와 작성자 자격 증명은 별도로 유지됩니다.",
-      "syncStepDelta": "각 피드는 고정된 데이터베이스 스냅샷에 연결된 불투명 커서를 사용합니다. hasMore=false까지 시작 워터마크를 유지하고 마지막 페이지에서만 체크포인트를 진행하며 재시도는 멱등성을 유지해야 합니다.",
-      "riskTitle": "절충점과 위험",
-      "riskTiming": "최신성은 폴링 간격과 주기 처리 시간을 합한 값입니다. 간격이 길면 오래된 상태가 더 오래 유지되고, 너무 짧으면 Docmost, Redis 및 Open WebUI의 부하가 증가하여 429/503 응답이 발생할 수 있습니다.",
-      "riskDelivery": "피드는 최소 한 번 전달됩니다. 리스 또는 슬롯 손실은 현재 외부 요청을 중단하고 새 작업을 막으며, 취소가 도착하기 전에 완료된 부수 효과는 조정 과정에서 처리됩니다.",
-      "riskModel": "외부 인덱스에서 임베딩 모델이나 청크 분할을 변경해도 Docmost 콘텐츠 해시는 바뀌지 않습니다. RAG Sync는 변경되지 않은 소스를 건너뛰므로 인덱싱 모델을 변경할 때는 외부 플랫폼 도구로 전체 재구축을 수행하세요.",
-      "securityTitle": "보안 경계",
-      "securitySourceAccess": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다.",
-      "securityInbound": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다.",
-      "securityOutbound": "아웃바운드 MCP는 배포 스위치, 워크스페이스 스위치, 활성 서버, 스페이스 바인딩, 그룹 정책 및 사용자 동의가 모두 허용할 때까지 닫혀 있습니다. 배포 비상 스위치는 AI_EXTERNAL_MCP_ENABLED입니다.",
-      "securityOutboundGroups": "스페이스 관리자는 각 서버 바인딩에서 그룹 규칙을 관리합니다. 거부 규칙이 우선하며, 그렇지 않으면 선택한 그룹 도구 목록이 워크스페이스와 스페이스 허용 목록의 교집합을 좁힙니다.",
-      "securityOutboundConsent": "동의에는 수신 호스트가 명시되므로 서버 URL을 변경하면 저장된 모든 사용자 동의가 철회됩니다. 실행 중에는 동의를 철회할 수 있지만 새 외부 서버를 활성화할 수는 없습니다.",
-      "securitySecrets": "공급자, 검색, Open WebUI writer, RAG, 인바운드 MCP 및 아웃바운드 MCP 자격 증명은 서로 다른 비밀입니다. 공간별 자격 증명을 Docker 환경이나 메타데이터, 로그 또는 URL에 넣지 마세요. APP_SECRET을 변경하기 전에 모든 RAG binding을 비활성화하고 정리가 끝날 때까지 기다리세요. 이 비밀은 원격 소유권 metadata 서명에도 사용됩니다. 너무 일찍 변경했다면 정리 전에 이전 값을 복원한 뒤 암호화된 자격 증명을 다시 입력하세요.",
-      "securityRemote": "아웃바운드 MCP는 선택된 Docmost 데이터를 다른 시스템으로 전송합니다. 원격 설명, 스키마 및 결과는 신뢰할 수 없는 것으로 취급됩니다. ‘읽기 전용’은 Docmost 정책 분류일 뿐 원격 구현에 부작용이 없다는 증거가 아닙니다.",
-      "operationsTitle": "관리자 체크리스트",
-      "operationsSetup": "각 스페이스에서 모델과 선택적 검색을 구성하고 테스트하세요. 먼저 배포 수준에서 주소를 허용하고 어댑터가 준비되기 전에는 검색을 활성화하지 말며 내장 및 외부 도구 정책으로 접근 범위를 좁히세요. 이미지 또는 이미지만 있는 PDF를 보내기 전에 이미지 이해를 활성화하세요. 비활성화된 경우 서버는 입력을 조용히 생략하지 않고 거부합니다.",
-      "operationsDictionaryForms": "스페이스 모델이 활성화되면 사전 편집자는 저장하지 않고 한 용어의 단어 형태를 생성할 수 있습니다. 워크스페이스 소유자와 관리자는 모든 용어의 형태를 생성해 원자적으로 저장할 수 있습니다. 기존 형태는 유지되며 다른 용어와 충돌하는 별칭은 제외됩니다. 이 보조 경로는 전용 생성 경계를 통해 스페이스 공급자를 사용하며 채팅 대화나 AI run을 만들지 않습니다.",
-      "operationsProfileNames": "어시스턴트 프로필 이름은 스페이스 내에서 고유해야 합니다. 중복이면 ai_profile_name_conflict가 포함된 409가 반환됩니다. 필요하면 목록을 다시 불러오고 다른 이름을 선택하세요.",
-      "operationsRagMigration": "독립형 RAG worker를 교체할 때는 먼저 중지하고 RAG_SYNC_ENABLED=false로 마이그레이션한 다음 각 스페이스를 구성하고 Test와 Enable을 수행하세요. 현재 대상이 Test를 통과할 때까지 API는 Enable을 거부합니다. 이전 환경 비밀은 가져오지 않습니다. 롤백에는 migration down이 아니라 배포 스위치를 사용하세요.",
-      "operationsRecovery": "장애 후에는 먼저 종속성을 복구하고 PostgreSQL을 신뢰할 수 있는 기준으로 유지하며 매핑 복구 중에는 Knowledge Base를 보존하세요. 동일한 Idempotency-Key로 비공개 파일 업로드를 반복하면 프로세스 장애 후에도 새 파일 행을 만들지 않고 예약된 배치를 재개합니다. RAG Sync를 긴급 롤백하려면 RAG_SYNC_ENABLED=false로 설정하고 Docmost를 다시 시작하세요. AI_EXTERNAL_MCP_ENABLED는 아웃바운드 MCP만 제어합니다.",
-      "templateExportScope": "템플릿 카탈로그 항목은 제외됩니다. 템플릿에서 만든 페이지는 일반적인 구체화된 페이지로 내보내집니다.",
-      "contractVersion": "가이드 계약 v{{version}}",
-      "quickNavLabel": "AI 가이드 섹션",
-      "taskChooserTitle": "설정에 필요한 항목을 선택하세요.",
-      "taskChooserDescription": "필요한 결과부터 시작하세요. 각 경로는 소유자, 필수 구성 요소, 예상 결과 및 정확한 설정 페이지를 식별합니다.",
-      "roleLabel": "소유자",
-      "prerequisiteLabel": "필요하다",
-      "resultLabel": "결과",
-      "detailsLabel": "단계 읽기",
-      "openSettings": "설정 열기",
       "openRelevantGuide": "관련 가이드 열기",
-      "architectureTitle": "경로가 연결되는 방법",
-      "architectureDescription": "개요에서는 생성, 쿼리 시간 검색, 내보내기, 동기화 및 MCP 방향을 모두 구분합니다. PostgreSQL는 여전히 권위를 갖고 있습니다. Redis는 입장 및 임대를 조정합니다.",
-      "setupSequence": "기본 순서: Save → Test → Enable. API 키 클라이언트는 Create → 한 번 복사 → 테스트 → 시작을 사용합니다.",
-      "instructionsTitle": "설정, 성공 신호 및 롤백",
-      "stepsTitle": "설정 순서",
-      "successTitle": "성공은 다음과 같습니다",
-      "rollbackTitle": "안전한 롤백",
-      "referencesTitle": "경로 및 배포 제어",
-      "referencesDescription": "정확한 공개 경로 및 환경 이름을 복사하세요. 비밀 값은 승인된 비밀 저장소에 속하며 이 가이드나 로그에는 속하지 않습니다.",
-      "routeLabel": "경로",
-      "environmentLabel": "환경변수",
-      "securityMatrixTitle": "자격 증명 및 보안 경계",
-      "securityMatrixDescription": "모든 경로에는 자체 자격 증명과 실시간 인증 확인이 있습니다. 쿼리, 작성기, RAG, 인바운드 MCP, 아웃바운드 MCP 또는 공급자 암호를 재사용하지 마십시오.",
-      "securityScenarioLabel": "경로",
-      "securityOwnerLabel": "다음에 의해 제어됨",
-      "securityBoundaryLabel": "저장 및 경계",
-      "troubleshootingTitle": "문제 해결",
-      "troubleshootingDescription": "안정적인 오류 코드 또는 상태에서 시작하여 실패한 종속성 또는 인증 경계를 복원한 다음 가장 작은 안전한 작업을 다시 시도합니다.",
-      "problemLabel": "신호",
-      "actionLabel": "해야 할 일",
+      "navigation": {
+        "label": "AI 가이드 섹션",
+        "selectLabel": "AI 가이드 섹션",
+        "overview": "각 영역의 역할",
+        "groups": {
+          "docmost": "Docmost 내부",
+          "data": "데이터 및 인덱스",
+          "mcp": "MCP 연결",
+          "support": "보안 및 지원"
+        }
+      },
+      "overview": {
+        "title": "설정에 필요한 항목을 선택하세요.",
+        "description": "필요한 결과부터 시작하세요. 각 경로는 소유자, 필수 구성 요소, 예상 결과 및 정확한 설정 페이지를 식별합니다.",
+        "setupSequence": "기본 순서: Save → Test → Enable. API 키 클라이언트는 Create → 한 번 복사 → 테스트 → 시작을 사용합니다."
+      },
+      "labels": {
+        "owner": "소유자",
+        "prerequisite": "필요하다",
+        "result": "결과",
+        "steps": "설정 순서",
+        "success": "성공은 다음과 같습니다",
+        "rollback": "안전한 롤백",
+        "openSettings": "설정 열기",
+        "technicalDetails": "기술 세부 정보",
+        "textAlternative": "텍스트 설명",
+        "route": "경로",
+        "environment": "환경변수"
+      },
       "scenario": {
         "assistant": {
-          "facts": "공간 관리자||승인된 공급자 출처, 모델 및 선택적 보조 프로필||Chat 및 Agent는 선택한 모델과 허용된 도구만 사용합니다.",
-          "operations": "Save 공급자, 모델, 프로필 및 정책 설정|Test Chat 및 Agent|Enable 공간 모델 및 의도된 프로파일||테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.||Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다."
+          "description": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다.",
+          "owner": "공간 관리자",
+          "prerequisite": "승인된 공급자 출처, 모델 및 선택적 보조 프로필",
+          "result": "Chat 및 Agent는 선택한 모델과 허용된 도구만 사용합니다.",
+          "steps": {
+            "step1": "Save 공급자, 모델, 프로필 및 정책 설정",
+            "step2": "Test Chat 및 Agent",
+            "step3": "Enable 공간 모델 및 의도된 프로파일"
+          },
+          "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
+          "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",
+          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다."
         },
         "retrieval": {
-          "facts": "운영자 및 공간 관리자||승인된 검색 원본 및 구성된 어댑터||답변은 실시간 Docmost 확인 후에만 외부 후보자를 인용할 수 있습니다.",
-          "operations": "Save 엔드포인트, 어댑터 및 쿼리 자격 증명|공간 설정에서 Test 검색|Enable 외부 검색||테스트는 후보를 반환하고 답변은 읽을 수 있고 제외되지 않은 소스만 유지합니다.||외부 검색을 비활성화합니다. Chat가 검색 없이 계속됩니다."
+          "description": "스페이스 검색은 답변을 생성하는 동안 수행됩니다.",
+          "owner": "운영자 및 공간 관리자",
+          "prerequisite": "승인된 검색 원본 및 구성된 어댑터",
+          "result": "답변은 실시간 Docmost 확인 후에만 외부 후보자를 인용할 수 있습니다.",
+          "steps": {
+            "step1": "Save 엔드포인트, 어댑터 및 쿼리 자격 증명",
+            "step2": "공간 설정에서 Test 검색",
+            "step3": "Enable 외부 검색"
+          },
+          "success": "테스트는 후보를 반환하고 답변은 읽을 수 있고 제외되지 않은 소스만 유지합니다.",
+          "rollback": "외부 검색을 비활성화합니다. Chat가 검색 없이 계속됩니다.",
+          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다."
         },
         "ragApi": {
-          "facts": "작업공간 관리자 및 인덱서 운영자||생성 시 복사된 공간 범위 RAG API 키||외부 인덱서는 승인된 피드와 보호된 첨부 파일 스트림을 수신합니다.",
-          "operations": "Create RAG 키를 한 번 복사합니다.|Test /api/rag/pages 및 커서 계속|외부 인덱서 시작||응답은 200, 안정적인 커서 및 키 작성자의 실시간 읽기 가능 범위만 반환합니다.||키를 취소하고 인덱서를 중지합니다. 복구를 위한 새 키 생성"
+          "description": "읽기 전용 /api/rag/* API는 전체 및 증분 피드를 외부 인덱서로 내보내고 인증 후 보호된 첨부 파일 스트림을 반환할 수 있습니다.",
+          "owner": "작업공간 관리자 및 인덱서 운영자",
+          "prerequisite": "생성 시 복사된 공간 범위 RAG API 키",
+          "result": "외부 인덱서는 승인된 피드와 보호된 첨부 파일 스트림을 수신합니다.",
+          "steps": {
+            "step1": "Create RAG 키를 한 번 복사합니다.",
+            "step2": "Test /api/rag/pages 및 커서 계속",
+            "step3": "외부 인덱서 시작"
+          },
+          "success": "응답은 200, 안정적인 커서 및 키 작성자의 실시간 읽기 가능 범위만 반환합니다.",
+          "rollback": "키를 취소하고 인덱서를 중지합니다. 복구를 위한 새 키 생성",
+          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다."
         },
         "ragSync": {
-          "facts": "배치 운영자 및 공간 관리자||RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키||Docmost는 선택된 Open WebUI Knowledge Base를 점진적으로 유지하며 PDF, DOCX, TXT 및 Markdown 첨부 파일만 이식 가능한 문서 인덱스에 추가합니다.",
-          "operations": "Save 대상 및 작성자 자격 증명|현재 대상에 대해 Test를 실행하십시오.|Enable 바인딩||마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.||바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요."
+          "description": "내장된 Open WebUI RAG 동기화는 Docmost 내부에서 실행되고, Docmost 서비스를 통해 직접 PostgreSQL를 읽고, Redis와 조정하고, 별도의 암호화된 공간별 자격 증명으로 씁니다.",
+          "owner": "배치 운영자 및 공간 관리자",
+          "prerequisite": "RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키",
+          "result": "Docmost는 선택된 Open WebUI Knowledge Base를 점진적으로 유지하며 PDF, DOCX, TXT 및 Markdown 첨부 파일만 이식 가능한 문서 인덱스에 추가합니다.",
+          "steps": {
+            "step1": "Save 대상 및 작성자 자격 증명",
+            "step2": "현재 대상에 대해 Test를 실행하십시오.",
+            "step3": "Enable 바인딩"
+          },
+          "success": "마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.",
+          "rollback": "바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요.",
+          "technical": "각 피드는 고정된 데이터베이스 스냅샷에 연결된 불투명 커서를 사용합니다. hasMore=false까지 시작 워터마크를 유지하고 마지막 페이지에서만 체크포인트를 진행하며 재시도는 멱등성을 유지해야 합니다. 피드는 최소 한 번 전달됩니다. 리스 또는 슬롯 손실은 현재 외부 요청을 중단하고 새 작업을 막으며, 취소가 도착하기 전에 완료된 부수 효과는 조정 과정에서 처리됩니다."
         },
         "inboundMcp": {
-          "facts": "Workspace 관리자 및 MCP 클라이언트 소유자||정확한 기능 허용 목록이 포함된 공간 범위 MCP 키||클라이언트는 /mcp를 통해 승인된 읽기 전용 Docmost 도구를 호출할 수 있습니다.",
-          "operations": "Create MCP 키를 한 번 복사합니다.|Test 초기화, tools/list 및 허용된 호출 1개|클라이언트 통합 시작||허용된 도구는 작동합니다. 거부된 기능 및 바이너리 첨부 파일 읽기는 계속 사용할 수 없습니다.||키를 취소하거나 공간에서 작성자를 제거합니다. 다음 요청 시 활성 액세스가 닫힙니다."
+          "description": "외부 보조자는 범위가 지정된 MCP 키를 사용하여 루트 /mcp 엔드포인트에 연결합니다.",
+          "owner": "Workspace 관리자 및 MCP 클라이언트 소유자",
+          "prerequisite": "정확한 기능 허용 목록이 포함된 공간 범위 MCP 키",
+          "result": "클라이언트는 /mcp를 통해 승인된 읽기 전용 Docmost 도구를 호출할 수 있습니다.",
+          "steps": {
+            "step1": "Create MCP 키를 한 번 복사합니다.",
+            "step2": "Test 초기화, tools/list 및 허용된 호출 1개",
+            "step3": "클라이언트 통합 시작"
+          },
+          "success": "허용된 도구는 작동합니다. 거부된 기능 및 바이너리 첨부 파일 읽기는 계속 사용할 수 없습니다.",
+          "rollback": "키를 취소하거나 공간에서 작성자를 제거합니다. 다음 요청 시 활성 액세스가 닫힙니다.",
+          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다."
         },
         "outboundMcp": {
-          "facts": "배포 운영자, 작업 공간 관리자, 공간 관리자 및 사용자||원본 허용 목록, 활성화된 서버 및 바인딩, 그룹 정책, 사용자 동의 모두||Docmost Agent는 교차된 원격 MCP 도구 세트를 사용할 수 있습니다.",
-          "operations": "Save 서버, 바인딩 및 그룹 정책|Test 및 도구 검색|Enable 서버 및 사용자 동의 수집||교차된 도구만 나타나고 DNS-pinned 요청은 검토를 위해 신뢰할 수 없는 결과를 반환합니다.||인증 레이어를 비활성화하거나 동의를 취소합니다. URL을 변경하면 저장된 모든 동의가 취소됩니다."
+          "description": "Docmost 에이전트는 승인된 원격 MCP 서버의 도구를 호출할 수 있습니다.",
+          "owner": "배포 운영자, 작업 공간 관리자, 공간 관리자 및 사용자",
+          "prerequisite": "원본 허용 목록, 활성화된 서버 및 바인딩, 그룹 정책, 사용자 동의 모두",
+          "result": "Docmost Agent는 교차된 원격 MCP 도구 세트를 사용할 수 있습니다.",
+          "steps": {
+            "step1": "Save 서버, 바인딩 및 그룹 정책",
+            "step2": "Test 및 도구 검색",
+            "step3": "Enable 서버 및 사용자 동의 수집"
+          },
+          "success": "교차된 도구만 나타나고 DNS-pinned 요청은 검토를 위해 신뢰할 수 없는 결과를 반환합니다.",
+          "rollback": "인증 레이어를 비활성화하거나 동의를 취소합니다. URL을 변경하면 저장된 모든 동의가 취소됩니다.",
+          "technical": "아웃바운드 MCP는 배포 스위치, 워크스페이스 스위치, 활성 서버, 스페이스 바인딩, 그룹 정책 및 사용자 동의가 모두 허용할 때까지 닫혀 있습니다. 배포 비상 스위치는 AI_EXTERNAL_MCP_ENABLED입니다. 아웃바운드 MCP는 선택된 Docmost 데이터를 다른 시스템으로 전송합니다. 원격 설명, 스키마 및 결과는 신뢰할 수 없는 것으로 취급됩니다. ‘읽기 전용’은 Docmost 정책 분류일 뿐 원격 구현에 부작용이 없다는 증거가 아닙니다."
         }
       },
       "diagram": {
         "expand": "다이어그램 전체 화면 열기",
         "invalid": "아키텍처 다이어그램을 렌더링할 수 없습니다. 인접한 단계를 사용하십시오.",
-        "stepsTitle": "동등한 단계별 보기",
         "overview": {
           "label": "AI, RAG 및 MCP 아키텍처 개요",
           "caption": "생성, 내보내기, 동기화 및 두 개의 MCP 방향은 서로 다른 승인 및 자격 증명 경로를 사용합니다.",
-          "textAlternative": "공간별 도우미 및 선택적 쿼리 시간 검색 구성|외부 읽기 전용 내보내기 클라이언트에만 /api/rag/*를 사용하세요.|공개 RAG API를 호출하지 않고 직접 Open WebUI 쓰기를 위해 내장된 RAG 동기화를 사용하세요.|인바운드 읽기 도구에는 /mcp를 사용하고 아웃바운드 Agent 도구에는 외부 MCP 설정을 사용합니다."
+          "textAlternative": {
+            "step1": "공간별 도우미 및 선택적 쿼리 시간 검색 구성",
+            "step2": "외부 읽기 전용 내보내기 클라이언트에만 /api/rag/*를 사용하세요.",
+            "step3": "공개 RAG API를 호출하지 않고 직접 Open WebUI 쓰기를 위해 내장된 RAG 동기화를 사용하세요.",
+            "step4": "인바운드 읽기 도구에는 /mcp를 사용하고 아웃바운드 Agent 도구에는 외부 MCP 설정을 사용합니다."
+          }
         },
         "rag": {
           "label": "RAG API 및 내장 RAG 동기화 아키텍처",
           "caption": "쿼리, 공개 내보내기 및 작성자 자격 증명은 별개입니다. 내장 동기화는 /api/rag/*를 통해 반복되지 않습니다.",
-          "textAlternative": "Chat 검색은 쿼리 자격 증명을 사용하여 외부 인덱스를 요청합니다.|외부 인덱서는 /api/rag/*를 통해 승인된 콘텐츠를 읽습니다.|내장된 RAG 동기화는 Docmost 상태를 내부적으로 읽고 공간당 기록기 키로 씁니다.|내보냈거나 동기화된 콘텐츠 앞에 실시간 ACL 및 콘텐츠 정책 검사가 유지됩니다."
+          "textAlternative": {
+            "step1": "Chat 검색은 쿼리 자격 증명을 사용하여 외부 인덱스를 요청합니다.",
+            "step2": "외부 인덱서는 /api/rag/*를 통해 승인된 콘텐츠를 읽습니다.",
+            "step3": "내장된 RAG 동기화는 Docmost 상태를 내부적으로 읽고 공간당 기록기 키로 씁니다.",
+            "step4": "내보냈거나 동기화된 콘텐츠 앞에 실시간 ACL 및 콘텐츠 정책 검사가 유지됩니다."
+          },
+          "nodes": {
+            "question": "Chat 쿼리",
+            "externalIndex": "외부 인덱스",
+            "externalIndexer": "외부 인덱서",
+            "liveChecks": "라이브 ACL 및 콘텐츠 정책"
+          }
         },
-        "inboundMcp": {
-          "label": "인바운드 MCP 인증 흐름",
-          "caption": "모든 /mcp 요청은 Redis 승인 및 공유 읽기 전용 도구 정책 전에 키 범위를 다시 확인합니다.",
-          "textAlternative": "Create 입력된 공간 범위 MCP 키|라이브 키, 워크스페이스, 생성자, 공간 검증|Redis 속도 및 동시성 승인 획득|PostgreSQL를 읽기 전에 기능 정책을 페이지 ACL 및 콘텐츠 정책과 교차하세요."
-        },
-        "outboundMcp": {
-          "label": "아웃바운드 MCP 승인 흐름",
-          "caption": "모든 인증 계층은 요청을 허용해야 합니다. 동의는 수신자 URL을 따르며 DNS 확인은 고정됩니다.",
-          "textAlternative": "Enable 배포 및 원산지 승인|Enable 작업 공간 서버 및 공간 바인딩|거부 우선 그룹 정책 및 사용자 동의 적용|승인된 원격 주소를 확인하고 고정한 다음 스키마와 결과를 신뢰할 수 없는 것으로 처리합니다."
-        },
-        "overviewNodes": "공유 AI 도구 레지스트리|외부 시스템|원격 MCP 서버",
-        "ragNodes": "Chat 쿼리|자격 증명 쿼리|외부 인덱스|외부 인덱서|라이브 ACL 및 콘텐츠 정책|작가 자격증|전화하지 않는다",
-        "inboundNodes": "API 키 설정|라이브 키, 작업 공간, 사용자 및 공간 범위|Redis 속도 및 동시성 허용|도구 정책, 페이지 ACL 및 콘텐츠 정책",
-        "outboundNodes": "배포 제어|작업 공간 제어|공간 바인딩|거부 우선 그룹 정책|사용자 동의|정확한 출처 허용 목록|DNS-pinned 원격 요청"
+        "mcp": {
+          "label": "인바운드 MCP 인증 흐름 / 아웃바운드 MCP 승인 흐름",
+          "caption": "모든 /mcp 요청은 Redis 승인 및 공유 읽기 전용 도구 정책 전에 키 범위를 다시 확인합니다. 모든 인증 계층은 요청을 허용해야 합니다. 동의는 수신자 URL을 따르며 DNS 확인은 고정됩니다.",
+          "textAlternative": {
+            "step1": "Create 입력된 공간 범위 MCP 키",
+            "step2": "라이브 키, 워크스페이스, 생성자, 공간 검증",
+            "step3": "거부 우선 그룹 정책 및 사용자 동의 적용",
+            "step4": "승인된 원격 주소를 확인하고 고정한 다음 스키마와 결과를 신뢰할 수 없는 것으로 처리합니다."
+          },
+          "nodes": {
+            "readTools": "도구 정책, 페이지 ACL 및 콘텐츠 정책",
+            "approval": "배포 제어 · 사용자 동의",
+            "remoteServer": "원격 MCP 서버"
+          }
+        }
       },
-      "securityOwner": {
-        "spaceAdmin": "공간 관리자; 운영자가 원산지를 승인합니다.",
-        "workspaceAdmin": "워크스페이스 소유자 또는 관리자",
-        "operatorAndSpaceAdmin": "배치 운영자 및 공간 관리자",
-        "layered": "운영자, 워크스페이스 관리자, 스페이스 관리자, 그룹 정책 및 사용자"
+      "security": {
+        "title": "보안 경계",
+        "description": "모든 경로에는 자체 자격 증명과 실시간 인증 확인이 있습니다. 쿼리, 작성기, RAG, 인바운드 MCP, 아웃바운드 MCP 또는 공급자 암호를 재사용하지 마십시오.",
+        "principles": {
+          "leastPrivilege": {
+            "title": "최소 권한",
+            "description": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다."
+          },
+          "separateCredentials": {
+            "title": "자격 증명 분리",
+            "description": "공급자, 검색, Open WebUI writer, RAG, 인바운드 MCP 및 아웃바운드 MCP 자격 증명은 서로 다른 비밀입니다."
+          },
+          "liveChecks": {
+            "title": "실시간 권한 확인",
+            "description": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다."
+          },
+          "stopControls": {
+            "title": "빠른 중지 제어",
+            "description": "아웃바운드 MCP는 배포 스위치, 워크스페이스 스위치, 활성 서버, 스페이스 바인딩, 그룹 정책 및 사용자 동의가 모두 허용할 때까지 닫혀 있습니다."
+          }
+        },
+        "matrixTitle": "자격 증명 및 보안 경계",
+        "matrixDescription": "모든 경로에는 자체 자격 증명과 실시간 인증 확인이 있습니다. 쿼리, 작성기, RAG, 인바운드 MCP, 아웃바운드 MCP 또는 공급자 암호를 재사용하지 마십시오.",
+        "scenarioLabel": "경로",
+        "ownerLabel": "다음에 의해 제어됨",
+        "boundaryLabel": "저장 및 경계",
+        "owners": {
+          "spaceAdmin": "공간 관리자; 운영자가 원산지를 승인합니다.",
+          "workspaceAdmin": "워크스페이스 소유자 또는 관리자",
+          "operatorAndSpaceAdmin": "배치 운영자 및 공간 관리자",
+          "layered": "운영자, 워크스페이스 관리자, 스페이스 관리자, 그룹 정책 및 사용자"
+        },
+        "boundaries": {
+          "provider": "각 스페이스에서 모델과 선택적 검색을 구성하고 테스트하세요. 먼저 배포 수준에서 주소를 허용하고 어댑터가 준비되기 전에는 검색을 활성화하지 말며 내장 및 외부 도구 정책으로 접근 범위를 좁히세요. 이미지 또는 이미지만 있는 PDF를 보내기 전에 이미지 이해를 활성화하세요. 비활성화된 경우 서버는 입력을 조용히 생략하지 않고 거부합니다.",
+          "retrieval": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다.",
+          "ragApi": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다.",
+          "ragSync": "공급자, 검색, Open WebUI writer, RAG, 인바운드 MCP 및 아웃바운드 MCP 자격 증명은 서로 다른 비밀입니다. 공간별 자격 증명을 Docker 환경이나 메타데이터, 로그 또는 URL에 넣지 마세요. APP_SECRET을 변경하기 전에 모든 RAG binding을 비활성화하고 정리가 끝날 때까지 기다리세요. 이 비밀은 원격 소유권 metadata 서명에도 사용됩니다. 너무 일찍 변경했다면 정리 전에 이전 값을 복원한 뒤 암호화된 자격 증명을 다시 입력하세요.",
+          "inboundMcp": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다.",
+          "outboundMcp": "아웃바운드 MCP는 배포 스위치, 워크스페이스 스위치, 활성 서버, 스페이스 바인딩, 그룹 정책 및 사용자 동의가 모두 허용할 때까지 닫혀 있습니다. 배포 비상 스위치는 AI_EXTERNAL_MCP_ENABLED입니다. 아웃바운드 MCP는 선택된 Docmost 데이터를 다른 시스템으로 전송합니다. 원격 설명, 스키마 및 결과는 신뢰할 수 없는 것으로 취급됩니다. ‘읽기 전용’은 Docmost 정책 분류일 뿐 원격 구현에 부작용이 없다는 증거가 아닙니다."
+        }
       },
       "troubleshooting": {
-        "401": "401 무단||Bearer 키 유형, 만료, 해지, 작성자의 라이브 멤버십 및 정확한 범위 공간을 확인하세요. 사용자 쿠키는 RAG 또는 MCP를 인증하지 않습니다.",
-        "409": "409 갈등||현재 상태를 다시 로드합니다. 다시 시도하기 전에 중복된 프로필 이름, 오래된 버전, RAG 대상 충돌 또는 불완전한 정리를 해결하세요.",
-        "429": "429 요청이 너무 많습니다||지터를 줄이고 병렬성을 줄입니다. RAG/MCP 속도와 동시성 제한, 장기 실행 임대를 확인하세요.",
-        "503": "503 서비스를 사용할 수 없습니다.||Redis, 공급자 또는 외부 대상을 먼저 복원하십시오. Redis가 한계를 보호할 수 없으면 승인이 실패합니다.",
-        "leaseLost": "Redis 임대 손실||활성 요청을 중단된 것으로 처리하고 Redis 안정성과 소유권 펜싱을 확인한 다음 멱등적으로 재시도합니다.",
-        "sourceAccessChanged": "source_access_changed||액세스 권한이 변경되어 부분 답변과 인용이 삭제되었습니다. 권한이 의도적으로 복원된 후에만 소스를 다시 엽니다.",
-        "sourceRemoved": "소스 삭제됨||피드 스냅샷 이후 페이지, 데이터베이스 또는 첨부 파일이 사라졌습니다. RAG Sync는 이를 삭제로 처리하고 관리 파일을 제거한 뒤 내부 not found 오류를 재시도하지 않고 계속합니다.",
-        "runtimeStopped": "동기화 중지됨||재시도할 수 없는 런타임 오류로 바인딩이 비활성화되었습니다. 보고된 원인을 해결하고, 대상을 사용할 수 없다면 동기화를 활성화하기 전에 Knowledge Base를 다시 테스트하세요.",
-        "cleanupRequired": "정리 필요||아직 대상을 전환하거나 APP_SECRET를 회전하지 마십시오. 현재 작성자 액세스를 복원하고 정리를 마친 다음 새 대상을 저장하고 테스트합니다.",
-        "consentRevoked": "MCP 동의가 취소되었습니다.||사용자는 다시 검토하고 선택해야 합니다. URL을 변경하면 이전 수신자에 대해 저장된 모든 동의가 의도적으로 취소됩니다."
+        "title": "문제 해결",
+        "description": "안정적인 오류 코드 또는 상태에서 시작하여 실패한 종속성 또는 인증 경계를 복원한 다음 가장 작은 안전한 작업을 다시 시도합니다.",
+        "groups": {
+          "access": "접근",
+          "limits": "제한 및 종속성",
+          "ragSync": "RAG Sync",
+          "mcp": "MCP"
+        },
+        "rows": {
+          "401": {
+            "signal": "401 무단",
+            "action": "Bearer 키 유형, 만료, 해지, 작성자의 라이브 멤버십 및 정확한 범위 공간을 확인하세요. 사용자 쿠키는 RAG 또는 MCP를 인증하지 않습니다."
+          },
+          "409": {
+            "signal": "409 갈등",
+            "action": "현재 상태를 다시 로드합니다. 다시 시도하기 전에 중복된 프로필 이름, 오래된 버전, RAG 대상 충돌 또는 불완전한 정리를 해결하세요."
+          },
+          "429": {
+            "signal": "429 요청이 너무 많습니다",
+            "action": "지터를 줄이고 병렬성을 줄입니다. RAG/MCP 속도와 동시성 제한, 장기 실행 임대를 확인하세요."
+          },
+          "503": {
+            "signal": "503 서비스를 사용할 수 없습니다.",
+            "action": "Redis, 공급자 또는 외부 대상을 먼저 복원하십시오. Redis가 한계를 보호할 수 없으면 승인이 실패합니다."
+          },
+          "leaseLost": {
+            "signal": "Redis 임대 손실",
+            "action": "활성 요청을 중단된 것으로 처리하고 Redis 안정성과 소유권 펜싱을 확인한 다음 멱등적으로 재시도합니다."
+          },
+          "sourceAccessChanged": {
+            "signal": "source_access_changed",
+            "action": "액세스 권한이 변경되어 부분 답변과 인용이 삭제되었습니다. 권한이 의도적으로 복원된 후에만 소스를 다시 엽니다."
+          },
+          "sourceRemoved": {
+            "signal": "소스 삭제됨",
+            "action": "피드 스냅샷 이후 페이지, 데이터베이스 또는 첨부 파일이 사라졌습니다. RAG Sync는 이를 삭제로 처리하고 관리 파일을 제거한 뒤 내부 not found 오류를 재시도하지 않고 계속합니다."
+          },
+          "runtimeStopped": {
+            "signal": "동기화 중지됨",
+            "action": "재시도할 수 없는 런타임 오류로 바인딩이 비활성화되었습니다. 보고된 원인을 해결하고, 대상을 사용할 수 없다면 동기화를 활성화하기 전에 Knowledge Base를 다시 테스트하세요."
+          },
+          "cleanupRequired": {
+            "signal": "정리 필요",
+            "action": "아직 대상을 전환하거나 APP_SECRET를 회전하지 마십시오. 현재 작성자 액세스를 복원하고 정리를 마친 다음 새 대상을 저장하고 테스트합니다."
+          },
+          "consentRevoked": {
+            "signal": "MCP 동의가 취소되었습니다.",
+            "action": "사용자는 다시 검토하고 선택해야 합니다. URL을 변경하면 이전 수신자에 대해 저장된 모든 동의가 의도적으로 취소됩니다."
+          }
+        },
+        "recovery": "장애 후에는 먼저 종속성을 복구하고 PostgreSQL을 신뢰할 수 있는 기준으로 유지하며 매핑 복구 중에는 Knowledge Base를 보존하세요. 동일한 Idempotency-Key로 비공개 파일 업로드를 반복하면 프로세스 장애 후에도 새 파일 행을 만들지 않고 예약된 배치를 재개합니다. RAG Sync를 긴급 롤백하려면 RAG_SYNC_ENABLED=false로 설정하고 Docmost를 다시 시작하세요. AI_EXTERNAL_MCP_ENABLED는 아웃바운드 MCP만 제어합니다."
       }
     },
     "integrations": {
@@ -2630,5 +2752,16 @@
   "Uses hidden by permissions: {{count}}": "권한으로 인해 숨겨진 사용: {{count}}건",
   "Could not load source pages": "원본 페이지를 불러오지 못했습니다",
   "The selected source page is no longer available or readable.": "선택한 원본 페이지를 더 이상 사용할 수 없거나 읽을 권한이 없습니다.",
-  "No pages": "페이지 없음"
+  "No pages": "페이지 없음",
+  "Documents": "문서",
+  "Open": "미완료",
+  "Clear tags": "태그 지우기",
+  "Tag filter was cleared because this scope has no tags.": "이 범위에 태그가 없어 태그 필터를 지웠습니다.",
+  "Search is temporarily unavailable.": "검색을 일시적으로 사용할 수 없습니다.",
+  "No documents match the selected tags and filters.": "선택한 태그 및 필터와 일치하는 문서가 없습니다.",
+  "Database row": "데이터베이스 행",
+  "Open tag match {{index}} in {{title}}": "{{title}}에서 태그 일치 {{index}} 열기",
+  "+{{count}} more tag matches": "태그 일치 {{count}}개 더 있음",
+  "Tag actions": "태그 작업",
+  "Find this tag in the space": "이 스페이스에서 이 태그 찾기"
 }
