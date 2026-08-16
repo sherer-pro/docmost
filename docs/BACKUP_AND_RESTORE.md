@@ -145,6 +145,13 @@ After restore, record:
 - whether optional outbound integrations remain disabled or were deliberately
   re-enabled from the target deployment's local configuration.
 
+For a disposable or forensic restore drill, stop every temporary application
+and PostgreSQL container after recording acceptance evidence. Verify that it is
+absent from `docker ps`; leaving a forensic database running consumes production
+memory and can be mistaken for an owned Compose service. Preserve the stopped
+container and candidate volume when retention or incident evidence requires it,
+and remove them only in a separate reviewed cleanup after the retention window.
+
 Do not reuse partial volumes, do not substitute an Alpine/musl PostgreSQL image
 for the pinned Debian/glibc runtime, and do not open ingress while migration or
 acceptance is incomplete. If a default pre-restore snapshot exists, restore it
