@@ -551,6 +551,19 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       `Shared text ${suffix} live-update`,
       { timeout: 45_000 },
     );
+    await expect
+      .poll(
+        async () =>
+          JSON.stringify(
+            (await apiGet<PageInfo>(api, `/api/pages/info?pageId=${source.id}`))
+              .content,
+          ),
+        {
+          message: "live source content to persist before invariant checks",
+          timeout: 60_000,
+        },
+      )
+      .toContain(`Shared text ${suffix} live-update`);
 
     await apiPost(api, "/api/pages/actions/update", {
       pageId: source.id,
