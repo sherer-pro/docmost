@@ -3,11 +3,24 @@ import test from "node:test";
 import {
   buildCapacityPlan,
   compareInventories,
+  parseArguments,
   parseEnvFile,
   rollbackPreflightMatches,
   rollbackState,
   serializeEnvFile,
 } from "./production-db.mjs";
+
+test("accepts pnpm's documented argument separator", () => {
+  assert.deepEqual(parseArguments(["--", "preflight", "--json"]), {
+    command: "preflight",
+    composeFile: "compose.production.yml",
+    envFile: "/etc/docmost/docmost.env",
+    stateFile: "/var/lib/docmost/deployment/postgres.env",
+    backupDir: "/var/backups/docmost/postgres",
+    json: true,
+    yes: false,
+  });
+});
 
 test("parses deployment state without expanding shell syntax", () => {
   assert.deepEqual(
