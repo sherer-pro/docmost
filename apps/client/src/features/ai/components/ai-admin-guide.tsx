@@ -1,14 +1,13 @@
 import {
   Accordion,
   Alert,
-  Anchor,
-  Badge,
   Button,
   Card,
   Code,
   Group,
   List,
-  ScrollArea,
+  Paper,
+  Select,
   SimpleGrid,
   Stack,
   Table,
@@ -20,7 +19,7 @@ import {
   IconAlertTriangle,
   IconBook2,
   IconBrain,
-  IconChecklist,
+  IconCheck,
   IconChevronRight,
   IconDatabase,
   IconPlugConnected,
@@ -30,30 +29,24 @@ import {
   IconTool,
   type TablerIcon,
 } from "@tabler/icons-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import CopyTextButton from "@/components/common/copy";
 import responsiveTableClasses from "@/components/ui/responsive-table.module.css";
 import { MermaidDiagram } from "@/features/editor/components/common/mermaid-diagram";
 import {
-  AI_ADMIN_GUIDE_ANCHORS,
-  AI_ADMIN_GUIDE_CONTRACT_VERSION,
-  AI_ADMIN_GUIDE_COPY_VALUES,
+  AI_ADMIN_GUIDE_NAVIGATION_GROUPS,
   AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS,
   AI_ADMIN_GUIDE_SCENARIOS,
+  AI_ADMIN_GUIDE_SECURITY_PRINCIPLES,
   AI_ADMIN_GUIDE_SECURITY_ROWS,
-  AI_ADMIN_GUIDE_TROUBLESHOOTING_ROWS,
+  AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS,
   buildAiAdminGuideDiagrams,
-  getAiAdminGuideAnchorFromHash,
-  splitAiAdminGuideFields,
+  getAiAdminGuidePanelFromHash,
+  type AiAdminGuideCopyValue,
   type AiAdminGuideDiagram,
+  type AiAdminGuidePanel,
   type AiAdminGuideScenario,
 } from "./ai-admin-guide-content";
 import classes from "./ai-admin-guide.module.css";
@@ -70,225 +63,364 @@ const SCENARIO_ICONS: Record<
   "outbound-mcp": { color: "orange", icon: IconTool },
 };
 
-function splitSteps(value: string): string[] {
-  return value
-    .split("|")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function getPanelPath(
+  location: { pathname: string; search: string },
+  panel: AiAdminGuidePanel,
+): string {
+  const base = `${location.pathname}${location.search}`;
+  return panel === "overview" ? base : `${base}#${panel}`;
 }
 
-function GuideDiagram({
-  diagram,
-  onRenderComplete,
-}: {
-  diagram: AiAdminGuideDiagram;
-  onRenderComplete: () => void;
-}) {
+function GuideDiagram({ diagram }: { diagram: AiAdminGuideDiagram }) {
   const { t } = useTranslation();
-  const steps = splitSteps(t(diagram.textAlternativeKey));
 
   return (
-    <Card withBorder radius="md" p="md" className={classes.diagramCard}>
-      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
-        <MermaidDiagram
-          source={diagram.source}
-          accessibleName={t(diagram.labelKey)}
-          caption={t(diagram.captionKey)}
-          previewTitle={t(diagram.labelKey)}
-          expandLabel={t("ai.adminGuide.diagram.expand")}
-          invalidLabel={t("ai.adminGuide.diagram.invalid")}
-          enablePreview
-          scrollOnNarrow
-          onRenderComplete={onRenderComplete}
-        />
-        <div>
-          <Text fw={650} size="sm" mb="xs">
-            {t("ai.adminGuide.diagram.stepsTitle")}
-          </Text>
-          <List size="sm" spacing="xs" withPadding>
-            {steps.map((step) => (
-              <List.Item key={step}>{step}</List.Item>
-            ))}
-          </List>
-        </div>
-      </SimpleGrid>
-    </Card>
+    <div className={classes.diagramSurface}>
+      <MermaidDiagram
+        source={diagram.source}
+        accessibleName={t(diagram.labelKey)}
+        caption={t(diagram.captionKey)}
+        previewTitle={t(diagram.labelKey)}
+        expandLabel={t("ai.adminGuide.diagram.expand")}
+        invalidLabel={t("ai.adminGuide.diagram.invalid")}
+        enablePreview
+        scrollOnNarrow
+        diagramClassName={classes.guideDiagram}
+      />
+      <Accordion variant="contained" radius="md" mt="sm">
+        <Accordion.Item value="text-alternative">
+          <Accordion.Control>
+            {t("ai.adminGuide.labels.textAlternative")}
+          </Accordion.Control>
+          <Accordion.Panel>
+            <List size="sm" spacing="xs" withPadding>
+              {diagram.textAlternativeKeys.map((key) => (
+                <List.Item key={key}>{t(key)}</List.Item>
+              ))}
+            </List>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </div>
   );
 }
 
-function ScenarioTaskCard({ scenario }: { scenario: AiAdminGuideScenario }) {
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={classes.fact}>
+      <Text size="xs" c="dimmed" fw={700} tt="uppercase">
+        {label}
+      </Text>
+      <Text size="sm">{children}</Text>
+    </div>
+  );
+}
+
+function CopyValues({ values }: { values: readonly AiAdminGuideCopyValue[] }) {
+  const { t } = useTranslation();
+
+  return (
+    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="sm">
+      {values.map((item) => (
+        <Card key={item.value} withBorder radius="sm" p="sm">
+          <Group justify="space-between" wrap="nowrap" align="flex-start">
+            <div className={classes.copyValue}>
+              <Text size="xs" c="dimmed">
+                {t(
+                  item.kind === "route"
+                    ? "ai.adminGuide.labels.route"
+                    : "ai.adminGuide.labels.environment",
+                )}
+              </Text>
+              <Code>{item.value}</Code>
+            </div>
+            <CopyTextButton text={item.value} />
+          </Group>
+        </Card>
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function ScenarioPanel({
+  scenario,
+  diagram,
+}: {
+  scenario: AiAdminGuideScenario;
+  diagram?: AiAdminGuideDiagram;
+}) {
   const { t } = useTranslation();
   const iconConfig = SCENARIO_ICONS[scenario.anchor];
   const Icon = iconConfig.icon;
-  const [role, prerequisite, result] = splitAiAdminGuideFields(
-    t(scenario.factsKey),
-    3,
-  );
+  const key = scenario.contentKey;
 
   return (
-    <Card withBorder radius="md" p="md" className={classes.taskCard}>
-      <Stack gap="sm" h="100%">
+    <section id={scenario.anchor} aria-labelledby={`${scenario.anchor}-title`}>
+      <Stack gap="lg">
         <Group gap="sm" wrap="nowrap" align="flex-start">
           <ThemeIcon
             variant="light"
             color={iconConfig.color}
             radius="md"
-            size="lg"
+            size={42}
           >
-            <Icon size={19} stroke={1.9} />
+            <Icon size={21} stroke={1.8} />
           </ThemeIcon>
-          <Text fw={700}>{t(scenario.titleKey)}</Text>
+          <div className={classes.panelHeading}>
+            <Title order={2} size="h3" id={`${scenario.anchor}-title`}>
+              {t(scenario.titleKey)}
+            </Title>
+            <Text c="dimmed" mt={4} maw={820}>
+              {t(`${key}.description`)}
+            </Text>
+          </div>
         </Group>
-        <div className={classes.taskFacts}>
-          <Text size="xs" c="dimmed" fw={650}>
-            {t("ai.adminGuide.roleLabel")}
-          </Text>
-          <Text size="sm">{role}</Text>
-          <Text size="xs" c="dimmed" fw={650}>
-            {t("ai.adminGuide.prerequisiteLabel")}
-          </Text>
-          <Text size="sm">{prerequisite}</Text>
-          <Text size="xs" c="dimmed" fw={650}>
-            {t("ai.adminGuide.resultLabel")}
-          </Text>
-          <Text size="sm">{result}</Text>
+
+        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
+          <Fact label={t("ai.adminGuide.labels.owner")}>
+            {t(`${key}.owner`)}
+          </Fact>
+          <Fact label={t("ai.adminGuide.labels.prerequisite")}>
+            {t(`${key}.prerequisite`)}
+          </Fact>
+          <Fact label={t("ai.adminGuide.labels.result")}>
+            {t(`${key}.result`)}
+          </Fact>
+        </SimpleGrid>
+
+        {diagram && <GuideDiagram diagram={diagram} />}
+
+        <div>
+          <Title order={3} size="h4" mb="sm">
+            {t("ai.adminGuide.labels.steps")}
+          </Title>
+          <List type="ordered" spacing="sm" withPadding>
+            {["step1", "step2", "step3"].map((step) => (
+              <List.Item key={step}>{t(`${key}.steps.${step}`)}</List.Item>
+            ))}
+          </List>
         </div>
-        <Group mt="auto" justify="space-between" gap="xs">
-          <Anchor href={`#${scenario.anchor}`} size="sm">
-            {t("ai.adminGuide.detailsLabel")}
-          </Anchor>
-          <Button
-            component={Link}
-            to={scenario.settingsPath}
-            size="xs"
-            variant="light"
-            rightSection={<IconChevronRight size={14} />}
-          >
-            {t("ai.adminGuide.openSettings")}
-          </Button>
-        </Group>
+
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          <Alert color="green" variant="light" icon={<IconCheck size={18} />}>
+            <Text fw={700} size="sm" mb={4}>
+              {t("ai.adminGuide.labels.success")}
+            </Text>
+            <Text size="sm">{t(`${key}.success`)}</Text>
+          </Alert>
+          <Alert color="gray" variant="light" icon={<IconRefresh size={18} />}>
+            <Text fw={700} size="sm" mb={4}>
+              {t("ai.adminGuide.labels.rollback")}
+            </Text>
+            <Text size="sm">{t(`${key}.rollback`)}</Text>
+          </Alert>
+        </SimpleGrid>
+
+        <Button
+          component={Link}
+          to={scenario.settingsPath}
+          variant="light"
+          className={classes.primaryAction}
+          rightSection={<IconChevronRight size={16} />}
+        >
+          {t("ai.adminGuide.labels.openSettings")}
+        </Button>
+
+        <Accordion variant="contained" radius="md">
+          <Accordion.Item value="technical-details">
+            <Accordion.Control>
+              {t("ai.adminGuide.labels.technicalDetails")}
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Text size="sm">{t(`${key}.technical`)}</Text>
+              <CopyValues values={scenario.controls} />
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
       </Stack>
-    </Card>
+    </section>
   );
 }
 
-function InstructionBlock({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={classes.instructionBlock}>
-      <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-        {title}
-      </Text>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function ScenarioSection({
-  scenario,
-  diagram,
-  activeAnchor,
-  onDiagramRenderComplete,
-}: {
-  scenario: AiAdminGuideScenario;
-  diagram?: AiAdminGuideDiagram;
-  activeAnchor: string | null;
-  onDiagramRenderComplete: () => void;
-}) {
+function OverviewPanel({ diagram }: { diagram: AiAdminGuideDiagram }) {
   const { t } = useTranslation();
-  const [opened, setOpened] = useState(activeAnchor === scenario.anchor);
-  const iconConfig = SCENARIO_ICONS[scenario.anchor];
-  const Icon = iconConfig.icon;
-  const [stepsValue, success, rollback] = splitAiAdminGuideFields(
-    t(scenario.operationsKey),
-    3,
-  );
 
-  useEffect(() => {
-    if (activeAnchor === scenario.anchor) {
-      setOpened(true);
-    }
-  }, [activeAnchor, scenario.anchor]);
+  return (
+    <section aria-labelledby="ai-guide-overview-title">
+      <Stack gap="lg">
+        <div>
+          <Title order={2} size="h3" id="ai-guide-overview-title">
+            {t("ai.adminGuide.overview.title")}
+          </Title>
+          <Text c="dimmed" mt={4} maw={820}>
+            {t("ai.adminGuide.overview.description")}
+          </Text>
+        </div>
+        <GuideDiagram diagram={diagram} />
+        <Alert color="blue" variant="light" icon={<IconCheck size={18} />}>
+          <Text size="sm">{t("ai.adminGuide.overview.setupSequence")}</Text>
+        </Alert>
+      </Stack>
+    </section>
+  );
+}
+
+function SecurityPanel() {
+  const { t } = useTranslation();
+
+  return (
+    <section id="security" aria-labelledby="ai-guide-security-title">
+      <Stack gap="lg">
+        <Group gap="sm" wrap="nowrap" align="flex-start">
+          <ThemeIcon variant="light" color="blue" radius="md" size={42}>
+            <IconShieldCheck size={21} />
+          </ThemeIcon>
+          <div className={classes.panelHeading}>
+            <Title order={2} size="h3" id="ai-guide-security-title">
+              {t("ai.adminGuide.security.title")}
+            </Title>
+            <Text c="dimmed" mt={4} maw={820}>
+              {t("ai.adminGuide.security.description")}
+            </Text>
+          </div>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          {AI_ADMIN_GUIDE_SECURITY_PRINCIPLES.map((principle) => (
+            <Card key={principle} withBorder radius="md" p="md">
+              <Text fw={700} size="sm">
+                {t(`ai.adminGuide.security.principles.${principle}.title`)}
+              </Text>
+              <Text size="sm" c="dimmed" mt={4}>
+                {t(
+                  `ai.adminGuide.security.principles.${principle}.description`,
+                )}
+              </Text>
+            </Card>
+          ))}
+        </SimpleGrid>
+
+        <Accordion variant="contained" radius="md">
+          <Accordion.Item value="security-matrix">
+            <Accordion.Control>
+              {t("ai.adminGuide.security.matrixTitle")}
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Text size="sm" c="dimmed" mb="md">
+                {t("ai.adminGuide.security.matrixDescription")}
+              </Text>
+              <Table.ScrollContainer
+                minWidth={680}
+                className={responsiveTableClasses.responsiveScroll}
+              >
+                <Table
+                  striped
+                  highlightOnHover
+                  withTableBorder
+                  className={responsiveTableClasses.responsiveTable}
+                >
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>
+                        {t("ai.adminGuide.security.scenarioLabel")}
+                      </Table.Th>
+                      <Table.Th>
+                        {t("ai.adminGuide.security.ownerLabel")}
+                      </Table.Th>
+                      <Table.Th>
+                        {t("ai.adminGuide.security.boundaryLabel")}
+                      </Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {AI_ADMIN_GUIDE_SECURITY_ROWS.map((row) => (
+                      <Table.Tr key={row.id}>
+                        <Table.Td
+                          data-card-role="primary"
+                          data-label={t("ai.adminGuide.security.scenarioLabel")}
+                        >
+                          <Text fw={650} size="sm">
+                            {t(row.nameKey)}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td
+                          data-label={t("ai.adminGuide.security.ownerLabel")}
+                        >
+                          <Text size="sm">{t(row.ownerKey)}</Text>
+                        </Table.Td>
+                        <Table.Td
+                          data-label={t("ai.adminGuide.security.boundaryLabel")}
+                        >
+                          <Text size="sm">{t(row.boundaryKey)}</Text>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      </Stack>
+    </section>
+  );
+}
+
+function TroubleshootingPanel() {
+  const { t } = useTranslation();
 
   return (
     <section
-      id={scenario.anchor}
-      aria-labelledby={`${scenario.anchor}-title`}
-      className={classes.anchorSection}
+      id="troubleshooting"
+      aria-labelledby="ai-guide-troubleshooting-title"
     >
-      <Card withBorder radius="lg" p={{ base: "md", sm: "lg" }}>
-        <Stack gap="md">
-          <Group gap="sm" wrap="nowrap" align="flex-start">
-            <ThemeIcon
-              variant="light"
-              color={iconConfig.color}
-              radius="md"
-              size="lg"
-            >
-              <Icon size={19} />
-            </ThemeIcon>
-            <div>
-              <Title order={3} size="h4" id={`${scenario.anchor}-title`}>
-                {t(scenario.titleKey)}
-              </Title>
-              <Text size="sm" c="dimmed" mt={4} maw={920}>
-                {t(scenario.descriptionKey)}
-              </Text>
-            </div>
-          </Group>
+      <Stack gap="lg">
+        <Group gap="sm" wrap="nowrap" align="flex-start">
+          <ThemeIcon variant="light" color="yellow" radius="md" size={42}>
+            <IconAlertTriangle size={21} />
+          </ThemeIcon>
+          <div className={classes.panelHeading}>
+            <Title order={2} size="h3" id="ai-guide-troubleshooting-title">
+              {t("ai.adminGuide.troubleshooting.title")}
+            </Title>
+            <Text c="dimmed" mt={4} maw={820}>
+              {t("ai.adminGuide.troubleshooting.description")}
+            </Text>
+          </div>
+        </Group>
 
-          {diagram && (
-            <GuideDiagram
-              diagram={diagram}
-              onRenderComplete={onDiagramRenderComplete}
-            />
-          )}
-
-          <Accordion
-            value={opened ? "instructions" : null}
-            onChange={(value) => setOpened(value === "instructions")}
-            variant="contained"
-            radius="md"
-          >
-            <Accordion.Item value="instructions">
+        <Accordion multiple variant="separated" radius="md">
+          {AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS.map((group) => (
+            <Accordion.Item key={group.id} value={group.id}>
               <Accordion.Control>
-                {t("ai.adminGuide.instructionsTitle")}
+                {t(`ai.adminGuide.troubleshooting.groups.${group.id}`)}
               </Accordion.Control>
               <Accordion.Panel>
-                <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-                  <InstructionBlock title={t("ai.adminGuide.stepsTitle")}>
-                    <List size="sm" spacing="xs" withPadding>
-                      {splitSteps(stepsValue).map((step) => (
-                        <List.Item key={step}>{step}</List.Item>
-                      ))}
-                    </List>
-                  </InstructionBlock>
-                  <InstructionBlock title={t("ai.adminGuide.successTitle")}>
-                    <Text size="sm">{success}</Text>
-                  </InstructionBlock>
-                  <InstructionBlock title={t("ai.adminGuide.rollbackTitle")}>
-                    <Text size="sm">{rollback}</Text>
-                  </InstructionBlock>
-                </SimpleGrid>
-                <Button
-                  component={Link}
-                  to={scenario.settingsPath}
-                  variant="light"
-                  mt="md"
-                  rightSection={<IconChevronRight size={16} />}
-                >
-                  {t("ai.adminGuide.openSettings")}
-                </Button>
+                <Stack gap="sm">
+                  {group.rows.map((row) => (
+                    <div key={row} className={classes.troubleshootingItem}>
+                      <Text fw={700} size="sm">
+                        {t(`ai.adminGuide.troubleshooting.rows.${row}.signal`)}
+                      </Text>
+                      <Text size="sm" c="dimmed" mt={4}>
+                        {t(`ai.adminGuide.troubleshooting.rows.${row}.action`)}
+                      </Text>
+                    </div>
+                  ))}
+                </Stack>
               </Accordion.Panel>
             </Accordion.Item>
-          </Accordion>
-        </Stack>
-      </Card>
+          ))}
+        </Accordion>
+
+        <Alert
+          color="yellow"
+          variant="light"
+          icon={<IconAlertTriangle size={18} />}
+        >
+          <Text size="sm">{t("ai.adminGuide.troubleshooting.recovery")}</Text>
+        </Alert>
+      </Stack>
     </section>
   );
 }
@@ -296,289 +428,123 @@ function ScenarioSection({
 export default function AiAdminGuide() {
   const { t } = useTranslation();
   const location = useLocation();
-  const activeAnchor = getAiAdminGuideAnchorFromHash(location.hash);
+  const navigate = useNavigate();
+  const activePanel = getAiAdminGuidePanelFromHash(location.hash);
   const diagrams = useMemo(() => buildAiAdminGuideDiagrams(t), [t]);
-  const [diagramLayoutRevision, setDiagramLayoutRevision] = useState(0);
-  const handleDiagramRenderComplete = useCallback(() => {
-    setDiagramLayoutRevision((revision) => revision + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!activeAnchor) {
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      document.getElementById(activeAnchor)?.scrollIntoView({ block: "start" });
-    });
-  }, [activeAnchor, diagramLayoutRevision]);
+  const scenario = AI_ADMIN_GUIDE_SCENARIOS.find(
+    (item) => item.anchor === activePanel,
+  );
+  const navigationOptions = [
+    {
+      value: "overview",
+      label: t(AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS.overview),
+    },
+    ...AI_ADMIN_GUIDE_NAVIGATION_GROUPS.flatMap((group) =>
+      group.panels.map((panel) => ({
+        value: panel,
+        label: t(AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS[panel]),
+      })),
+    ),
+  ];
 
   return (
-    <Stack gap="xl">
-      <Card withBorder radius="lg" className={classes.hero}>
-        <Group wrap="nowrap" align="flex-start">
-          <ThemeIcon size={48} radius="md" variant="light" color="violet">
-            <IconBook2 size={26} stroke={1.8} />
-          </ThemeIcon>
-          <div className={classes.heroContent}>
-            <Group gap="xs" align="center">
-              <Title order={2} size="h3" id="ai-admin-guide-title">
-                {t("ai.adminGuide.title")}
-              </Title>
-              <Badge variant="light" color="gray">
-                {t("ai.adminGuide.contractVersion", {
-                  version: AI_ADMIN_GUIDE_CONTRACT_VERSION,
-                })}
-              </Badge>
-            </Group>
-            <Text c="dimmed" mt={4} maw={880}>
-              {t("ai.adminGuide.description")}
-            </Text>
-          </div>
-        </Group>
-      </Card>
+    <Stack gap="lg" className={classes.page}>
+      <Group gap="sm" wrap="nowrap" align="flex-start">
+        <ThemeIcon size={42} radius="md" variant="light" color="violet">
+          <IconBook2 size={22} stroke={1.8} />
+        </ThemeIcon>
+        <div className={classes.panelHeading}>
+          <Title order={1} size="h2" id="ai-admin-guide-title">
+            {t("ai.adminGuide.title")}
+          </Title>
+          <Text c="dimmed" mt={4} maw={820}>
+            {t("ai.adminGuide.description")}
+          </Text>
+        </div>
+      </Group>
 
-      <Card
-        component="nav"
-        withBorder
-        radius="md"
-        p="md"
-        aria-label={t("ai.adminGuide.quickNavLabel")}
-      >
-        <Group gap="xs">
-          {AI_ADMIN_GUIDE_ANCHORS.map((anchor) => (
-            <Anchor
-              key={anchor}
-              href={`#${anchor}`}
-              className={classes.navLink}
-              aria-current={activeAnchor === anchor ? "location" : undefined}
-            >
-              {t(AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS[anchor])}
-            </Anchor>
-          ))}
-        </Group>
-      </Card>
-
-      <section aria-labelledby="ai-guide-task-title">
-        <Title order={3} size="h4" id="ai-guide-task-title">
-          {t("ai.adminGuide.taskChooserTitle")}
-        </Title>
-        <Text size="sm" c="dimmed" mt={4} mb="md">
-          {t("ai.adminGuide.taskChooserDescription")}
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }} spacing="md">
-          {AI_ADMIN_GUIDE_SCENARIOS.map((scenario) => (
-            <ScenarioTaskCard key={scenario.anchor} scenario={scenario} />
-          ))}
-        </SimpleGrid>
-        <Alert
-          color="blue"
-          variant="light"
-          icon={<IconChecklist size={19} />}
-          mt="md"
-        >
-          <Text size="sm">{t("ai.adminGuide.setupSequence")}</Text>
-        </Alert>
-      </section>
-
-      <section aria-labelledby="ai-guide-architecture-title">
-        <Title order={3} size="h4" id="ai-guide-architecture-title">
-          {t("ai.adminGuide.architectureTitle")}
-        </Title>
-        <Text size="sm" c="dimmed" mt={4} mb="md">
-          {t("ai.adminGuide.architectureDescription")}
-        </Text>
-        <GuideDiagram
-          diagram={diagrams.overview}
-          onRenderComplete={handleDiagramRenderComplete}
-        />
-      </section>
-
-      {AI_ADMIN_GUIDE_SCENARIOS.map((scenario) => (
-        <ScenarioSection
-          key={scenario.anchor}
-          scenario={scenario}
-          activeAnchor={activeAnchor}
-          onDiagramRenderComplete={handleDiagramRenderComplete}
-          diagram={
-            scenario.anchor === "rag-api"
-              ? diagrams.rag
-              : scenario.anchor === "inbound-mcp"
-                ? diagrams.inboundMcp
-                : scenario.anchor === "outbound-mcp"
-                  ? diagrams.outboundMcp
-                  : undefined
+      <Select
+        className={classes.mobileNavigation}
+        label={t("ai.adminGuide.navigation.selectLabel")}
+        data={navigationOptions}
+        value={activePanel}
+        allowDeselect={false}
+        onChange={(value) => {
+          if (value) {
+            void navigate(getPanelPath(location, value as AiAdminGuidePanel));
           }
-        />
-      ))}
+        }}
+      />
 
-      <section
-        id="security"
-        aria-labelledby="ai-guide-security-title"
-        className={classes.anchorSection}
-      >
-        <Group gap="sm" mb={4}>
-          <ThemeIcon variant="light" color="blue" radius="md">
-            <IconShieldCheck size={18} />
-          </ThemeIcon>
-          <Title order={3} size="h4" id="ai-guide-security-title">
-            {t("ai.adminGuide.securityMatrixTitle")}
-          </Title>
-        </Group>
-        <Text size="sm" c="dimmed" mb="md" maw={920}>
-          {t("ai.adminGuide.securityMatrixDescription")}
-        </Text>
-        <Table.ScrollContainer
-          minWidth={720}
-          className={responsiveTableClasses.responsiveScroll}
+      <div className={classes.layout}>
+        <Paper
+          component="nav"
+          withBorder
+          radius="md"
+          p="xs"
+          className={classes.navigation}
+          aria-label={t("ai.adminGuide.navigation.label")}
         >
-          <Table
-            striped
-            highlightOnHover
-            withTableBorder
-            className={responsiveTableClasses.responsiveTable}
-          >
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t("ai.adminGuide.securityScenarioLabel")}</Table.Th>
-                <Table.Th>{t("ai.adminGuide.securityOwnerLabel")}</Table.Th>
-                <Table.Th>{t("ai.adminGuide.securityBoundaryLabel")}</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {AI_ADMIN_GUIDE_SECURITY_ROWS.map((row) => (
-                <Table.Tr key={row.id}>
-                  <Table.Td
-                    data-card-role="primary"
-                    data-label={t("ai.adminGuide.securityScenarioLabel")}
-                  >
-                    <Text fw={650} size="sm">
-                      {t(row.nameKey)}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td data-label={t("ai.adminGuide.securityOwnerLabel")}>
-                    <Text size="sm">{t(row.ownerKey)}</Text>
-                  </Table.Td>
-                  <Table.Td
-                    data-label={t("ai.adminGuide.securityBoundaryLabel")}
-                  >
-                    <Text size="sm">{t(row.boundaryKey)}</Text>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-        <Alert
-          color="orange"
-          variant="light"
-          icon={<IconShieldCheck size={18} />}
-          mt="md"
-        >
-          <Stack gap={4}>
-            <Text size="sm">{t("ai.adminGuide.securityOutboundGroups")}</Text>
-            <Text size="sm">{t("ai.adminGuide.securityOutboundConsent")}</Text>
+          <Stack gap="md">
+            <Button
+              component={Link}
+              to={getPanelPath(location, "overview")}
+              variant={activePanel === "overview" ? "light" : "subtle"}
+              color={activePanel === "overview" ? "blue" : "gray"}
+              justify="flex-start"
+              aria-current={activePanel === "overview" ? "page" : undefined}
+            >
+              {t(AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS.overview)}
+            </Button>
+            {AI_ADMIN_GUIDE_NAVIGATION_GROUPS.map((group) => (
+              <div key={group.labelKey}>
+                <Text
+                  size="xs"
+                  c="dimmed"
+                  fw={700}
+                  tt="uppercase"
+                  px="sm"
+                  mb={4}
+                >
+                  {t(group.labelKey)}
+                </Text>
+                <Stack gap={2}>
+                  {group.panels.map((panel) => (
+                    <Button
+                      key={panel}
+                      component={Link}
+                      to={getPanelPath(location, panel)}
+                      variant={activePanel === panel ? "light" : "subtle"}
+                      color={activePanel === panel ? "blue" : "gray"}
+                      justify="flex-start"
+                      aria-current={activePanel === panel ? "page" : undefined}
+                    >
+                      {t(AI_ADMIN_GUIDE_NAVIGATION_LABEL_KEYS[panel])}
+                    </Button>
+                  ))}
+                </Stack>
+              </div>
+            ))}
           </Stack>
-        </Alert>
-      </section>
+        </Paper>
 
-      <section aria-labelledby="ai-guide-reference-title">
-        <Title order={3} size="h4" id="ai-guide-reference-title">
-          {t("ai.adminGuide.referencesTitle")}
-        </Title>
-        <Text size="sm" c="dimmed" mt={4} mb="md">
-          {t("ai.adminGuide.referencesDescription")}
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-          {AI_ADMIN_GUIDE_COPY_VALUES.map((item) => (
-            <Card key={item.value} withBorder radius="sm" p="sm">
-              <Group justify="space-between" wrap="nowrap">
-                <div className={classes.copyValue}>
-                  <Text size="xs" c="dimmed">
-                    {t(
-                      item.kind === "route"
-                        ? "ai.adminGuide.routeLabel"
-                        : "ai.adminGuide.environmentLabel",
-                    )}
-                  </Text>
-                  <Code>{item.value}</Code>
-                </div>
-                <CopyTextButton text={item.value} />
-              </Group>
-            </Card>
-          ))}
-        </SimpleGrid>
-      </section>
-
-      <section
-        id="troubleshooting"
-        aria-labelledby="ai-guide-troubleshooting-title"
-        className={classes.anchorSection}
-      >
-        <Group gap="sm" mb={4}>
-          <ThemeIcon variant="light" color="yellow" radius="md">
-            <IconAlertTriangle size={18} />
-          </ThemeIcon>
-          <Title order={3} size="h4" id="ai-guide-troubleshooting-title">
-            {t("ai.adminGuide.troubleshootingTitle")}
-          </Title>
-        </Group>
-        <Text size="sm" c="dimmed" mb="md" maw={920}>
-          {t("ai.adminGuide.troubleshootingDescription")}
-        </Text>
-        <ScrollArea className={responsiveTableClasses.responsiveScroll}>
-          <Table
-            withTableBorder
-            className={responsiveTableClasses.responsiveTable}
-          >
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t("ai.adminGuide.problemLabel")}</Table.Th>
-                <Table.Th>{t("ai.adminGuide.actionLabel")}</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {AI_ADMIN_GUIDE_TROUBLESHOOTING_ROWS.map((row) => (
-                <Table.Tr key={row}>
-                  <Table.Td
-                    data-card-role="primary"
-                    data-label={t("ai.adminGuide.problemLabel")}
-                  >
-                    <Text fw={650} size="sm">
-                      {
-                        splitAiAdminGuideFields(
-                          t(`ai.adminGuide.troubleshooting.${row}`),
-                          2,
-                        )[0]
-                      }
-                    </Text>
-                  </Table.Td>
-                  <Table.Td data-label={t("ai.adminGuide.actionLabel")}>
-                    <Text size="sm">
-                      {
-                        splitAiAdminGuideFields(
-                          t(`ai.adminGuide.troubleshooting.${row}`),
-                          2,
-                        )[1]
-                      }
-                    </Text>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-
-        <Alert
-          color="yellow"
-          variant="light"
-          icon={<IconAlertTriangle size={20} />}
-          title={t("ai.adminGuide.riskTitle")}
-          mt="md"
-        >
-          <Text size="sm">{t("ai.adminGuide.operationsRecovery")}</Text>
-        </Alert>
-      </section>
+        <main className={classes.content} aria-live="polite">
+          {activePanel === "overview" && (
+            <OverviewPanel diagram={diagrams.overview} />
+          )}
+          {scenario && (
+            <ScenarioPanel
+              key={scenario.anchor}
+              scenario={scenario}
+              diagram={
+                scenario.diagram ? diagrams[scenario.diagram] : undefined
+              }
+            />
+          )}
+          {activePanel === "security" && <SecurityPanel />}
+          {activePanel === "troubleshooting" && <TroubleshootingPanel />}
+        </main>
+      </div>
     </Stack>
   );
 }

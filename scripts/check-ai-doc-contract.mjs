@@ -226,7 +226,7 @@ async function validateStaticContract() {
       );
     }
   }
-  if (!files.guideComponent.includes("getAiAdminGuideAnchorFromHash")) {
+  if (!files.guideComponent.includes("getAiAdminGuidePanelFromHash")) {
     issues.push("AI guide component does not activate stable hash navigation");
   }
 
@@ -252,30 +252,18 @@ async function validateStaticContract() {
         issues.push(`${locale} placeholder mismatch: ${key}`);
       }
     }
-    for (const key of requiredGuideKeys.filter((value) =>
-      /^scenario\..+\.(?:facts|operations)$/u.test(value),
-    )) {
-      if (guide[key].split("||").length !== 3) {
-        issues.push(`${locale} compact guide field must have 3 parts: ${key}`);
+    for (const [key, value] of Object.entries(guide)) {
+      if (value.includes("||")) {
+        issues.push(`${locale} AI guide still uses a compact field: ${key}`);
       }
-    }
-    for (const key of requiredGuideKeys.filter((value) =>
-      value.startsWith("troubleshooting."),
-    )) {
-      if (guide[key].split("||").length !== 2) {
+      if (
+        key.startsWith("diagram.") &&
+        (key.includes(".nodes.") || key.includes(".textAlternative.")) &&
+        value.includes("|")
+      ) {
         issues.push(
-          `${locale} troubleshooting field must have 2 parts: ${key}`,
+          `${locale} AI guide diagram still uses a compact field: ${key}`,
         );
-      }
-    }
-    for (const [key, count] of [
-      ["diagram.overviewNodes", 3],
-      ["diagram.ragNodes", 7],
-      ["diagram.inboundNodes", 4],
-      ["diagram.outboundNodes", 7],
-    ]) {
-      if (guide[key].split("|").length !== count) {
-        issues.push(`${locale} diagram node field has invalid arity: ${key}`);
       }
     }
   }

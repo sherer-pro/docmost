@@ -3,8 +3,12 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  AI_ADMIN_GUIDE_ANCHORS,
+  type AiAdminGuideAnchor,
+} from "./ai-admin-guide-content";
 import AiAdminGuide from "./ai-admin-guide";
 
 (
@@ -16,7 +20,6 @@ const { renderMock } = vi.hoisted(() => ({
     svg: "<svg><text>Architecture</text></svg>",
   })),
 }));
-const scrollIntoViewMock = vi.fn();
 
 vi.mock("mermaid", () => ({
   default: {
@@ -29,32 +32,22 @@ vi.mock("uuid", () => ({
   v4: vi.fn(() => `guide-${Math.random()}`),
 }));
 
-function translate(key: string, options?: { version?: number }) {
-  if (key.endsWith(".facts")) return "Owner||Prerequisite||Result";
-  if (key.endsWith(".operations")) {
-    return "Save|Test|Enable||Success signal||Safe rollback";
-  }
-  if (key.startsWith("ai.adminGuide.troubleshooting.")) {
-    return "Problem||Action";
-  }
-  if (key.endsWith("textAlternative")) return "First|Second|Third";
-  if (key.endsWith("overviewNodes")) return "Registry|External|Remote";
-  if (key.endsWith("ragNodes")) {
-    return "Query|Query key|Index|Indexer|ACL|Writer key|does not call";
-  }
-  if (key.endsWith("inboundNodes")) return "Keys|Scope|Admission|Policy";
-  if (key.endsWith("outboundNodes")) {
-    return "Deployment|Workspace|Space|Group|Consent|Origin allowlists|DNS request";
-  }
-  if (key === "ai.adminGuide.contractVersion") {
-    return `Guide contract v${options?.version}`;
-  }
-  return key;
-}
-
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: translate }),
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
+
+function HistoryControls() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <div>
+      <output data-testid="hash">{location.hash}</output>
+      <button type="button" data-testid="back" onClick={() => navigate(-1)}>
+        Back
+      </button>
+    </div>
+  );
+}
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -69,10 +62,6 @@ beforeAll(() => {
       removeListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })),
-  });
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-    configurable: true,
-    value: scrollIntoViewMock,
   });
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
@@ -93,17 +82,17 @@ describe("AiAdminGuide", () => {
     root = null;
     container = null;
     renderMock.mockClear();
-    scrollIntoViewMock.mockClear();
   });
 
-  async function renderGuide() {
+  async function renderGuide(path = "/settings/ai/guide") {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     await act(async () => {
       root?.render(
         <MantineProvider>
-          <MemoryRouter initialEntries={["/settings/ai/guide#rag-api"]}>
+          <MemoryRouter initialEntries={[path]}>
+            <HistoryControls />
             <AiAdminGuide />
           </MemoryRouter>
         </MantineProvider>,
@@ -114,43 +103,128 @@ describe("AiAdminGuide", () => {
     return container;
   }
 
-  it("renders stable anchors, direct CTAs, accordions, and copy buttons", async () => {
+  async function click(element: Element) {
+    await act(async () => {
+      element.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  function activeAnchors(view: HTMLElement): string[] {
+    return AI_ADMIN_GUIDE_ANCHORS.filter((anchor) =>
+      view.querySelector(`#${anchor}`),
+    );
+  }
+
+  it("shows the compact overview when the URL has no supported hash", async () => {
     const view = await renderGuide();
 
-    for (const anchor of [
-      "assistant",
-      "retrieval",
-      "rag-api",
-      "rag-sync",
-      "inbound-mcp",
-      "outbound-mcp",
-      "security",
-      "troubleshooting",
-    ]) {
-      expect(view.querySelector(`#${anchor}`)).toBeTruthy();
-      expect(view.querySelector(`a[href="#${anchor}"]`)).toBeTruthy();
-    }
+    expect(view.textContent).toContain("ai.adminGuide.overview.title");
+    expect(activeAnchors(view)).toEqual([]);
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    expect(view.textContent).toContain("ai.adminGuide.navigation.selectLabel");
+    expect(view.querySelector('input[value="overview"]')).toBeTruthy();
+    expect(view.querySelector('[aria-current="page"]')?.textContent).toContain(
+      "ai.adminGuide.navigation.overview",
+    );
+  });
 
-    for (const href of [
-      "/settings/ai/spaces",
-      "/settings/keys/rag",
-      "/settings/keys/mcp",
-      "/settings/ai/external-tools",
-    ]) {
-      expect(view.querySelector(`a[href="${href}"]`)).toBeTruthy();
-    }
+  for (const anchor of AI_ADMIN_GUIDE_ANCHORS) {
+    it(`opens only the ${anchor} panel from its stable deep link`, async () => {
+      const view = await renderGuide(`/settings/ai/guide#${anchor}`);
 
+      expect(activeAnchors(view)).toEqual([anchor]);
+      expect(
+        view.querySelector(`[aria-current="page"]`)?.getAttribute("href"),
+      ).toBe(`/settings/ai/guide#${anchor}`);
+    });
+  }
+
+  it("switches panels through hash navigation and browser history", async () => {
+    const view = await renderGuide();
+    const assistantLink = view.querySelector(
+      'a[href="/settings/ai/guide#assistant"]',
+    );
+    expect(assistantLink).toBeTruthy();
+    await click(assistantLink!);
+    expect(activeAnchors(view)).toEqual(["assistant"]);
+    expect(view.querySelector('[data-testid="hash"]')?.textContent).toBe(
+      "#assistant",
+    );
+
+    const ragLink = view.querySelector('a[href="/settings/ai/guide#rag-api"]');
+    expect(ragLink).toBeTruthy();
+    await click(ragLink!);
+    expect(activeAnchors(view)).toEqual(["rag-api"]);
+
+    await click(view.querySelector('[data-testid="back"]')!);
+    expect(activeAnchors(view)).toEqual(["assistant"]);
+  });
+
+  it("keeps the scenario CTA, contextual copy controls, and details collapsed", async () => {
+    const view = await renderGuide("/settings/ai/guide#rag-sync");
+
+    expect(view.querySelector('a[href="/settings/ai/spaces"]')).toBeTruthy();
     expect(
       view.querySelectorAll(
         'button[aria-label="Copy"], button[aria-label="ai.adminGuide.copy"]',
       ),
-    ).toHaveLength(8);
-    expect(
-      view.textContent?.match(/ai\.adminGuide\.instructionsTitle/gu),
-    ).toHaveLength(6);
-    expect(view.textContent).toContain("Success signal");
-    expect(view.textContent).toContain("ai.adminGuide.securityOutboundGroups");
-    expect(view.textContent).toContain("ai.adminGuide.securityOutboundConsent");
-    expect(scrollIntoViewMock).toHaveBeenCalled();
+    ).toHaveLength(2);
+    expect(view.textContent).toContain("RAG_SYNC_ENABLED");
+    expect(view.textContent).toContain("RAG_SYNC_ALLOWED_ORIGINS");
+
+    const details = Array.from(view.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("ai.adminGuide.labels.technicalDetails"),
+    );
+    expect(details?.getAttribute("aria-expanded")).toBe("false");
+    await click(details!);
+    expect(details?.getAttribute("aria-expanded")).toBe("true");
   });
+
+  it("keeps security details and troubleshooting groups on demand", async () => {
+    const security = await renderGuide("/settings/ai/guide#security");
+    const matrix = Array.from(security.querySelectorAll("button")).find(
+      (button) =>
+        button.textContent?.includes("ai.adminGuide.security.matrixTitle"),
+    );
+    expect(matrix?.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => root?.unmount());
+    container?.remove();
+    root = null;
+    container = null;
+
+    const troubleshooting = await renderGuide(
+      "/settings/ai/guide#troubleshooting",
+    );
+    const groupButtons = Array.from(
+      troubleshooting.querySelectorAll("button"),
+    ).filter((button) =>
+      button.textContent?.includes("ai.adminGuide.troubleshooting.groups."),
+    );
+    expect(groupButtons).toHaveLength(4);
+    expect(
+      groupButtons.every(
+        (button) => button.getAttribute("aria-expanded") === "false",
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["assistant", "/settings/ai/spaces"],
+    ["retrieval", "/settings/ai/spaces"],
+    ["rag-api", "/settings/keys/rag"],
+    ["rag-sync", "/settings/ai/spaces"],
+    ["inbound-mcp", "/settings/keys/mcp"],
+    ["outbound-mcp", "/settings/ai/external-tools"],
+  ] satisfies readonly [AiAdminGuideAnchor, string][])(
+    "keeps the %s CTA route",
+    async (anchor, href) => {
+      const view = await renderGuide(`/settings/ai/guide#${anchor}`);
+      expect(view.querySelector(`a[href="${href}"]`)).toBeTruthy();
+    },
+  );
 });

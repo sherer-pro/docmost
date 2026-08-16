@@ -1,72 +1,83 @@
-.hero {
-  padding: clamp(var(--mantine-spacing-md), 3vw, var(--mantine-spacing-xl));
-  background: linear-gradient(
-    135deg,
-    light-dark(var(--mantine-color-violet-0), var(--mantine-color-dark-7)),
-    light-dark(var(--mantine-color-blue-0), var(--mantine-color-dark-8))
-  );
+.page {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  container-type: inline-size;
+  container-name: ai-admin-guide;
 }
 
-.heroContent,
+.panelHeading,
+.content,
 .copyValue {
   min-width: 0;
 }
 
-.navLink {
-  padding: rem(7px) rem(11px);
-  color: var(--mantine-color-text);
-  background: light-dark(
-    var(--mantine-color-gray-0),
-    var(--mantine-color-dark-6)
-  );
-  border-radius: var(--mantine-radius-xl);
-  font-size: var(--mantine-font-size-sm);
-  font-weight: 600;
-  text-decoration: none;
+.panelHeading {
+  flex: 1;
 }
 
-.navLink:hover,
-.navLink[aria-current="location"] {
-  color: light-dark(var(--mantine-color-blue-8), var(--mantine-color-blue-3));
-  background: light-dark(
-    var(--mantine-color-blue-0),
-    var(--mantine-color-dark-5)
-  );
-}
-
-.taskCard {
-  height: 100%;
-}
-
-.taskFacts {
+.layout {
   display: grid;
-  grid-template-columns: minmax(rem(78px), auto) minmax(0, 1fr);
-  gap: rem(7px) var(--mantine-spacing-sm);
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: var(--mantine-spacing-xl);
   align-items: start;
 }
 
-.anchorSection {
-  scroll-margin-top: calc(var(--mantine-spacing-xl) * 2);
+.navigation {
+  position: sticky;
+  top: calc(45px + var(--mantine-spacing-md));
+  max-height: calc(100vh - 45px - var(--mantine-spacing-xl));
+  overflow-y: auto;
 }
 
-.diagramCard {
-  overflow: hidden;
-  background: light-dark(
-    var(--mantine-color-gray-0),
-    var(--mantine-color-dark-7)
-  );
+.navigation a {
+  height: auto;
+  min-height: rem(36px);
+  padding-block: rem(7px);
+  text-align: left;
 }
 
-.instructionBlock {
+.navigation a :global(.mantine-Button-label) {
+  overflow: visible;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.mobileNavigation {
+  display: none;
+}
+
+.content {
+  min-height: rem(360px);
+}
+
+.fact {
   display: grid;
-  gap: var(--mantine-spacing-xs);
+  gap: rem(5px);
   align-content: start;
   padding: var(--mantine-spacing-sm);
   background: light-dark(
     var(--mantine-color-gray-0),
     var(--mantine-color-dark-7)
   );
-  border-radius: var(--mantine-radius-sm);
+  border: rem(1px) solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  border-radius: var(--mantine-radius-md);
+}
+
+.diagramSurface {
+  min-width: 0;
+  padding: var(--mantine-spacing-md);
+  overflow: hidden;
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+  border-radius: var(--mantine-radius-md);
+}
+
+.primaryAction {
+  align-self: flex-start;
 }
 
 .copyValue code {
@@ -76,17 +87,39 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 36em) {
-  .hero > div {
-    align-items: flex-start;
+.troubleshootingItem {
+  padding: var(--mantine-spacing-sm);
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+  border-radius: var(--mantine-radius-sm);
+}
+
+@container ai-admin-guide (max-width: 759px) {
+  .layout {
+    display: block;
   }
 
-  .taskFacts {
-    grid-template-columns: 1fr;
-    gap: rem(4px);
+  .navigation {
+    display: none;
   }
 
-  .taskFacts p:nth-of-type(even) {
-    margin-bottom: var(--mantine-spacing-xs);
+  .mobileNavigation {
+    display: block;
+  }
+
+  .diagramSurface {
+    padding: var(--mantine-spacing-sm);
+  }
+
+  .guideDiagram {
+    justify-content: flex-start !important;
+  }
+}
+
+@container ai-admin-guide (max-width: 420px) {
+  .primaryAction {
+    width: 100%;
   }
 }

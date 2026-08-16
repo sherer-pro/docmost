@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 6 -->
+<!-- ai-admin-guide-contract-version: 7 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -39,11 +39,19 @@ Docmost at `/settings/ai/guide`. It provides stable deep links for the
 assistant (`#assistant`), query-time retrieval (`#retrieval`), external RAG API
 clients (`#rag-api`), built-in Open WebUI synchronization (`#rag-sync`),
 inbound MCP (`#inbound-mcp`), outbound MCP (`#outbound-mcp`), security
-boundaries (`#security`), and recovery (`#troubleshooting`). Each scenario has
-a short task card plus expandable setup, success, and rollback instructions.
-The guide also includes copyable public routes and deployment controls, a
-credential matrix, and four sanitized, strict-mode Mermaid diagrams with
-semantic step-by-step alternatives.
+boundaries (`#security`), and recovery (`#troubleshooting`). With no hash, the
+guide opens a compact overview. Desktop users choose one active panel from a
+sticky grouped navigation; narrow layouts use a section selector. Browser
+history and external deep links switch the same active panel.
+
+Each scenario presents its purpose, owner, prerequisites, expected result,
+setup steps, success signal, and safe rollback before expandable technical
+details. Public routes and deployment controls appear only in their relevant
+scenario. Security starts with four operating principles and keeps its detailed
+credential matrix collapsed; troubleshooting is grouped by access, limits and
+dependencies, RAG Sync, and MCP. Three vertical, responsive, sanitized Mermaid
+diagrams cover path selection, the three RAG data paths, and both MCP
+directions. Their text alternatives remain available in collapsed disclosures.
 
 The structured UI contract lives in
 `apps/client/src/features/ai/components/ai-admin-guide-content.ts`; stable
