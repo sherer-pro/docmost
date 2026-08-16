@@ -862,6 +862,15 @@ export function rollbackState(
   };
 }
 
+export function migrationRetryState(state) {
+  if (state.MIGRATION_PHASE !== "rolled_back" || !state.DOCMOST_IMAGE) {
+    return state;
+  }
+  const retryState = { ...state };
+  delete retryState.DOCMOST_IMAGE;
+  return retryState;
+}
+
 export function rollbackPreflightMatches(report, expectedExitCode) {
   return (
     [0, 20].includes(Number(expectedExitCode)) &&
@@ -872,6 +881,13 @@ export function rollbackPreflightMatches(report, expectedExitCode) {
 async function migrate(context) {
   requireLinux();
   if (!context.yes) throw new Error("migrate requires --yes");
+  const retryState = migrationRetryState(context.state);
+  if (retryState !== context.state) {
+    atomicWrite(context.stateFile, serializeEnvFile(retryState));
+    context.state = retryState;
+    context.effective = { ...context.baseEnv, ...retryState, ...process.env };
+    context.childEnv = { ...process.env, ...context.baseEnv, ...retryState };
+  }
   const plan = buildPlan(context);
   if (plan.status !== "ready") {
     throw new Error(

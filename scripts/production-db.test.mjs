@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCapacityPlan,
   compareInventories,
+  migrationRetryState,
   parseArguments,
   parseEnvFile,
   rollbackPreflightMatches,
@@ -73,6 +74,22 @@ test("rollback accepts only the recorded safe source preflight class", () => {
   assert.equal(rollbackPreflightMatches({ exitCode: 0 }, 20), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 30 }, 30), false);
   assert.equal(rollbackPreflightMatches({ exitCode: 40 }, 40), false);
+});
+
+test("a rolled-back migration retries with the configured target image", () => {
+  const state = {
+    DOCMOST_IMAGE: `shererpro/docmost@sha256:${"b".repeat(64)}`,
+    MIGRATION_PHASE: "rolled_back",
+    POSTGRES_VOLUME_NAME: "docmost-postgres-16",
+  };
+  assert.deepEqual(migrationRetryState(state), {
+    MIGRATION_PHASE: "rolled_back",
+    POSTGRES_VOLUME_NAME: "docmost-postgres-16",
+  });
+  assert.equal(
+    migrationRetryState({ ...state, MIGRATION_PHASE: "acceptance" }).DOCMOST_IMAGE,
+    state.DOCMOST_IMAGE,
+  );
 });
 
 test("archives root-owned storage with a privileged one-shot process", () => {
