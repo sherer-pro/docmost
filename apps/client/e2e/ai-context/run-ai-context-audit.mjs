@@ -550,17 +550,20 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       "The synchronized page editor is not editable",
     );
     const marker = editorLocator.getByText("CURRENT_PAGE_MARKER_A11C", { exact: true }).first();
-    await marker.click({ clickCount: 3 });
+    // A collaborative re-render can drop a selection made moments earlier, so
+    // reissue the triple click on every attempt rather than trusting a single
+    // one, and use the shared waitFor budget instead of the tightest in the file.
     await waitFor(
       "current-page marker selection",
-      () =>
-        page.evaluate(() =>
+      async () => {
+        await marker.click({ clickCount: 3 });
+        return page.evaluate(() =>
           window
             .getSelection()
             ?.toString()
             .includes("CURRENT_PAGE_MARKER_A11C"),
-        ),
-      5_000,
+        );
+      },
     );
     try {
       await enabledSelectionAction().waitFor({ state: "visible", timeout: 5_000 });

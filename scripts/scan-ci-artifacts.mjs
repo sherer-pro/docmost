@@ -1,5 +1,12 @@
-import { readdir, readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+
+// Playwright videos and traces are far larger than one JavaScript string can
+// hold, so artifacts are scanned in chunks. The carry-over keeps a match that
+// straddles a chunk boundary visible.
+const CHUNK_BYTES = 4 * 1024 * 1024;
+const MAX_PATTERN_SPAN = 4096;
 
 const sensitivePatterns = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/gu,
@@ -23,21 +30,46 @@ async function filesUnder(root) {
   return files;
 }
 
-export async function scanArtifacts(root, exactSecrets = []) {
+async function scanFile(path, exactSecrets) {
   const findings = [];
-  for (const path of await filesUnder(root)) {
-    const content = await readFile(path, "utf8");
-    for (const secret of exactSecrets.filter(Boolean)) {
-      if (content.includes(secret)) {
+  const reportedSecrets = new Set();
+  const reportedPatterns = new Set();
+  const carryLength = Math.max(
+    MAX_PATTERN_SPAN,
+    ...exactSecrets.map((secret) => secret.length),
+  );
+  let carry = "";
+
+  for await (const chunk of createReadStream(path, {
+    encoding: "utf8",
+    highWaterMark: CHUNK_BYTES,
+  })) {
+    const window = carry + chunk;
+    for (const secret of exactSecrets) {
+      if (!reportedSecrets.has(secret) && window.includes(secret)) {
+        reportedSecrets.add(secret);
         findings.push(`${path}: exact secret`);
       }
     }
     for (const pattern of sensitivePatterns) {
+      if (reportedPatterns.has(pattern)) continue;
       pattern.lastIndex = 0;
-      if (pattern.test(content)) {
+      if (pattern.test(window)) {
+        reportedPatterns.add(pattern);
         findings.push(`${path}: credential pattern`);
       }
     }
+    carry = window.slice(-carryLength);
+  }
+
+  return findings;
+}
+
+export async function scanArtifacts(root, exactSecrets = []) {
+  const findings = [];
+  const secrets = exactSecrets.filter(Boolean);
+  for (const path of await filesUnder(root)) {
+    findings.push(...(await scanFile(path, secrets)));
   }
   return findings;
 }
