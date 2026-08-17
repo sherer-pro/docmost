@@ -670,10 +670,39 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       ),
     ).toBe(true);
 
-    const sourceBeforeUnsync = await apiGet<PageInfo>(
-      api,
-      `/api/pages/info?pageId=${source.id}`,
-    );
+    /**
+     * The collaboration server stores a document with debounce 10000 and
+     * maxDebounce 45000, so a flush belonging to the live edit above can still
+     * land here and rewrite the source content on its own. Snapshot the source
+     * only once repeated reads agree, otherwise the invariant below races that
+     * background write instead of checking what unsync did.
+     */
+    let sourceBeforeUnsync!: PageInfo;
+    let previousSourceHash = "";
+    let stableSourceReads = 0;
+    await expect
+      .poll(
+        async () => {
+          const current = await apiGet<PageInfo>(
+            api,
+            `/api/pages/info?pageId=${source.id}`,
+          );
+          const currentHash = hashProseMirrorJson(current.content);
+          stableSourceReads =
+            currentHash === previousSourceHash ? stableSourceReads + 1 : 0;
+          previousSourceHash = currentHash;
+          sourceBeforeUnsync = current;
+          return stableSourceReads;
+        },
+        {
+          message:
+            "source content to stop changing before the unsync invariant",
+          intervals: [2_000],
+          timeout: 90_000,
+        },
+      )
+      .toBeGreaterThanOrEqual(2);
+
     await firstReference.hover();
     await firstReference.getByRole("button", { name: "More options" }).click();
     await page.getByRole("menuitem", { name: "Unsync" }).click();
@@ -684,9 +713,12 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       api,
       `/api/pages/info?pageId=${source.id}`,
     );
-    expect(hashProseMirrorJson(sourceAfterUnsync.content)).toBe(
-      hashProseMirrorJson(sourceBeforeUnsync.content),
-    );
+    expect(
+      hashProseMirrorJson(sourceAfterUnsync.content),
+      `unsync must not rewrite the source page\nbefore: ${JSON.stringify(
+        sourceBeforeUnsync.content,
+      )}\nafter: ${JSON.stringify(sourceAfterUnsync.content)}`,
+    ).toBe(hashProseMirrorJson(sourceBeforeUnsync.content));
 
     await page.goto(pageUrl(state, source));
     await makeEditable(page);
