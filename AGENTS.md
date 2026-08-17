@@ -280,10 +280,11 @@ Minimum:
 ## 6) CI/CD and local reproduction
 
 - The repository includes GitHub Actions workflows:
-  - `.github/workflows/ci.yml` — reusable PR/release validation (`install`, contracts, build, client bundle budget, lint/tests/security, integration, production-image MCP/collaboration smoke, editor and AI browser acceptance, artifact sanitization, and production dependency audit).
+  - `.github/workflows/ci.yml` — reusable validation for `push` to `main`, pull requests, manual dispatch, and release gates (`install`, contracts, build, client bundle budget, lint/tests/security, integration, production-image MCP/collaboration smoke, editor and AI browser acceptance, artifact sanitization, and production dependency audit). Superseded `push`/`pull_request` runs are cancelled; runs called from `docker.yml` use a different concurrency group and are not. On `push` the AI guide diff gate degrades to non-diff validation, because `AI_GUIDE_BASE_SHA`/`AI_GUIDE_HEAD_SHA` come from `github.event.pull_request.*`.
   - `.github/workflows/docker.yml` — release/docker gates, build, and push.
-  - `.github/workflows/rag-open-webui-compat.yml` — scheduled/manual Open WebUI compatibility audit with sanitized failure artifacts.
-- `pnpm check:release-gates` locks the three-workflow command matrix, root `verify:*` and security composition, shared E2E Python dependency install/cache contract, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+  - `.github/workflows/rag-open-webui-compat.yml` — scheduled (Monday 03:00 UTC) and manual Open WebUI compatibility audit with sanitized failure artifacts. It installs workspace dependencies with pinned pnpm, because `scripts/rag-open-webui-compat.mjs` uses `jszip` from the root manifest.
+- `pnpm check:release-gates` locks the three-workflow command matrix, the `push: [main]` CI trigger, root `verify:*` and security composition, shared E2E Python dependency install/cache contract, the compatibility workflow dependency install, the `production-smoke` collaboration runtime flags, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+- A run triggered by `release: published` always checks out the **tag**. A fix pushed to `main` after the tag is never picked up by re-running that workflow — it requires a new tag whose name equals `v${package.version}`.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`
   2. for quick checks on day-to-day changes: `pnpm verify:quick`.
