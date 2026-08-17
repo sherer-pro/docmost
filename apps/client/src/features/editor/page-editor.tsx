@@ -608,15 +608,26 @@ export default function PageEditor({
 
   const isSynced = isLocalSynced && isRemoteSynced;
 
+  /**
+   * Reports a connection attempt that never completes.
+   *
+   * It must not escalate a live socket that is only slow to finish its first
+   * sync. The status atom is also the gate for leaving the static view and for
+   * the header indicator, and nothing rewrites it until the socket itself
+   * changes state, so a Disconnected value reported over a connected socket
+   * kept the page in the non-editable static view for the rest of its lifetime.
+   */
   useEffect(() => {
+    if (yjsConnectionStatus !== WebSocketStatus.Connecting) {
+      return;
+    }
+
     const timeout = setTimeout(() => {
-      if (yjsConnectionStatus === WebSocketStatus.Connecting || !isSynced) {
-        setYjsConnectionStatus(WebSocketStatus.Disconnected);
-      }
+      setYjsConnectionStatus(WebSocketStatus.Disconnected);
     }, 7500);
 
     return () => clearTimeout(timeout);
-  }, [yjsConnectionStatus, isSynced]);
+  }, [yjsConnectionStatus, setYjsConnectionStatus]);
   useEffect(() => {
     if (editor) {
       editor.setEditable(editable && userPageEditMode === PageEditMode.Edit);
