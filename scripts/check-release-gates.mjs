@@ -66,12 +66,14 @@ const REQUIRED_WORKFLOW_JOBS = {
   "rag-open-webui-compat.yml": {
     jobName: "compatibility",
     commands: [
+      "pnpm install --frozen-lockfile",
       "node scripts/run-rag-open-webui-compat.mjs",
       "node scripts/sanitize-ci-log-stream.mjs",
       "node scripts/scan-ci-artifacts.mjs output/audit",
       "touch output/audit/.sanitized",
     ],
     metadata: [
+      "version: 10.4.0",
       "if: failure() && hashFiles('output/audit/.sanitized') != ''",
       "retention-days: 7",
     ],
@@ -362,6 +364,30 @@ function validateAiGuideGateMetadata(errors, ciSource) {
   }
 }
 
+function validateCiTriggerContract(errors, ciSource) {
+  const lines = ciSource.split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^on:\s*$/u.test(line));
+  const triggerLines = [];
+  for (let index = start + 1; start >= 0 && index < lines.length; index += 1) {
+    if (/^\S/u.test(lines[index])) {
+      break;
+    }
+    triggerLines.push(lines[index]);
+  }
+  const triggers = triggerLines.join("\n");
+  if (!/^\s{2}push:\s*$/mu.test(triggers)) {
+    errors.push(
+      "ci.yml must run on push so main is validated between releases",
+    );
+    return;
+  }
+  const pushTrigger =
+    /^\s{2}push:\s*\r?\n((?:\s{4}.*(?:\r?\n|$))*)/mu.exec(triggers)?.[1] ?? "";
+  if (!/^\s{4}branches:/mu.test(pushTrigger) || !/\bmain\b/u.test(pushTrigger)) {
+    errors.push("ci.yml push trigger must target the main branch");
+  }
+}
+
 function validateProductionSmokeCollaborationRuntime(errors, ciSource) {
   const productionSmoke = jobBlock(ciSource, "production-smoke");
   const start = productionSmoke.indexOf("docker run -d --name docmost-collab");
@@ -516,6 +542,7 @@ export function validateReleaseGateContract({
   validateVerificationScripts(errors, packageJson);
   validateWorkflowHygiene(errors, workflowSources);
   validateAiGuideGateMetadata(errors, ciSource);
+  validateCiTriggerContract(errors, ciSource);
   validateProductionSmokeCollaborationRuntime(errors, ciSource);
   validateDockerfileDependencyInstall(errors, dockerfileSource);
   validateRagSyncHarness(errors, ragSyncComposeSource);

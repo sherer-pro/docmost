@@ -20,10 +20,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.4.0
+
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Run pinned Open WebUI compatibility suite
         env:
@@ -36,8 +45,13 @@ jobs:
           CI_LOG_CANARIES: "isolated-rag-audit-secret-at-least-32-characters;docmost-test-password;isolated-open-webui-test-secret;Open-WebUI-compat-password-123!"
         run: |
           mkdir -p output/audit
-          { docker compose -f tests/rag-sync/compose.yml --profile real-open-webui logs --no-color open-webui 2>&1 || true; } |
-            node scripts/sanitize-ci-log-stream.mjs > output/audit/open-webui.log
+          # The suite tears its Compose project down before this step runs, so it captures
+          # the sanitized log itself while the container is still alive. Only fall back to a
+          # post-mortem capture when that log is missing or empty.
+          if [ ! -s output/audit/open-webui.log ]; then
+            { docker compose -f tests/rag-sync/compose.yml --profile real-open-webui logs --no-color open-webui 2>&1 || true; } |
+              node scripts/sanitize-ci-log-stream.mjs > output/audit/open-webui.log
+          fi
           node scripts/scan-ci-artifacts.mjs output/audit
           touch output/audit/.sanitized
 

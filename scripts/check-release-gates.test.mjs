@@ -83,6 +83,40 @@ test("shared E2E requirements include the Markdown parser", () => {
   assert.match(e2eRequirementsSource, /^markdown-it-py==4\.2\.0$/mu);
 });
 
+test("CI validates main between releases", () => {
+  const trigger = /^\s{2}push:\s*\r?\n\s{4}branches:.*(?:\r?\n|$)/mu;
+  assert.match(ciSource, trigger);
+  const errors = validateReleaseGateContract(
+    inputs({ ciSource: ciSource.replace(trigger, "") }),
+  );
+  assert.ok(
+    errors.includes(
+      "ci.yml must run on push so main is validated between releases",
+    ),
+  );
+});
+
+test("CI push trigger stays bound to main", () => {
+  const errors = validateReleaseGateContract(
+    inputs({
+      ciSource: ciSource.replace(
+        /^(\s{4}branches:).*$/mu,
+        "$1 [release-please]",
+      ),
+    }),
+  );
+  assert.ok(errors.includes("ci.yml push trigger must target the main branch"));
+});
+
+test("Open WebUI compatibility installs workspace dependencies", () => {
+  const command = "pnpm install --frozen-lockfile";
+  assert.ok(ragSource.includes(command), "compatibility job must install deps");
+  const errors = validateReleaseGateContract(
+    inputs({ ragSource: ragSource.replace(command, "node --version") }),
+  );
+  assert.ok(errors.includes(`compatibility must run ${command}`));
+});
+
 test("RAG Sync harness keeps collaboration and PostgreSQL runtime prerequisites", () => {
   for (const [needle, expectedError] of [
     [
