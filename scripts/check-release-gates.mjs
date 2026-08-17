@@ -63,6 +63,9 @@ const REQUIRED_JOB_METADATA = {
     "DOCMOST_EDITOR_AUDIT_ROOT: ${{ github.workspace }}/output/audit/editor",
     "name: editor-acceptance-artifacts",
     "if: failure() && hashFiles('output/audit/editor/.sanitized') != ''",
+    "DOCMOST_AI_CONTEXT_AUDIT_ROOT: ${{ github.workspace }}/output/audit/ai-context",
+    "name: ai-context-acceptance-artifacts",
+    "if: failure() && hashFiles('output/audit/ai-context/.sanitized') != ''",
   ],
 };
 

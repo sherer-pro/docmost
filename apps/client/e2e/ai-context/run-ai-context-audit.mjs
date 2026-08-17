@@ -553,18 +553,41 @@ async function browserEvidenceV2(storageState, state, citedCase) {
     // A collaborative re-render can drop a selection made moments earlier, so
     // reissue the triple click on every attempt rather than trusting a single
     // one, and use the shared waitFor budget instead of the tightest in the file.
-    await waitFor(
-      "current-page marker selection",
-      async () => {
-        await marker.click({ clickCount: 3 });
-        return page.evaluate(() =>
-          window
-            .getSelection()
-            ?.toString()
-            .includes("CURRENT_PAGE_MARKER_A11C"),
-        );
-      },
-    );
+    try {
+      await waitFor(
+        "current-page marker selection",
+        async () => {
+          await marker.click({ clickCount: 3 });
+          return page.evaluate(() =>
+            window
+              .getSelection()
+              ?.toString()
+              .includes("CURRENT_PAGE_MARKER_A11C"),
+          );
+        },
+      );
+    } catch (error) {
+      // A click that lands without selecting anything raises nothing, so the
+      // bare timeout carries no evidence. Record what the document reported.
+      const selectionState = await page.evaluate(() => {
+        const selection = window.getSelection();
+        const editor = document.querySelector(".editor-container .ProseMirror");
+        return {
+          selectionText: selection?.toString() ?? null,
+          rangeCount: selection?.rangeCount ?? 0,
+          anchorNode: selection?.anchorNode?.nodeName ?? null,
+          activeElement: document.activeElement?.tagName ?? null,
+          editorHtml: editor?.innerHTML.slice(0, 800) ?? null,
+        };
+      });
+      await page.screenshot({
+        path: path.join(auditRoot, "screenshots", "marker-selection-unavailable.png"),
+        fullPage: true,
+      });
+      throw new Error(
+        `${error.message}; selection state: ${JSON.stringify(selectionState)}`,
+      );
+    }
     try {
       await enabledSelectionAction().waitFor({ state: "visible", timeout: 5_000 });
     } catch (error) {

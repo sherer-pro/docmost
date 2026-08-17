@@ -85,14 +85,18 @@ test("shared E2E requirements include the Markdown parser", () => {
   assert.match(e2eRequirementsSource, /^markdown-it-py==4\.2\.0$/mu);
 });
 
-test("production smoke keeps editor acceptance evidence on failure", () => {
-  const upload = "name: editor-acceptance-artifacts";
-  assert.ok(ciSource.includes(upload), "artifact upload fixture must exist");
-  const errors = validateReleaseGateContract(
-    inputs({ ciSource: ciSource.replace(upload, "name: removed-upload") }),
-  );
-  assert.ok(errors.includes(`production-smoke must define ${upload}`));
-});
+for (const upload of [
+  "name: editor-acceptance-artifacts",
+  "name: ai-context-acceptance-artifacts",
+]) {
+  test(`production smoke keeps evidence behind ${upload}`, () => {
+    assert.ok(ciSource.includes(upload), "artifact upload fixture must exist");
+    const errors = validateReleaseGateContract(
+      inputs({ ciSource: ciSource.replace(upload, "name: removed-upload") }),
+    );
+    assert.ok(errors.includes(`production-smoke must define ${upload}`));
+  });
+}
 
 test("synced block unsync invariant waits for source persistence to settle", () => {
   assert.match(
