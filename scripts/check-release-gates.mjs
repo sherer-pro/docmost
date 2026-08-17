@@ -49,6 +49,7 @@ const REQUIRED_JOB_COMMANDS = {
     "node scripts/sanitize-ci-log-stream.mjs",
     "node scripts/scan-ci-artifacts.mjs ci-artifacts",
     "touch ci-artifacts/.sanitized",
+    'node scripts/scan-ci-artifacts.mjs "$audit_root"',
   ],
 };
 
@@ -59,6 +60,9 @@ const REQUIRED_JOB_METADATA = {
     "cache-dependency-path: apps/client/e2e/requirements.txt",
     "if: failure() && hashFiles('ci-artifacts/.sanitized') != ''",
     "retention-days: 7",
+    "DOCMOST_EDITOR_AUDIT_ROOT: ${{ github.workspace }}/output/audit/editor",
+    "name: editor-acceptance-artifacts",
+    "if: failure() && hashFiles('output/audit/editor/.sanitized') != ''",
   ],
 };
 

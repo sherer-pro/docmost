@@ -340,6 +340,7 @@ jobs:
 
       - name: Editor browser acceptance against the production image
         env:
+          DOCMOST_EDITOR_AUDIT_ROOT: ${{ github.workspace }}/output/audit/editor
           DOCMOST_BASE_URL: http://127.0.0.1:3000
           DOCMOST_API_BASE_URL: http://127.0.0.1:3000
           DOCMOST_API_ORIGIN: http://127.0.0.1:3000
@@ -415,6 +416,28 @@ jobs:
             echo 'Per-space RAG credentials leaked into container environment' >&2
             exit 1
           fi
+
+      - name: Scan editor acceptance artifacts
+        if: failure()
+        env:
+          CI_LOG_CANARIES: "ci-only-app-secret-at-least-32-characters;docmost-ci-password;CI-smoke-password-123!"
+        run: |
+          audit_root=output/audit/editor
+          if [ ! -d "$audit_root" ]; then
+            echo 'Editor acceptance produced no artifacts to upload.'
+            exit 0
+          fi
+          node scripts/scan-ci-artifacts.mjs "$audit_root"
+          touch "$audit_root/.sanitized"
+
+      - name: Upload editor acceptance artifacts on failure
+        if: failure() && hashFiles('output/audit/editor/.sanitized') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: editor-acceptance-artifacts
+          path: output/audit/editor
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Capture server logs
         if: always()

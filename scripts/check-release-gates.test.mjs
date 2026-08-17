@@ -20,6 +20,7 @@ const [
   dockerfileSource,
   ragSyncComposeSource,
   e2eRequirementsSource,
+  syncedBlocksSpecSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -37,6 +38,7 @@ const [
   readFile("Dockerfile", "utf8"),
   readFile("tests/rag-sync/compose.yml", "utf8"),
   readFile("apps/client/e2e/requirements.txt", "utf8"),
+  readFile("apps/client/e2e/editor/specs/synced-blocks.spec.ts", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
 
@@ -81,6 +83,22 @@ test("production smoke keeps page templates enabled in collaboration", () => {
 
 test("shared E2E requirements include the Markdown parser", () => {
   assert.match(e2eRequirementsSource, /^markdown-it-py==4\.2\.0$/mu);
+});
+
+test("production smoke keeps editor acceptance evidence on failure", () => {
+  const upload = "name: editor-acceptance-artifacts";
+  assert.ok(ciSource.includes(upload), "artifact upload fixture must exist");
+  const errors = validateReleaseGateContract(
+    inputs({ ciSource: ciSource.replace(upload, "name: removed-upload") }),
+  );
+  assert.ok(errors.includes(`production-smoke must define ${upload}`));
+});
+
+test("synced block unsync invariant waits for source persistence to settle", () => {
+  assert.match(
+    syncedBlocksSpecSource,
+    /source content to stop changing before the unsync invariant/u,
+  );
 });
 
 test("CI validates main between releases", () => {
