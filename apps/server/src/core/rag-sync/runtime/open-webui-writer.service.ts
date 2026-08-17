@@ -650,9 +650,16 @@ export class OpenWebUiWriterService {
 
 function remoteError(status: number): OpenWebUiWriterError {
   if (status === 401 || status === 403) {
+    /**
+     * A rejected credential is recoverable: an administrator rotates the writer
+     * key and synchronization continues. Reporting it as terminal made the
+     * supervisor disable the binding, so the space stopped syncing for good and
+     * a later valid key changed nothing until someone re-enabled it by hand.
+     * The binding stays enabled and degraded, retrying under the usual backoff.
+     */
     return new OpenWebUiWriterError(
       'rag_sync_writer_unauthorized',
-      false,
+      true,
       status,
     );
   }

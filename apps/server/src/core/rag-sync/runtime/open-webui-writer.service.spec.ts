@@ -231,6 +231,22 @@ describe('OpenWebUiWriterService', () => {
     ).rejects.toMatchObject({ code: 'rag_sync_invalid_response' });
   });
 
+  it('keeps a rejected writer credential recoverable', async () => {
+    const { writer } = createWriter();
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 401 }));
+
+    // Retryable keeps the supervisor from disabling the binding, so rotating the
+    // key is enough to resume instead of re-enabling the space by hand.
+    await expect(
+      writer.listKnowledgeFilesPage(binding, 1),
+    ).rejects.toMatchObject({
+      code: 'rag_sync_writer_unauthorized',
+      retryable: true,
+    });
+  });
+
   it('fails closed for malformed or truncated knowledge listings', async () => {
     const malformed = createWriter();
     jest

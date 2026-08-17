@@ -274,6 +274,12 @@ export class RagSyncSupervisorService implements OnModuleInit, OnModuleDestroy {
               originalError instanceof Error
                 ? originalError.constructor.name
                 : 'unknown',
+            // The normalized code is the only part that names the cause, and it
+            // is an enumerated identifier already returned by the status API,
+            // so it carries no credential or user content.
+            ...(runtimeError instanceof RagSyncRuntimeError
+              ? { code: runtimeError.code, retryable: runtimeError.retryable }
+              : {}),
             ...(diagnostic
               ? {
                   stage: diagnostic.stage,
