@@ -17,7 +17,7 @@ export const AI_ADMIN_GUIDE_ANCHORS =
 
 export type AiAdminGuideAnchor = (typeof AI_ADMIN_GUIDE_ANCHORS)[number];
 export type AiAdminGuidePanel = "overview" | AiAdminGuideAnchor;
-export type AiAdminGuideScenarioAnchor = Exclude<
+type AiAdminGuideScenarioAnchor = Exclude<
   AiAdminGuideAnchor,
   "security" | "troubleshooting"
 >;
