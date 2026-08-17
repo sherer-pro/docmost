@@ -550,14 +550,26 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       "The synchronized page editor is not editable",
     );
     const marker = editorLocator.getByText("CURRENT_PAGE_MARKER_A11C", { exact: true }).first();
-    // A collaborative re-render can drop a selection made moments earlier, so
-    // reissue the triple click on every attempt rather than trusting a single
-    // one, and use the shared waitFor budget instead of the tightest in the file.
+    // The marker heading carries an inline copy-link widget right after its text
+    // and stretches to the content width, so a default click targets the block
+    // centre. Wherever the text renders narrow enough that the centre falls on
+    // that widget, the click copies the heading link and leaves the editor
+    // unfocused instead of selecting anything. Click near the start of the text
+    // instead, and reissue it because a collaborative re-render can drop a
+    // selection made moments earlier.
+    const markerBox = await marker.boundingBox();
+    const markerClick = {
+      clickCount: 3,
+      position: {
+        x: 8,
+        y: Math.max(2, Math.round((markerBox?.height ?? 24) / 2)),
+      },
+    };
     try {
       await waitFor(
         "current-page marker selection",
         async () => {
-          await marker.click({ clickCount: 3 });
+          await marker.click(markerClick);
           return page.evaluate(() =>
             window
               .getSelection()
