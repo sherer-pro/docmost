@@ -363,6 +363,7 @@ jobs:
 
       - name: AI context acceptance against the production image
         env:
+          DOCMOST_AI_CONTEXT_AUDIT_ROOT: ${{ github.workspace }}/output/audit/ai-context
           DOCMOST_BASE_URL: http://127.0.0.1:3000
           DOCMOST_API_BASE_URL: http://127.0.0.1:3000
           DOCMOST_API_ORIGIN: http://127.0.0.1:3000
@@ -417,18 +418,22 @@ jobs:
             exit 1
           fi
 
-      - name: Scan editor acceptance artifacts
+      - name: Scan browser acceptance artifacts
         if: failure()
         env:
           CI_LOG_CANARIES: "ci-only-app-secret-at-least-32-characters;docmost-ci-password;CI-smoke-password-123!"
         run: |
-          audit_root=output/audit/editor
-          if [ ! -d "$audit_root" ]; then
-            echo 'Editor acceptance produced no artifacts to upload.'
-            exit 0
-          fi
-          node scripts/scan-ci-artifacts.mjs "$audit_root"
-          touch "$audit_root/.sanitized"
+          # Both suites sanitize their own artifacts, including the Playwright
+          # traces, before this step. Scanning is the independent fail-closed
+          # check that gates each upload.
+          for audit_root in output/audit/editor output/audit/ai-context; do
+            if [ ! -d "$audit_root" ]; then
+              echo "No artifacts to upload from $audit_root."
+              continue
+            fi
+            node scripts/scan-ci-artifacts.mjs "$audit_root"
+            touch "$audit_root/.sanitized"
+          done
 
       - name: Upload editor acceptance artifacts on failure
         if: failure() && hashFiles('output/audit/editor/.sanitized') != ''
@@ -436,6 +441,15 @@ jobs:
         with:
           name: editor-acceptance-artifacts
           path: output/audit/editor
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload AI context acceptance artifacts on failure
+        if: failure() && hashFiles('output/audit/ai-context/.sanitized') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ai-context-acceptance-artifacts
+          path: output/audit/ai-context
           if-no-files-found: ignore
           retention-days: 7
 
