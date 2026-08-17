@@ -889,8 +889,8 @@ pnpm verify:release
 
 The version gate requires matching root, client, and server package versions,
 runtime-derived MCP versions, and an exact `v${package.version}` release tag.
-For the current candidate the only accepted release tag is `v1.1.1`. Follow the
-[v1.1.1 upgrade and rollback notes](./apps/server/docs/release-notes/v1.1.1.md)
+For the current candidate the only accepted release tag is `v1.2.0`. Follow the
+[v1.2.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.0.md)
 before deployment.
 
 For backend changes:
