@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "사전 용어 삭제",
   "Dictionary": "사전",
   "Dictionary is disabled": "사전이 비활성화되어 있습니다",
+  "Dictionary term is unavailable": "사전 용어를 사용할 수 없습니다",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "연결된 사전 용어가 삭제 또는 비활성화되었거나 이 공간에서 사용할 수 없습니다.",
   "Dictionary term actions": "사전 용어 작업",
   "Dictionary term created": "사전 용어가 생성되었습니다",
   "Dictionary term deleted": "사전 용어가 삭제되었습니다",
@@ -1532,7 +1534,7 @@
           },
           "success": "응답은 200, 안정적인 커서 및 키 작성자의 실시간 읽기 가능 범위만 반환합니다.",
           "rollback": "키를 취소하고 인덱서를 중지합니다. 복구를 위한 새 키 생성",
-          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다."
+          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다. 프로젝션 v1은 활성화된 문서 필드, 이름이 있는 데이터베이스 셀, 활성화된 사전을 독립적인 페이지네이션 피드로 내보냅니다."
         },
         "ragSync": {
           "description": "내장된 Open WebUI RAG 동기화는 Docmost 내부에서 실행되고, Docmost 서비스를 통해 직접 PostgreSQL를 읽고, Redis와 조정하고, 별도의 암호화된 공간별 자격 증명으로 씁니다.",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "액세스 권한이 변경되어 부분 답변과 인용이 삭제되었습니다. 권한이 의도적으로 복원된 후에만 소스를 다시 엽니다."
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "정규화된 Open WebUI 검색 origin과 Knowledge ID를 writer 대상과 정확히 일치시킨 뒤 다시 테스트하고 활성화하세요. 서로 다른 동안에는 쓰기를 전송하지 않습니다."
           },
           "sourceRemoved": {
             "signal": "소스 삭제됨",

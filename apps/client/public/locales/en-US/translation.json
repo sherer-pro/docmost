@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "Delete dictionary term",
   "Dictionary": "Dictionary",
   "Dictionary is disabled": "Dictionary is disabled",
+  "Dictionary term is unavailable": "Dictionary term is unavailable",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "The linked dictionary term was deleted, disabled, or is not available in this space.",
   "Dictionary term actions": "Dictionary term actions",
   "Dictionary term created": "Dictionary term created",
   "Dictionary term deleted": "Dictionary term deleted",
@@ -1532,7 +1534,7 @@
           },
           "success": "Responses return 200, stable cursors, and only the key creator's live readable scope",
           "rollback": "Revoke the key and stop the indexer; create a new key for recovery",
-          "technical": "Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Keys remain bounded by their creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated."
+          "technical": "Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Keys remain bounded by their creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated. Projection v1 exports enabled document fields, named database cells, and the enabled dictionary through independent paginated feeds."
         },
         "ragSync": {
           "description": "Built-in Open WebUI RAG Sync runs inside Docmost, reads PostgreSQL directly through Docmost services, coordinates with Redis, and writes with a separate encrypted per-space credential.",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "The partial answer and citations were cleared because access changed. Reopen the source only after permissions are intentionally restored."
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "Make the normalized Open WebUI retrieval origin and Knowledge ID exactly match the writer target, then Test and enable again. No write is sent while they differ."
           },
           "sourceRemoved": {
             "signal": "source removed",

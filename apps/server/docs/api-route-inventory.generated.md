@@ -94,6 +94,7 @@
 | GET | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | DELETE | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
+| GET | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | PATCH | `/dictionary-terms/:termId` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms/actions/export` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms/actions/generate-all-word-forms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
@@ -214,6 +215,10 @@
 | GET | `/rag/databases/:databaseIdOrPageSlug` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/databases/:databaseIdOrPageSlug/rows` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/deleted` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/dictionary/deleted` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/dictionary/terms` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/dictionary/terms/:termId` | `apps/server/src/core/rag/rag.controller.ts` |
+| GET | `/rag/dictionary/updates` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages/:pageIdOrSlug` | `apps/server/src/core/rag/rag.controller.ts` |
 | GET | `/rag/pages/:pageIdOrSlug/attachments` | `apps/server/src/core/rag/rag.controller.ts` |

@@ -9,6 +9,7 @@ import {
   generateAllDictionaryWordForms,
   generateDictionaryWordForms,
   getDictionaryTerms,
+  getDictionaryTerm,
   getDictionaryWordFormGenerationStatus,
   importDictionaryTerms,
   updateDictionaryTerm,
@@ -30,9 +31,22 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit";
 const DICTIONARY_QUERY_KEYS = {
   terms: (spaceId?: string): string[] =>
     ["dictionaryTerms", spaceId].filter(Boolean) as string[],
+  term: (termId?: string): string[] =>
+    ["dictionaryTerm", termId].filter(Boolean) as string[],
   wordFormGenerationStatus: (spaceId?: string): string[] =>
     ["dictionaryWordFormGenerationStatus", spaceId].filter(Boolean) as string[],
 };
+
+export function useDictionaryTermQuery(
+  termId?: string,
+  enabled = true,
+): UseQueryResult<IDictionaryTerm, Error> {
+  return useQuery({
+    queryKey: DICTIONARY_QUERY_KEYS.term(termId),
+    queryFn: () => getDictionaryTerm(termId as string),
+    enabled: Boolean(termId && enabled),
+  });
+}
 
 export function useDictionaryTermsQuery(
   spaceId?: string,

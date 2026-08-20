@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 7 -->
+<!-- ai-admin-guide-contract-version: 8 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -100,6 +100,7 @@ The main components are:
 | `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                |
 | `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                           |
 | `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history     |
+| `KnowledgeProjectionService`             | canonical document fields, member names, database schema/cells, dictionary Markdown/search, and projection fingerprint |
 | `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
 | `AiTextGenerationService`                | narrow provider session facade exported through `AI_TEXT_GENERATION_PORT`                   |
@@ -460,6 +461,16 @@ are normal explicit, citable sources. Enabling the current document merges or
 removes a manual source with the same `pageId`. Disabling it allows that page
 to be added manually.
 
+Current-document fields are always reloaded by `pageId` on the server; fields
+from the editor snapshot are not trusted. Page, database, and database-row
+contexts use the shared knowledge projection: enabled `status`, `assigneeId`,
+`stakeholderIds`, and `aiRole`, current member display names without email,
+database property names/types/options, and named cells including explicit empty
+values. These fields enrich a source after the existing page/row text search
+has selected it and therefore do not change page ranking. Dictionary terms are
+not explicit conversation-context roots and are never appended wholesale to a
+prompt.
+
 Chat files and page attachments retain separate limits of ten and twenty.
 Context updates include `expectedRevision`; conflicts return
 `ai_context_revision_conflict`. Every run stores an allowed context snapshot,
@@ -570,6 +581,14 @@ default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB
 response. Malformed, oversized, and non-UUID candidates are rejected
 individually. Duplicate identities retain the highest score.
 
+The shared Agent/MCP `search` capability also searches the dictionary as an
+independent corpus when the space switch is enabled. Exact normalized term or
+form matches precede prefix and substring matches, followed by definition
+matches and a stable score/title/UUID tie-break. Dictionary and document
+candidates share the caller-provided limit. A `dictionary_term` result carries
+the UUID, term, forms, definition, `pageId: null`, and the stable link
+`/s/:spaceSlug/dictionary?term=<uuid>`.
+
 ### Supported adapters
 
 | Adapter                   | Configuration                                                    | Request and expected behavior                                          |
@@ -582,8 +601,14 @@ individually. Duplicate identities retain the highest score.
 `schemaVersion: 1 | 2` metadata and matching `workspaceId` and `spaceId`. The
 built-in writer emits version 2; version 1 remains a read/cleanup compatibility
 format. External
-result types are `page`, `database_row`, and `attachment`. A `database` may be
-explicit context but is not an external retrieval result type. The adapter
+result types are `page`, `database_row`, `attachment`, and `dictionary_term`.
+A dictionary candidate is requested only while
+`space.settings.dictionary.enabled` is true, uses `pageId: null`, and is
+revalidated against workspace, space, active-term state, the switch, and the
+caller's `Read Page` space ability; page ACL does not apply to terms. Page-backed
+safe retrieval results and attachment excerpts receive current parent document
+fields during local resolution. A `database` may be explicit context but is not
+an external retrieval result type. The adapter
 sends `hybrid: false`, so a broken external reranker does not disable normal
 vector search. When the collection response contains only `file_id`, the
 adapter calls `GET /api/v1/files/:fileId` and reads canonical metadata from
@@ -652,6 +677,17 @@ atomically; concurrent edits return `409` without a partial save. A provider or
 validation failure likewise leaves the dictionary unchanged. These synchronous
 utility calls use the provider timeout and network policy from the space
 configuration but are not stored as chat conversations or assistant runs.
+
+The dictionary is also a knowledge/search corpus with one
+`dictionary_term` source per active term. Term/form lookup uses exact,
+prefix/substring, definition, and trigram ranking backed by PostgreSQL
+expression indexes. Create, update, forms generation, bulk import, and soft
+delete emit a post-commit RAG Sync wake-up; polling and the independent
+dictionary update/delete feeds remain the recovery path. Disabling the space
+dictionary removes remote term mappings, while re-enabling it changes the scope
+fingerprint and backfills the corpus. The client deep link opens, scrolls to,
+and focuses the requested term; disabled, deleted, or inaccessible terms show a
+localized fail-closed state.
 
 The assistant's display identity is stored in the same space configuration:
 `assistantNameEnabled`, `assistantName` (up to eighty characters), and
@@ -781,6 +817,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
 | [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                     | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                     | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
 | [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
+| [`20260820T130000-knowledge-projection-dictionary-search.ts`](../apps/server/src/database/migrations/20260820T130000-knowledge-projection-dictionary-search.ts) | Adds `dictionary_term` to persisted AI source types and trigram/expression indexes for terms, definitions, and normalized aliases. Existing page and ordinary-search indexes are unchanged.                                                                                                       | Drops the dictionary indexes and deletes persisted `dictionary_term` citations before restoring the old source-type constraint. Those citation rows are intentionally not recoverable by `down`. |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -815,6 +852,14 @@ enable the bindings again. If the secret was rotated before cleanup, restore the
 previous value first so Docmost can verify and remove the existing managed
 files; do not abandon those targets merely to work around the rotation.
 
+When query-time retrieval uses `open-webui-knowledge-v1`, Enable additionally
+requires the normalized retrieval origin and Knowledge ID to match the writer
+target. Mismatch returns `409 rag_sync_target_mismatch`; the UI treats it as a
+blocking alert. Every runtime quantum repeats the comparison from PostgreSQL
+before any remote write, so a later mismatch stops the binding non-retryably
+without writing to the wrong Knowledge Base. The writer key remains separate
+and must still pass its own upload/process/delete Test.
+
 The binding state machine is `disabled | enabled | draining`. Normal disable
 stops new uploads and removes only files whose versioned `docmost` metadata
 proves ownership by the binding. Cleanup completes only after two stable empty
@@ -835,6 +880,15 @@ Open WebUI results still pass through Docmost source resolution and the
 requesting user's current ACL. Direct user access to the Open WebUI Knowledge
 Base is not safe because the external index contains the full policy-allowed
 space scope.
+
+All page/database/row Markdown is produced by `KnowledgeProjectionService`.
+The scope/feed fingerprint contains projection version `1`, the enabled
+document-field mask, and the dictionary switch. A change resets the applicable
+update checkpoints, reconciles stale remote mappings, and reprojects existing
+documents without relying on an event being delivered. Entity changes,
+referenced member display-name changes, database schema/cell/row changes, and
+dictionary mutations wake the supervisor only after commit; business writes do
+not wait for Open WebUI and delivery remains at least once.
 
 Attachment update feeds include only attachments whose parent page is still
 live in the same workspace and space. A page, database, or attachment can still
@@ -897,6 +951,10 @@ writes only schema v2 with binding, workspace, space, source, content hash,
 target version, and operation identity. Foreign files and whole Knowledge Base
 objects are never deleted. Deletions are scheduled ahead of updates; one feed
 page is processed per scheduling quantum so a large space cannot starve another.
+Mapping and ownership metadata use nullable `pageId` for `dictionary_term` and
+a required page UUID for page-backed sources. Dictionary update/delete
+checkpoints are independent; disable drains term files and re-enable backfills
+them through fingerprint replay.
 
 Deployment configuration contains no per-space identifiers or secrets:
 
@@ -1060,18 +1118,18 @@ described in JSON Schema.
 
 | Tool                         | Main inputs                                           | Result and bounds                                                                                                            |
 | ---------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `search`                     | `query`, optional `limit`                             | accessible pages and database rows with compact highlights and breadcrumbs; default 10, maximum 20                           |
+| `search`                     | `query`, optional `limit`                             | accessible pages/database rows enriched with document fields plus enabled dictionary terms; shared default 10, maximum 20   |
 | `getTree`                    | none                                                  | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
-| `getPageContext`             | `pageId`                                              | page metadata, visible allowed breadcrumbs, and up to 50 readable direct children                                            |
-| `getPage`                    | `pageId`                                              | title, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                                 |
+| `getPageContext`             | `pageId`                                              | page metadata and server-resolved document fields, visible allowed breadcrumbs, and up to 50 readable direct children        |
+| `getPage`                    | `pageId`                                              | title, document fields, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                |
 | `getOutline`                 | `pageId`                                              | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
 | `getNode`                    | `pageId`, `nodeId`                                    | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
 | `searchInPage`               | `pageId`, `query`, optional `limit`                   | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
 | `getWorkspaceContext`        | none                                                  | curated workspace identity and actor role; never raw workspace settings                                                      |
 | `getSpaceContext`            | none                                                  | current-space metadata, explicit `spaceRole`, workspace role, and safe actor capability flags                                |
-| `getDatabaseContext`         | `databaseId`                                          | curated database metadata, normalized property schema, and compact views                                                     |
-| `listDatabaseRows`           | `databaseId`, optional `limit`, `cursor`              | readable row pages and cells; default 20, maximum 50                                                                         |
-| `getDatabaseRowContext`      | `pageId`                                              | readable row, its database root, schema, and cells                                                                           |
+| `getDatabaseContext`         | `databaseId`                                          | database document fields, normalized property schema/options, and compact views                                              |
+| `listDatabaseRows`           | `databaseId`, optional `limit`, `cursor`              | readable row pages, their document fields, and named/explicit cells; default 20, maximum 50                                 |
+| `getDatabaseRowContext`      | `pageId`                                              | readable row fields, database root, schema/options, and named/explicit cells                                                 |
 | `getTable`                   | `pageId`, `tableRef`                                  | bounded text/cell-ID matrices for one structural table                                                                       |
 | `listComments`               | `pageId`, optional `limit`, `cursor`                  | active comments, parent/resolution state, compact content, and safe actors; maximum 50                                       |
 | `listPageHistory`            | `pageId`, optional `limit`, `cursor`                  | version metadata only; maximum 50                                                                                            |
@@ -1484,6 +1542,15 @@ bound, and last `(timestamp, id)` position. A watermark advances only on the
 terminal page; v1, cross-feed, cross-scope, or changed-watermark cursors fail
 with `400 Invalid RAG feed cursor`.
 
+`RagScope.projectionVersion` starts at `1`; the fingerprint also includes the
+enabled document-field mask and dictionary switch. Detail responses preserve
+legacy `contentMarkdown`/`rowMarkdown` and add canonical `knowledgeMarkdown`,
+structured fields, named database cells, and `projectionUpdatedAt`. Feed
+`updatedAt`/`updatedAtMs` are the latest RAG-relevant time across the entity,
+database structure/content, and only referenced assignee/stakeholder user rows.
+Attachment binaries are not replayed for parent-field changes; current parent
+fields are joined when RAG or safe retrieval reads the attachment.
+
 | Path                                                            | Data                                                               |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `GET /api/rag/scope`                                            | schema-v2 policy and readable-page fingerprint                     |
@@ -1493,6 +1560,10 @@ with `400 Invalid RAG feed cursor`.
 | `GET /api/rag/deleted?deletedSince=&limit=&cursor=`             | page/database/database-row tombstones                              |
 | `GET /api/rag/attachments/updates?updatedSince=&limit=&cursor=` | changed attachments                                                |
 | `GET /api/rag/attachments/deleted?deletedSince=&limit=&cursor=` | attachment tombstones                                              |
+| `GET /api/rag/dictionary/terms?limit=&cursor=`                  | active dictionary term projections                                |
+| `GET /api/rag/dictionary/terms/:termId`                         | one active term projection                                         |
+| `GET /api/rag/dictionary/updates?updatedSince=&limit=&cursor=`  | dictionary changes                                                 |
+| `GET /api/rag/dictionary/deleted?deletedSince=&limit=&cursor=`  | dictionary tombstones                                              |
 | `GET /api/rag/pages/:pageIdOrSlug?includeContent=`              | page or database-container details                                 |
 | `GET /api/rag/databases/:databaseIdOrPageSlug`                  | structured database data and `knowledgeMarkdown`                   |
 | `GET /api/rag/databases/:databaseIdOrPageSlug/rows?pageIds=`    | rows, cells, and row Markdown                                      |
@@ -1521,7 +1592,10 @@ Important enumerations include provider `openai-compatible`; adapters `none`,
 `http-json-v1`, and `open-webui-knowledge-v1`; run statuses `queued`, `running`,
 `awaiting_approval`, `completed`, `failed`, and `cancelled`; execution modes
 `chat` and `agent`; and source types `page`, `database`, `database_row`,
-`attachment`, and `chat_file`.
+`attachment`, `dictionary_term`, and `chat_file`.
+`packages/api-contract/src/rag.ts` also owns `RagDocumentCustomFields`, named
+database property/cell projections, dictionary feed/detail DTOs, and
+`RagScope.projectionVersion`.
 
 The primary public models are `AiSpaceConfig`, `AiAvailability`,
 `AiConversation`, `AiConversationContext`, `AiMessage`, `AiRun`, `AiCitation`,
@@ -1574,21 +1648,28 @@ type AiRetrievalQueryRequest = {
   pageId: string;
   query: string;
   allowedPageIds: string[];
-  sourceTypes: Array<"page" | "database_row" | "attachment">;
+  sourceTypes: Array<
+    "page" | "database_row" | "attachment" | "dictionary_term"
+  >;
   limit: number;
   candidateLimit: number;
 };
 
 type AiRetrievalQueryResponse = {
   items: Array<{
-    sourceType: "page" | "database_row" | "attachment";
+    sourceType: "page" | "database_row" | "attachment" | "dictionary_term";
     sourceId: string;
-    pageId: string;
+    pageId: string | null;
     text: string;
     score?: number;
   }>;
 };
 ```
+
+`pageId` is `null` only for `dictionary_term`; every page-backed result requires
+a UUID. This is a deliberate extension of `http-json-v1`, so external services
+with strict response validators must add the new discriminant and nullable
+branch before enabling dictionary retrieval.
 
 Realtime Socket.IO contracts include `ai:run.delta`, `ai:run.status`,
 `ai:run.step`,

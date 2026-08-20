@@ -1,5 +1,6 @@
 import {
   Accordion,
+  Alert,
   Button,
   FileButton,
   Group,
@@ -14,6 +15,7 @@ import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import {
   IconBook2,
+  IconAlertTriangle,
   IconChevronDown,
   IconChevronUp,
   IconDotsVertical,
@@ -27,9 +29,9 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DictionaryMarkdown } from "@/features/dictionary/components/dictionary-markdown";
 import { DictionaryTermModal } from "@/features/dictionary/components/dictionary-term-modal";
@@ -109,6 +111,8 @@ function termMatchesSearch(
 export default function SpaceDictionary() {
   const { t, i18n } = useTranslation();
   const { spaceSlug } = useParams();
+  const [searchParams] = useSearchParams();
+  const linkedTermId = searchParams.get("term")?.trim() || null;
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const spaceAbility = useSpaceAbility(space?.membership?.permissions);
   const { isAdmin } = useUserRole();
@@ -135,6 +139,42 @@ export default function SpaceDictionary() {
   const [openedTermIds, setOpenedTermIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
+  const [linkedTermUnavailable, setLinkedTermUnavailable] = useState(false);
+  const handledLinkedTermRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!linkedTermId) {
+      handledLinkedTermRef.current = null;
+      setLinkedTermUnavailable(false);
+      return;
+    }
+    if (!space || isLoading || handledLinkedTermRef.current === linkedTermId) {
+      return;
+    }
+    handledLinkedTermRef.current = linkedTermId;
+    if (!dictionaryEnabled) {
+      setLinkedTermUnavailable(true);
+      return;
+    }
+    const linkedTerm = terms.find((term) => term.id === linkedTermId);
+    if (!linkedTerm) {
+      setLinkedTermUnavailable(true);
+      return;
+    }
+    setLinkedTermUnavailable(false);
+    setSearchQuery("");
+    setActiveLetter(null);
+    setOpenedTermIds((current) =>
+      current.includes(linkedTermId) ? current : [...current, linkedTermId],
+    );
+    window.requestAnimationFrame(() => {
+      const control = document.getElementById(
+        `dictionary-term-${linkedTermId}`,
+      );
+      control?.scrollIntoView({ behavior: "smooth", block: "center" });
+      control?.focus({ preventScroll: true });
+    });
+  }, [dictionaryEnabled, isLoading, linkedTermId, space, terms]);
 
   const allGroups = useMemo(
     () => groupDictionaryTerms(terms, i18n.language),
@@ -375,7 +415,17 @@ export default function SpaceDictionary() {
           }
         />
 
-        {!dictionaryEnabled ? (
+        {linkedTermUnavailable ? (
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size={18} />}
+            title={t("Dictionary term is unavailable")}
+          >
+            {t(
+              "The linked dictionary term was deleted, disabled, or is not available in this space.",
+            )}
+          </Alert>
+        ) : !dictionaryEnabled ? (
           <EmptyState
             icon={IconBook2}
             title={t("Dictionary is disabled")}
@@ -521,7 +571,7 @@ export default function SpaceDictionary() {
 
                       return (
                         <Accordion.Item key={term.id} value={term.id}>
-                          <Accordion.Control>
+                          <Accordion.Control id={`dictionary-term-${term.id}`}>
                             <Group justify="space-between" wrap="nowrap">
                               <div className={classes.termHeader}>
                                 <Text className={classes.termTitle} fw={600}>

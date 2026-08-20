@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "辞書用語を削除",
   "Dictionary": "辞書",
   "Dictionary is disabled": "辞書は無効です",
+  "Dictionary term is unavailable": "辞書用語を利用できません",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "リンクされた辞書用語は削除、無効化、またはこのスペースでは利用できません。",
   "Dictionary term actions": "辞書用語の操作",
   "Dictionary term created": "辞書用語を作成しました",
   "Dictionary term deleted": "辞書用語を削除しました",
@@ -1532,7 +1534,7 @@
           },
           "success": "応答は 200、安定したカーソル、およびキー作成者のライブ読み取り可能なスコープのみを返します。",
           "rollback": "キーを取り消し、インデクサーを停止します。回復用の新しいキーを作成する",
-          "technical": "受信側の /mcp と /api/rag/* は、それぞれ専用のキー種別だけを受け付けます。ユーザーセッションや別種別のキーは拒否されます。キーは作成者の現在のスペースアクセス権とページ可視性の範囲を超えません。対象スペースをアーカイブすると、そのキーは直ちに無効になります。トークンは作成時にのみ返され、種別、スペース、作成者、有効期限は更新できません。"
+          "technical": "受信側の /mcp と /api/rag/* は、それぞれ専用のキー種別だけを受け付けます。ユーザーセッションや別種別のキーは拒否されます。キーは作成者の現在のスペースアクセス権とページ可視性の範囲を超えません。対象スペースをアーカイブすると、そのキーは直ちに無効になります。トークンは作成時にのみ返され、種別、スペース、作成者、有効期限は更新できません。プロジェクション v1 は、有効な文書フィールド、名前付きデータベースセル、有効な辞書を独立したページ分割フィードでエクスポートします。"
         },
         "ragSync": {
           "description": "組み込みの Open WebUI RAG Sync は Docmost 内で実行され、Docmost サービスを通じて PostgreSQL を直接読み取り、Redis と調整し、別の暗号化されたスペースごとの資格情報を使用して書き込みます。パブリック /api/rag/* API を呼び出すことはありません。クエリ資格情報とライター資格情報は分離されたままになります。",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "アクセスが変更されたため、部分的な回答と引用は削除されました。アクセス許可が意図的に復元された後にのみ、ソースを再度開きます。"
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "正規化された Open WebUI の検索元と Knowledge ID を書き込み先と完全に一致させてから、再度テストして有効化してください。一致しない間は書き込みません。"
           },
           "sourceRemoved": {
             "signal": "ソースが削除されました",

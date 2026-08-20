@@ -4,6 +4,7 @@ import {
   generateAllDictionaryWordForms,
   generateDictionaryWordForms,
   getDictionaryWordFormGenerationStatus,
+  getDictionaryTerm,
   importDictionaryTerms,
   parseDictionaryImportJson,
 } from "./dictionary-service";
@@ -149,6 +150,16 @@ describe("dictionary-service JSON import/export", () => {
       "/dictionary-terms/word-form-generation/status",
       { params: { spaceId: "space-1" } },
     );
+  });
+
+  it("loads one term lazily for search disclosure", async () => {
+    getMock.mockResolvedValue({ data: { id: "term-1", forms: [] } });
+
+    await expect(getDictionaryTerm("term-1")).resolves.toEqual({
+      id: "term-1",
+      forms: [],
+    });
+    expect(getMock).toHaveBeenCalledWith("/dictionary-terms/term-1");
   });
 
   it("generates word forms for an unsaved term form", async () => {

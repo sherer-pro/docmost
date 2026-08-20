@@ -200,7 +200,13 @@ export const AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS = [
   },
   {
     id: "ragSync",
-    rows: ["409", "sourceRemoved", "runtimeStopped", "cleanupRequired"],
+    rows: [
+      "409",
+      "targetMismatch",
+      "sourceRemoved",
+      "runtimeStopped",
+      "cleanupRequired",
+    ],
   },
   {
     id: "mcp",
