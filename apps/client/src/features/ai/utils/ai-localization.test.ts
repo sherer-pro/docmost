@@ -46,6 +46,7 @@ const GUIDE_GLOBAL_IDENTICAL_VALUE_ALLOWLIST = new Set([
   "troubleshooting.rows.429.signal",
   "troubleshooting.rows.503.signal",
   "troubleshooting.rows.sourceAccessChanged.signal",
+  "troubleshooting.rows.targetMismatch.signal",
   "troubleshooting.groups.mcp",
   "troubleshooting.groups.ragSync",
 ]);

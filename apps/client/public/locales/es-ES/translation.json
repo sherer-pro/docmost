@@ -1515,7 +1515,7 @@
           },
           "success": "Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir",
           "rollback": "Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida",
-          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales."
+          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales. La proyección de conocimiento compartida añade a la búsqueda de AI y al contexto de herramientas los campos de documento y personalizados habilitados, las propiedades y celdas de base de datos con nombre y los términos activos del diccionario (`dictionary_term`)."
         },
         "retrieval": {
           "description": "La búsqueda del espacio se ejecuta mientras se genera una respuesta.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Las respuestas devuelven 200 cursores estables y solo el alcance legible en vivo del creador de la clave",
           "rollback": "Revocar la clave y detener el indexador; crear una nueva clave para la recuperación",
-          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad. La proyección v1 exporta los campos de documento habilitados, las celdas de base de datos con nombre y el diccionario habilitado mediante feeds paginados independientes."
+          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad. La proyección v1 (`projectionVersion: 1`) exporta los campos de documento habilitados, las celdas de base de datos con nombre y el diccionario habilitado mediante feeds paginados independientes."
         },
         "ragSync": {
           "description": "La sincronización integrada Open WebUI RAG se ejecuta dentro de Docmost, lee PostgreSQL directamente a través de los servicios Docmost, se coordina con Redis y escribe con una credencial cifrada separada por espacio.",
           "owner": "Operador de implementación y administrador del espacio.",
           "prerequisite": "RAG_SYNC_ENABLED, un origen Open WebUI permitido, Knowledge ID y clave de escritor",
-          "result": "Docmost mantiene incrementalmente el Open WebUI Knowledge Base seleccionado; solo los adjuntos PDF, DOCX, TXT y Markdown entran en el índice de documentos portátil",
+          "result": "Docmost mantiene de forma incremental páginas, filas de base de datos y términos del diccionario habilitado en la Open WebUI Knowledge Base seleccionada; entre los adjuntos, solo PDF, DOCX, TXT y Markdown entran en el índice portátil",
           "steps": {
             "step1": "Save la credencial de destino y de escritor",
             "step2": "Ejecute Test para el objetivo actual",
@@ -1557,7 +1557,7 @@
           },
           "success": "El último éxito avanza y no queda ningún estado de limpieza o desajuste de objetivos",
           "rollback": "Deshabilite el enlace y finalice la limpieza; para reversión de emergencia, deshabilite RAG_SYNC_ENABLED y reinicie",
-          "technical": "Cada fuente usa un cursor opaco vinculado a una instantánea fija de la base de datos. Conserve la marca de agua inicial hasta hasMore=false; solo la página terminal avanza el checkpoint y los reintentos deben ser idempotentes. Las fuentes se procesan al menos una vez. Perder el lease o el cupo cancela la solicitud remota actual e impide nuevo trabajo; la conciliación gestiona efectos que terminaron antes de que llegara la cancelación."
+          "technical": "La sincronización integrada lee mediante servicios internos de Docmost y nunca llama a /api/rag/*. Las páginas, las filas de base de datos y los términos del diccionario habilitado se administran por separado; los términos usan el tipo de origen `dictionary_term`. Cada fuente usa un cursor opaco vinculado a una instantánea fija de la base de datos. Conserve la marca de agua inicial hasta hasMore=false; solo la página terminal avanza el checkpoint y los reintentos deben ser idempotentes. Las fuentes se procesan al menos una vez. Perder el lease o el cupo cancela la solicitud remota actual e impide nuevo trabajo; la conciliación gestiona efectos que terminaron antes de que llegara la cancelación."
         },
         "inboundMcp": {
           "description": "Los asistentes externos se conectan al punto final raíz /mcp con una clave MCP con alcance.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "fuente eliminada",
-            "action": "Una página, base de datos o archivo adjunto desapareció después de la instantánea del feed. RAG Sync lo trata como una eliminación, quita los archivos administrados y continúa sin reintentar un error interno de tipo not found."
+            "action": "Una página, base de datos, fila, adjunto o término del diccionario desapareció después de la instantánea del feed. RAG Sync elimina también las fuentes administradas `database_row` y `dictionary_term` y continúa sin reintentar un error interno not found."
           },
           "runtimeStopped": {
             "signal": "sincronización detenida",

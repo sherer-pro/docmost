@@ -1,0 +1,323 @@
+{
+  "version": 2,
+  "documents": {
+    "en": "README.md",
+    "ru": "FORK_SPECIFIC_ENHANCEMENTS_RU.md"
+  },
+  "guide": {
+    "headings": {
+      "en": "Built-in administrator and operator guide",
+      "ru": "Встроенная справка для администраторов и операторов"
+    },
+    "anchors": [
+      "assistant",
+      "retrieval",
+      "rag-api",
+      "rag-sync",
+      "inbound-mcp",
+      "outbound-mcp",
+      "security",
+      "troubleshooting"
+    ],
+    "requiredConcepts": [
+      {
+        "id": "guide-route",
+        "en": "/settings/ai/guide",
+        "ru": "/settings/ai/guide"
+      },
+      {
+        "id": "guide-boundaries",
+        "en": "built-in RAG Sync writes to Open WebUI through internal services and does not call the public RAG API",
+        "ru": "встроенный RAG Sync пишет в Open WebUI через внутренние службы и не вызывает публичный RAG API"
+      },
+      {
+        "id": "guide-release-gate",
+        "en": "check:ai-docs",
+        "ru": "check:ai-docs"
+      },
+      {
+        "id": "fork-doc-release-gate",
+        "en": "check:fork-docs",
+        "ru": "check:fork-docs"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "number": 1,
+      "id": "ai-assistant",
+      "headings": {
+        "en": "Built-in AI assistant for each space",
+        "ru": "Встроенный AI-помощник для каждого пространства"
+      },
+      "requiredConcepts": [
+        {
+          "id": "assistant-profiles",
+          "en": "assistant profiles",
+          "ru": "профили помощника"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "id": "context-ai",
+      "headings": {
+        "en": "Context-aware AI workflows inside documents",
+        "ru": "Контекстные AI-сценарии внутри документов"
+      },
+      "requiredConcepts": [
+        {
+          "id": "agent-tool-policy",
+          "en": "built-in tool policy",
+          "ru": "политика встроенных инструментов"
+        },
+        {
+          "id": "agent-capability-allowlists",
+          "en": "workspace and space capability allowlists",
+          "ru": "allowlist возможностей рабочего пространства и пространства"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "id": "rag-open-webui",
+      "headings": {
+        "en": "RAG and Open WebUI integration",
+        "ru": "Интеграция RAG и Open WebUI"
+      },
+      "requiredConcepts": [
+        {
+          "id": "rag-sync-origin-policy",
+          "en": "RAG_SYNC_ALLOWED_ORIGINS",
+          "ru": "RAG_SYNC_ALLOWED_ORIGINS"
+        },
+        {
+          "id": "mcp-baseline-capabilities",
+          "en": "seven baseline reads",
+          "ru": "семь базовых операций чтения"
+        },
+        {
+          "id": "hostile-schema-references",
+          "en": "`$ref` and `$defs`",
+          "ru": "`$ref` и `$defs`"
+        },
+        {
+          "id": "hostile-schema-aliases",
+          "en": "opaque aliases",
+          "ru": "непрозрачными псевдонимами"
+        },
+        {
+          "id": "knowledge-projection-v1",
+          "en": "`projectionVersion: 1` knowledge projection",
+          "ru": "проекцию знаний `projectionVersion: 1`"
+        },
+        {
+          "id": "rag-sync-dictionary-source",
+          "en": "active `dictionary_term` sources",
+          "ru": "активных источников `dictionary_term`"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "id": "ai-reliability",
+      "headings": {
+        "en": "Reliable AI request infrastructure",
+        "ru": "Надёжная инфраструктура AI-запросов"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 5,
+      "id": "databases",
+      "headings": {
+        "en": "Notion-style databases",
+        "ru": "Базы данных в стиле Notion"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 6,
+      "id": "document-properties",
+      "headings": {
+        "en": "Extended document properties",
+        "ru": "Расширенные свойства документов"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 7,
+      "id": "dictionary",
+      "headings": {
+        "en": "Tags and terminology dictionary",
+        "ru": "Теги и терминологический словарь"
+      },
+      "requiredConcepts": [
+        {
+          "id": "llm-word-forms",
+          "en": "LLM-assisted word forms",
+          "ru": "генерацию словоформ с помощью LLM"
+        },
+        {
+          "id": "space-scoped-inline-tags",
+          "en": "per-space controls for which built-in tags",
+          "ru": "настройки пространства, определяющие доступные"
+        },
+        {
+          "id": "six-built-in-tags",
+          "en": "TBD, TODO, DONE, Core, Future, and Pilot",
+          "ru": "TBD, TODO, DONE, Core, Future и Pilot"
+        },
+        {
+          "id": "portable-tag-settings",
+          "en": "portable tag availability settings",
+          "ru": "переносимые настройки доступности тегов"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "id": "search",
+      "headings": {
+        "en": "Search and content indexing",
+        "ru": "Поиск и индексация содержимого"
+      },
+      "requiredConcepts": [
+        {
+          "id": "inline-tag-filter",
+          "en": "multi-select inline",
+          "ru": "с множественным выбором"
+        },
+        {
+          "id": "search-fragments",
+          "en": "up to three anchored matching fragments",
+          "ru": "до трёх привязанных совпадающих фрагментов"
+        },
+        {
+          "id": "search-runbook",
+          "en": "./docs/SEARCH.md",
+          "ru": "./docs/SEARCH.md"
+        },
+        {
+          "id": "all-mode-search-sections",
+          "en": "separates document, attachment, and dictionary results",
+          "ru": "разделяет документы, вложения и словарь"
+        },
+        {
+          "id": "dictionary-database-projection-search",
+          "en": "selected database property names and cell values",
+          "ru": "имена свойств и значения ячеек баз данных"
+        },
+        {
+          "id": "all-six-inline-tag-filters",
+          "en": "TBD/TODO/DONE/Core/Future/Pilot",
+          "ru": "TBD/TODO/DONE/Core/Future/Pilot"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "id": "editor",
+      "headings": {
+        "en": "Extended editor",
+        "ru": "Расширенный редактор"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 10,
+      "id": "portability",
+      "headings": {
+        "en": "Import, export, and data portability",
+        "ru": "Импорт, экспорт и переносимость данных"
+      },
+      "requiredConcepts": [
+        {
+          "id": "portable-space-settings",
+          "en": "portable document-field, heading-numbering, dictionary, and per-space built-in tag settings",
+          "ru": "переносимых настроек полей документов, нумерации заголовков, словаря и встроенных тегов пространства"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "id": "collaboration",
+      "headings": {
+        "en": "Comments and collaboration",
+        "ru": "Комментарии и совместная работа"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 12,
+      "id": "notifications",
+      "headings": {
+        "en": "Notifications",
+        "ru": "Уведомления"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 13,
+      "id": "access-control",
+      "headings": {
+        "en": "Access control",
+        "ru": "Управление доступом"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 14,
+      "id": "security",
+      "headings": {
+        "en": "Security",
+        "ru": "Безопасность"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 15,
+      "id": "interface",
+      "headings": {
+        "en": "PWA, interface, and navigation",
+        "ru": "PWA, интерфейс и навигация"
+      },
+      "requiredConcepts": []
+    },
+    {
+      "number": 16,
+      "id": "operations",
+      "headings": {
+        "en": "Operations and development",
+        "ru": "Эксплуатация и разработка"
+      },
+      "requiredConcepts": [
+        {
+          "id": "performance-harness",
+          "en": "staging-only browser/API performance harness",
+          "ru": "browser/API performance harness только для staging"
+        },
+        {
+          "id": "maintenance-baseline",
+          "en": "maintenance baseline",
+          "ru": "maintenance baseline"
+        },
+        {
+          "id": "telemetry-contract",
+          "en": "product telemetry",
+          "ru": "продуктовой телеметрии"
+        },
+        {
+          "id": "oci-provenance",
+          "en": "OCI image version and source-revision labels",
+          "ru": "OCI labels версии образа и source revision"
+        },
+        {
+          "id": "backup-restore",
+          "en": "secret-free PostgreSQL and local-storage backup verification and restore tooling",
+          "ru": "резервных копий PostgreSQL и локального storage без включения секретов"
+        }
+      ]
+    }
+  ]
+}

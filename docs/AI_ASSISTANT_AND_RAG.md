@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 8 -->
+<!-- ai-admin-guide-contract-version: 9 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -35,7 +35,8 @@ those documents should link here instead of copying changing implementation
 details.
 
 The administrator and operator projection of this document is embedded in
-Docmost at `/settings/ai/guide`. It provides stable deep links for the
+Docmost as a separate workspace-administrator AI settings tab at
+`/settings/ai/guide`. It provides stable deep links for the
 assistant (`#assistant`), query-time retrieval (`#retrieval`), external RAG API
 clients (`#rag-api`), built-in Open WebUI synchronization (`#rag-sync`),
 inbound MCP (`#inbound-mcp`), outbound MCP (`#outbound-mcp`), security
@@ -65,6 +66,13 @@ manifest version, and all supported locales in the same pull request. The
 `AI_GUIDE_BASE_SHA` and `AI_GUIDE_HEAD_SHA`; without Git history it still checks
 routes, flags, anchors, manifest coverage, localized field structure, and the
 matching contract version.
+
+Release verification also runs the production-like AI browser acceptance for
+this route in both Russian and English. It traverses all eight panels and checks
+the projection-v1 and `rag_sync_target_mismatch` guidance. Static
+`check:ai-docs` validation rejects moving the route outside the administrator
+boundary, merging the guide into another settings tab, dropping an anchor, or
+removing either localized browser project.
 
 The guide deliberately keeps the paths separate: query-time retrieval is an
 answer-time search adapter, `/api/rag/*` is an API-key-only export surface for
@@ -817,7 +825,8 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260806T090000-rag-sync-bindings.ts`](../apps/server/src/database/migrations/20260806T090000-rag-sync-bindings.ts)                                           | Adds disabled-by-default per-space RAG Sync bindings, encrypted writer credentials, lifecycle revisions, cleanup state, and unique target claims. Existing standalone env bindings and secrets are intentionally not imported.                                                                     | Deletes binding configuration, writer credentials, cleanup state, and target reservations; use `RAG_SYNC_ENABLED=false` for operational rollback instead.                                      |
 | [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                     | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                     | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
 | [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
-| [`20260820T130000-knowledge-projection-dictionary-search.ts`](../apps/server/src/database/migrations/20260820T130000-knowledge-projection-dictionary-search.ts) | Adds `dictionary_term` to persisted AI source types and trigram/expression indexes for terms, definitions, and normalized aliases. Existing page and ordinary-search indexes are unchanged.                                                                                                       | Drops the dictionary indexes and deletes persisted `dictionary_term` citations before restoring the old source-type constraint. Those citation rows are intentionally not recoverable by `down`. |
+| [`20260820T130000-knowledge-projection-dictionary-search.ts`](../apps/server/src/database/migrations/20260820T130000-knowledge-projection-dictionary-search.ts) | Extends only the persisted AI source-type constraint with `dictionary_term`; it performs no index build or table rewrite.                                                                                                                                                                          | Deletes persisted `dictionary_term` citations before restoring the old source-type constraint. Those citation rows are intentionally not recoverable by `down`.                                |
+| [`20260820T140000-search-dictionary-database-projection.ts`](../apps/server/src/database/migrations/20260820T140000-search-dictionary-database-projection.ts) | Builds trigram expression indexes for dictionary terms, definitions, and normalized aliases; adds the database search projection columns/trigger; rewrites existing `pages` rows; and builds the partial database-projection GIN index.                                                            | Drops the database-projection index, trigger, function, and columns, then drops the three dictionary trigram indexes.                                                                           |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation

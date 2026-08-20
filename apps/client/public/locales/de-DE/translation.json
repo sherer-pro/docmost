@@ -1515,7 +1515,7 @@
           },
           "success": "Eine Testantwort wird abgeschlossen; Agent listet nur zulässige Tools auf und fragt vor dem Schreiben",
           "rollback": "Deaktivieren Sie Agent oder das Weltraummodell und stellen Sie dann die letzten als funktionierend bekannten Einstellungen wieder her",
-          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern."
+          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern. Die gemeinsame Wissensprojektion ergänzt AI-Suche und Werkzeugkontext um aktivierte Dokument- und benutzerdefinierte Felder, benannte Datenbankeigenschaften und -zellen sowie aktive Wörterbuchbegriffe (`dictionary_term`)."
         },
         "retrieval": {
           "description": "Die Bereichssuche wird während der Generierung einer Antwort ausgeführt.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Die Antworten geben 200, stabile Cursor und nur den live lesbaren Bereich des Schlüsselerstellers zurück",
           "rollback": "Widerrufen Sie den Schlüssel und stoppen Sie den Indexer. Erstellen Sie einen neuen Schlüssel für die Wiederherstellung",
-          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. Projektion v1 exportiert aktivierte Dokumentfelder, benannte Datenbankzellen und das aktivierte Wörterbuch über unabhängige paginierte Feeds."
+          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. Projektion v1 (`projectionVersion: 1`) exportiert aktivierte Dokumentfelder, benannte Datenbankzellen und das aktivierte Wörterbuch über unabhängige paginierte Feeds."
         },
         "ragSync": {
           "description": "Die integrierte Open WebUI RAG-Synchronisierung läuft in Docmost, liest PostgreSQL direkt über Docmost-Dienste, koordiniert mit Redis und schreibt mit separaten, verschlüsselten Anmeldeinformationen pro Space.",
           "owner": "Bereitstellungsbetreiber und Raumadministrator",
           "prerequisite": "RAG_SYNC_ENABLED, ein zulässiger Open WebUI-Ursprung, Knowledge ID und ein Writer-Schlüssel",
-          "result": "Docmost behält inkrementell den ausgewählten Open WebUI Knowledge Base bei; nur PDF-, DOCX-, TXT- und Markdown-Anhänge gelangen in den portablen Dokumentindex",
+          "result": "Docmost pflegt Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe inkrementell in der ausgewählten Open WebUI Knowledge Base; von den Anhängen gelangen nur PDF, DOCX, TXT und Markdown in den portablen Dokumentindex",
           "steps": {
             "step1": "Save die Anmeldeinformationen des Ziels und des Autors",
             "step2": "Führen Sie Test für das aktuelle Ziel aus",
@@ -1557,7 +1557,7 @@
           },
           "success": "Der letzte Erfolg schreitet voran und es bleibt kein Bereinigungs- oder Zielinkongruenzstatus bestehen",
           "rollback": "Deaktivieren Sie die Bindung und schließen Sie die Bereinigung ab. Für ein Notfall-Rollback deaktivieren Sie RAG_SYNC_ENABLED und starten Sie neu",
-          "technical": "Jeder Feed verwendet einen opaken Cursor für einen festen Datenbank-Snapshot. Der Start-Watermark bleibt bis hasMore=false unverändert; erst die letzte Seite schreibt den Checkpoint fort, und Wiederholungen müssen idempotent bleiben. Feeds werden mindestens einmal zugestellt. Der Verlust von Lease oder Slot bricht die aktuelle entfernte Anfrage ab und verhindert neue Arbeit; die Abstimmung behandelt Seiteneffekte, die vor der Abbruchübermittlung abgeschlossen wurden."
+          "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft niemals /api/rag/* auf. Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe werden getrennt verwaltet; Wörterbuchbegriffe verwenden den Quelltyp `dictionary_term`. Jeder Feed verwendet einen opaken Cursor für einen festen Datenbank-Snapshot. Der Start-Watermark bleibt bis hasMore=false unverändert; erst die letzte Seite schreibt den Checkpoint fort, und Wiederholungen müssen idempotent bleiben. Feeds werden mindestens einmal zugestellt. Der Verlust von Lease oder Slot bricht die aktuelle entfernte Anfrage ab und verhindert neue Arbeit; die Abstimmung behandelt Seiteneffekte, die vor der Abbruchübermittlung abgeschlossen wurden."
         },
         "inboundMcp": {
           "description": "Externe Assistenten stellen mit einem bereichsbezogenen MCP-Schlüssel eine Verbindung zum Root-Endpunkt /mcp her.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "Quelle entfernt",
-            "action": "Eine Seite, Datenbank oder Anlage ist nach dem Feed-Snapshot verschwunden. RAG Sync behandelt dies als Löschung, entfernt verwaltete Dateien und fährt ohne interne Not-found-Wiederholungen fort."
+            "action": "Eine Seite, Datenbank, Datenbankzeile, Anlage oder ein Wörterbuchbegriff ist nach dem Feed-Snapshot verschwunden. RAG Sync entfernt auch verwaltete Quellen vom Typ `database_row` und `dictionary_term` und fährt ohne interne Not-found-Wiederholungen fort."
           },
           "runtimeStopped": {
             "signal": "Synchronisierung angehalten",

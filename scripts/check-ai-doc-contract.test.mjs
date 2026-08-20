@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+  AI_GUIDE_MIGRATION_FILES,
   evaluateAiGuideDiffContract,
   isAiGuideLogicPath,
+  validateAiGuideRequiredFacts,
+  validateAiGuideUiContract,
 } from "./check-ai-doc-contract.mjs";
 
 const locales = [
@@ -27,6 +31,25 @@ const requiredChanges = [
     (locale) => `apps/client/public/locales/${locale}/translation.json`,
   ),
 ];
+const uiInputs = {
+  appRoutes: await readFile("apps/client/src/App.tsx", "utf8"),
+  aiSettingsPage: await readFile(
+    "apps/client/src/features/ai/pages/ai-integrations-settings.tsx",
+    "utf8",
+  ),
+  settingsAccess: await readFile(
+    "apps/client/src/components/settings/workspace-settings-access.ts",
+    "utf8",
+  ),
+  guideBrowserAcceptance: await readFile(
+    "apps/client/e2e/ai/specs/admin-guide.spec.ts",
+    "utf8",
+  ),
+  aiPlaywrightConfig: await readFile(
+    "apps/client/playwright.ai.config.ts",
+    "utf8",
+  ),
+};
 
 test("accepts a coupled AI logic and guide contract update", () => {
   const errors = evaluateAiGuideDiffContract({
@@ -102,4 +125,101 @@ test("rejects a skipped or mismatched guide contract version", () => {
       ),
     );
   }
+});
+
+test("accepts the separate administrator-only AI guide release surface", () => {
+  assert.deepEqual(validateAiGuideUiContract(uiInputs), []);
+});
+
+test("rejects an AI guide route outside the administrator boundary", () => {
+  const errors = validateAiGuideUiContract({
+    ...uiInputs,
+    appRoutes: uiInputs.appRoutes.replace(
+      '<Route path={"ai/:aiTab"} element={<AiIntegrationsSettings />} />',
+      '<Route path={"removed"} element={<AiIntegrationsSettings />} />',
+    ),
+  });
+  assert.ok(
+    errors.includes(
+      "AI guide route must remain inside the workspace-administrator route boundary",
+    ),
+  );
+});
+
+test("rejects removal of the separate AI guide tab", () => {
+  const errors = validateAiGuideUiContract({
+    ...uiInputs,
+    aiSettingsPage: uiInputs.aiSettingsPage.replace(
+      'value="guide"',
+      'value="removed-guide"',
+    ),
+  });
+  assert.ok(errors.includes("AI guide must remain a separate AI settings tab"));
+});
+
+test("rejects incomplete bilingual browser acceptance", () => {
+  const errors = validateAiGuideUiContract({
+    ...uiInputs,
+    guideBrowserAcceptance: uiInputs.guideBrowserAcceptance.replaceAll(
+      '"rag-sync"',
+      '"removed-rag-sync"',
+    ),
+    aiPlaywrightConfig: uiInputs.aiPlaywrightConfig.replace("admin-guide|", ""),
+  });
+  assert.ok(
+    errors.includes("AI guide browser acceptance is missing anchor: rag-sync"),
+  );
+  assert.ok(
+    errors.includes(
+      "AI guide browser acceptance must run in the English project",
+    ),
+  );
+});
+
+test("keeps the current knowledge projection migrations in the AI ledger", () => {
+  for (const migration of [
+    "20260811T190000-rag-sync-target-verification.ts",
+    "20260820T130000-knowledge-projection-dictionary-search.ts",
+    "20260820T140000-search-dictionary-database-projection.ts",
+  ]) {
+    assert.ok(AI_GUIDE_MIGRATION_FILES.includes(migration));
+  }
+});
+
+test("rejects a missing localized operational fact", () => {
+  const guideContract = {
+    requiredKeys: ["scenario.ragSync.technical"],
+    requiredFacts: [
+      {
+        id: "rag-sync-source-union",
+        key: "scenario.ragSync.technical",
+        needles: ["/api/rag/*", "dictionary_term"],
+      },
+    ],
+  };
+  assert.deepEqual(
+    validateAiGuideRequiredFacts({
+      guideContract,
+      localeGuides: {
+        "en-US": {
+          "scenario.ragSync.technical":
+            "Uses /api/rag/* only as a boundary and includes dictionary_term.",
+        },
+      },
+    }),
+    [],
+  );
+  const errors = validateAiGuideRequiredFacts({
+    guideContract,
+    localeGuides: {
+      "en-US": {
+        "scenario.ragSync.technical": "Uses /api/rag/* only as a boundary.",
+      },
+    },
+  });
+  assert.ok(
+    errors.includes(
+      "en-US AI guide fact rag-sync-source-union is missing from scenario.ragSync.technical: dictionary_term",
+    ),
+  );
 });

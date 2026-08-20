@@ -1,7 +1,7 @@
 {
   "name": "docmost",
   "homepage": "https://docmost.com",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "scripts": {
     "build": "nx run-many -t build",
@@ -28,12 +28,13 @@
     "test:rag-sync:e2e": "node scripts/run-rag-sync-e2e.mjs",
     "verify:quick": "corepack pnpm run check:no-ee && corepack pnpm run test:no-ee && corepack pnpm run check:architecture && corepack pnpm run check:release-version && corepack pnpm run check:release-gates && corepack pnpm run check:env && corepack pnpm run check:telemetry && corepack pnpm run check:ai-docs && corepack pnpm run lint && corepack pnpm run test && corepack pnpm run test:security",
     "verify:full": "corepack pnpm run check:no-ee && corepack pnpm run test:no-ee && corepack pnpm run check:architecture && corepack pnpm run check:release-version && corepack pnpm run check:release-gates && corepack pnpm run check:env && corepack pnpm run check:telemetry && corepack pnpm run check:maintenance-audit && corepack pnpm run check:ai-docs && corepack pnpm run build && corepack pnpm run check:client-bundle && corepack pnpm run lint && corepack pnpm run test:all && corepack pnpm run test:security",
-    "verify:release": "corepack pnpm run verify:full && corepack pnpm run routes:inventory:check && corepack pnpm run check:rag-docs && corepack pnpm run check:comments:en && corepack pnpm run check:audit-exceptions && corepack pnpm run test:text-contracts && corepack pnpm run test:editor-ext && corepack pnpm run test:rag-sync:contract && corepack pnpm run test:mcp:audit-client && corepack pnpm audit --prod --audit-level high && corepack pnpm run test:ai:e2e && corepack pnpm run test:ai-agent:e2e && corepack pnpm run test:editor:e2e && corepack pnpm run test:ai-context:e2e",
+    "verify:release": "corepack pnpm run verify:full && corepack pnpm run routes:inventory:check && corepack pnpm run check:rag-docs && corepack pnpm run check:fork-docs && corepack pnpm run check:comments:en && corepack pnpm run check:audit-exceptions && corepack pnpm run test:text-contracts && corepack pnpm run test:editor-ext && corepack pnpm run test:rag-sync:contract && corepack pnpm run test:mcp:audit-client && corepack pnpm audit --prod --audit-level high && corepack pnpm run test:ai:e2e && corepack pnpm run test:ai-agent:e2e && corepack pnpm run test:editor:e2e && corepack pnpm run test:ai-context:e2e",
     "verify": "corepack pnpm run verify:full",
     "routes:inventory": "node scripts/generate-api-route-inventory.mjs",
     "routes:inventory:check": "node scripts/generate-api-route-inventory.mjs --check",
     "check:rag-docs": "node scripts/check-rag-doc-contract.mjs",
     "check:ai-docs": "node --test scripts/check-ai-doc-contract.test.mjs && node scripts/check-ai-doc-contract.mjs",
+    "check:fork-docs": "node --test scripts/check-fork-docs-contract.test.mjs && node scripts/check-fork-docs-contract.mjs",
     "start": "corepack pnpm --filter ./apps/server run start:prod",
     "collab": "corepack pnpm --filter ./apps/server run collab:prod",
     "collab:dev": "corepack pnpm --filter ./apps/server run collab:dev",

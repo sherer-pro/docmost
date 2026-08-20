@@ -105,13 +105,14 @@
 - Targeted root builds: `pnpm server:build`, `pnpm client:build`, `pnpm editor-ext:build`
 - Quick local verification (CE/architecture/version/release/env/telemetry/AI-doc contracts → lint → backend test + frontend build smoke → hostile MCP/server/client security): `pnpm verify:quick`
 - Full local verification (quick contracts plus maintenance baseline → build → client bundle budget → lint → backend tests + frontend build/unit → hostile MCP/server/client security): `pnpm verify:full`
-- Release-candidate verification (full verification plus route/RAG/comments/audit/text/editor-extension/RAG Sync/inbound MCP/dependency contracts and AI/Agent/editor/AI-context browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
+- Release-candidate verification (full verification plus route/RAG/bilingual-fork-docs/comments/audit/text/editor-extension/RAG Sync/inbound MCP/dependency contracts and AI administrator-guide/Agent/editor/AI-context browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Enforce the permanent absence of external product telemetry code, configuration, and dependencies: `pnpm check:telemetry`
 - Compare Knip and jscpd findings with the reviewed, expiring maintenance baseline: `pnpm check:maintenance-audit`
 - Check the production Vite manifest against the general chunk cap and the exact lazy Excalidraw exception/importer graph: `pnpm check:client-bundle` (requires a current client build).
 - Check manifest, MCP runtime, and release-tag version consistency: `pnpm check:release-version`
+- Check structural and critical semantic parity between the English fork section in `README.md` and `FORK_SPECIFIC_ENHANCEMENTS_RU.md`, plus source-backed release contracts for tags, knowledge projection, RAG Sync, portable settings, and migration sequencing: `pnpm check:fork-docs`.
 - Regenerate backend route inventory from controllers: `pnpm routes:inventory`
 - Check route inventory drift without rewriting the generated file: `pnpm routes:inventory:check`
 - Check the RAG Postman collection against route inventory and key-type examples: `pnpm check:rag-docs`
@@ -283,7 +284,7 @@ Minimum:
   - `.github/workflows/ci.yml` — reusable validation for `push` to `main`, pull requests, manual dispatch, and release gates (`install`, contracts, build, client bundle budget, lint/tests/security, integration, production-image MCP/collaboration smoke, editor and AI browser acceptance, artifact sanitization, and production dependency audit). Superseded `push`/`pull_request` runs are cancelled; runs called from `docker.yml` use a different concurrency group and are not. On `push` the AI guide diff gate degrades to non-diff validation, because `AI_GUIDE_BASE_SHA`/`AI_GUIDE_HEAD_SHA` come from `github.event.pull_request.*`.
   - `.github/workflows/docker.yml` — release/docker gates, build, and push.
   - `.github/workflows/rag-open-webui-compat.yml` — scheduled (Monday 03:00 UTC) and manual Open WebUI compatibility audit with sanitized failure artifacts. It installs workspace dependencies with pinned pnpm, because `scripts/rag-open-webui-compat.mjs` uses `jszip` from the root manifest.
-- `pnpm check:release-gates` locks the three-workflow command matrix, the `push: [main]` CI trigger, root `verify:*` and security composition, shared E2E Python dependency install/cache contract, the compatibility workflow dependency install, the `production-smoke` collaboration runtime flags, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
+- `pnpm check:release-gates` locks the three-workflow command matrix, the `push: [main]` CI trigger, root `verify:*`, bilingual fork-documentation and security composition, shared E2E Python dependency install/cache contract, the compatibility workflow dependency install, the `production-smoke` collaboration runtime flags, OCI version/revision provenance, least-privilege permissions, concurrency policy, and immutable third-party action pins against fail-open workflow drift.
 - A run triggered by `release: published` always checks out the **tag**. A fix pushed to `main` after the tag is never picked up by re-running that workflow — it requires a new tag whose name equals `v${package.version}`.
 - De facto required local pipeline before PR:
   1. `pnpm install --frozen-lockfile`

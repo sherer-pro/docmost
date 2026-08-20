@@ -1515,7 +1515,7 @@
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
-          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen."
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext."
         },
         "retrieval": {
           "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker",
           "rollback": "Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel",
-          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. Projectie v1 exporteert ingeschakelde documentvelden, benoemde databasecellen en het ingeschakelde woordenboek via onafhankelijke gepagineerde feeds."
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. Projectie v1 (`projectionVersion: 1`) exporteert ingeschakelde documentvelden, benoemde databasecellen en het ingeschakelde woordenboek via onafhankelijke gepagineerde feeds."
         },
         "ragSync": {
           "description": "Ingebouwde Open WebUI RAG Sync draait binnen Docmost, leest PostgreSQL rechtstreeks via Docmost-services, coördineert met Redis en schrijft met een afzonderlijke gecodeerde referentie per ruimte.",
           "owner": "Implementatieoperator en ruimtebeheerder",
           "prerequisite": "RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel",
-          "result": "Docmost onderhoudt stapsgewijs de geselecteerde Open WebUI Knowledge Base; alleen PDF-, DOCX-, TXT- en Markdown-bijlagen gaan naar de draagbare documentindex",
+          "result": "Docmost onderhoudt pagina’s, databaserijen en actieve woordenboektermen stapsgewijs in de geselecteerde Open WebUI Knowledge Base; van de bijlagen gaan alleen PDF, DOCX, TXT en Markdown naar de draagbare index",
           "steps": {
             "step1": "Save de doel- en schrijverreferentie",
             "step2": "Voer Test uit voor het huidige doel",
@@ -1557,7 +1557,7 @@
           },
           "success": "Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan",
           "rollback": "Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op",
-          "technical": "Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid."
+          "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, databaserijen en actieve woordenboektermen worden afzonderlijk beheerd; woordenboektermen gebruiken het brontype `dictionary_term`. Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid."
         },
         "inboundMcp": {
           "description": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "bron verwijderd",
-            "action": "Een pagina, database of bijlage verdween na de feed-snapshot. RAG Sync behandelt dit als een verwijdering, verwijdert beheerde bestanden en gaat door zonder een interne not-found-fout opnieuw te proberen."
+            "action": "Een pagina, database, databaserij, bijlage of woordenboekterm verdween na de feed-snapshot. RAG Sync verwijdert ook beheerde bronnen van het type `database_row` en `dictionary_term` en gaat door zonder een interne not-found-fout opnieuw te proberen."
           },
           "runtimeStopped": {
             "signal": "synchronisatie gestopt",

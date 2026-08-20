@@ -284,7 +284,7 @@ export class DictionarySearchService {
   }
 }
 
-export function normalizeDictionarySearchText(value: string): string {
+function normalizeDictionarySearchText(value: string): string {
   return value
     .normalize('NFKC')
     .trim()
