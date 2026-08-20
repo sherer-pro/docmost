@@ -74,6 +74,14 @@ test("integration keeps the pinned live Typesense contract", () => {
   assert.ok(errors.includes(`integration must define ${image}`));
 });
 
+test("integration provisions ephemeral Typesense storage", () => {
+  const storage = "--tmpfs /data";
+  const errors = validateReleaseGateContract(
+    inputs({ ciSource: ciSource.replace(storage, "--tmpfs /removed") }),
+  );
+  assert.ok(errors.includes(`integration must define ${storage}`));
+});
+
 test("production smoke keeps page templates enabled in collaboration", () => {
   const marker = "docker run -d --name docmost-collab";
   const start = ciSource.indexOf(marker);
