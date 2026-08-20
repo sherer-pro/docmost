@@ -89,6 +89,16 @@ test("administrator AI guide is a separate localized release surface", async ({
   }
 
   await page.goto("/settings/ai/guide#troubleshooting");
+  const ragSyncTroubleshooting = page.getByRole("button", {
+    name: "RAG Sync",
+    exact: true,
+  });
+  await expect(ragSyncTroubleshooting).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await ragSyncTroubleshooting.click();
+  await expect(ragSyncTroubleshooting).toHaveAttribute("aria-expanded", "true");
   await expect(
     page.getByText("rag_sync_target_mismatch", { exact: true }),
   ).toBeVisible();
