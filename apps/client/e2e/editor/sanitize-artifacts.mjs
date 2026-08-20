@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { unzipSync, zipSync } from "fflate";
 
-const TEXT_FILE_PATTERN = /\.(?:html?|json|log|network|trace|txt)$/i;
+const TEXT_FILE_PATTERN = /\.(?:har|html?|json|log|network|trace|txt)$/i;
 const ZIP_TEXT_ENTRY_PATTERN =
-  /(?:\.(?:html?|json|log|network|trace|txt)|stacks)$/i;
+  /(?:\.(?:har|html?|json|log|network|trace|txt)|stacks)$/i;
 
 function createSanitizer(exactSecrets) {
   return (value) => {
