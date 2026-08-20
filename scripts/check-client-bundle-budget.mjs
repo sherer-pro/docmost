@@ -15,6 +15,8 @@ const defaultManifestPath = join(
 
 export const CLIENT_BUNDLE_BUDGET = Object.freeze({
   generalMaxRawBytes: 1_500_000,
+  initialClosureMaxGzipBytes: 260_000,
+  pageRouteClosureMaxGzipBytes: 900_000,
   excalidrawSubset: Object.freeze({
     maxRawBytes: 1_821_659,
     maxGzipBytes: 736_669,
@@ -23,6 +25,28 @@ export const CLIENT_BUNDLE_BUDGET = Object.freeze({
 
 const excalidrawEditorSource =
   "src/features/editor/components/excalidraw/excalidraw-editor.tsx";
+const excalidrawViewSource =
+  "src/features/editor/components/excalidraw/excalidraw-view.tsx";
+const pageRouteSource = "src/pages/page/page.tsx";
+const requiredDynamicSources = [
+  "src/features/comment/components/page-comment-section.tsx",
+  "src/features/ai/components/ai-document-context-sync.tsx",
+  "src/features/editor/components/math/math-inline.tsx",
+  "src/features/editor/components/math/math-block.tsx",
+  "src/features/editor/components/image/image-view.tsx",
+  "src/features/editor/components/video/video-view.tsx",
+  "src/features/editor/components/audio/audio-view.tsx",
+  "src/features/editor/components/attachment/attachment-view.tsx",
+  "src/features/editor/components/code-block/code-block-view.tsx",
+  "src/features/editor/components/drawio/drawio-view.tsx",
+  "src/features/editor/components/excalidraw/excalidraw-view.tsx",
+  "src/features/editor/components/embed/embed-view.tsx",
+  "src/features/editor/components/link-preview/link-preview-view.tsx",
+  "src/features/editor/components/pdf/pdf-view.tsx",
+  "src/features/editor/components/subpages/subpages-view.tsx",
+  "src/features/editor/components/page-template/template-node-views.tsx",
+  excalidrawEditorSource,
+];
 const subsetSharedSourcePattern =
   /\/node_modules\/@excalidraw\/excalidraw\/dist\/(?:dev|prod)\/subset-shared\.chunk\.js$/u;
 const subsetWorkerSourcePattern =
@@ -44,6 +68,25 @@ function staticImportClosure(manifest, entryKey) {
     }
   }
   return visited;
+}
+
+function getClosureMetrics(manifest, assetMetrics, entryKey) {
+  const closure = staticImportClosure(manifest, entryKey);
+  const files = new Set(
+    [...closure]
+      .map((key) => normalizePath(manifest[key]?.file ?? ""))
+      .filter((file) => file.endsWith(".js")),
+  );
+  let rawBytes = 0;
+  let gzipBytes = 0;
+  for (const file of files) {
+    const metrics = assetMetrics.get(file);
+    if (!metrics) continue;
+    rawBytes += metrics.rawBytes;
+    gzipBytes += metrics.gzipBytes;
+  }
+
+  return { closure, files, rawBytes, gzipBytes };
 }
 
 function reverseImporters(manifest, targetKey) {
@@ -73,14 +116,24 @@ function isExcalidrawMainImporter(importer) {
 function isExcalidrawEditorImporter(importer) {
   return (
     importer.kind === "dynamic" &&
-    importer.entry.name === "page-reading-time" &&
-    /^_page-reading-time-[A-Za-z0-9_-]+\.js$/u.test(
-      normalizePath(importer.key),
-    ) &&
-    /^assets\/page-reading-time-[A-Za-z0-9_-]+\.js$/u.test(
-      normalizePath(importer.entry.file),
-    )
+    normalizePath(importer.key) === excalidrawViewSource &&
+    importer.entry.name === "excalidraw-view"
   );
+}
+
+function findManifestEntry(manifest, source) {
+  if (manifest[source]) {
+    return { key: source, entry: manifest[source] };
+  }
+
+  const expectedName = source.split("/").at(-1)?.replace(/\.tsx?$/u, "");
+  const matches = Object.entries(manifest).filter(
+    ([, entry]) =>
+      normalizePath(entry.src ?? "") === source || entry.name === expectedName,
+  );
+  return matches.length === 1
+    ? { key: matches[0][0], entry: matches[0][1] }
+    : null;
 }
 
 function isSubsetWorkerImporter(importer) {
@@ -116,7 +169,48 @@ export function validateClientBundleBudget({
     );
   }
 
-  const initialClosure = staticImportClosure(manifest, "index.html");
+  const initialMetrics = getClosureMetrics(
+    manifest,
+    assetMetrics,
+    "index.html",
+  );
+  const initialClosure = initialMetrics.closure;
+  if (initialMetrics.gzipBytes > budget.initialClosureMaxGzipBytes) {
+    errors.push(
+      `Initial static closure gzip cap exceeded: ${initialMetrics.gzipBytes} > ${budget.initialClosureMaxGzipBytes}.`,
+    );
+  }
+
+  const pageRouteEntry = manifest[pageRouteSource];
+  const pageRouteMetrics = pageRouteEntry
+    ? getClosureMetrics(manifest, assetMetrics, pageRouteSource)
+    : null;
+  if (!pageRouteMetrics) {
+    errors.push(`Missing page route manifest entry: ${pageRouteSource}.`);
+  } else if (
+    pageRouteMetrics.gzipBytes > budget.pageRouteClosureMaxGzipBytes
+  ) {
+    errors.push(
+      `Page route static closure gzip cap exceeded: ${pageRouteMetrics.gzipBytes} > ${budget.pageRouteClosureMaxGzipBytes}.`,
+    );
+  }
+
+  for (const source of requiredDynamicSources) {
+    const match = findManifestEntry(manifest, source);
+    if (!match) {
+      errors.push(`Missing required dynamic entry: ${source}.`);
+      continue;
+    }
+    const { key, entry } = match;
+    if (entry.isDynamicEntry !== true) {
+      errors.push(`Required lazy component became eager: ${source}.`);
+    }
+    if (pageRouteMetrics?.closure.has(key)) {
+      errors.push(
+        `Required lazy component entered the page route static closure: ${source}.`,
+      );
+    }
+  }
   const [subsetEntry] = subsetEntries;
   const [editorEntry] = editorEntries;
   if (subsetEntry && initialClosure.has(subsetEntry[0])) {
@@ -228,6 +322,18 @@ export function validateClientBundleBudget({
     errors,
     report: {
       javascriptChunks: uniqueJavaScriptFiles.size,
+      initialClosure: {
+        files: initialMetrics.files.size,
+        rawBytes: initialMetrics.rawBytes,
+        gzipBytes: initialMetrics.gzipBytes,
+      },
+      pageRouteClosure: pageRouteMetrics
+        ? {
+            files: pageRouteMetrics.files.size,
+            rawBytes: pageRouteMetrics.rawBytes,
+            gzipBytes: pageRouteMetrics.gzipBytes,
+          }
+        : undefined,
       subsetFile,
       subsetMetrics,
       editorImporters: editorImporters.map((importer) => ({
@@ -282,6 +388,8 @@ async function main() {
   }
   console.log(
     `Client bundle budget passed: ${report.javascriptChunks} JavaScript chunks; ` +
+      `initial closure ${report.initialClosure.gzipBytes} gzip bytes; ` +
+      `page route closure ${report.pageRouteClosure.gzipBytes} gzip bytes; ` +
       `general raw cap ${CLIENT_BUNDLE_BUDGET.generalMaxRawBytes}; ` +
       `Excalidraw subset ${report.subsetMetrics.rawBytes} raw / ` +
       `${report.subsetMetrics.gzipBytes} gzip bytes.`,

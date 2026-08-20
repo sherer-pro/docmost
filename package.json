@@ -19,6 +19,7 @@
     "test:ai-external-mcp:e2e": "corepack pnpm --filter ./apps/client test:ai-external-mcp:e2e",
     "test:ai-context:e2e": "node apps/client/e2e/ai-context/run-ai-context-audit.mjs",
     "test:editor:e2e": "corepack pnpm --filter ./apps/client test:editor:e2e",
+    "test:performance": "node --test scripts/performance-audit.test.mjs && node scripts/performance-audit.mjs",
     "test:security": "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs && corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",
     "test": "corepack pnpm run test:server && corepack pnpm run test:client:smoke",
     "test:all": "corepack pnpm run test && corepack pnpm run test:client",

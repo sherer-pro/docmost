@@ -661,6 +661,8 @@ The fork includes its own maintenance and development infrastructure:
 
 - quick and full composite verification pipelines;
 
+- a staging-only browser/API performance harness and privacy-safe opt-in server diagnostics documented in [`docs/PERFORMANCE_TESTING.md`](./docs/PERFORMANCE_TESTING.md);
+
 - API route inventory generation;
 
 - automated checks for RAG documentation drift and removed Enterprise Edition runtime remnants;
