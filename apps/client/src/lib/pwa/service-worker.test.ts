@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
+import { shouldReloadAfterWorkerActivation } from "./register-service-worker";
 
 const source = readFileSync(resolve(process.cwd(), "public", "sw.js"), "utf8");
 const registrationSource = readFileSync(
@@ -70,6 +71,15 @@ describe("service worker safety policy", () => {
       registrationSource.indexOf("await registration.update()"),
     );
     expect(registrationSource).toContain("observeWorker(registration.installing)");
+  });
+
+  it("reloads after activation only when the page was already controlled", () => {
+    expect(registrationSource.indexOf("const wasControlled")).toBeLessThan(
+      registrationSource.indexOf("await navigator.serviceWorker.register"),
+    );
+    expect(shouldReloadAfterWorkerActivation("activated", false)).toBe(false);
+    expect(shouldReloadAfterWorkerActivation("activated", true)).toBe(true);
+    expect(shouldReloadAfterWorkerActivation("installing", true)).toBe(false);
   });
 
   it("keeps background runtime cache writes inside the fetch event lifetime", () => {
