@@ -1,5 +1,43 @@
 [Russian version of Fork-Specific Enhancements](./FORK_SPECIFIC_ENHANCEMENTS_RU.md)
 
+<!-- fork-doc-contract-version: 2 -->
+
+## Built-in administrator and operator guide
+
+The `/settings/ai/guide` route provides practical guidance for AI, RAG, and
+MCP. With no hash it opens a compact overview. Wide screens use sticky grouped
+navigation, narrow screens use a selector, and only one scenario is visible at
+a time. Stable deep links use `#assistant`, `#retrieval`, `#rag-api`,
+`#rag-sync`, `#inbound-mcp`, `#outbound-mcp`, `#security`, and
+`#troubleshooting`; Back and Next move through the same panels.
+
+Each scenario exposes its purpose, owner, prerequisites, expected result, setup
+steps, success signal, and safe rollback. Routes and environment variables stay
+in expandable technical details. Security starts with four key rules and can
+reveal the credential matrix. Troubleshooting is grouped by access, limits and
+dependencies, RAG Sync, and MCP.
+
+Three localized vertical Mermaid diagrams show path selection, the three ways
+to work with an external index, and both MCP directions. SVG output is
+sanitized, fullscreen access works from the keyboard, and every diagram has a
+collapsed text alternative.
+
+The guide keeps the operational boundaries explicit: query-time retrieval
+queries an external index; `/api/rag/*` is a read-only export surface that can
+return protected attachment streams after reauthorization; built-in RAG Sync
+writes to Open WebUI through internal services and does not call the public RAG
+API. Inbound `/mcp` returns attachment metadata but never attachment binaries.
+Contextual links lead back to the guide from API keys and, for workspace
+administrators, from space settings.
+
+The strict `check:ai-docs` gate couples changes in production AI/RAG/RAG
+Sync/MCP/API-key logic, shared contracts, migrations, and environment contracts
+to the canonical document, structured UI content, contract version, and all
+twelve locales. Locally the gate remains useful without Git history by checking
+routes, flags, anchors, the localization manifest, and version equality.
+The release-only `check:fork-docs` gate keeps this English description aligned
+with the Russian fork document before `verify:release` can pass.
+
 > [!NOTE]
 > This is a custom fork of Docmost that I created to simplify team collaboration and better structure the knowledge base. My goal was to make the system more predictable, secure, and practical for real-world use — without unnecessary complexity and with the ability to evolve faster using AI agents. I have great respect for the Docmost team and the work they’ve done. However, their focus on releasing features primarily for commercial use does not resonate with me, so I decided to develop my own fork — with an emphasis on openness, practicality, and independence.
 
@@ -109,7 +147,7 @@ The fork includes its own RAG API and integrations with external knowledge-retri
 
 Supported capabilities include:
 
-- APIs for full and incremental synchronization of pages, databases, rows, and attachments;
+- APIs for full and incremental synchronization of pages, databases, rows, attachments, and dictionary terms;
 
 - API keys restricted to a specific space;
 
@@ -118,6 +156,8 @@ Supported capabilities include:
 - direct integration with Open WebUI Knowledge Base;
 
 - built-in per-space synchronization from Docmost to Open WebUI Knowledge Base;
+
+- a unified `projectionVersion: 1` knowledge projection for enabled document and custom fields, named database properties and cells, database rows, and active `dictionary_term` sources;
 
 - tracking of created, updated, and deleted content;
 
@@ -140,35 +180,22 @@ Supported capabilities include:
 - a stateless read-only MCP endpoint for external assistants, using the same
   access-aware tool registry and exact capability policy as agent mode.
 
-Workspace administrators and operators can use the layered guide at
-`/settings/ai/guide` instead of reconstructing these paths from separate
-settings pages. Stable anchors cover the assistant, query-time retrieval,
-external RAG API clients, built-in Open WebUI RAG Sync, inbound `/mcp`, outbound
-MCP, security, and troubleshooting. The default overview leads to one active
-scenario at a time through sticky grouped navigation on desktop or a section
-selector on narrow screens. Each scenario identifies the responsible role,
-prerequisites, expected result, setup sequence, success signal, rollback, and
-direct settings link. Relevant routes and environment controls stay in
-expandable technical details; the security matrix and grouped troubleshooting
-details are also disclosed on demand. Three strict, sanitized, vertical Mermaid
-diagrams explain path selection, the RAG data paths, and both MCP directions,
-with collapsed text alternatives. The API-key and per-space AI pages link back
-to their relevant guide sections.
-
-The guide makes three operational boundaries explicit: query-time retrieval is
-answer-time search; `/api/rag/*` is an API-key-only export surface that may stream
-authorized attachments; and built-in RAG Sync writes to Open WebUI internally
-without calling that public API. Inbound `/mcp` returns attachment metadata but
-never attachment binaries. A strict `check:ai-docs` pull-request gate couples
-changes in production AI/RAG/RAG Sync/MCP/API-key logic, shared contracts,
-migrations, and environment contracts to the canonical documentation, structured
-guide content, its version, and all twelve locales.
-
 This allows Docmost content to serve as an up-to-date knowledge base for local
 or corporate LLMs. RAG and MCP keys are scoped to one space, are not
 interchangeable, and are revalidated on every request against the creator's
 current membership and page access. Existing MCP keys retain only the seven
 baseline reads; optional reads must be selected explicitly for each key.
+
+For built-in synchronization, the Open WebUI URL, Knowledge Base ID, and a
+separate writer API key are configured in each space's UI; the writer key is
+stored encrypted in PostgreSQL. Deployment configuration supplies only
+`RAG_SYNC_ENABLED=true`, the exact `RAG_SYNC_ALLOWED_ORIGINS` allowlist, and
+shared operational limits. There is no separate container, worker, Compose
+profile, or JSON configuration. The index includes every page and database row
+allowed by the space AI content policy, plus active dictionary terms when the
+space dictionary is enabled. Direct user access to the Open WebUI Knowledge
+Base can therefore expose content beyond that user's Docmost ACL; query and
+writer credentials must remain separate.
 
 #### Outbound external MCP servers
 
@@ -193,8 +220,9 @@ Everything a remote server says about itself is treated as hostile input. Remote
 titles and descriptions are not stored at all, only the fact that they exist;
 `readOnlyHint` and the other annotations are shown as claims and never decide the
 read/write class; and JSON Schemas are rebuilt from an allowlist of structural
-keywords, with remote property names replaced by opaque aliases and prose-bearing
-keywords and string values dropped. The server-side mapping restores argument
+keywords, with `$ref` and `$defs` dropped, remote property names replaced by
+opaque aliases, and prose-bearing keywords and string values removed. The
+server-side mapping restores argument
 names only at the RPC boundary. The only text about a tool that the model ever
 sees is the description a workspace administrator typed. Results are
 wrapped in an envelope marked untrusted, and the fixed Docmost safety policy is
@@ -324,13 +352,13 @@ Changes to significant properties are recorded in the document history.
 
 The fork provides more advanced terminology management:
 
-- page tags;
+- page labels scoped to a space, with descriptions shown on hover;
 
-- scoped labels;
+- six built-in inline tags: TBD, TODO, DONE, Core, Future, and Pilot;
 
-- a registry of allowed workspace tags;
+- per-space controls for which built-in tags appear in the editor slash menu;
 
-- tag descriptions shown on hover;
+- portable tag availability settings in schema-v4 space archives;
 
 - a terminology dictionary;
 
@@ -346,7 +374,7 @@ The fork provides more advanced terminology management:
 
 ### 8. Search and content indexing
 
-Search works across pages, databases, rows, and attachments while preserving current workspace, space, public-sharing, and page-level access rules:
+Search works across pages, databases, rows, attachments, and enabled dictionary terms while preserving current workspace, space, public-sharing, and page-level access rules:
 
 - PostgreSQL full-text search is available by default;
 
@@ -354,7 +382,11 @@ Search works across pages, databases, rows, and attachments while preserving cur
 
 - PDF and DOCX names and extracted text are searchable;
 
-- search filters cover spaces, content types, page labels, and multi-select inline TBD/TODO/DONE tags;
+- Spotlight `All` mode separates document, attachment, and dictionary results, while database rows include matched-property context;
+
+- dictionary terms, aliases, forms, and definitions and selected database property names and cell values are indexed;
+
+- search filters cover spaces, content types, page labels, and multi-select inline TBD/TODO/DONE/Core/Future/Pilot tags;
 - tag-aware document results group up to three anchored matching fragments and identify pages, databases, and database rows explicitly;
 
 - result breadcrumbs show where a page or database row sits in the content tree;
@@ -448,6 +480,8 @@ A custom portable Docmost archive format has also been added:
 - export of pages, spaces, and databases;
 
 - preservation of structure, properties, and attachments;
+
+- optional restoration of portable document-field, heading-numbering, dictionary, and per-space built-in tag settings;
 
 - import preview;
 
@@ -893,13 +927,19 @@ documented production-like PostgreSQL, Redis, API, and collaboration runtime:
 
 ```bash
 pnpm check:release-version
+pnpm check:fork-docs
 pnpm verify:release
 ```
 
 The version gate requires matching root, client, and server package versions,
 runtime-derived MCP versions, and an exact `v${package.version}` release tag.
-For the current candidate the only accepted release tag is `v1.2.0`. Follow the
-[v1.2.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.0.md)
+The fork-documentation gate requires the administrator AI guide contract and
+the English/Russian fork descriptions to retain the same numbered capability
+structure, paired images, stable AI-guide anchors, and critical semantic
+coverage. `verify:release` also opens the administrator guide in both languages
+through the production-like AI browser acceptance suite.
+For the current candidate the only accepted release tag is `v1.2.1`. Follow the
+[v1.2.1 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.1.md)
 before deployment.
 
 For backend changes:

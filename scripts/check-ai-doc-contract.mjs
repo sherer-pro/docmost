@@ -33,6 +33,25 @@ const REQUIRED_GUIDE_CONTROLS = [
   "AI_EXTERNAL_MCP_ENABLED",
   "AI_MCP_ALLOWED_ORIGINS",
 ];
+export const AI_GUIDE_MIGRATION_FILES = [
+  "20260728T120000-ai-integration.ts",
+  "20260729T120000-ai-reliability.ts",
+  "20260729T180000-ai-context-editor-actions.ts",
+  "20260729T220000-open-webui-rag.ts",
+  "20260729T230000-ai-reasoning.ts",
+  "20260730T120000-ai-content-policy.ts",
+  "20260730T130000-ai-assistant-identity.ts",
+  "20260730T140000-ai-agent-mcp.ts",
+  "20260730T150000-remove-legacy-ee-imports-and-ai-search.ts",
+  "20260803T120000-ai-external-mcp.ts",
+  "20260804T120000-ai-citations.ts",
+  "20260805T100000-ai-assistant-profiles.ts",
+  "20260805T110000-ai-builtin-tool-policy.ts",
+  "20260806T090000-rag-sync-bindings.ts",
+  "20260811T190000-rag-sync-target-verification.ts",
+  "20260820T130000-knowledge-projection-dictionary-search.ts",
+  "20260820T140000-search-dictionary-database-projection.ts",
+];
 
 const LOGIC_PATH_PATTERNS = [
   /^apps\/server\/src\/core\/(?:ai|rag|rag-sync|mcp|api-key)\//u,
@@ -109,6 +128,80 @@ function flatten(value, prefix = "", result = {}) {
   return result;
 }
 
+export function validateAiGuideRequiredFacts({
+  guideContract,
+  localeGuides,
+}) {
+  const issues = [];
+  const factIds = new Set();
+  for (const fact of guideContract.requiredFacts ?? []) {
+    if (factIds.has(fact.id)) {
+      issues.push(`AI guide required fact ID must be unique: ${fact.id}`);
+    }
+    factIds.add(fact.id);
+    if (!guideContract.requiredKeys.includes(fact.key)) {
+      issues.push(`AI guide required fact uses an unknown key: ${fact.key}`);
+      continue;
+    }
+    for (const [locale, guide] of Object.entries(localeGuides)) {
+      for (const needle of fact.needles) {
+        if (!guide[fact.key]?.includes(needle)) {
+          issues.push(
+            `${locale} AI guide fact ${fact.id} is missing from ${fact.key}: ${needle}`,
+          );
+        }
+      }
+    }
+  }
+  return issues;
+}
+
+export function validateAiGuideUiContract({
+  appRoutes,
+  aiSettingsPage,
+  settingsAccess,
+  guideBrowserAcceptance,
+  aiPlaywrightConfig,
+}) {
+  const issues = [];
+  const administratorRoute =
+    /<Route element=\{<WorkspaceAdminRoute \/>\}>[\s\S]*?<Route path=\{"ai\/:aiTab"\} element=\{<AiIntegrationsSettings \/>\}/u;
+  if (!administratorRoute.test(appRoutes)) {
+    issues.push(
+      "AI guide route must remain inside the workspace-administrator route boundary",
+    );
+  }
+  if (!settingsAccess.includes('"/settings/ai/guide"')) {
+    issues.push("AI guide route must remain administrator-only");
+  }
+  if (
+    !/<Tabs\.Tab[\s\S]*?value="guide"[\s\S]*?ai\.adminGuide\.tab[\s\S]*?<\/Tabs\.Tab>/u.test(
+      aiSettingsPage,
+    )
+  ) {
+    issues.push("AI guide must remain a separate AI settings tab");
+  }
+  if (
+    !/<Tabs\.Panel value="guide"[\s\S]*?<AiAdminGuide \/>[\s\S]*?<\/Tabs\.Panel>/u.test(
+      aiSettingsPage,
+    )
+  ) {
+    issues.push("AI guide tab must render the administrator guide component");
+  }
+  if (!guideBrowserAcceptance.includes("/settings/ai/guide")) {
+    issues.push("AI guide must keep production-like browser acceptance");
+  }
+  for (const anchor of EXPECTED_ANCHORS) {
+    if (!guideBrowserAcceptance.includes(`"${anchor}"`)) {
+      issues.push(`AI guide browser acceptance is missing anchor: ${anchor}`);
+    }
+  }
+  if (!aiPlaywrightConfig.includes("admin-guide")) {
+    issues.push("AI guide browser acceptance must run in the English project");
+  }
+  return issues;
+}
+
 function extractDocumentedApiRoutes(content) {
   const routes = new Set();
   for (const match of content.matchAll(
@@ -156,6 +249,13 @@ async function validateStaticContract() {
     guideContent: GUIDE_CONTENT,
     guideComponent: GUIDE_COMPONENT,
     guideContract: GUIDE_CONTRACT,
+    appRoutes: "apps/client/src/App.tsx",
+    aiSettingsPage:
+      "apps/client/src/features/ai/pages/ai-integrations-settings.tsx",
+    settingsAccess:
+      "apps/client/src/components/settings/workspace-settings-access.ts",
+    guideBrowserAcceptance: "apps/client/e2e/ai/specs/admin-guide.spec.ts",
+    aiPlaywrightConfig: "apps/client/playwright.ai.config.ts",
   };
   const entries = await Promise.all(
     Object.entries(paths).map(async ([name, filePath]) => [
@@ -229,6 +329,15 @@ async function validateStaticContract() {
   if (!files.guideComponent.includes("getAiAdminGuidePanelFromHash")) {
     issues.push("AI guide component does not activate stable hash navigation");
   }
+  issues.push(
+    ...validateAiGuideUiContract({
+      appRoutes: files.appRoutes,
+      aiSettingsPage: files.aiSettingsPage,
+      settingsAccess: files.settingsAccess,
+      guideBrowserAcceptance: files.guideBrowserAcceptance,
+      aiPlaywrightConfig: files.aiPlaywrightConfig,
+    }),
+  );
 
   const requiredGuideKeys = [...guideContract.requiredKeys].sort();
   const englishGuide = localeGuides["en-US"];
@@ -267,6 +376,9 @@ async function validateStaticContract() {
       }
     }
   }
+  issues.push(
+    ...validateAiGuideRequiredFacts({ guideContract, localeGuides }),
+  );
 
   const inventoryRoutes = new Set(
     files.inventory
@@ -334,22 +446,7 @@ async function validateStaticContract() {
     );
   }
 
-  const migrationFiles = [
-    "20260728T120000-ai-integration.ts",
-    "20260729T120000-ai-reliability.ts",
-    "20260729T180000-ai-context-editor-actions.ts",
-    "20260729T220000-open-webui-rag.ts",
-    "20260729T230000-ai-reasoning.ts",
-    "20260730T120000-ai-content-policy.ts",
-    "20260730T130000-ai-assistant-identity.ts",
-    "20260730T140000-ai-agent-mcp.ts",
-    "20260730T150000-remove-legacy-ee-imports-and-ai-search.ts",
-    "20260803T120000-ai-external-mcp.ts",
-    "20260804T120000-ai-citations.ts",
-    "20260805T100000-ai-assistant-profiles.ts",
-    "20260805T110000-ai-builtin-tool-policy.ts",
-    "20260806T090000-rag-sync-bindings.ts",
-  ];
+  const migrationFiles = AI_GUIDE_MIGRATION_FILES;
   const ledger = /### AI and RAG migration ledger\n([\s\S]*?)\n## 5\./u.exec(
     files.canonical,
   )?.[1];

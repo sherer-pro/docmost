@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "anchors": [
     "assistant",
     "retrieval",
@@ -9,6 +9,33 @@
     "outbound-mcp",
     "security",
     "troubleshooting"
+  ],
+  "requiredFacts": [
+    {
+      "id": "knowledge-projection-dictionary-source",
+      "key": "scenario.assistant.technical",
+      "needles": ["dictionary_term"]
+    },
+    {
+      "id": "knowledge-projection-version",
+      "key": "scenario.ragApi.technical",
+      "needles": ["projectionVersion: 1"]
+    },
+    {
+      "id": "rag-sync-source-union",
+      "key": "scenario.ragSync.technical",
+      "needles": ["/api/rag/*", "dictionary_term"]
+    },
+    {
+      "id": "rag-sync-source-removal",
+      "key": "troubleshooting.rows.sourceRemoved.action",
+      "needles": ["database_row", "dictionary_term"]
+    },
+    {
+      "id": "rag-sync-target-mismatch",
+      "key": "troubleshooting.rows.targetMismatch.signal",
+      "needles": ["rag_sync_target_mismatch"]
+    }
   ],
   "requiredKeys": [
     "description",

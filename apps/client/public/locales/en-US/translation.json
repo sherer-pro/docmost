@@ -1515,7 +1515,7 @@
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
-          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches."
+          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`)."
         },
         "retrieval": {
           "description": "Space search runs while an answer is generated.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Responses return 200, stable cursors, and only the key creator's live readable scope",
           "rollback": "Revoke the key and stop the indexer; create a new key for recovery",
-          "technical": "Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Keys remain bounded by their creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated. Projection v1 exports enabled document fields, named database cells, and the enabled dictionary through independent paginated feeds."
+          "technical": "The API exports data only; it does not search or generate answers. Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Every key is bound to one space and its creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated. Projection v1 (`projectionVersion: 1`) exports enabled document fields, named database cells, and the enabled dictionary through independent paginated feeds."
         },
         "ragSync": {
           "description": "Built-in Open WebUI RAG Sync runs inside Docmost, reads PostgreSQL directly through Docmost services, coordinates with Redis, and writes with a separate encrypted per-space credential.",
           "owner": "Deployment operator and space administrator",
           "prerequisite": "RAG_SYNC_ENABLED, an allowed Open WebUI origin, Knowledge ID, and writer key",
-          "result": "Docmost incrementally maintains the selected Open WebUI Knowledge Base; only PDF, DOCX, TXT, and Markdown attachments enter the portable document index",
+          "result": "Docmost incrementally maintains pages, database rows, and enabled dictionary terms in the selected Open WebUI Knowledge Base; among attachments, only PDF, DOCX, TXT, and Markdown enter the portable document index",
           "steps": {
             "step1": "Save the target and writer credential",
             "step2": "Run Test for the current target",
@@ -1557,7 +1557,7 @@
           },
           "success": "Last success advances and no cleanup or target-mismatch state remains",
           "rollback": "Disable the binding and finish cleanup; for emergency rollback disable RAG_SYNC_ENABLED and restart",
-          "technical": "Each feed uses an opaque cursor bound to one fixed database snapshot. Keep its starting watermark until hasMore=false; only the terminal page advances the checkpoint, and retries must remain idempotent. Feeds are at least once. Lease or slot loss aborts the current remote request and prevents new work; reconciliation handles a side effect that completed before cancellation reached the remote service."
+          "technical": "Built-in synchronization reads through internal Docmost services and never calls /api/rag/*. Query and writer credentials remain separate. Page and database-row projections and enabled dictionary terms are managed independently; dictionary terms use the `dictionary_term` source type and Markdown ownership metadata. Each feed uses an opaque cursor bound to one fixed database snapshot. Keep its starting watermark until hasMore=false; only the terminal page advances the checkpoint, and retries must remain idempotent. Feeds are at least once. Lease or slot loss aborts the current remote request and prevents new work; reconciliation handles a side effect that completed before cancellation reached the remote service. Only PDF, DOCX, TXT, and Markdown enter the portable attachment index."
         },
         "inboundMcp": {
           "description": "External assistants connect to the root /mcp endpoint with a scoped MCP key.",
@@ -1571,7 +1571,7 @@
           },
           "success": "Allowed tools work; denied capabilities and binary attachment reads remain unavailable",
           "rollback": "Revoke the key or remove the creator from the space; active access closes on the next request",
-          "technical": "Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Keys remain bounded by their creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated."
+          "technical": "The /mcp endpoint is stateless. Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Every request checks the key type and expiry, the creator's current space membership, capability allowlist, and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated."
         },
         "outboundMcp": {
           "description": "The Docmost Agent can call tools on approved remote MCP servers.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "source removed",
-            "action": "A page, database, or attachment disappeared after the feed snapshot. RAG Sync treats it as a deletion, removes managed files, and continues without an internal not-found retry."
+            "action": "A page, database, database row, attachment, or dictionary term disappeared after the feed snapshot. RAG Sync treats `database_row` and `dictionary_term` like the other managed sources: it removes their files and continues without an internal not-found retry."
           },
           "runtimeStopped": {
             "signal": "synchronization stopped",

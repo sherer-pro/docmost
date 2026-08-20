@@ -69,6 +69,9 @@ jobs:
           AI_GUIDE_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: pnpm check:ai-docs
 
+      - name: Bilingual fork documentation contract check
+        run: pnpm check:fork-docs
+
       - name: Cross-platform text contract check
         run: pnpm test:text-contracts
 

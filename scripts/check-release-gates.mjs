@@ -14,6 +14,7 @@ const REQUIRED_JOB_COMMANDS = {
     "pnpm routes:inventory:check",
     "pnpm check:rag-docs",
     "pnpm check:ai-docs",
+    "pnpm check:fork-docs",
     "pnpm test:text-contracts",
     "pnpm check:env",
     "pnpm check:telemetry",
@@ -125,6 +126,7 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run verify:full",
     "run routes:inventory:check",
     "run check:rag-docs",
+    "run check:fork-docs",
     "run check:comments:en",
     "run check:audit-exceptions",
     "run test:text-contracts",
@@ -140,6 +142,10 @@ const REQUIRED_VERIFICATION_COMMANDS = {
 };
 
 const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
+  "check:fork-docs": [
+    "node --test scripts/check-fork-docs-contract.test.mjs",
+    "node scripts/check-fork-docs-contract.mjs",
+  ],
   "test:security": [
     "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
   ],

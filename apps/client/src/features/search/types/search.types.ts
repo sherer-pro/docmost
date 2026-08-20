@@ -37,7 +37,7 @@ export interface IPageSearch {
   space: Partial<ISpace>;
 }
 
-export interface ITagSearchMatch {
+interface ITagSearchMatch {
   start: number;
   end: number;
   value: string;

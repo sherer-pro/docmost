@@ -1515,7 +1515,7 @@
           },
           "success": "Viene completata una risposta di prova; Agent elenca solo gli strumenti consentiti e chiede prima della scrittura",
           "rollback": "Disattiva Agent o il modello spaziale, quindi ripristina le ultime impostazioni funzionanti",
-          "technical": "L’assistente integrato esegue chat private associate alle pagine tramite il provider configurato per ogni spazio. Le impostazioni dello spazio mostrano l’utilizzo di richieste e token per oggi e per gli ultimi 7 giorni. La modalità Agent può richiamare strumenti Docmost approvati e applica le modifiche alle pagine solo dopo la conferma dell’utente che le ha avviate. Subito prima di applicare una modifica, il server ricontrolla l’accesso in scrittura alla pagina corrente e le policy degli strumenti ai livelli deployment, workspace, space, profile e group. L’editor dei profili dello spazio mostra nomi degli strumenti localizzati e riceve la policy effettiva per gli override del modello tramite l’elenco dei profili dello spazio; solo gli amministratori dell’area di lavoro possono modificare gli interruttori principali."
+          "technical": "L’assistente integrato esegue chat private associate alle pagine tramite il provider configurato per ogni spazio. Le impostazioni dello spazio mostrano l’utilizzo di richieste e token per oggi e per gli ultimi 7 giorni. La modalità Agent può richiamare strumenti Docmost approvati e applica le modifiche alle pagine solo dopo la conferma dell’utente che le ha avviate. Subito prima di applicare una modifica, il server ricontrolla l’accesso in scrittura alla pagina corrente e le policy degli strumenti ai livelli deployment, workspace, space, profile e group. L’editor dei profili dello spazio mostra nomi degli strumenti localizzati e riceve la policy effettiva per gli override del modello tramite l’elenco dei profili dello spazio; solo gli amministratori dell’area di lavoro possono modificare gli interruttori principali. La proiezione di conoscenza condivisa arricchisce la ricerca AI e il contesto degli strumenti con campi documento e personalizzati abilitati, proprietà e celle di database con nome e termini attivi del dizionario (`dictionary_term`)."
         },
         "retrieval": {
           "description": "La ricerca nello spazio viene eseguita durante la generazione di una risposta.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Le risposte restituiscono 200 cursori stabili e solo l'ambito leggibile in tempo reale del creatore della chiave",
           "rollback": "Revocare la chiave e fermare l'indicizzatore; creare una nuova chiave per il ripristino",
-          "technical": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati. La proiezione v1 esporta i campi documento abilitati, le celle di database con nome e il dizionario abilitato tramite feed paginati indipendenti."
+          "technical": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati. La proiezione v1 (`projectionVersion: 1`) esporta i campi documento abilitati, le celle di database con nome e il dizionario abilitato tramite feed paginati indipendenti."
         },
         "ragSync": {
           "description": "Open WebUI RAG integrato La sincronizzazione viene eseguita all'interno di Docmost, legge PostgreSQL direttamente tramite i servizi Docmost, si coordina con Redis e scrive con credenziali per spazio crittografate separate.",
           "owner": "Operatore di distribuzione e amministratore di spazio",
           "prerequisite": "RAG_SYNC_ENABLED, un'origine Open WebUI consentita, Knowledge ID e chiave di scrittura",
-          "result": "Docmost mantiene in modo incrementale lo Open WebUI Knowledge Base selezionato; solo gli allegati PDF, DOCX, TXT e Markdown entrano nell'indice documentale portabile",
+          "result": "Docmost mantiene in modo incrementale pagine, righe di database e termini del dizionario abilitato nella Knowledge Base Open WebUI selezionata; tra gli allegati, solo PDF, DOCX, TXT e Markdown entrano nell’indice portabile",
           "steps": {
             "step1": "Save la credenziale di destinazione e di scrittore",
             "step2": "Esegui Test per il target corrente",
@@ -1557,7 +1557,7 @@
           },
           "success": "L'ultimo successo avanza e non rimane alcuno stato di pulizia o mancata corrispondenza del target",
           "rollback": "Disabilitare l'associazione e completare la pulizia; per il rollback di emergenza disabilitare RAG_SYNC_ENABLED e riavviare",
-          "technical": "Ogni feed usa un cursore opaco legato a uno snapshot fisso del database. Mantieni il watermark iniziale fino a hasMore=false; solo la pagina terminale avanza il checkpoint e i tentativi devono restare idempotenti. I feed vengono elaborati almeno una volta. La perdita del lease o dello slot interrompe la richiesta remota corrente e impedisce nuovo lavoro; la riconciliazione gestisce un effetto completato prima dell’arrivo dell’annullamento."
+          "technical": "La sincronizzazione integrata legge tramite i servizi interni di Docmost e non chiama mai /api/rag/*. Pagine, righe di database e termini del dizionario abilitato sono gestiti separatamente; i termini usano il tipo di origine `dictionary_term`. Ogni feed usa un cursore opaco legato a uno snapshot fisso del database. Mantieni il watermark iniziale fino a hasMore=false; solo la pagina terminale avanza il checkpoint e i tentativi devono restare idempotenti. I feed vengono elaborati almeno una volta. La perdita del lease o dello slot interrompe la richiesta remota corrente e impedisce nuovo lavoro; la riconciliazione gestisce un effetto completato prima dell’arrivo dell’annullamento."
         },
         "inboundMcp": {
           "description": "Gli assistenti esterni si connettono all'endpoint root /mcp con una chiave MCP con ambito.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "fonte rimossa",
-            "action": "Una pagina, un database o un allegato è scomparso dopo l'istantanea del feed. RAG Sync lo tratta come un'eliminazione, rimuove i file gestiti e continua senza ripetere un errore interno not found."
+            "action": "Una pagina, un database, una riga, un allegato o un termine del dizionario è scomparso dopo lo snapshot del feed. RAG Sync rimuove anche le origini gestite `database_row` e `dictionary_term` e continua senza ripetere un errore interno not found."
           },
           "runtimeStopped": {
             "signal": "sincronizzazione arrestata",

@@ -1515,7 +1515,7 @@
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",
-          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux."
+          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`)."
         },
         "retrieval": {
           "description": "La recherche dans l’espace s’exécute pendant la génération d’une réponse.",
@@ -1543,13 +1543,13 @@
           },
           "success": "Les réponses renvoient 200 curseurs stables et uniquement la portée lisible en direct du créateur de la clé.",
           "rollback": "Révoquer la clé et arrêter l'indexeur ; créer une nouvelle clé pour la récupération",
-          "technical": "Les accès entrants à /mcp et /api/rag/* acceptent uniquement leur propre type de clé. Les sessions utilisateur et l’autre type de clé sont rejetés. Les clés restent limitées par l’accès actuel de leur créateur à l’espace et par la visibilité des pages. L’archivage de l’espace associé invalide immédiatement ses clés. Le jeton n’est renvoyé qu’à la création ; son type, son espace, son créateur et son expiration ne peuvent pas être modifiés. La projection v1 exporte les champs de document activés, les cellules de base de données nommées et le dictionnaire activé via des flux paginés indépendants."
+          "technical": "Les accès entrants à /mcp et /api/rag/* acceptent uniquement leur propre type de clé. Les sessions utilisateur et l’autre type de clé sont rejetés. Les clés restent limitées par l’accès actuel de leur créateur à l’espace et par la visibilité des pages. L’archivage de l’espace associé invalide immédiatement ses clés. Le jeton n’est renvoyé qu’à la création ; son type, son espace, son créateur et son expiration ne peuvent pas être modifiés. La projection v1 (`projectionVersion: 1`) exporte les champs de document activés, les cellules de base de données nommées et le dictionnaire activé via des flux paginés indépendants."
         },
         "ragSync": {
           "description": "La synchronisation Open WebUI RAG intégrée s'exécute dans le Docmost, lit le PostgreSQL directement via les services Docmost, se coordonne avec le Redis et écrit avec un identifiant crypté distinct par espace.",
           "owner": "Opérateur de déploiement et administrateur d'espace",
           "prerequisite": "RAG_SYNC_ENABLED, une origine Open WebUI autorisée, Knowledge ID et une clé d'écriture",
-          "result": "Docmost maintient progressivement le Open WebUI Knowledge Base sélectionné ; seuls les fichiers PDF, DOCX, TXT et Markdown entrent dans l'index de documents portable",
+          "result": "Docmost maintient progressivement les pages, les lignes de base de données et les termes du dictionnaire activé dans la base Open WebUI sélectionnée ; parmi les pièces jointes, seuls PDF, DOCX, TXT et Markdown entrent dans l’index portable",
           "steps": {
             "step1": "Save la cible et les informations d'identification du rédacteur",
             "step2": "Exécutez Test pour la cible actuelle",
@@ -1557,7 +1557,7 @@
           },
           "success": "Le dernier succès avance et il ne reste aucun état de nettoyage ou de non-concordance de cible.",
           "rollback": "Désactivez la liaison et terminez le nettoyage ; pour une restauration d'urgence, désactivez RAG_SYNC_ENABLED et redémarrez",
-          "technical": "Chaque flux utilise un curseur opaque lié à un instantané fixe de la base. Conservez le watermark initial jusqu’à hasMore=false ; seule la page terminale avance le checkpoint et les reprises doivent rester idempotentes. Les flux sont traités au moins une fois. La perte du lease ou du créneau annule la requête distante en cours et interdit tout nouveau travail ; la réconciliation traite un effet achevé avant l’arrivée de l’annulation."
+          "technical": "La synchronisation intégrée lit via les services internes de Docmost et n’appelle jamais /api/rag/*. Les pages, les lignes de base de données et les termes du dictionnaire activé sont gérés séparément ; les termes utilisent le type de source `dictionary_term`. Chaque flux utilise un curseur opaque lié à un instantané fixe de la base. Conservez le watermark initial jusqu’à hasMore=false ; seule la page terminale avance le checkpoint et les reprises doivent rester idempotentes. Les flux sont traités au moins une fois. La perte du lease ou du créneau annule la requête distante en cours et interdit tout nouveau travail ; la réconciliation traite un effet achevé avant l’arrivée de l’annulation."
         },
         "inboundMcp": {
           "description": "Les assistants externes se connectent au point de terminaison racine /mcp avec une clé MCP étendue.",
@@ -1714,7 +1714,7 @@
           },
           "sourceRemoved": {
             "signal": "source supprimée",
-            "action": "Une page, une base de données ou une pièce jointe a disparu après l'instantané du flux. RAG Sync la traite comme une suppression, retire les fichiers gérés et continue sans réessayer une erreur interne not found."
+            "action": "Une page, une base de données, une ligne, une pièce jointe ou un terme du dictionnaire a disparu après l’instantané du flux. RAG Sync retire aussi les sources gérées `database_row` et `dictionary_term`, puis continue sans réessayer une erreur interne not found."
           },
           "runtimeStopped": {
             "signal": "synchronisation arrêtée",

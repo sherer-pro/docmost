@@ -427,6 +427,7 @@ const workflowMutations = [
   ["route inventory", "ciSource", "pnpm routes:inventory:check"],
   ["RAG docs", "ciSource", "pnpm check:rag-docs"],
   ["AI docs", "ciSource", "pnpm check:ai-docs"],
+  ["bilingual fork docs", "ciSource", "pnpm check:fork-docs"],
   ["text contracts", "ciSource", "pnpm test:text-contracts"],
   ["environment", "ciSource", "pnpm check:env"],
   ["product telemetry removal", "ciSource", "pnpm check:telemetry"],
@@ -656,6 +657,24 @@ test("rejects test:security without the hostile external MCP contract", () => {
   );
 });
 
+test("rejects a fork documentation gate without its contract tests", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["check:fork-docs"] = mutatedPackage.scripts[
+    "check:fork-docs"
+  ].replace(
+    "node --test scripts/check-fork-docs-contract.test.mjs",
+    "removed-fork-doc-contract-tests",
+  );
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes(
+      "check:fork-docs must include node --test scripts/check-fork-docs-contract.test.mjs",
+    ),
+  );
+});
+
 for (const [scriptName, command] of [
   ["verify:quick", "run check:release-version"],
   ["verify:quick", "run check:telemetry"],
@@ -666,6 +685,7 @@ for (const [scriptName, command] of [
   ["verify:full", "run build"],
   ["verify:full", "run check:client-bundle"],
   ["verify:release", "run routes:inventory:check"],
+  ["verify:release", "run check:fork-docs"],
   ["verify:release", "run test:ai:e2e"],
   ["verify:release", "run test:ai-agent:e2e"],
 ]) {

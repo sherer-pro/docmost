@@ -1789,6 +1789,7 @@ describe('DatabaseService mixed tree flows', () => {
         propertyId: 'prop-checkbox',
         value: true,
       }),
+      trx,
     );
     expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
       2,
@@ -1796,6 +1797,7 @@ describe('DatabaseService mixed tree flows', () => {
         propertyId: 'prop-checkbox',
         value: false,
       }),
+      trx,
     );
     expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
       3,
@@ -1803,6 +1805,7 @@ describe('DatabaseService mixed tree flows', () => {
         propertyId: 'prop-text',
         value: 'plain text value',
       }),
+      trx,
     );
     expect(databaseCellRepo.upsertCell).toHaveBeenNthCalledWith(
       4,
@@ -1810,6 +1813,7 @@ describe('DatabaseService mixed tree flows', () => {
         propertyId: 'prop-object',
         value: { id: 'user-2' },
       }),
+      trx,
     );
   });
 
@@ -1857,6 +1861,7 @@ describe('DatabaseService mixed tree flows', () => {
         value: null,
         attachmentId: null,
       }),
+      trx,
     );
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
       'cell-delete',
@@ -1865,6 +1870,7 @@ describe('DatabaseService mixed tree flows', () => {
         attachmentId: null,
         updatedById: 'u-1',
       }),
+      trx,
     );
   });
 

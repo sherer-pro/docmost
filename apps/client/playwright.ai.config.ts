@@ -19,7 +19,10 @@ export default defineConfig({
   reporter: [
     ["list"],
     ["json", { outputFile: path.join(auditRoot, "playwright-results.json") }],
-    ["html", { outputFolder: path.join(auditRoot, "playwright-html"), open: "never" }],
+    [
+      "html",
+      { outputFolder: path.join(auditRoot, "playwright-html"), open: "never" },
+    ],
   ],
   use: {
     baseURL,
@@ -33,12 +36,21 @@ export default defineConfig({
   projects: [
     {
       name: "chromium-ru-desktop",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, locale: "ru-RU" },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        locale: "ru-RU",
+      },
     },
     {
       name: "chromium-en-desktop",
-      testMatch: /(?:localization-responsive|streaming-recovery)\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, locale: "en-US" },
+      testMatch:
+        /(?:admin-guide|localization-responsive|streaming-recovery)\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+        locale: "en-US",
+      },
     },
     {
       name: "firefox-streaming",
@@ -53,7 +65,11 @@ export default defineConfig({
     {
       name: "narrow-ai-panel",
       testMatch: /localization-responsive\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 820, height: 900 }, locale: "ru-RU" },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 820, height: 900 },
+        locale: "ru-RU",
+      },
     },
   ],
 });
