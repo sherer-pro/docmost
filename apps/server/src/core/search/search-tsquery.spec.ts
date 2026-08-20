@@ -16,6 +16,17 @@ describe('buildSearchTsQuery', () => {
     expect(buildSearchTsQuery('test-case')).toBe('test-case:*');
   });
 
+  it('keeps dots embedded in PostgreSQL full-text tokens', () => {
+    expect(buildSearchTsQuery('AI.UX')).toBe('AI.UX:*');
+    expect(buildSearchTsQuery('UX.2.Ремонт')).toBe('UX.2.Ремонт:*');
+  });
+
+  it('drops dots that are not embedded in searchable tokens', () => {
+    expect(buildSearchTsQuery('.env')).toBe('env:*');
+    expect(buildSearchTsQuery('Node.')).toBe('Node:*');
+    expect(buildSearchTsQuery('...')).toBeUndefined();
+  });
+
   it('returns undefined when nothing searchable remains', () => {
     expect(buildSearchTsQuery('«»')).toBeUndefined();
     expect(buildSearchTsQuery('   ')).toBeUndefined();
