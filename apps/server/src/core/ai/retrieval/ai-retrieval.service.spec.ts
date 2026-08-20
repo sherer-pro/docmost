@@ -6,6 +6,7 @@ function queryReturning(rows: unknown[]) {
     select: jest.fn(() => query),
     where: jest.fn(() => query),
     execute: jest.fn(async () => rows),
+    executeTakeFirst: jest.fn(async () => rows[0]),
   };
   return query;
 }

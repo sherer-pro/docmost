@@ -428,13 +428,11 @@ export class AiConversationService {
     );
     const sourceReferences = [
       ...sources
-        .filter(
-          (source) => source.sourceType !== 'chat_file' && source.pageId,
-        )
+        .filter((source) => source.sourceType !== 'chat_file')
         .map((source) => ({
           sourceType: source.sourceType,
           sourceId: source.sourceId,
-          pageId: source.pageId!,
+          pageId: source.pageId,
         })),
       ...dependencies.map((dependency) => ({
         sourceType: 'page',
@@ -476,11 +474,7 @@ export class AiConversationService {
     for (const dependency of dependencies) {
       if (
         !accessibleKeys.has(
-          this.sourceAccessKey(
-            'page',
-            dependency.pageId,
-            dependency.pageId,
-          ),
+          this.sourceAccessKey('page', dependency.pageId, dependency.pageId),
         )
       ) {
         restrictedMessages.add(dependency.messageId);
@@ -490,8 +484,7 @@ export class AiConversationService {
       if (
         source.sourceType === 'chat_file'
           ? !liveChatFileIds.has(source.sourceId)
-          : !source.pageId ||
-            !accessibleKeys.has(
+          : !accessibleKeys.has(
               this.sourceAccessKey(
                 source.sourceType,
                 source.sourceId,
@@ -639,7 +632,7 @@ export class AiConversationService {
   private sourceAccessKey(
     sourceType: string,
     sourceId: string,
-    pageId: string,
+    pageId: string | null,
   ): string {
     return `${sourceType}:${sourceId}:${pageId}`;
   }

@@ -63,6 +63,7 @@ import {
 import { AiAssistantProfileService } from './services/ai-assistant-profile.service';
 import { AiSourceAccessService } from './services/ai-source-access.service';
 import { AiProviderModule } from './ai-provider.module';
+import { RagModule } from '../rag/rag.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { AiProviderModule } from './ai-provider.module';
     CollaborationClientModule,
     ShareModule,
     TransclusionModule,
+    RagModule,
   ],
   controllers: [
     AiConfigController,

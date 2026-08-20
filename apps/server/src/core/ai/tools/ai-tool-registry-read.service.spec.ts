@@ -52,6 +52,13 @@ function query(result: unknown, whereCalls: unknown[][]) {
     executeTakeFirst: jest.fn(async () =>
       Array.isArray(result) ? result[0] : result,
     ),
+    executeTakeFirstOrThrow: jest.fn(async () => {
+      const first = Array.isArray(result) ? result[0] : result;
+      if (typeof first === 'undefined' || first === null) {
+        throw new Error('Expected query result');
+      }
+      return first;
+    }),
   };
   return value;
 }
@@ -68,6 +75,8 @@ function buildRegistry(options?: {
   pageAccessDenied?: boolean;
   liveContent?: any;
   liveError?: boolean;
+  searchItems?: any[];
+  dictionaryTerms?: any[];
 }) {
   const whereCalls: Record<string, unknown[][]> = {};
   const rows = options?.rows ?? {};
@@ -95,10 +104,28 @@ function buildRegistry(options?: {
   const pages = {
     findById: jest.fn(async () => options?.page ?? PAGE),
   };
+  const search = {
+    searchPage: jest.fn(async () => ({ items: options?.searchItems ?? [] })),
+  };
+  const knowledgeProjection = options?.dictionaryTerms
+    ? {
+        searchDictionaryTerms: jest.fn(async () => options.dictionaryTerms),
+        getDocumentFieldsConfig: jest.fn(() => ({
+          status: false,
+          assignee: false,
+          stakeholders: false,
+          aiRole: false,
+        })),
+        buildCustomFields: jest.fn(() => undefined),
+        resolveMembers: jest.fn(async () => new Map()),
+        memberNames: jest.fn(() => new Map()),
+        renderDocumentFields: jest.fn(() => ''),
+      }
+    : undefined;
   const registry = new AiToolRegistryService(
     db as any,
     pageAccess as any,
-    {} as any,
+    search as any,
     contentPolicy as any,
     pages as any,
     {
@@ -128,11 +155,100 @@ function buildRegistry(options?: {
     {
       getUserSpaceRoles: jest.fn(async () => options?.spaceRoles ?? []),
     } as any,
+    knowledgeProjection as any,
   );
   return { registry, db, pageAccess, contentPolicy, whereCalls };
 }
 
 describe('extended built-in AI read tools', () => {
+  it('prioritizes exact dictionary matches within the shared search limit', async () => {
+    const { registry } = buildRegistry({
+      rows: {
+        spaces: [
+          {
+            id: CONTEXT.spaceId,
+            workspaceId: CONTEXT.workspaceId,
+            slug: 'space',
+            settings: { dictionary: { enabled: true } },
+          },
+        ],
+        pages: [
+          {
+            id: 'page-1',
+            title: 'Page one',
+            slugId: 'page-one',
+            settings: {},
+          },
+          {
+            id: 'page-2',
+            title: 'Page two',
+            slugId: 'page-two',
+            settings: {},
+          },
+        ],
+      },
+      searchItems: [
+        {
+          id: 'page-1',
+          title: 'Page one',
+          slugId: 'page-one',
+          breadcrumbs: [],
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        {
+          id: 'page-2',
+          title: 'Page two',
+          slugId: 'page-two',
+          breadcrumbs: [],
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      ],
+      dictionaryTerms: [
+        {
+          id: 'term-exact',
+          term: 'Exact',
+          forms: ['Exact form'],
+          definitionMarkdown: 'Exact definition',
+          score: 1000,
+          exact: true,
+        },
+        {
+          id: 'term-partial',
+          term: 'Partial',
+          forms: [],
+          definitionMarkdown: 'Partial definition',
+          score: 500,
+          exact: false,
+        },
+      ],
+    });
+
+    const result = await registry.execute(
+      'search',
+      { query: 'Exact', limit: 2 },
+      CONTEXT,
+    );
+
+    expect((result.content as any).items).toHaveLength(2);
+    expect((result.content as any).items[0]).toMatchObject({
+      type: 'dictionary_term',
+      sourceId: 'term-exact',
+      pageId: null,
+      deepLink: '/s/space/dictionary?term=term-exact',
+    });
+    expect((result.content as any).items[1]).toMatchObject({
+      type: 'page',
+      pageId: 'page-1',
+    });
+    expect(result.citations).toContainEqual(
+      expect.objectContaining({
+        sourceType: 'dictionary_term',
+        sourceId: 'term-exact',
+        pageId: null,
+      }),
+    );
+  });
+
   it('binds #index proposals to the exact live outline hash', async () => {
     const liveContent = {
       type: 'doc',

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { jsonToMarkdown } from '../../../collaboration/collaboration.util';
@@ -37,6 +38,7 @@ import { AiContentPolicyService } from '../../ai-content-policy/ai-content-polic
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 import { AiSourceAccessChangedError } from './ai-source-access.service';
+import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
 
 export interface AiResolvedRunContextSource {
   sourceType: AiContextSourceType;
@@ -89,6 +91,10 @@ export class AiContextService {
     private readonly searchService: SearchService,
     private readonly pageRepo: PageRepo,
     private readonly contentPolicy: AiContentPolicyService,
+    @Optional()
+    private readonly knowledgeProjection: KnowledgeProjectionService = new KnowledgeProjectionService(
+      db,
+    ),
   ) {}
 
   async get(
@@ -605,8 +611,18 @@ export class AiContextService {
       ) {
         continue;
       }
+      const documentFields =
+        item.origin === 'current_document'
+          ? await this.documentFieldsMarkdown(
+              item.source.pageId,
+              conversation.workspaceId,
+              conversation.spaceId,
+            )
+          : '';
       const markdown =
-        item.origin === 'current_document' ? dto.documentSnapshot! : '';
+        item.origin === 'current_document'
+          ? this.insertAfterTitle(dto.documentSnapshot!, documentFields)
+          : '';
       snapshots.push({
         origin: item.origin,
         sourceType: item.source.sourceType,
@@ -899,10 +915,9 @@ export class AiContextService {
       }
       return {
         title: page.title?.trim() || '',
-        markdown: this.pageMarkdown(
-          page.title,
-          page.content,
-          page.textContent,
+        markdown: this.insertAfterTitle(
+          this.pageMarkdown(page.title, page.content, page.textContent),
+          await this.documentFieldsMarkdown(page.id, workspaceId, spaceId),
         ).slice(0, maxChars),
         dependencyPageIds: [page.id],
         citationHeadings: this.extractCitationHeadings(page.content),
@@ -949,6 +964,7 @@ export class AiContextService {
         'p.title',
         'p.content',
         'p.textContent',
+        'p.settings',
       ])
       .where('r.id', '=', rowId)
       .where('r.workspaceId', '=', workspaceId)
@@ -965,8 +981,15 @@ export class AiContextService {
       throw this.contextUnavailable();
     }
     const cells = await this.databaseRowCells(row.databaseId, [row.pageId]);
+    const documentFields = await this.documentFieldsMarkdown(
+      row.pageId,
+      workspaceId,
+      spaceId,
+      row.settings,
+    );
     const markdown = [
       `# ${row.title?.trim() || row.databaseName}`,
+      documentFields,
       `Database: ${row.databaseName}`,
       this.cellsMarkdown(cells.get(row.pageId) ?? []),
       this.safeMarkdown(row.content, row.textContent),
@@ -1018,12 +1041,43 @@ export class AiContextService {
       .orderBy('p.updatedAt', 'desc')
       .limit(200)
       .execute();
+    const [databasePage, properties] = await Promise.all([
+      this.db
+        .selectFrom('pages')
+        .select('settings')
+        .where('id', '=', database.pageId)
+        .where('workspaceId', '=', workspaceId)
+        .where('spaceId', '=', spaceId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('databaseProperties')
+        .select(['id', 'name', 'type', 'settings'])
+        .where('databaseId', '=', database.id)
+        .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
+        .orderBy('position', 'asc')
+        .execute(),
+    ]);
     const readableRows = rows.filter((row) => readablePageIds.has(row.pageId));
     const cells = await this.databaseRowCells(
       database.id,
       readableRows.map((row) => row.pageId),
     );
-    let markdown = `# ${database.name}\n\n`;
+    const documentFields = await this.documentFieldsMarkdown(
+      database.pageId,
+      workspaceId,
+      spaceId,
+      databasePage?.settings,
+    );
+    let markdown = [
+      `# ${database.name}`,
+      documentFields,
+      this.knowledgeProjection.renderDatabaseSchema(properties),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    markdown += '\n\n';
     const description = this.safeMarkdown(
       database.descriptionContent,
       database.description,
@@ -1147,20 +1201,33 @@ export class AiContextService {
       Array<{ propertyName: string; value: unknown }>
     >();
     if (pageIds.length === 0) return result;
-    const rows = await this.db
-      .selectFrom('databaseCells as c')
-      .innerJoin('databaseProperties as p', 'p.id', 'c.propertyId')
-      .select(['c.pageId', 'c.value', 'p.name as propertyName', 'p.position'])
-      .where('c.databaseId', '=', databaseId)
-      .where('c.pageId', 'in', pageIds)
-      .where('c.deletedAt', 'is', null)
-      .where('p.deletedAt', 'is', null)
-      .orderBy('p.position', 'asc')
-      .execute();
-    for (const row of rows) {
-      const current = result.get(row.pageId) ?? [];
-      current.push({ propertyName: row.propertyName, value: row.value });
-      result.set(row.pageId, current);
+    const [properties, cells] = await Promise.all([
+      this.db
+        .selectFrom('databaseProperties')
+        .select(['id', 'name'])
+        .where('databaseId', '=', databaseId)
+        .where('deletedAt', 'is', null)
+        .orderBy('position', 'asc')
+        .execute(),
+      this.db
+        .selectFrom('databaseCells')
+        .select(['pageId', 'propertyId', 'value'])
+        .where('databaseId', '=', databaseId)
+        .where('pageId', 'in', pageIds)
+        .where('deletedAt', 'is', null)
+        .execute(),
+    ]);
+    const valueByCell = new Map(
+      cells.map((cell) => [`${cell.pageId}:${cell.propertyId}`, cell.value]),
+    );
+    for (const pageId of pageIds) {
+      result.set(
+        pageId,
+        properties.map((property) => ({
+          propertyName: property.name,
+          value: valueByCell.get(`${pageId}:${property.id}`) ?? null,
+        })),
+      );
     }
     return result;
   }
@@ -1170,7 +1237,8 @@ export class AiContextService {
   ): string {
     return cells
       .map(
-        (cell) => `- ${cell.propertyName}: ${this.renderCellValue(cell.value)}`,
+        (cell) =>
+          `- ${cell.propertyName}: ${this.renderCellValue(cell.value) || 'Not set'}`,
       )
       .join('\n');
   }
@@ -1194,6 +1262,57 @@ export class AiContextService {
       return JSON.stringify(record);
     }
     return String(value);
+  }
+
+  private async documentFieldsMarkdown(
+    pageId: string,
+    workspaceId: string,
+    spaceId: string,
+    providedSettings?: unknown,
+  ): Promise<string> {
+    const [space, page] = await Promise.all([
+      this.db
+        .selectFrom('spaces')
+        .selectAll()
+        .where('id', '=', spaceId)
+        .where('workspaceId', '=', workspaceId)
+        .executeTakeFirst(),
+      providedSettings === undefined
+        ? this.db
+            .selectFrom('pages')
+            .select('settings')
+            .where('id', '=', pageId)
+            .where('workspaceId', '=', workspaceId)
+            .where('spaceId', '=', spaceId)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst()
+        : Promise.resolve({ settings: providedSettings }),
+    ]);
+    if (!space || !page) return '';
+    const fields = this.knowledgeProjection.buildCustomFields(
+      page.settings,
+      this.knowledgeProjection.getDocumentFieldsConfig(space),
+    );
+    const members = await this.knowledgeProjection.resolveMembers(workspaceId, [
+      fields,
+    ]);
+    return this.knowledgeProjection.renderDocumentFields(
+      fields,
+      this.knowledgeProjection.memberNames(members),
+    );
+  }
+
+  private insertAfterTitle(markdown: string, fields: string): string {
+    if (!fields) return markdown;
+    const title = /^# [^\n]*(?:\r?\n|$)/.exec(markdown);
+    if (!title) return [fields, markdown].filter(Boolean).join('\n\n');
+    return [
+      title[0].trimEnd(),
+      fields,
+      markdown.slice(title[0].length).trimStart(),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   private pageMarkdown(

@@ -473,14 +473,12 @@ export class AiPromptBuilderService {
           pageId: dependency.pageId,
         })),
         ...sources
-          .filter(
-            (source) => source.sourceType !== 'chat_file' && source.pageId,
-          )
+          .filter((source) => source.sourceType !== 'chat_file')
           .map((source) => ({
             messageId: source.messageId,
             sourceType: source.sourceType,
             sourceId: source.sourceId,
-            pageId: source.pageId!,
+            pageId: source.pageId,
           })),
       ];
       const accessible = await this.sourceAccess.filterAccessible(
@@ -584,7 +582,7 @@ export class AiPromptBuilderService {
     messageId: string,
     sourceType: string,
     sourceId: string,
-    pageId: string,
+    pageId: string | null,
   ): string {
     return `${messageId}:${sourceType}:${sourceId}:${pageId}`;
   }
