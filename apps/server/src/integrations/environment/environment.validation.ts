@@ -358,6 +358,10 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsIn(['true', 'false'])
+  PERFORMANCE_DIAGNOSTICS_ENABLED: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
   DEBUG_DB: string;
 
   @IsOptional()

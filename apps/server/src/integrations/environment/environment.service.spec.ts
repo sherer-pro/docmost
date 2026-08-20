@@ -36,6 +36,10 @@ describe('EnvironmentService', () => {
     expect(service.getDatabaseMigrationMode()).toBe('auto');
   });
 
+  it('keeps performance diagnostics disabled by default', () => {
+    expect(service.isPerformanceDiagnosticsEnabled()).toBe(false);
+  });
+
   it('supports an external one-shot database migration job', () => {
     configGet.mockImplementation((key: string, defaultValue: unknown) =>
       key === 'DATABASE_MIGRATION_MODE' ? 'external' : defaultValue,
