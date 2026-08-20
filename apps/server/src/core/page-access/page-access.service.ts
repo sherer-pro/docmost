@@ -394,7 +394,7 @@ export class PageAccessService {
   }
 
   async getEffectiveAccessForPages(
-    pages: Page[],
+    pages: Array<Pick<Page, 'id' | 'spaceId' | 'workspaceId'>>,
     user: User,
   ): Promise<Map<string, EffectivePageAccess>> {
     const accessByPageId = new Map<string, EffectivePageAccess>();

@@ -22,3 +22,10 @@ export interface PageAccessInfo {
   capabilities: PageAccessCapabilities;
   isSystemAccess: boolean;
 }
+
+export interface PageReference {
+  id: string;
+  slugId: string;
+  title: string;
+  icon: string | null;
+}

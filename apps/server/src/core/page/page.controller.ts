@@ -24,6 +24,7 @@ import {
   PageHistoryIdDto,
   PageIdDto,
   PageInfoDto,
+  PageReferencesQueryDto,
   PageLabelsQueryDto,
 } from './dto/page.dto';
 import { PageHistoryService } from './services/page-history.service';
@@ -69,6 +70,7 @@ import { LinkPreviewService } from './services/link-preview.service';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { PageAccessMutationService } from './services/page-access-mutation.service';
 import { PageTemplateSyncService } from './services/page-template-sync.service';
+import type { PageReference } from '@docmost/api-contract';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -112,6 +114,40 @@ export class PageController {
   @Get('/info')
   async getPageViaQuery(@Query() dto: PageInfoDto, @AuthUser() user: User) {
     return this.getPage(dto, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('workspace')
+  @Get('/references')
+  async getPageReferences(
+    @Query() dto: PageReferencesQueryDto,
+    @AuthUser() user: User,
+  ): Promise<PageReference[]> {
+    const uniqueIds = [...new Set(dto.ids)];
+    const pages = await this.pageRepo.findReferencesByIds(
+      uniqueIds,
+      user.workspaceId,
+    );
+    const accessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(pages, user);
+    const pageById = new Map(pages.map((page) => [page.id, page]));
+
+    return uniqueIds.flatMap((pageId) => {
+      const page = pageById.get(pageId);
+      const access = accessByPageId.get(pageId);
+      if (!page || !access?.capabilities.canRead) {
+        return [];
+      }
+
+      return [
+        {
+          id: page.id,
+          slugId: page.slugId,
+          title: page.title,
+          icon: page.icon,
+        },
+      ];
+    });
   }
 
   @HttpCode(HttpStatus.OK)

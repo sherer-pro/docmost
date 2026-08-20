@@ -11,6 +11,7 @@ export const QUERY_KEY_SPACE = {
   rows: "rows",
   rowContext: "row-context",
   pages: "pages",
+  pageReferences: "page-references",
 } as const;
 
 export type QueryParamsKey = object;
@@ -77,7 +78,10 @@ export function databaseViewsKey(databaseId?: string) {
   ] as const;
 }
 
-export function databaseRowsKey(databaseId?: string, params?: QueryParamsKey | null) {
+export function databaseRowsKey(
+  databaseId?: string,
+  params?: QueryParamsKey | null,
+) {
   return [
     QUERY_KEY_SPACE.database,
     databaseId,
@@ -86,13 +90,21 @@ export function databaseRowsKey(databaseId?: string, params?: QueryParamsKey | n
   ] as const;
 }
 
+function pageReferencesKey(pageIds: string[]) {
+  return [QUERY_KEY_SPACE.pageReferences, [...pageIds].sort()] as const;
+}
+
 export function databaseRowsBaseKey(databaseId?: string) {
   return [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows] as const;
 }
 
 export function databaseRowContextKey(pageId?: string) {
   if (pageId) {
-    return [QUERY_KEY_SPACE.database, QUERY_KEY_SPACE.rowContext, pageId] as const;
+    return [
+      QUERY_KEY_SPACE.database,
+      QUERY_KEY_SPACE.rowContext,
+      pageId,
+    ] as const;
   }
 
   return [QUERY_KEY_SPACE.database, QUERY_KEY_SPACE.rowContext] as const;
@@ -100,6 +112,7 @@ export function databaseRowContextKey(pageId?: string) {
 
 export const PAGE_QUERY_KEYS = {
   page: pageKey,
+  references: pageReferencesKey,
   sidebar: sidebarKey,
   rootSidebar: rootSidebarKey,
   breadcrumbs: breadcrumbsKey,

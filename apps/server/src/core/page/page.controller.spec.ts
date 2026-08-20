@@ -18,6 +18,7 @@ describe('PageController guardrails and mixed-id contract', () => {
   };
   const pageRepo = {
     findById: jest.fn(),
+    findReferencesByIds: jest.fn(),
     restorePage: jest.fn(),
   };
   const pageHistoryService = {
@@ -94,6 +95,7 @@ describe('PageController guardrails and mixed-id contract', () => {
       },
       isSystemAccess: false,
     })),
+    getEffectiveAccessForPages: jest.fn(),
     getSidebarAccessSnapshot: jest.fn(async () => ({
       visiblePageIds: new Set(['uuid-page', 'p1', 'parent']),
       readablePageIds: new Set(['uuid-page', 'p1', 'parent']),
@@ -159,6 +161,86 @@ describe('PageController guardrails and mixed-id contract', () => {
       settings: null,
       contributorIds: [],
     });
+    pageRepo.findReferencesByIds.mockResolvedValue([]);
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValue(new Map());
+  });
+
+  it('returns each readable page reference once and omits inaccessible pages', async () => {
+    const readablePage = {
+      id: '11111111-1111-4111-8111-111111111111',
+      slugId: 'readable',
+      title: 'Readable',
+      icon: 'page',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+    };
+    const deniedPage = {
+      id: '22222222-2222-4222-8222-222222222222',
+      slugId: 'denied',
+      title: 'Denied',
+      icon: null,
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+    };
+    pageRepo.findReferencesByIds.mockResolvedValue([deniedPage, readablePage]);
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
+      new Map([
+        [readablePage.id, { capabilities: { canRead: true } }],
+        [deniedPage.id, { capabilities: { canRead: false } }],
+      ]),
+    );
+
+    const result = await controller.getPageReferences(
+      {
+        ids: [readablePage.id, deniedPage.id, readablePage.id],
+      },
+      { id: 'u1', workspaceId: 'workspace-1' } as any,
+    );
+
+    expect(pageRepo.findReferencesByIds).toHaveBeenCalledWith(
+      [readablePage.id, deniedPage.id],
+      'workspace-1',
+    );
+    expect(result).toEqual([
+      {
+        id: readablePage.id,
+        slugId: readablePage.slugId,
+        title: readablePage.title,
+        icon: readablePage.icon,
+      },
+    ]);
+  });
+
+  it('omits missing and deleted page references returned as absent by the repository', async () => {
+    const readableId = '11111111-1111-4111-8111-111111111111';
+    const missingId = '22222222-2222-4222-8222-222222222222';
+    const deletedId = '33333333-3333-4333-8333-333333333333';
+    const readablePage = {
+      id: readableId,
+      slugId: 'readable',
+      title: 'Readable',
+      icon: null,
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+    };
+    pageRepo.findReferencesByIds.mockResolvedValue([readablePage]);
+    pageAccessService.getEffectiveAccessForPages.mockResolvedValue(
+      new Map([[readableId, { capabilities: { canRead: true } }]]),
+    );
+
+    const result = await controller.getPageReferences(
+      { ids: [readableId, missingId, deletedId] },
+      { id: 'u1', workspaceId: 'workspace-1' } as any,
+    );
+
+    expect(result).toEqual([
+      {
+        id: readableId,
+        slugId: 'readable',
+        title: 'Readable',
+        icon: null,
+      },
+    ]);
   });
 
   it('sidebar-pages rejects mismatched pageId/spaceId', async () => {
@@ -254,10 +336,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     });
 
     await expect(
-      controller.getPage(
-        { pageId: 'docs-home' } as any,
-        { id: 'u1' } as any,
-      ),
+      controller.getPage({ pageId: 'docs-home' } as any, { id: 'u1' } as any),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(pageAccessService.assertCanReadPage).not.toHaveBeenCalled();
@@ -364,7 +443,9 @@ describe('PageController guardrails and mixed-id contract', () => {
     expect(pageRepo.findById).toHaveBeenLastCalledWith('uuid-page', {
       includeHasChildren: true,
     });
-    expect(pageTemplateSyncService.catchUpRestoredInstances).toHaveBeenCalledWith(
+    expect(
+      pageTemplateSyncService.catchUpRestoredInstances,
+    ).toHaveBeenCalledWith(
       ['uuid-page'],
       expect.objectContaining({ id: 'u1' }),
     );

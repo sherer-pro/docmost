@@ -30,12 +30,13 @@ import { activeCommentIdAtom } from "@/features/comment/atoms/comment-atom";
 import { COMMENT_LIMIT } from "@/features/comment/comment.constants";
 import { CommentThreadList } from "./comment-thread-list";
 import { shouldRevealResolvedComments } from "../utils/comment-collapse";
+import { useLazyCommentTrigger } from "../hooks/use-lazy-comment-trigger";
 
 interface PageCommentSectionProps {
   pageId: string;
 }
 
-function PageCommentSection({ pageId }: PageCommentSectionProps) {
+function LoadedPageCommentSection({ pageId }: PageCommentSectionProps) {
   const { t } = useTranslation();
   const emit = useQueryEmit();
   const { pageByRoute } = useDatabasePageContext();
@@ -273,6 +274,30 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
             )}
           </Collapse>
         </>
+      )}
+    </div>
+  );
+}
+
+function PageCommentSection({ pageId }: PageCommentSectionProps) {
+  const { t } = useTranslation();
+  const activeCommentId = useAtomValue(activeCommentIdAtom);
+  const { targetRef, shouldLoad } = useLazyCommentTrigger(activeCommentId);
+
+  if (!pageId) {
+    return null;
+  }
+
+  return (
+    <div ref={targetRef}>
+      {shouldLoad ? (
+        <LoadedPageCommentSection pageId={pageId} />
+      ) : (
+        <div className={classes.container}>
+          <Text size="md" fw={600} my="md">
+            {t("Comments")}
+          </Text>
+        </div>
       )}
     </div>
   );

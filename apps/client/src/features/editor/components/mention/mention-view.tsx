@@ -2,31 +2,34 @@ import { NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { ActionIcon, Anchor, Text } from "@mantine/core";
 import { IconFileDescription } from "@tabler/icons-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import {
   buildPageUrl,
   buildSharedPageUrl,
 } from "@/features/page/page.utils.ts";
 import { extractPageSlugId } from "@/lib";
 import classes from "./mention.module.css";
+import { usePageReference } from "./use-page-reference";
+import { resolvePageMentionReference } from "./mention-reference";
 
 export default function MentionView(props: NodeViewProps) {
   const { node } = props;
-  const { label, entityType, entityId, slugId, anchorId } = node.attrs;
+  const { label, entityType, entityId, slugId, anchorId, icon } = node.attrs;
   const { spaceSlug, pageSlug } = useParams();
   const { shareId } = useParams();
   const navigate = useNavigate();
-  const {
-    data: page,
-    isLoading,
-    isError,
-  } = usePageQuery({ pageId: entityType === "page" ? slugId : null });
-
   const location = useLocation();
   const isShareRoute = location.pathname.startsWith("/share");
+  const page = usePageReference(
+    entityType === "page" ? entityId : null,
+    !isShareRoute,
+  );
+  const resolvedPage = resolvePageMentionReference(
+    { slugId, label, icon },
+    page,
+  );
 
   const currentPageSlugId = extractPageSlugId(pageSlug);
-  const isSamePage = currentPageSlugId === slugId;
+  const isSamePage = currentPageSlugId === resolvedPage.slugId;
 
   const handleClick = (e: React.MouseEvent) => {
     if (isSamePage && anchorId) {
@@ -41,8 +44,8 @@ export default function MentionView(props: NodeViewProps) {
 
   const shareSlugUrl = buildSharedPageUrl({
     shareId,
-    pageSlugId: slugId,
-    pageTitle: label,
+    pageSlugId: resolvedPage.slugId,
+    pageTitle: resolvedPage.title,
     anchorId,
   });
 
@@ -59,14 +62,21 @@ export default function MentionView(props: NodeViewProps) {
           component={Link}
           fw={500}
           to={
-            isShareRoute ? shareSlugUrl : buildPageUrl(spaceSlug, slugId, label, anchorId)
+            isShareRoute
+              ? shareSlugUrl
+              : buildPageUrl(
+                  spaceSlug,
+                  resolvedPage.slugId,
+                  resolvedPage.title,
+                  anchorId,
+                )
           }
           onClick={handleClick}
           underline="never"
           className={classes.pageMentionLink}
         >
-          {page?.icon ? (
-            <span style={{ marginRight: "4px" }}>{page.icon}</span>
+          {resolvedPage.icon ? (
+            <span style={{ marginRight: "4px" }}>{resolvedPage.icon}</span>
           ) : (
             <ActionIcon
               variant="transparent"
@@ -79,9 +89,7 @@ export default function MentionView(props: NodeViewProps) {
             </ActionIcon>
           )}
 
-          <span className={classes.pageMentionText}>
-            {page?.title || label}
-          </span>
+          <span className={classes.pageMentionText}>{resolvedPage.title}</span>
         </Anchor>
       )}
     </NodeViewWrapper>

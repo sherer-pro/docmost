@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsBoolean,
   IsIn,
   IsNotEmpty,
@@ -20,6 +22,19 @@ function parseOptionalBoolean(value: unknown): unknown {
   }
 
   return value;
+}
+
+function parsePageReferenceIds(value: unknown): unknown {
+  const values = Array.isArray(value) ? value : [value];
+
+  return values.flatMap((item) =>
+    typeof item === 'string'
+      ? item
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [],
+  );
 }
 
 export class PageIdDto {
@@ -60,6 +75,14 @@ export class DeletePageDto extends PageIdDto {
   @Transform(({ value }) => parseOptionalBoolean(value))
   @IsBoolean()
   permanentlyDelete?: boolean;
+}
+
+export class PageReferencesQueryDto {
+  @Transform(({ value }) => parsePageReferenceIds(value))
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  ids: string[];
 }
 
 export class PageHistoryQueryDto extends PaginationOptions {

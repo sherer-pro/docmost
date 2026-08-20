@@ -21,12 +21,12 @@ import {
   Editor,
   EditorContent,
   EditorProvider,
-  useEditor,
   useEditorState,
 } from "@tiptap/react";
 import {
   collabExtensions,
   createMainExtensions,
+  createReadOnlyExtensions,
 } from "@/features/editor/extensions/extensions";
 import { useAtom, useSetAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
@@ -88,6 +88,13 @@ import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { useTranslation } from "react-i18next";
 import type { TemplateKind } from "@docmost/api-contract";
 import { TemplateBlockToolbar } from "@/features/editor/components/page-template/template-block-toolbar";
+import { Alert, Button } from "@mantine/core";
+import { IconWifiOff } from "@tabler/icons-react";
+import { PageReferenceProvider } from "@/features/editor/components/mention/page-reference-context";
+import {
+  resolveLiveEditorOptions,
+  shouldActivateLiveEditor,
+} from "./page-editor-lifecycle";
 
 interface PageEditorProps {
   pageId: string;
@@ -215,7 +222,10 @@ export default function PageEditor({
   );
   const staticContentExtensions = useMemo(
     () => [
-      ...mainEditorExtensions,
+      ...createReadOnlyExtensions({
+        tagDefinitions,
+        onSearchTag: handleSearchTag,
+      }),
       DictionaryHighlightExtension.configure({
         enabled: dictionaryEnabled,
         terms: activeDictionaryTerms,
@@ -226,7 +236,8 @@ export default function PageEditor({
       activeDictionaryTerms,
       dictionaryEnabled,
       dictionaryMatcherIndex,
-      mainEditorExtensions,
+      handleSearchTag,
+      tagDefinitions,
     ],
   );
   const staticContentKey = useMemo(
@@ -472,16 +483,62 @@ export default function PageEditor({
     ];
   }, [collaborationUserId, editorExtensions, providersReady]);
 
-  const editor = useEditor(
-    {
+  const hasConnectedOnceRef = useRef(false);
+  const [showStatic, setShowStatic] = useState(true);
+
+  const debouncedUpdateContent = useDebouncedCallback((newContent: any) => {
+    if (!resolvedCacheSlugId) {
+      return;
+    }
+
+    const pageData = queryClient.getQueryData<IPage>([
+      "pages",
+      resolvedCacheSlugId,
+    ]);
+
+    if (pageData) {
+      queryClient.setQueryData(["pages", resolvedCacheSlugId], {
+        ...pageData,
+        content: newContent,
+        updatedAt: new Date(),
+      });
+    }
+  }, 3000);
+  const [editor, setLiveEditor] = useState<Editor | null>(null);
+  const liveEditorRuntimeRef = useRef({
+    editable: editable && userPageEditMode === PageEditMode.Edit,
+    ariaLabel: t("Editor"),
+    handleKeyDown,
+    handleBeforeInput,
+    handleEditorPaste,
+    handleEditorDrop,
+    handleScrollTo,
+    debouncedUpdateContent,
+    setEditor,
+    templateKind,
+  });
+  liveEditorRuntimeRef.current = {
+    editable: editable && userPageEditMode === PageEditMode.Edit,
+    ariaLabel: t("Editor"),
+    handleKeyDown,
+    handleBeforeInput,
+    handleEditorPaste,
+    handleEditorDrop,
+    handleScrollTo,
+    debouncedUpdateContent,
+    setEditor,
+    templateKind,
+  };
+
+  useEffect(() => {
+    const runtime = liveEditorRuntimeRef.current;
+    const options = resolveLiveEditorOptions(showStatic, {
       extensions,
-      editable: editable && userPageEditMode === PageEditMode.Edit,
-      immediatelyRender: true,
-      shouldRerenderOnTransaction: false,
+      editable: runtime.editable,
       editorProps: {
         attributes: {
           role: "textbox",
-          "aria-label": t("Editor"),
+          "aria-label": runtime.ariaLabel,
           "aria-multiline": "true",
         },
         scrollThreshold: 80,
@@ -497,21 +554,30 @@ export default function PageEditor({
               return true;
             }
 
-            return handleKeyDown(_view, event);
+            return liveEditorRuntimeRef.current.handleKeyDown(_view, event);
           },
-          beforeinput: handleBeforeInput,
+          beforeinput: (_view, event) =>
+            liveEditorRuntimeRef.current.handleBeforeInput(_view, event),
         },
-        handlePaste: handleEditorPaste,
-        handleDrop: handleEditorDrop,
+        handlePaste: (_view, event) =>
+          liveEditorRuntimeRef.current.handleEditorPaste(_view, event),
+        handleDrop: (_view, event, slice, moved) =>
+          liveEditorRuntimeRef.current.handleEditorDrop(
+            _view,
+            event,
+            slice,
+            moved,
+          ),
       },
       onCreate({ editor }) {
         if (editor) {
           // @ts-ignore
-          setEditor(editor);
+          liveEditorRuntimeRef.current.setEditor(editor);
           // @ts-ignore
           editor.storage.pageId = pageId;
-          (editor.storage as any).templateKind = templateKind;
-          handleScrollTo(editor);
+          (editor.storage as any).templateKind =
+            liveEditorRuntimeRef.current.templateKind;
+          liveEditorRuntimeRef.current.handleScrollTo(editor);
           editorRef.current = editor;
         }
       },
@@ -519,11 +585,21 @@ export default function PageEditor({
         if (editor.isEmpty) return;
         const editorJson = editor.getJSON();
         //update local page cache to reduce flickers
-        debouncedUpdateContent(editorJson);
+        liveEditorRuntimeRef.current.debouncedUpdateContent(editorJson);
       },
-    },
-    [pageId, extensions],
-  );
+    });
+    if (!options) {
+      return;
+    }
+
+    const liveEditor = new Editor(options);
+    setLiveEditor(liveEditor);
+
+    return () => {
+      setLiveEditor((current) => (current === liveEditor ? null : current));
+      liveEditor.destroy();
+    };
+  }, [extensions, pageId, showStatic]);
 
   useEffect(() => {
     if (!editor) {
@@ -587,27 +663,6 @@ export default function PageEditor({
     },
   });
 
-  const debouncedUpdateContent = useDebouncedCallback((newContent: any) => {
-    if (!resolvedCacheSlugId) {
-      return;
-    }
-
-    const pageData = queryClient.getQueryData<IPage>([
-      "pages",
-      resolvedCacheSlugId,
-    ]);
-
-    if (pageData) {
-      queryClient.setQueryData(["pages", resolvedCacheSlugId], {
-        ...pageData,
-        content: newContent,
-        updatedAt: new Date(),
-      });
-    }
-  }, 3000);
-
-  const isSynced = isLocalSynced && isRemoteSynced;
-
   /**
    * Reports a connection attempt that never completes.
    *
@@ -634,46 +689,80 @@ export default function PageEditor({
     }
   }, [userPageEditMode, editor, editable]);
 
-  const hasConnectedOnceRef = useRef(false);
-  const [showStatic, setShowStatic] = useState(true);
-
   useEffect(() => {
     if (
       !hasConnectedOnceRef.current &&
-      yjsConnectionStatus === WebSocketStatus.Connected &&
-      isSynced
+      shouldActivateLiveEditor({
+        connectionStatus: yjsConnectionStatus,
+        localSynced: isLocalSynced,
+        remoteSynced: isRemoteSynced,
+      })
     ) {
       hasConnectedOnceRef.current = true;
       setShowStatic(false);
     }
-  }, [yjsConnectionStatus, isSynced]);
+  }, [isLocalSynced, isRemoteSynced, yjsConnectionStatus]);
+
+  const handleRetryCollaboration = useCallback(async () => {
+    setYjsConnectionStatus(WebSocketStatus.Connecting);
+    const result = await refetchCollabTokenRef.current();
+    const nextToken = result.data?.token;
+    const providers = providersRef.current;
+    if (!nextToken || !providers) {
+      setYjsConnectionStatus(WebSocketStatus.Disconnected);
+      return;
+    }
+
+    collabTokenRef.current = nextToken;
+    providers.remote.configuration.token = nextToken;
+    providers.socket.disconnect();
+    providers.socket.connect();
+  }, [setYjsConnectionStatus]);
 
   if (showStatic) {
     return (
       <>
-        <TransclusionLookupProvider>
-          <DictionaryHighlightLayer terms={activeDictionaryTerms}>
-            <EditorProvider
-              key={staticContentKey}
-              editable={false}
-              immediatelyRender={true}
-              extensions={staticContentExtensions}
-              content={content}
-              editorProps={{
-                attributes: {
-                  role: "textbox",
-                  "aria-label": t("Editor"),
-                  "aria-multiline": "true",
-                },
-              }}
-              onCreate={({ editor: staticEditor }) => {
-                staticEditor.commands.setHeadingNumberingEnabled(
-                  headingNumberingEnabled,
-                );
-              }}
-            />
-          </DictionaryHighlightLayer>
-        </TransclusionLookupProvider>
+        {yjsConnectionStatus === WebSocketStatus.Disconnected && (
+          <Alert
+            color="orange"
+            icon={<IconWifiOff size={18} />}
+            title={t("Real-time editor connection lost. Retrying...")}
+            mb="md"
+          >
+            <Button
+              variant="default"
+              size="xs"
+              onClick={() => void handleRetryCollaboration()}
+            >
+              {t("Retry")}
+            </Button>
+          </Alert>
+        )}
+        <PageReferenceProvider>
+          <TransclusionLookupProvider>
+            <DictionaryHighlightLayer terms={activeDictionaryTerms}>
+              <EditorProvider
+                key={staticContentKey}
+                editable={false}
+                immediatelyRender={true}
+                extensions={staticContentExtensions}
+                content={content}
+                editorProps={{
+                  attributes: {
+                    role: "textbox",
+                    "aria-label": t("Editor"),
+                    "aria-multiline": "true",
+                  },
+                }}
+                onCreate={({ editor: staticEditor }) => {
+                  staticEditor.commands.setHeadingNumberingEnabled(
+                    headingNumberingEnabled,
+                  );
+                }}
+              />
+            </DictionaryHighlightLayer>
+          </TransclusionLookupProvider>
+        </PageReferenceProvider>
         <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
       </>
     );
@@ -681,40 +770,16 @@ export default function PageEditor({
 
   return (
     <>
-      <TransclusionLookupProvider>
-        <div className="editor-container" style={{ position: "relative" }}>
-          <div ref={menuContainerRef}>
-            {editor && editorIsEditable && templateKind === "synced" && (
-              <TemplateBlockToolbar editor={editor} />
-            )}
-            {editor && editorIsEditable && fixedToolbarEnabled && (
-              <>
-                <FixedToolbar
-                  editor={editor}
-                  pageId={pageId}
-                  spaceId={spaceId}
-                  dictionaryEnabled={dictionaryEnabled}
-                  canManageDictionary={canManageDictionary}
-                  canCreateInlineComments={canCreateInlineComments}
-                />
-              </>
-            )}
-
-            <DictionaryHighlightLayer terms={activeDictionaryTerms}>
-              <EditorContent
-                editor={editor}
-                className={clsx(editorContentClassName)}
-              />
-            </DictionaryHighlightLayer>
-
-            {editor && (
-              <SearchAndReplaceDialog editor={editor} editable={editable} />
-            )}
-
-            {editor && editorIsEditable && (
-              <div>
-                {!fixedToolbarEnabled && (
-                  <EditorBubbleMenu
+      <PageReferenceProvider>
+        <TransclusionLookupProvider>
+          <div className="editor-container" style={{ position: "relative" }}>
+            <div ref={menuContainerRef}>
+              {editor && editorIsEditable && templateKind === "synced" && (
+                <TemplateBlockToolbar editor={editor} />
+              )}
+              {editor && editorIsEditable && fixedToolbarEnabled && (
+                <>
+                  <FixedToolbar
                     editor={editor}
                     pageId={pageId}
                     spaceId={spaceId}
@@ -722,35 +787,61 @@ export default function PageEditor({
                     canManageDictionary={canManageDictionary}
                     canCreateInlineComments={canCreateInlineComments}
                   />
-                )}
-                <TableMenu editor={editor} />
-                <TableCellMenu editor={editor} appendTo={menuContainerRef} />
-                <ImageMenu editor={editor} />
-                <VideoMenu editor={editor} />
-                <AudioMenu editor={editor} />
-                <PdfMenu editor={editor} />
-                <CalloutMenu editor={editor} />
-                <SubpagesMenu editor={editor} />
-                <ExcalidrawMenu editor={editor} />
-                <DrawioMenu editor={editor} />
-                <LinkMenu editor={editor} appendTo={menuContainerRef} />
-              </div>
-            )}
-            {editor && !editorIsEditable && canCreateInlineComments && (
-              <ReadOnlyCommentBubbleMenu editor={editor} />
-            )}
-            {sharedShowCommentPopup && (
-              <CommentDialog editor={editor} pageId={pageId} />
+                </>
+              )}
+
+              <DictionaryHighlightLayer terms={activeDictionaryTerms}>
+                <EditorContent
+                  editor={editor}
+                  className={clsx(editorContentClassName)}
+                />
+              </DictionaryHighlightLayer>
+
+              {editor && (
+                <SearchAndReplaceDialog editor={editor} editable={editable} />
+              )}
+
+              {editor && editorIsEditable && (
+                <div>
+                  {!fixedToolbarEnabled && (
+                    <EditorBubbleMenu
+                      editor={editor}
+                      pageId={pageId}
+                      spaceId={spaceId}
+                      dictionaryEnabled={dictionaryEnabled}
+                      canManageDictionary={canManageDictionary}
+                      canCreateInlineComments={canCreateInlineComments}
+                    />
+                  )}
+                  <TableMenu editor={editor} />
+                  <TableCellMenu editor={editor} appendTo={menuContainerRef} />
+                  <ImageMenu editor={editor} />
+                  <VideoMenu editor={editor} />
+                  <AudioMenu editor={editor} />
+                  <PdfMenu editor={editor} />
+                  <CalloutMenu editor={editor} />
+                  <SubpagesMenu editor={editor} />
+                  <ExcalidrawMenu editor={editor} />
+                  <DrawioMenu editor={editor} />
+                  <LinkMenu editor={editor} appendTo={menuContainerRef} />
+                </div>
+              )}
+              {editor && !editorIsEditable && canCreateInlineComments && (
+                <ReadOnlyCommentBubbleMenu editor={editor} />
+              )}
+              {sharedShowCommentPopup && (
+                <CommentDialog editor={editor} pageId={pageId} />
+              )}
+            </div>
+            {showBottomSpacer && (
+              <div
+                onClick={() => editor.commands.focus("end")}
+                style={{ paddingBottom: "20vh" }}
+              ></div>
             )}
           </div>
-          {showBottomSpacer && (
-            <div
-              onClick={() => editor.commands.focus("end")}
-              style={{ paddingBottom: "20vh" }}
-            ></div>
-          )}
-        </div>
-      </TransclusionLookupProvider>
+        </TransclusionLookupProvider>
+      </PageReferenceProvider>
       <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
     </>
   );

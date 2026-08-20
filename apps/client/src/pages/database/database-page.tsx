@@ -1,5 +1,13 @@
 import { Container, Stack } from "@mantine/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -28,12 +36,15 @@ import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-
 import { useSetAtom } from "jotai";
 import classes from "./database-page.module.css";
 import { useDatabasePageContext } from "@/features/database/hooks/use-database-page-context.ts";
-import PageCommentSection from "@/features/comment/components/page-comment-section";
 import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
-import { AiDocumentContextSync } from "@/features/ai/components/ai-document-context-sync.tsx";
+import { DeferredAiDocumentContextSync } from "@/features/ai/components/deferred-ai-document-context-sync";
+
+const LazyPageCommentSection = lazy(
+  () => import("@/features/comment/components/page-comment-section"),
+);
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -116,14 +127,15 @@ export default function DatabasePage() {
     setAsideState,
   ]);
 
-  const { onTitleFocusChange, syncCanonicalUrl } = useDeferredCanonicalTitleUrlSync(
-    useCallback(
-      (nextUrl: string) => {
-        navigate(nextUrl, { replace: true });
-      },
-      [navigate],
-    ),
-  );
+  const { onTitleFocusChange, syncCanonicalUrl } =
+    useDeferredCanonicalTitleUrlSync(
+      useCallback(
+        (nextUrl: string) => {
+          navigate(nextUrl, { replace: true });
+        },
+        [navigate],
+      ),
+    );
 
   useEffect(() => {
     if (!database) {
@@ -228,6 +240,7 @@ export default function DatabasePage() {
 
     return database?.name?.trim() || t("database.editor.untitled");
   }, [database?.name, draftName, t]);
+  const resolvedSpaceId = database?.spaceId ?? space?.id;
 
   if (!databaseId || !spaceSlug) {
     return null;
@@ -235,10 +248,10 @@ export default function DatabasePage() {
 
   return (
     <>
-      {databasePageId && (
-        <AiDocumentContextSync
+      {databasePageId && resolvedSpaceId && (
+        <DeferredAiDocumentContextSync
           pageId={databasePageId}
-          spaceId={database?.spaceId ?? space?.id}
+          spaceId={resolvedSpaceId}
           spaceSlug={spaceSlug}
           title={databaseDisplayName}
           canWrite={!readOnly}
@@ -325,7 +338,9 @@ export default function DatabasePage() {
         )}
 
         {databasePageId && !isCommentsAsideOpen && (
-          <PageCommentSection pageId={databasePageId} />
+          <Suspense fallback={null}>
+            <LazyPageCommentSection pageId={databasePageId} />
+          </Suspense>
         )}
       </Container>
     </>

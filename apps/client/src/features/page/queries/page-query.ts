@@ -21,6 +21,7 @@ import {
   getDeletedPages,
   restorePage,
   convertPageToDatabase,
+  getPageReferences,
 } from "@/features/page/services/page-service";
 import {
   IMovePage,
@@ -45,6 +46,7 @@ import {
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useTranslation } from "react-i18next";
+import type { PageReference } from "@docmost/api-contract";
 import { getDefaultStore, useAtom } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SimpleTree } from "react-arborist";
@@ -119,6 +121,19 @@ export function usePageQuery(
   }, [query.data]);
 
   return query;
+}
+
+export function usePageReferencesQuery(
+  pageIds: string[],
+): UseQueryResult<PageReference[], Error> {
+  const uniqueIds = [...new Set(pageIds)].sort();
+
+  return useQuery({
+    queryKey: PAGE_QUERY_KEYS.references(uniqueIds),
+    queryFn: () => getPageReferences(uniqueIds),
+    enabled: uniqueIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 function invalidateDatabaseTreeConsistency() {
