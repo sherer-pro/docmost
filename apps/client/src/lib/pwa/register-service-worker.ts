@@ -12,6 +12,7 @@ export async function registerServiceWorker(): Promise<void> {
 
   const register = async () => {
     try {
+      const wasControlled = Boolean(navigator.serviceWorker.controller);
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
         updateViaCache: "none",
@@ -19,8 +20,9 @@ export async function registerServiceWorker(): Promise<void> {
 
       /**
        * When a new SW version is found, attach an install-state listener.
-       * Once the new worker becomes active, reload the page so the app
-       * immediately uses the fresh bundle/asset cache.
+       * Once the new worker becomes active, reload an already controlled page
+       * so the app immediately uses the fresh bundle/asset cache. A first
+       * installation must not interrupt the page that initiated it.
        */
       const observedWorkers = new WeakSet<ServiceWorker>();
       const observeWorker = (nextWorker: ServiceWorker | null) => {
@@ -36,8 +38,7 @@ export async function registerServiceWorker(): Promise<void> {
 
         nextWorker.addEventListener("statechange", () => {
           if (
-            nextWorker.state === "activated" &&
-            navigator.serviceWorker.controller
+            shouldReloadAfterWorkerActivation(nextWorker.state, wasControlled)
           ) {
             window.location.reload();
           }
@@ -65,4 +66,11 @@ export async function registerServiceWorker(): Promise<void> {
   }
 
   window.addEventListener("load", () => void register(), { once: true });
+}
+
+export function shouldReloadAfterWorkerActivation(
+  workerState: ServiceWorkerState,
+  wasControlled: boolean,
+): boolean {
+  return workerState === "activated" && wasControlled;
 }
