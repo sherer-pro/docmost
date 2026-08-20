@@ -65,6 +65,15 @@ test("accepts the checked-in release gate contract", () => {
   assert.deepEqual(validateReleaseGateContract(inputs()), []);
 });
 
+test("integration keeps the pinned live Typesense contract", () => {
+  const image =
+    "typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110";
+  const errors = validateReleaseGateContract(
+    inputs({ ciSource: ciSource.replace(image, "typesense:removed") }),
+  );
+  assert.ok(errors.includes(`integration must define ${image}`));
+});
+
 test("production smoke keeps page templates enabled in collaboration", () => {
   const marker = "docker run -d --name docmost-collab";
   const start = ciSource.indexOf(marker);
