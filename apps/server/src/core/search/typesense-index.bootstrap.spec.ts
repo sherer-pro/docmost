@@ -13,6 +13,7 @@ describe('TypesenseIndexService bootstrap reconciliation', () => {
     jest
       .spyOn(service as any, 'ensureCollections')
       .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'aliasesNeedSwitch').mockResolvedValue(false);
 
     return { service, queue };
   };

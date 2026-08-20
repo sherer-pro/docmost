@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
@@ -50,6 +51,7 @@ import { validate as isValidUuid } from 'uuid';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { DatabaseExportService } from './database-export.service';
 import type { DatabaseExportTableState } from './database-export.types';
+import { DatabaseSearchProjectionService } from './database-search-projection.service';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -123,6 +125,11 @@ export class DatabaseService {
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional()
+    private readonly databaseSearchProjection?: DatabaseSearchProjectionService,
+    @Optional()
+    @InjectQueue(QueueName.SEARCH_QUEUE)
+    private readonly searchQueue?: Queue,
   ) {}
 
   /**
@@ -1828,6 +1835,10 @@ export class DatabaseService {
       },
     });
 
+    if (propertyChanges.length > 0) {
+      await this.enqueueDatabaseSearchRefresh(databaseId, workspaceId);
+    }
+
     return updatedProperty;
   }
 
@@ -1869,6 +1880,8 @@ export class DatabaseService {
         },
       },
     });
+
+    await this.enqueueDatabaseSearchRefresh(databaseId, workspaceId);
   }
 
   /**
@@ -2345,139 +2358,159 @@ export class DatabaseService {
       }
     }
 
-    const row =
-      existingRow ??
-      (await this.databaseRowRepo.insertRow({
-        databaseId,
-        pageId,
-        workspaceId,
-        createdById: user.id,
-        updatedById: user.id,
-      }));
-
-    const previousCellsByPropertyId = new Map(
-      existingCells.map((existingCell) => [
-        existingCell.propertyId,
-        existingCell,
-      ]),
-    );
-    const cells = [];
     const historyUserNameCache = new Map<string, string>();
     const historyPageReferenceCache = new Map<
       string,
       IDatabasePageReferenceCellValue
     >();
-    const cellChanges: Array<{
-      propertyId: string;
-      propertyName: string;
-      propertyType: DatabasePropertyType | null;
-      operation: 'upsert' | 'delete';
-      oldValue: unknown;
-      newValue: unknown;
-    }> = [];
-    for (const cell of dto.cells) {
-      const property = propertyById.get(cell.propertyId);
-      const previousCell = previousCellsByPropertyId.get(cell.propertyId);
-      const previousUserId =
-        property?.type === 'user'
-          ? this.extractUserIdFromCellValue(previousCell?.value)
+    const mutation = await executeTx(this.db, async (trx) => {
+      const row =
+        existingRow ??
+        (await this.databaseRowRepo.insertRow(
+          {
+            databaseId,
+            pageId,
+            workspaceId,
+            createdById: user.id,
+            updatedById: user.id,
+          },
+          trx,
+        ));
+      const previousCellsByPropertyId = new Map(
+        existingCells.map((existingCell) => [
+          existingCell.propertyId,
+          existingCell,
+        ]),
+      );
+      const cells = [];
+      const cellChanges: Array<{
+        propertyId: string;
+        propertyName: string;
+        propertyType: DatabasePropertyType | null;
+        operation: 'upsert' | 'delete';
+        oldValue: unknown;
+        newValue: unknown;
+      }> = [];
+
+      for (const cell of dto.cells) {
+        const property = propertyById.get(cell.propertyId);
+        const previousCell = previousCellsByPropertyId.get(cell.propertyId);
+        const previousUserId =
+          property?.type === 'user'
+            ? this.extractUserIdFromCellValue(previousCell?.value)
+            : null;
+        const propertyType = property
+          ? this.normalizePropertyType(property.type)
           : null;
-      const propertyType = property
-        ? this.normalizePropertyType(property.type)
-        : null;
-      const previousValue = this.extractCurrentCellValue(previousCell?.value);
-      const oldHistoryValue = await this.resolveHistoryCellValue({
-        propertyType,
-        propertySettings: property?.settings,
-        value: previousCell?.value,
-        workspaceId,
-        userNameCache: historyUserNameCache,
-        pageReferenceCache: historyPageReferenceCache,
-      });
-
-      if (cell.operation === 'delete') {
-        const deleted = await this.databaseCellRepo.upsertCell({
-          databaseId,
-          pageId,
-          propertyId: cell.propertyId,
+        const oldHistoryValue = await this.resolveHistoryCellValue({
+          propertyType,
+          propertySettings: property?.settings,
+          value: previousCell?.value,
           workspaceId,
-          value: null,
-          attachmentId: null,
-          createdById: user.id,
-          updatedById: user.id,
+          userNameCache: historyUserNameCache,
+          pageReferenceCache: historyPageReferenceCache,
         });
 
-        const softDeleted = await this.databaseCellRepo.updateCell(deleted.id, {
-          deletedAt: new Date(),
-          value: null,
-          attachmentId: null,
-          updatedById: user.id,
-        });
+        if (cell.operation === 'delete') {
+          const deleted = await this.databaseCellRepo.upsertCell(
+            {
+              databaseId,
+              pageId,
+              propertyId: cell.propertyId,
+              workspaceId,
+              value: null,
+              attachmentId: null,
+              createdById: user.id,
+              updatedById: user.id,
+            },
+            trx,
+          );
+          const softDeleted = await this.databaseCellRepo.updateCell(
+            deleted.id,
+            {
+              deletedAt: new Date(),
+              value: null,
+              attachmentId: null,
+              updatedById: user.id,
+            },
+            trx,
+          );
+          cells.push(softDeleted);
+          cellChanges.push({
+            propertyId: cell.propertyId,
+            propertyName: property?.name ?? cell.propertyId,
+            propertyType,
+            operation: 'delete',
+            oldValue: oldHistoryValue ?? null,
+            newValue: null,
+          });
+          continue;
+        }
 
-        cells.push(softDeleted);
+        const normalizedValue = this.normalizeInputCellValue(cell.value);
+        const upserted = await this.databaseCellRepo.upsertCell(
+          {
+            databaseId,
+            pageId,
+            propertyId: cell.propertyId,
+            workspaceId,
+            value: normalizedValue as never,
+            attachmentId: cell.attachmentId ?? null,
+            createdById: user.id,
+            updatedById: user.id,
+          },
+          trx,
+        );
+
+        if (property?.type === 'user') {
+          const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
+          if (
+            nextUserId &&
+            nextUserId !== previousUserId &&
+            nextUserId !== user.id
+          ) {
+            await this.notifyDatabaseUserAssignment({
+              eventId: generateSlugId(),
+              actorId: user.id,
+              pageId,
+              spaceId: database.spaceId,
+              workspaceId,
+              recipientId: nextUserId,
+            });
+          }
+        }
+
+        previousCellsByPropertyId.set(cell.propertyId, upserted);
+        cells.push(upserted);
+        const newHistoryValue = await this.resolveHistoryCellValue({
+          propertyType,
+          propertySettings: property?.settings,
+          value: upserted.value,
+          workspaceId,
+          userNameCache: historyUserNameCache,
+          pageReferenceCache: historyPageReferenceCache,
+        });
         cellChanges.push({
           propertyId: cell.propertyId,
           propertyName: property?.name ?? cell.propertyId,
           propertyType,
-          operation: 'delete',
+          operation: 'upsert',
           oldValue: oldHistoryValue ?? null,
-          newValue: null,
+          newValue: newHistoryValue ?? null,
         });
-        continue;
       }
 
-      const normalizedValue = this.normalizeInputCellValue(cell.value);
-      const upserted = await this.databaseCellRepo.upsertCell({
-        databaseId,
-        pageId,
-        propertyId: cell.propertyId,
-        workspaceId,
-        value: normalizedValue as never,
-        attachmentId: cell.attachmentId ?? null,
-        createdById: user.id,
-        updatedById: user.id,
-      });
-
-      if (property?.type === 'user') {
-        const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
-
-        if (
-          nextUserId &&
-          nextUserId !== previousUserId &&
-          nextUserId !== user.id
-        ) {
-          await this.notifyDatabaseUserAssignment({
-            eventId: generateSlugId(),
-            actorId: user.id,
-            pageId,
-            spaceId: database.spaceId,
-            workspaceId,
-            recipientId: nextUserId,
-          });
-        }
+      if (cellChanges.length > 0) {
+        await this.databaseSearchProjection?.refreshRow(
+          pageId,
+          workspaceId,
+          trx,
+        );
       }
+      return { row, cells, cellChanges };
+    });
 
-      previousCellsByPropertyId.set(cell.propertyId, upserted);
-      cells.push(upserted);
-      const newHistoryValue = await this.resolveHistoryCellValue({
-        propertyType,
-        propertySettings: property?.settings,
-        value: upserted.value,
-        workspaceId,
-        userNameCache: historyUserNameCache,
-        pageReferenceCache: historyPageReferenceCache,
-      });
-      cellChanges.push({
-        propertyId: cell.propertyId,
-        propertyName: property?.name ?? cell.propertyId,
-        propertyType,
-        operation: 'upsert',
-        oldValue: oldHistoryValue ?? null,
-        newValue: newHistoryValue ?? null,
-      });
-    }
-
-    if (cellChanges.length > 0) {
+    if (mutation.cellChanges.length > 0) {
       await this.recordDatabaseRowHistoryEvent({
         database,
         rowPageId: pageId,
@@ -2488,12 +2521,13 @@ export class DatabaseService {
           rowContext: {
             rowPageId: pageId,
           },
-          changes: cellChanges,
+          changes: mutation.cellChanges,
         },
       });
+      await this.enqueuePageSearchRefresh(pageId);
     }
 
-    return { row, cells };
+    return { row: mutation.row, cells: mutation.cells };
   }
 
   async batchUpdateRows(
@@ -2616,6 +2650,30 @@ export class DatabaseService {
       workspaceId: params.workspaceId,
       candidateUserIds: [params.recipientId],
     } as IPageRecipientNotificationJob);
+  }
+
+  private async enqueuePageSearchRefresh(pageId: string): Promise<void> {
+    try {
+      await this.searchQueue?.add(QueueJob.PAGE_UPDATED, {
+        pageIds: [pageId],
+      });
+    } catch {
+      // Periodic reconciliation repairs a missed best-effort search wake-up.
+    }
+  }
+
+  private async enqueueDatabaseSearchRefresh(
+    databaseId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    try {
+      await this.searchQueue?.add(QueueJob.DATABASE_SEARCH_REBUILD_DATABASE, {
+        databaseId,
+        workspaceId,
+      });
+    } catch {
+      // A later reindex can rebuild the derived projection from PostgreSQL.
+    }
   }
 
   /**

@@ -231,6 +231,7 @@
 | GET | `/robots.txt` | `apps/server/src/integrations/security/robots.txt.controller.ts` |
 | POST | `/search` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/attachments` | `apps/server/src/core/search/search.controller.ts` |
+| POST | `/search/dictionary` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/share-search` | `apps/server/src/core/search/search.controller.ts` |
 | GET | `/search/suggest` | `apps/server/src/core/search/search.controller.ts` |
 | POST | `/search/tag-facets` | `apps/server/src/core/search/search.controller.ts` |

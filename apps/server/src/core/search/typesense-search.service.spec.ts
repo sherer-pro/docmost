@@ -1,4 +1,7 @@
-import { TypesenseSearchService } from './typesense-search.service';
+import {
+  isTypesenseAvailabilityError,
+  TypesenseSearchService,
+} from './typesense-search.service';
 
 describe('TypesenseSearchService', () => {
   it('keeps creator filtering and shared breadcrumb enrichment consistent', async () => {
@@ -166,5 +169,25 @@ describe('TypesenseSearchService', () => {
     ).toBe(
       '&lt;img src=x onerror=alert(1)&gt; <mark>token</mark> &lt;/script&gt;',
     );
+  });
+});
+
+describe('isTypesenseAvailabilityError', () => {
+  it.each([404, 408, 429, 500, 503])(
+    'classifies HTTP %s as an availability failure',
+    (httpStatus) => {
+      expect(isTypesenseAvailabilityError({ httpStatus })).toBe(true);
+    },
+  );
+
+  it.each([400, 401, 422])(
+    'does not mask HTTP %s request or schema failures',
+    (httpStatus) => {
+      expect(isTypesenseAvailabilityError({ httpStatus })).toBe(false);
+    },
+  );
+
+  it('classifies network failures without logging query text', () => {
+    expect(isTypesenseAvailabilityError({ code: 'ECONNREFUSED' })).toBe(true);
   });
 });

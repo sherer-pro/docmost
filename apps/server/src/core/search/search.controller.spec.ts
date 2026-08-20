@@ -6,13 +6,19 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PageAccessService } from '../page-access/page-access.service';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
-import { TypesenseSearchService } from './typesense-search.service';
+import {
+  TypesenseAvailabilityException,
+  TypesenseSearchService,
+} from './typesense-search.service';
+import { DictionarySearchService } from '../dictionary/dictionary-search.service';
+import { SearchOperationalMetricsService } from './search-operational-metrics.service';
 
 describe('SearchController', () => {
   let controller: SearchController;
   let searchService: {
     searchPage: jest.Mock;
     searchAttachments: jest.Mock;
+    searchDictionary: jest.Mock;
     getTagFacets: jest.Mock;
   };
   let typesenseSearchService: {
@@ -26,6 +32,7 @@ describe('SearchController', () => {
     searchService = {
       searchPage: jest.fn().mockResolvedValue({ items: [] }),
       searchAttachments: jest.fn().mockResolvedValue({ items: [] }),
+      searchDictionary: jest.fn().mockResolvedValue({ items: [] }),
       getTagFacets: jest.fn().mockResolvedValue({ items: [] }),
     };
     typesenseSearchService = {
@@ -50,6 +57,14 @@ describe('SearchController', () => {
         { provide: PageAccessService, useValue: pageAccessService },
         { provide: SpaceAbilityFactory, useValue: {} },
         { provide: EnvironmentService, useValue: environmentService },
+        {
+          provide: DictionarySearchService,
+          useValue: { search: jest.fn().mockResolvedValue({ items: [] }) },
+        },
+        {
+          provide: SearchOperationalMetricsService,
+          useValue: { recordFallback: jest.fn(), recordDuration: jest.fn() },
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -155,5 +170,36 @@ describe('SearchController', () => {
       'Cache-Control',
       'private, no-store',
     );
+  });
+
+  it('falls back to PostgreSQL only when Typesense is unavailable', async () => {
+    environmentService.getSearchDriver.mockReturnValue('typesense');
+    typesenseSearchService.searchPages.mockRejectedValue(
+      new TypesenseAvailabilityException('offline'),
+    );
+
+    await controller.pageSearch(
+      { query: 'policy' } as any,
+      { id: 'user-1' } as any,
+      { id: 'workspace-1' } as any,
+    );
+
+    expect(searchService.searchPage).toHaveBeenCalled();
+  });
+
+  it('does not mask invalid Typesense queries', async () => {
+    environmentService.getSearchDriver.mockReturnValue('typesense');
+    typesenseSearchService.searchPages.mockRejectedValue(
+      new Error('schema mismatch'),
+    );
+
+    await expect(
+      controller.pageSearch(
+        { query: 'policy' } as any,
+        { id: 'user-1' } as any,
+        { id: 'workspace-1' } as any,
+      ),
+    ).rejects.toThrow('schema mismatch');
+    expect(searchService.searchPage).not.toHaveBeenCalled();
   });
 });

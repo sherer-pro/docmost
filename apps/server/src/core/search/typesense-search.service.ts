@@ -1,4 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -6,9 +10,10 @@ import { sql } from 'kysely';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
-import { SearchDTO } from './dto/search.dto';
+import { DictionarySearchDTO, SearchDTO } from './dto/search.dto';
 import {
   AttachmentSearchResponseDto,
+  DictionarySearchResponseDto,
   SearchContentKind,
   SearchResponseDto,
 } from './dto/search-response.dto';
@@ -20,13 +25,18 @@ import { ShareService } from '../share/share.service';
 import { SearchService } from './search.service';
 import {
   TypesenseAttachmentDocument,
+  TypesenseDictionaryDocument,
   TypesenseIndexService,
   TypesensePageDocument,
 } from './typesense-index.service';
+import { DictionarySearchService } from '../dictionary/dictionary-search.service';
+import { DatabaseSearchProjectionService } from '../database/services/database-search-projection.service';
 
 const DEFAULT_SEARCH_LIMIT = 25;
 const TYPESENSE_FETCH_BATCH_SIZE = 100;
 const MAX_TYPESENSE_CANDIDATES = 10_000;
+
+export class TypesenseAvailabilityException extends ServiceUnavailableException {}
 
 @Injectable()
 export class TypesenseSearchService {
@@ -39,6 +49,10 @@ export class TypesenseSearchService {
     private readonly userRepo: UserRepo,
     private readonly pageAccessService: PageAccessService,
     private readonly searchService: SearchService,
+    @Optional()
+    private readonly dictionarySearchService?: DictionarySearchService,
+    @Optional()
+    private readonly databaseSearchProjection?: DatabaseSearchProjectionService,
   ) {}
 
   async searchPages(
@@ -77,8 +91,10 @@ export class TypesenseSearchService {
       const response = await this.runTypesenseRequest(() =>
         this.typesenseIndexService.searchPages({
           q: query,
-          query_by: 'title,content',
-          query_by_weights: '4,1',
+          query_by: opts.userId
+            ? 'title,content,databaseContent'
+            : 'title,content',
+          query_by_weights: opts.userId ? '8,3,2' : '8,3',
           filter_by: this.buildFilter({
             workspaceId: opts.workspaceId,
             spaceId: publicShare?.spaceId ?? searchParams.spaceId,
@@ -88,7 +104,7 @@ export class TypesenseSearchService {
           prioritize_exact_match: true,
           sort_by: '_text_match:desc,updatedAt:desc',
           highlight_fields: 'title',
-          exclude_fields: 'content',
+          exclude_fields: opts.userId ? 'content,databaseContent' : 'content',
           offset: rawOffset,
           limit: TYPESENSE_FETCH_BATCH_SIZE,
         }),
@@ -121,7 +137,7 @@ export class TypesenseSearchService {
           continue;
         }
 
-        const { textContent, space, ...publicRow } = row;
+        const { textContent, databaseSearchText, space, ...publicRow } = row;
         results.push({
           ...publicRow,
           // Anonymous share results never expose space metadata, matching the
@@ -130,6 +146,7 @@ export class TypesenseSearchService {
           rank: Number(hit.text_match ?? 0),
           highlight: this.buildAuthoritativeHighlight(query, [
             textContent,
+            ...(authUser ? [databaseSearchText] : []),
             row.title,
           ]),
           tagMatchCount: 0,
@@ -158,6 +175,19 @@ export class TypesenseSearchService {
       results,
       visiblePageIdsBySpaceId,
     );
+    if (authUser && this.databaseSearchProjection) {
+      const databaseRows = items.filter(
+        (item) => item.contentKind === 'databaseRow',
+      );
+      const matches = await this.databaseSearchProjection.buildMatches(
+        databaseRows.map((item) => item.id),
+        opts.workspaceId,
+        query,
+      );
+      for (const item of databaseRows) {
+        item.databaseMatches = matches.get(item.id);
+      }
+    }
     return {
       items: publicShare
         ? this.searchService.projectPublicShareResults(items)
@@ -262,6 +292,46 @@ export class TypesenseSearchService {
     return { items: results };
   }
 
+  async searchDictionary(
+    searchParams: DictionarySearchDTO,
+    opts: { userId: string; workspaceId: string },
+  ): Promise<{ items: DictionarySearchResponseDto[] }> {
+    const query = searchParams.query.trim();
+    if (!query || !this.dictionarySearchService) return { items: [] };
+    const candidateIds: string[] = [];
+    let rawOffset = 0;
+
+    while (rawOffset < MAX_TYPESENSE_CANDIDATES) {
+      const response = await this.runTypesenseRequest(() =>
+        this.typesenseIndexService.searchDictionary({
+          q: query,
+          query_by: 'term,forms,definitionText',
+          query_by_weights: '8,6,1',
+          num_typos: '2,2,0',
+          prefix: 'true,true,false',
+          prioritize_exact_match: true,
+          sort_by: '_text_match:desc,updatedAt:desc',
+          filter_by: this.buildFilter({
+            workspaceId: opts.workspaceId,
+            spaceId: searchParams.spaceId,
+          }),
+          exclude_fields: 'definitionText,forms',
+          offset: rawOffset,
+          limit: TYPESENSE_FETCH_BATCH_SIZE,
+        }),
+      );
+      const hits = response.hits ?? [];
+      candidateIds.push(...hits.map((hit) => hit.document.id));
+      rawOffset += hits.length;
+      if (hits.length < TYPESENSE_FETCH_BATCH_SIZE) break;
+    }
+
+    return this.dictionarySearchService.search(searchParams, {
+      ...opts,
+      candidateIds,
+    });
+  }
+
   private async loadPages(ids: string[], workspaceId: string) {
     if (ids.length === 0) {
       return [];
@@ -281,6 +351,7 @@ export class TypesenseSearchService {
         'pages.updatedAt',
         'pages.spaceId',
         'pages.textContent',
+        'pages.databaseSearchText',
       ])
       .select((eb) => this.pageRepo.withDatabaseId(eb))
       .select(
@@ -483,8 +554,50 @@ export class TypesenseSearchService {
   private async runTypesenseRequest<T>(request: () => Promise<T>): Promise<T> {
     try {
       return await request();
-    } catch {
-      throw new ServiceUnavailableException('Search service unavailable');
+    } catch (error) {
+      if (isTypesenseAvailabilityError(error)) {
+        throw new TypesenseAvailabilityException('Search service unavailable', {
+          cause: error,
+        });
+      }
+      throw error;
     }
   }
+}
+
+export function isTypesenseAvailabilityError(error: unknown): boolean {
+  const candidate = error as {
+    httpStatus?: number;
+    status?: number;
+    code?: string;
+    name?: string;
+    message?: string;
+  };
+  const status = candidate?.httpStatus ?? candidate?.status;
+  if (
+    status === 404 ||
+    status === 408 ||
+    status === 429 ||
+    (status && status >= 500)
+  ) {
+    return true;
+  }
+  const code = candidate?.code?.toUpperCase();
+  if (
+    code &&
+    [
+      'ECONNABORTED',
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+    ].includes(code)
+  ) {
+    return true;
+  }
+  return /network error|socket hang up|timed?\s*out/i.test(
+    candidate?.message ?? '',
+  );
 }

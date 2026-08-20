@@ -1,6 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
-import { sql } from 'kysely';
 import {
   RAG_KNOWLEDGE_PROJECTION_VERSION,
   type RagDocumentCustomFields,
@@ -8,6 +7,7 @@ import {
 import { Space } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { getPageAiRole } from '../page/utils/page-settings.utils';
+import { DictionarySearchService } from '../dictionary/dictionary-search.service';
 
 export interface KnowledgeDocumentFieldsConfig {
   status: boolean;
@@ -37,7 +37,11 @@ export interface KnowledgeMemberProjection {
 export class KnowledgeProjectionService {
   readonly version = RAG_KNOWLEDGE_PROJECTION_VERSION;
 
-  constructor(@InjectKysely() private readonly db: KyselyDB) {}
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    @Optional()
+    private readonly dictionarySearch?: DictionarySearchService,
+  ) {}
 
   getDocumentFieldsConfig(space: Space): KnowledgeDocumentFieldsConfig {
     const settings = this.asRecord(space.settings);
@@ -270,101 +274,10 @@ export class KnowledgeProjectionService {
     query: string;
     limit: number;
   }) {
-    const query = input.query
-      .normalize('NFKC')
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase();
-    if (!query) return [];
-
-    const normalizedQuery = sql<string>`LOWER(f_unaccent(${query}))`;
-    const normalizedAlias = sql<string>`LOWER(f_unaccent(alias.normalized_alias))`;
-    const normalizedDefinition = sql<string>`LOWER(f_unaccent(term.definition_markdown))`;
-    const prefix = `${query}%`;
-    const contains = `%${query}%`;
-    const result = await sql<{
-      id: string;
-      term: string;
-      definitionMarkdown: string;
-      forms: string[];
-      aliasScore: number | string;
-      score: number | string;
-    }>`
-      WITH alias_candidates AS (
-        SELECT
-          term.id,
-          term.term,
-          term.definition_markdown,
-          alias.alias,
-          alias.is_primary,
-          CASE
-            WHEN ${normalizedAlias} = ${normalizedQuery} AND alias.is_primary THEN 1000
-            WHEN ${normalizedAlias} = ${normalizedQuery} THEN 900
-            WHEN ${normalizedAlias} LIKE LOWER(f_unaccent(${prefix})) AND alias.is_primary THEN 800
-            WHEN ${normalizedAlias} LIKE LOWER(f_unaccent(${prefix})) THEN 700
-            WHEN ${normalizedAlias} LIKE LOWER(f_unaccent(${contains})) AND alias.is_primary THEN 600
-            WHEN ${normalizedAlias} LIKE LOWER(f_unaccent(${contains})) THEN 500
-            WHEN ${normalizedAlias} % ${normalizedQuery} AND alias.is_primary
-              THEN 400 + similarity(${normalizedAlias}, ${normalizedQuery}) * 100
-            WHEN ${normalizedAlias} % ${normalizedQuery}
-              THEN 300 + similarity(${normalizedAlias}, ${normalizedQuery}) * 100
-            ELSE 0
-          END::float8 AS alias_score,
-          (${normalizedDefinition} LIKE LOWER(f_unaccent(${contains}))) AS definition_matched
-        FROM dictionary_terms AS term
-        JOIN dictionary_term_aliases AS alias ON alias.term_id = term.id
-        JOIN spaces AS space ON space.id = term.space_id
-        WHERE term.workspace_id = ${input.workspaceId}
-          AND term.space_id = ${input.spaceId}
-          AND term.deleted_at IS NULL
-          AND space.workspace_id = ${input.workspaceId}
-          AND space.archived_at IS NULL
-          AND space.deleted_at IS NULL
-          AND COALESCE((space.settings -> 'dictionary' ->> 'enabled')::boolean, false)
-          AND (
-            ${normalizedAlias} LIKE LOWER(f_unaccent(${contains}))
-            OR ${normalizedAlias} % ${normalizedQuery}
-            OR ${normalizedDefinition} LIKE LOWER(f_unaccent(${contains}))
-          )
-      ), ranked_terms AS (
-        SELECT DISTINCT ON (candidate.id)
-          candidate.*,
-          candidate.alias_score +
-            CASE WHEN candidate.definition_matched THEN 100 ELSE 0 END AS score
-        FROM alias_candidates AS candidate
-        ORDER BY
-          candidate.id,
-          candidate.alias_score DESC,
-          candidate.is_primary DESC,
-          LOWER(candidate.alias) ASC
-      )
-      SELECT
-        ranked.id,
-        ranked.term,
-        ranked.definition_markdown AS "definitionMarkdown",
-        COALESCE(
-          (
-            SELECT ARRAY_AGG(form.alias ORDER BY form.alias)
-            FROM dictionary_term_aliases AS form
-            WHERE form.term_id = ranked.id AND NOT form.is_primary
-          ),
-          ARRAY[]::text[]
-        ) AS forms,
-        ranked.alias_score AS "aliasScore",
-        ranked.score
-      FROM ranked_terms AS ranked
-      ORDER BY ranked.score DESC, LOWER(ranked.term) ASC, ranked.id ASC
-      LIMIT ${input.limit}
-    `.execute(this.db);
-
-    return result.rows.map((row) => ({
-      id: row.id,
-      term: row.term,
-      definitionMarkdown: row.definitionMarkdown,
-      forms: row.forms,
-      score: Number(row.score),
-      exact: Number(row.aliasScore) >= 900,
-    }));
+    if (!this.dictionarySearch) {
+      throw new Error('Dictionary search service is unavailable');
+    }
+    return this.dictionarySearch.searchKnowledge(input);
   }
 
   stringifyValue(value: unknown): string {

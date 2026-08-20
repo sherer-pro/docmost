@@ -34,6 +34,8 @@ import { DictionaryTermRepo } from './repos/dictionary/dictionary-term.repo';
 import { PageListener } from '@docmost/db/listeners/page.listener';
 import { SpaceListener } from '@docmost/db/listeners/space.listener';
 import { WorkspaceListener } from '@docmost/db/listeners/workspace.listener';
+import { DictionaryListener } from '@docmost/db/listeners/dictionary.listener';
+import { DatabaseSearchListener } from '@docmost/db/listeners/database-search.listener';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { normalizePostgresUrl } from '../common/helpers';
 import { postgres } from './postgres-client';
@@ -123,6 +125,8 @@ import { QueueOutboxPersistenceModule } from './persistence/queue-outbox-persist
     PageListener,
     SpaceListener,
     WorkspaceListener,
+    DictionaryListener,
+    DatabaseSearchListener,
   ],
   exports: [
     WorkspaceRepo,

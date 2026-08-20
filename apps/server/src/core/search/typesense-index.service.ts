@@ -3,6 +3,7 @@ import {
   Logger,
   OnApplicationBootstrap,
   OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -13,9 +14,17 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import type { SearchParams } from 'typesense/lib/Typesense/Types';
 import type { SearchResponse } from 'typesense/lib/Typesense/Documents';
+import { sql } from 'kysely';
+import { DatabaseSearchProjectionService } from '../database/services/database-search-projection.service';
 
-const TYPESENSE_PAGE_COLLECTION = 'docmost_pages_v2';
-const TYPESENSE_ATTACHMENT_COLLECTION = 'docmost_attachments_v2';
+export const TYPESENSE_PAGE_ALIAS = 'docmost_pages';
+export const TYPESENSE_ATTACHMENT_ALIAS = 'docmost_attachments';
+export const TYPESENSE_DICTIONARY_ALIAS = 'docmost_dictionary_terms';
+export const TYPESENSE_PAGE_COLLECTION = 'docmost_pages_v3';
+export const TYPESENSE_ATTACHMENT_COLLECTION = 'docmost_attachments_v2';
+export const TYPESENSE_DICTIONARY_COLLECTION = 'docmost_dictionary_terms_v1';
+const TYPESENSE_GENERATION_RETENTION_MS = 24 * 60 * 60_000;
+const TYPESENSE_LEGACY_PAGE_COLLECTION = 'docmost_pages_v2';
 
 export interface TypesensePageDocument {
   id: string;
@@ -24,6 +33,7 @@ export interface TypesensePageDocument {
   creatorId: string;
   title: string;
   content: string;
+  databaseContent: string;
   updatedAt: number;
 }
 
@@ -37,11 +47,21 @@ export interface TypesenseAttachmentDocument {
   updatedAt: number;
 }
 
+export interface TypesenseDictionaryDocument {
+  id: string;
+  workspaceId: string;
+  spaceId: string;
+  term: string;
+  forms: string[];
+  definitionText: string;
+  updatedAt: number;
+}
+
 const INDEX_BATCH_SIZE = 500;
 const TYPESENSE_RECONCILIATION_INTERVAL_MS = 15 * 60_000;
 const TYPESENSE_SCHEDULER_RETRY_MS = 60_000;
 
-export type TypesenseRebuildEntity = 'pages' | 'attachments';
+export type TypesenseRebuildEntity = 'pages' | 'attachments' | 'dictionary';
 
 export interface TypesenseRebuildOptions {
   workspaceId?: string;
@@ -65,6 +85,8 @@ export class TypesenseIndexService
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.SEARCH_QUEUE)
     private readonly searchQueue: Queue,
+    @Optional()
+    private readonly databaseSearchProjection?: DatabaseSearchProjectionService,
   ) {
     this.client = this.isEnabled()
       ? new Client({
@@ -94,7 +116,7 @@ export class TypesenseIndexService
       // A full rebuild is only needed the first time a collection appears.
       // Afterwards lifecycle jobs keep the index current, so restarting the
       // server must not reindex every page and attachment again.
-      if (this.collectionsCreated) {
+      if (this.collectionsCreated || (await this.aliasesNeedSwitch())) {
         await this.enqueueRebuild('typesense-core-backfill-bootstrap');
       }
     } catch {
@@ -165,7 +187,7 @@ export class TypesenseIndexService
   ): Promise<SearchResponse<TypesensePageDocument>> {
     await this.ensureCollections();
     return this.getClient()
-      .collections<TypesensePageDocument>(TYPESENSE_PAGE_COLLECTION)
+      .collections<TypesensePageDocument>(TYPESENSE_PAGE_ALIAS)
       .documents()
       .search(params, {});
   }
@@ -175,7 +197,17 @@ export class TypesenseIndexService
   ): Promise<SearchResponse<TypesenseAttachmentDocument>> {
     await this.ensureCollections();
     return this.getClient()
-      .collections<TypesenseAttachmentDocument>(TYPESENSE_ATTACHMENT_COLLECTION)
+      .collections<TypesenseAttachmentDocument>(TYPESENSE_ATTACHMENT_ALIAS)
+      .documents()
+      .search(params, {});
+  }
+
+  async searchDictionary(
+    params: SearchParams<TypesenseDictionaryDocument>,
+  ): Promise<SearchResponse<TypesenseDictionaryDocument>> {
+    await this.ensureCollections();
+    return this.getClient()
+      .collections<TypesenseDictionaryDocument>(TYPESENSE_DICTIONARY_ALIAS)
       .documents()
       .search(params, {});
   }
@@ -184,9 +216,12 @@ export class TypesenseIndexService
     const startedAt = Date.now();
     await this.ensureCollections();
     const entities = new Set<TypesenseRebuildEntity>(
-      options.entities ?? ['pages', 'attachments'],
+      options.entities ?? ['pages', 'attachments', 'dictionary'],
     );
     if (entities.has('pages')) {
+      await this.databaseSearchProjection?.refreshWorkspace(
+        options.workspaceId,
+      );
       await this.indexAllPages(options.workspaceId);
       await this.removeStalePages(options.workspaceId);
     }
@@ -194,12 +229,41 @@ export class TypesenseIndexService
       await this.indexAllAttachments(options.workspaceId);
       await this.removeStaleAttachments(options.workspaceId);
     }
+    if (entities.has('dictionary')) {
+      await this.indexAllDictionary(options.workspaceId);
+      await this.removeStaleDictionary(options.workspaceId);
+    }
+    if (!options.workspaceId) {
+      await this.switchAliases(entities);
+    }
     this.logger.log({
       event: 'typesense_reconciliation_completed',
       durationMs: Date.now() - startedAt,
       entityCount: entities.size,
       scoped: Boolean(options.workspaceId),
     });
+  }
+
+  async cleanupGeneration(collection: string, alias: string): Promise<void> {
+    if (!collection || !alias || collection === alias) return;
+    let current: { collection_name: string };
+    try {
+      current = await this.getClient().aliases(alias).retrieve();
+    } catch (error) {
+      if (this.httpStatus(error) === 404) return;
+      throw error;
+    }
+    if (current.collection_name === collection) return;
+    try {
+      await this.getClient().collections(collection).delete();
+      this.logger.log({
+        event: 'typesense_generation_removed',
+        alias,
+        collection,
+      });
+    } catch (error) {
+      if (this.httpStatus(error) !== 404) throw error;
+    }
   }
 
   async reconcilePages(pageIds: string[]): Promise<void> {
@@ -219,6 +283,7 @@ export class TypesenseIndexService
         'pages.creatorId',
         'pages.title',
         'pages.textContent',
+        'pages.databaseSearchText',
         'pages.updatedAt',
       ])
       .where('pages.id', 'in', uniqueIds)
@@ -285,12 +350,108 @@ export class TypesenseIndexService
     );
   }
 
+  async reconcileDictionaryTerms(termIds: string[]): Promise<void> {
+    if (termIds.length === 0) return;
+    await this.ensureCollections();
+    const uniqueIds = [...new Set(termIds)];
+    const terms = await this.db
+      .selectFrom('dictionaryTerms')
+      .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
+      .select([
+        'dictionaryTerms.id',
+        'dictionaryTerms.workspaceId',
+        'dictionaryTerms.spaceId',
+        'dictionaryTerms.term',
+        'dictionaryTerms.definitionMarkdown',
+        'dictionaryTerms.updatedAt',
+      ])
+      .where('dictionaryTerms.id', 'in', uniqueIds)
+      .where('dictionaryTerms.deletedAt', 'is', null)
+      .where('spaces.archivedAt', 'is', null)
+      .where('spaces.deletedAt', 'is', null)
+      .where(
+        sql<boolean>`COALESCE((spaces.settings -> 'dictionary' ->> 'enabled')::boolean, false)`,
+        '=',
+        true,
+      )
+      .execute();
+    const aliases =
+      terms.length > 0
+        ? await this.db
+            .selectFrom('dictionaryTermAliases')
+            .select(['termId', 'alias'])
+            .where(
+              'termId',
+              'in',
+              terms.map((term) => term.id),
+            )
+            .where('isPrimary', '=', false)
+            .orderBy('alias', 'asc')
+            .execute()
+        : [];
+    const formsByTerm = new Map<string, string[]>();
+    for (const alias of aliases) {
+      const forms = formsByTerm.get(alias.termId) ?? [];
+      forms.push(alias.alias);
+      formsByTerm.set(alias.termId, forms);
+    }
+    await this.upsertDictionary(
+      terms.map((term) => this.toDictionaryDocument(term, formsByTerm)),
+    );
+    const indexedIds = new Set(terms.map((term) => term.id));
+    await this.deleteDocumentsByIds(
+      TYPESENSE_DICTIONARY_COLLECTION,
+      uniqueIds.filter((id) => !indexedIds.has(id)),
+    );
+  }
+
+  async reconcileDictionarySpace(spaceId: string): Promise<void> {
+    await this.ensureCollections();
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('id')
+      .where('id', '=', spaceId)
+      .where('archivedAt', 'is', null)
+      .where('deletedAt', 'is', null)
+      .where(
+        sql<boolean>`COALESCE((settings -> 'dictionary' ->> 'enabled')::boolean, false)`,
+        '=',
+        true,
+      )
+      .executeTakeFirst();
+    if (!space) {
+      await this.deleteByFilter(
+        TYPESENSE_DICTIONARY_COLLECTION,
+        `spaceId:=${this.filterValue(spaceId)}`,
+      );
+      return;
+    }
+
+    let cursor: string | null = null;
+    while (true) {
+      let query = this.db
+        .selectFrom('dictionaryTerms')
+        .select('id')
+        .where('spaceId', '=', spaceId)
+        .where('deletedAt', 'is', null)
+        .orderBy('id', 'asc')
+        .limit(INDEX_BATCH_SIZE);
+      if (cursor) query = query.where('id', '>', cursor);
+      const terms = await query.execute();
+      if (terms.length === 0) break;
+      await this.reconcileDictionaryTerms(terms.map((term) => term.id));
+      cursor = terms.at(-1).id;
+    }
+    await this.removeStaleDictionary(undefined, spaceId);
+  }
+
   async removeSpace(spaceId: string): Promise<void> {
     await this.ensureCollections();
     const filter = `spaceId:=${this.filterValue(spaceId)}`;
     await Promise.all([
       this.deleteByFilter(TYPESENSE_PAGE_COLLECTION, filter),
       this.deleteByFilter(TYPESENSE_ATTACHMENT_COLLECTION, filter),
+      this.deleteByFilter(TYPESENSE_DICTIONARY_COLLECTION, filter),
     ]);
   }
 
@@ -324,11 +485,12 @@ export class TypesenseIndexService
 
       const pages = await query.execute();
       if (pages.length === 0) {
-        return;
+        break;
       }
       await this.reconcilePages(pages.map((page) => page.id));
       cursor = pages.at(-1).id;
     }
+    await this.reconcileDictionarySpace(spaceId);
   }
 
   async removeWorkspace(workspaceId: string): Promise<void> {
@@ -337,6 +499,7 @@ export class TypesenseIndexService
     await Promise.all([
       this.deleteByFilter(TYPESENSE_PAGE_COLLECTION, filter),
       this.deleteByFilter(TYPESENSE_ATTACHMENT_COLLECTION, filter),
+      this.deleteByFilter(TYPESENSE_DICTIONARY_COLLECTION, filter),
     ]);
   }
 
@@ -354,6 +517,7 @@ export class TypesenseIndexService
           'pages.creatorId',
           'pages.title',
           'pages.textContent',
+          'pages.databaseSearchText',
           'pages.updatedAt',
         ])
         .where('pages.deletedAt', 'is', null)
@@ -424,6 +588,34 @@ export class TypesenseIndexService
     }
   }
 
+  private async indexAllDictionary(workspaceId?: string): Promise<void> {
+    let cursor: string | null = null;
+    while (true) {
+      let query = this.db
+        .selectFrom('dictionaryTerms')
+        .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
+        .select('dictionaryTerms.id')
+        .where('dictionaryTerms.deletedAt', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null)
+        .where(
+          sql<boolean>`COALESCE((spaces.settings -> 'dictionary' ->> 'enabled')::boolean, false)`,
+          '=',
+          true,
+        )
+        .$if(Boolean(workspaceId), (qb) =>
+          qb.where('dictionaryTerms.workspaceId', '=', workspaceId!),
+        )
+        .orderBy('dictionaryTerms.id', 'asc')
+        .limit(INDEX_BATCH_SIZE);
+      if (cursor) query = query.where('dictionaryTerms.id', '>', cursor);
+      const terms = await query.execute();
+      if (terms.length === 0) return;
+      await this.reconcileDictionaryTerms(terms.map((term) => term.id));
+      cursor = terms.at(-1).id;
+    }
+  }
+
   private async indexAttachmentsForPageIds(pageIds: string[]): Promise<void> {
     if (pageIds.length === 0) {
       return;
@@ -455,6 +647,178 @@ export class TypesenseIndexService
     );
   }
 
+  private async aliasesNeedSwitch(): Promise<boolean> {
+    const expected = [
+      [TYPESENSE_PAGE_ALIAS, TYPESENSE_PAGE_COLLECTION],
+      [TYPESENSE_ATTACHMENT_ALIAS, TYPESENSE_ATTACHMENT_COLLECTION],
+      [TYPESENSE_DICTIONARY_ALIAS, TYPESENSE_DICTIONARY_COLLECTION],
+    ] as const;
+    for (const [alias, collection] of expected) {
+      try {
+        const current = await this.getClient().aliases(alias).retrieve();
+        if (current.collection_name !== collection) return true;
+      } catch (error) {
+        if (this.httpStatus(error) === 404) return true;
+        throw error;
+      }
+    }
+    return false;
+  }
+
+  private async switchAliases(
+    entities: Set<TypesenseRebuildEntity>,
+  ): Promise<void> {
+    const mappings: Array<[TypesenseRebuildEntity, string, string]> = [
+      ['pages', TYPESENSE_PAGE_ALIAS, TYPESENSE_PAGE_COLLECTION],
+      [
+        'attachments',
+        TYPESENSE_ATTACHMENT_ALIAS,
+        TYPESENSE_ATTACHMENT_COLLECTION,
+      ],
+      [
+        'dictionary',
+        TYPESENSE_DICTIONARY_ALIAS,
+        TYPESENSE_DICTIONARY_COLLECTION,
+      ],
+    ];
+    for (const [entity, alias, collection] of mappings) {
+      if (!entities.has(entity)) continue;
+      const metadata = await this.getClient()
+        .collections(collection)
+        .retrieve();
+      await this.validateGeneration(entity, collection, metadata.num_documents);
+      let previous: string | undefined;
+      try {
+        previous = (await this.getClient().aliases(alias).retrieve())
+          .collection_name;
+      } catch (error) {
+        if (this.httpStatus(error) !== 404) throw error;
+      }
+      if (!previous && entity === 'pages') {
+        try {
+          await this.getClient()
+            .collections(TYPESENSE_LEGACY_PAGE_COLLECTION)
+            .retrieve();
+          previous = TYPESENSE_LEGACY_PAGE_COLLECTION;
+        } catch (error) {
+          if (this.httpStatus(error) !== 404) throw error;
+        }
+      }
+      await this.getClient().aliases().upsert(alias, {
+        collection_name: collection,
+      });
+      this.logger.log({
+        event: 'typesense_alias_switched',
+        alias,
+        collection,
+        documentCount: metadata.num_documents,
+      });
+      if (previous && previous !== collection) {
+        await this.searchQueue.add(
+          QueueJob.TYPESENSE_CLEANUP_GENERATION,
+          { alias, collection: previous },
+          {
+            jobId: `typesense-cleanup-${alias}-${previous}`,
+            delay: TYPESENSE_GENERATION_RETENTION_MS,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 60_000 },
+            removeOnComplete: true,
+            removeOnFail: 20,
+          },
+        );
+      }
+    }
+  }
+
+  private async validateGeneration(
+    entity: TypesenseRebuildEntity,
+    collection: string,
+    documentCount: number,
+  ): Promise<void> {
+    let countQuery;
+    let sampleQuery;
+    if (entity === 'pages') {
+      countQuery = this.db
+        .selectFrom('pages')
+        .innerJoin('spaces', 'spaces.id', 'pages.spaceId')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null);
+      sampleQuery = this.db
+        .selectFrom('pages')
+        .innerJoin('spaces', 'spaces.id', 'pages.spaceId')
+        .select('pages.id')
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null)
+        .orderBy('pages.id', 'asc');
+    } else if (entity === 'attachments') {
+      countQuery = this.db
+        .selectFrom('attachments')
+        .innerJoin('pages', 'pages.id', 'attachments.pageId')
+        .innerJoin('spaces', 'spaces.id', 'attachments.spaceId')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('attachments.deletedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null);
+      sampleQuery = this.db
+        .selectFrom('attachments')
+        .innerJoin('pages', 'pages.id', 'attachments.pageId')
+        .innerJoin('spaces', 'spaces.id', 'attachments.spaceId')
+        .select('attachments.id')
+        .where('attachments.deletedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.templateKind', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null)
+        .orderBy('attachments.id', 'asc');
+    } else {
+      const enabled = sql<boolean>`COALESCE((spaces.settings -> 'dictionary' ->> 'enabled')::boolean, false)`;
+      countQuery = this.db
+        .selectFrom('dictionaryTerms')
+        .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('dictionaryTerms.deletedAt', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null)
+        .where(enabled, '=', true);
+      sampleQuery = this.db
+        .selectFrom('dictionaryTerms')
+        .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
+        .select('dictionaryTerms.id')
+        .where('dictionaryTerms.deletedAt', 'is', null)
+        .where('spaces.archivedAt', 'is', null)
+        .where('spaces.deletedAt', 'is', null)
+        .where(enabled, '=', true)
+        .orderBy('dictionaryTerms.id', 'asc');
+    }
+    const [countRow, sample] = await Promise.all([
+      countQuery.executeTakeFirstOrThrow(),
+      sampleQuery.limit(3).execute(),
+    ]);
+    const expected = Number(countRow.count);
+    if (expected !== documentCount) {
+      this.logger.error({
+        event: 'typesense_generation_count_mismatch',
+        entity,
+        expected,
+        actual: documentCount,
+      });
+      throw new Error(`Typesense ${entity} generation count mismatch`);
+    }
+    for (const row of sample) {
+      await this.getClient()
+        .collections(collection)
+        .documents(row.id)
+        .retrieve();
+    }
+  }
+
   private async ensureCollections(): Promise<void> {
     if (!this.client) {
       throw new Error('Typesense search is not enabled');
@@ -481,6 +845,7 @@ export class TypesenseIndexService
         { name: 'creatorId', type: 'string', facet: true },
         { name: 'title', type: 'string', locale },
         { name: 'content', type: 'string', locale },
+        { name: 'databaseContent', type: 'string', locale },
         { name: 'updatedAt', type: 'int64', sort: true },
       ],
       default_sorting_field: 'updatedAt',
@@ -494,6 +859,19 @@ export class TypesenseIndexService
         { name: 'pageId', type: 'string', facet: true },
         { name: 'fileName', type: 'string', locale },
         { name: 'content', type: 'string', locale },
+        { name: 'updatedAt', type: 'int64', sort: true },
+      ],
+      default_sorting_field: 'updatedAt',
+    });
+    await this.ensureCollection({
+      name: TYPESENSE_DICTIONARY_COLLECTION,
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'workspaceId', type: 'string', facet: true },
+        { name: 'spaceId', type: 'string', facet: true },
+        { name: 'term', type: 'string', locale },
+        { name: 'forms', type: 'string[]', locale },
+        { name: 'definitionText', type: 'string', locale },
         { name: 'updatedAt', type: 'int64', sort: true },
       ],
       default_sorting_field: 'updatedAt',
@@ -539,6 +917,16 @@ export class TypesenseIndexService
     }
     await this.getClient()
       .collections<TypesenseAttachmentDocument>(TYPESENSE_ATTACHMENT_COLLECTION)
+      .documents()
+      .import(documents, { action: 'upsert', throwOnFail: true });
+  }
+
+  private async upsertDictionary(
+    documents: TypesenseDictionaryDocument[],
+  ): Promise<void> {
+    if (documents.length === 0) return;
+    await this.getClient()
+      .collections<TypesenseDictionaryDocument>(TYPESENSE_DICTIONARY_COLLECTION)
       .documents()
       .import(documents, { action: 'upsert', throwOnFail: true });
   }
@@ -619,19 +1007,54 @@ export class TypesenseIndexService
     );
   }
 
+  private async removeStaleDictionary(
+    workspaceId?: string,
+    spaceId?: string,
+  ): Promise<void> {
+    await this.forEachExportedIdBatch(
+      TYPESENSE_DICTIONARY_COLLECTION,
+      async (ids) => {
+        const rows = await this.db
+          .selectFrom('dictionaryTerms')
+          .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
+          .select('dictionaryTerms.id')
+          .where('dictionaryTerms.id', 'in', ids)
+          .where('dictionaryTerms.deletedAt', 'is', null)
+          .where('spaces.archivedAt', 'is', null)
+          .where('spaces.deletedAt', 'is', null)
+          .where(
+            sql<boolean>`COALESCE((spaces.settings -> 'dictionary' ->> 'enabled')::boolean, false)`,
+            '=',
+            true,
+          )
+          .execute();
+        const activeIds = new Set(rows.map((row) => row.id));
+        await this.deleteDocumentsByIds(
+          TYPESENSE_DICTIONARY_COLLECTION,
+          ids.filter((id) => !activeIds.has(id)),
+        );
+      },
+      workspaceId,
+      spaceId,
+    );
+  }
+
   private async forEachExportedIdBatch(
     collection: string,
     callback: (ids: string[]) => Promise<void>,
     workspaceId?: string,
+    spaceId?: string,
   ): Promise<void> {
+    const filters = [
+      workspaceId ? `workspaceId:=${this.filterValue(workspaceId)}` : undefined,
+      spaceId ? `spaceId:=${this.filterValue(spaceId)}` : undefined,
+    ].filter(Boolean) as string[];
     const stream = await this.getClient()
       .collections(collection)
       .documents()
       .exportStream({
         include_fields: 'id',
-        ...(workspaceId
-          ? { filter_by: `workspaceId:=${this.filterValue(workspaceId)}` }
-          : {}),
+        ...(filters.length > 0 ? { filter_by: filters.join(' && ') } : {}),
       });
     let remainder = '';
     let ids: string[] = [];
@@ -687,6 +1110,7 @@ export class TypesenseIndexService
     creatorId: string | null;
     title: string | null;
     textContent: string | null;
+    databaseSearchText: string;
     updatedAt: Date;
   }): TypesensePageDocument {
     return {
@@ -696,6 +1120,29 @@ export class TypesenseIndexService
       creatorId: row.creatorId ?? '',
       title: row.title ?? '',
       content: row.textContent ?? '',
+      databaseContent: row.databaseSearchText ?? '',
+      updatedAt: Math.floor(row.updatedAt.getTime() / 1000),
+    };
+  }
+
+  private toDictionaryDocument(
+    row: {
+      id: string;
+      workspaceId: string;
+      spaceId: string;
+      term: string;
+      definitionMarkdown: string;
+      updatedAt: Date;
+    },
+    formsByTerm: Map<string, string[]>,
+  ): TypesenseDictionaryDocument {
+    return {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      spaceId: row.spaceId,
+      term: row.term,
+      forms: formsByTerm.get(row.id) ?? [],
+      definitionText: this.stripMarkdown(row.definitionMarkdown),
       updatedAt: Math.floor(row.updatedAt.getTime() / 1000),
     };
   }
@@ -722,6 +1169,18 @@ export class TypesenseIndexService
 
   private filterValue(value: string): string {
     return `\`${value.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
+  }
+
+  private stripMarkdown(value: string): string {
+    return value
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/[>*_~|-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private getClient(): Client {
