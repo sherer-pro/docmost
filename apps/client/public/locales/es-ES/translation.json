@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Abrir coincidencia de etiqueta {{index}} en {{title}}",
   "+{{count}} more tag matches": "+{{count}} coincidencias de etiquetas más",
   "Tag actions": "Acciones de etiqueta",
-  "Find this tag in the space": "Buscar esta etiqueta en el espacio"
+  "Find this tag in the space": "Buscar esta etiqueta en el espacio",
+  "Show all": "Mostrar todo",
+  "Word form": "Forma de palabra",
+  "Matched form": "Forma coincidente",
+  "Open in Dictionary": "Abrir en el diccionario",
+  "Unable to load dictionary term.": "No se pudo cargar el término del diccionario.",
+  "This search section is temporarily unavailable.": "Esta sección de búsqueda no está disponible temporalmente."
 }

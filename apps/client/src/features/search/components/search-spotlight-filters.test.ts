@@ -10,10 +10,19 @@ import {
 
 describe("getSearchContentTypeOptions", () => {
   it("names the page, database, and row scope as documents", () => {
-    expect(getSearchContentTypeOptions((value) => value)[0]).toEqual({
+    expect(getSearchContentTypeOptions((value) => value)[1]).toEqual({
       value: "page",
       label: "Documents",
     });
+  });
+
+  it("starts with All and exposes Dictionary as a separate type", () => {
+    expect(getSearchContentTypeOptions((value) => value)).toEqual([
+      { value: "all", label: "All" },
+      { value: "page", label: "Documents" },
+      { value: "attachment", label: "Attachments" },
+      { value: "dictionary", label: "Dictionary" },
+    ]);
   });
 
   it("exposes attachments without feature-gating metadata", () => {
@@ -83,6 +92,19 @@ describe("getSearchFilterPayload", () => {
       labelId: null,
       tags: [],
     });
+  });
+
+  it("keeps document filters out of All and Dictionary search", () => {
+    for (const contentType of ["all", "dictionary"]) {
+      expect(
+        getSearchFilterPayload({
+          spaceId: null,
+          contentType,
+          label: { id: "label-1", name: "urgent" },
+          tags: ["todo"],
+        }),
+      ).toMatchObject({ contentType, labelId: null, tags: [] });
+    }
   });
 });
 

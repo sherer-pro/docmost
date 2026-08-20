@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Tagtreffer {{index}} in {{title}} openen",
   "+{{count}} more tag matches": "+{{count}} meer tagtreffers",
   "Tag actions": "Tagacties",
-  "Find this tag in the space": "Deze tag in de ruimte zoeken"
+  "Find this tag in the space": "Deze tag in de ruimte zoeken",
+  "Show all": "Alles tonen",
+  "Word form": "Woordvorm",
+  "Matched form": "Overeenkomende vorm",
+  "Open in Dictionary": "Openen in woordenboek",
+  "Unable to load dictionary term.": "Het woordenboekitem kon niet worden geladen.",
+  "This search section is temporarily unavailable.": "Deze zoeksectie is tijdelijk niet beschikbaar."
 }

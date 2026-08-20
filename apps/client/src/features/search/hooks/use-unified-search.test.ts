@@ -23,6 +23,11 @@ describe("getUnifiedSearchType", () => {
     expect(getUnifiedSearchType("attachment")).toBe("attachment");
   });
 
+  it("routes Dictionary and All without treating them as documents", () => {
+    expect(getUnifiedSearchType("dictionary")).toBe("dictionary");
+    expect(getUnifiedSearchType("all")).toBe("all");
+  });
+
   it("defaults non-attachment content types to page search", () => {
     expect(getUnifiedSearchType("page")).toBe("page");
     expect(getUnifiedSearchType(undefined)).toBe("page");
@@ -71,6 +76,16 @@ describe("getUnifiedSearchType", () => {
       query: "report",
       spaceId: "space-1",
     });
+  });
+
+  it("requires text for Dictionary search", () => {
+    expect(
+      isUnifiedSearchEnabled({
+        query: "",
+        contentType: "dictionary",
+        labelId: "label-1",
+      }),
+    ).toBe(false);
   });
 });
 

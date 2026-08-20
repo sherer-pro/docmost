@@ -1,5 +1,7 @@
 import type { BuiltInTagValue } from "@docmost/editor-ext";
 
+export const OPEN_TAGS: BuiltInTagValue[] = ["tbd", "todo"];
+
 export interface SelectedSearchLabel {
   id: string;
   name: string;
@@ -66,7 +68,7 @@ export function getSearchFilterPayload({
   label,
   tags,
 }: SearchFilterPayloadInput): SearchFilterPayload {
-  const supportsPageFilters = contentType !== "attachment";
+  const supportsPageFilters = contentType === "page";
 
   return {
     spaceId,

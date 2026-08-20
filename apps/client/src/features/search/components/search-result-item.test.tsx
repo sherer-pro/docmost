@@ -284,4 +284,56 @@ describe("SearchResultItem", () => {
       buildPageUrl("engineering", "slug-5", "Tagged Page", "block-1"),
     );
   });
+
+  it("renders database property names with safe highlighted cell fragments", () => {
+    const result = {
+      id: "row-page-1",
+      title: "Customer row",
+      icon: "",
+      parentPageId: null,
+      databaseId: "database-1",
+      contentKind: "databaseRow" as const,
+      slugId: "customer-row",
+      creatorId: "user-1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      rank: 1,
+      highlight: "",
+      tagMatchCount: 0,
+      tagSnippets: [],
+      databaseMatches: [
+        {
+          propertyId: "property-1",
+          propertyName: "Customer",
+          text: "Acme alpha account",
+          matches: [{ start: 5, end: 10, value: "alpha" }],
+        },
+      ],
+      space: {
+        id: "space-1",
+        name: "Engineering",
+        slug: "engineering",
+      },
+    };
+
+    const element = SearchResultItem({
+      result,
+      isAttachmentResult: false,
+    });
+    const children = React.Children.toArray(element.props.children) as any[];
+    const databaseMatchElement = React.Children.toArray(
+      children[1].props.children,
+    )[0] as any;
+    const databaseMatch = databaseMatchElement.type(databaseMatchElement.props);
+    const matchChildren = React.Children.toArray(
+      databaseMatch.props.children,
+    ) as any[];
+
+    expect(matchChildren[0].props.children).toEqual(["Customer", ":", " "]);
+    expect(
+      React.Children.toArray(matchChildren[1].props.children).some(
+        (node: any) => node.type === "mark" && node.props.children === "alpha",
+      ),
+    ).toBe(true);
+  });
 });

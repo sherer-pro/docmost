@@ -36,6 +36,7 @@ import {
 import type { IPageSearchLabel } from "../types/search.types";
 import {
   getSearchFilterPayload,
+  OPEN_TAGS,
   sameSearchTags,
   shouldClearUnavailableSearchTags,
   shouldShowSearchTagFilter,
@@ -52,9 +53,8 @@ interface SearchSpotlightFiltersProps {
   opened: boolean;
   intent?: SearchSpotlightIntent | null;
   clearTagsRequest?: number;
+  contentTypeRequest?: { value: string; sequence: number };
 }
-
-const OPEN_TAGS: BuiltInTagValue[] = ["tbd", "todo"];
 
 export function SearchSpotlightFilters({
   onFiltersChange,
@@ -63,6 +63,7 @@ export function SearchSpotlightFilters({
   opened,
   intent,
   clearTagsRequest = 0,
+  contentTypeRequest,
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
@@ -70,14 +71,14 @@ export function SearchSpotlightFilters({
   );
   const [spaceSearchQuery, setSpaceSearchQuery] = useState("");
   const [debouncedSpaceQuery] = useDebouncedValue(spaceSearchQuery, 300);
-  const [contentType, setContentType] = useState<string | null>("page");
+  const [contentType, setContentType] = useState<string | null>("all");
   const [selectedLabel, setSelectedLabel] =
     useState<SelectedSearchLabel | null>(null);
   const [selectedTags, setSelectedTags] = useState<BuiltInTagValue[]>([]);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
   const lastClearTagsRequest = useRef(clearTagsRequest);
-  const arePageFiltersDisabled = contentType === "attachment";
+  const arePageFiltersDisabled = contentType !== "page";
   const isLabelFilterDisabled = arePageFiltersDisabled || !selectedSpaceId;
 
   const { data: spacesData } = useGetSpacesQuery({
@@ -258,26 +259,38 @@ export function SearchSpotlightFilters({
   const handleContentTypeSelect = (nextContentType: string) => {
     if (contentType === nextContentType) return;
 
-    const nextLabel = nextContentType === "attachment" ? null : selectedLabel;
-    const nextTags = nextContentType === "attachment" ? [] : selectedTags;
+    const supportsPageFilters = nextContentType === "page";
+    const nextLabel = supportsPageFilters ? selectedLabel : null;
+    const nextTags = supportsPageFilters ? selectedTags : [];
     setContentType(nextContentType);
     setSelectedLabel(nextLabel);
     setSelectedTags(nextTags);
-    if (selectedTags.length > 0 && nextContentType === "attachment") {
+    if (selectedTags.length > 0 && !supportsPageFilters) {
       notifyTagReset();
     }
     emitFilters(selectedSpaceId, nextContentType, nextLabel, nextTags);
   };
 
   const handleLabelSelect = (label: SelectedSearchLabel | null) => {
+    const nextContentType =
+      label && contentType !== "page" ? "page" : contentType;
+    if (nextContentType !== contentType) setContentType(nextContentType);
     setSelectedLabel(label);
-    emitFilters(selectedSpaceId, contentType, label, selectedTags);
+    emitFilters(selectedSpaceId, nextContentType, label, selectedTags);
   };
 
   const handleTagsSelect = (tags: BuiltInTagValue[]) => {
+    const nextContentType =
+      tags.length > 0 && contentType !== "page" ? "page" : contentType;
+    if (nextContentType !== contentType) setContentType(nextContentType);
     setSelectedTags(tags);
-    emitFilters(selectedSpaceId, contentType, selectedLabel, tags);
+    emitFilters(selectedSpaceId, nextContentType, selectedLabel, tags);
   };
+
+  useEffect(() => {
+    if (!contentTypeRequest) return;
+    handleContentTypeSelect(contentTypeRequest.value);
+  }, [contentTypeRequest?.sequence]);
 
   const toggleTag = (tag: BuiltInTagValue) => {
     handleTagsSelect(
@@ -534,7 +547,7 @@ export function SearchSpotlightFilters({
             fw={500}
           >
             {contentType
-              ? `${t("Type")}: ${contentTypeOptions.find((option) => option.value === contentType)?.label || t(contentType === "page" ? "Documents" : "Attachments")}`
+              ? `${t("Type")}: ${contentTypeOptions.find((option) => option.value === contentType)?.label || t("All")}`
               : t("Type")}
           </Button>
         </Menu.Target>

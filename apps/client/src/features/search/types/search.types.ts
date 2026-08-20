@@ -31,15 +31,23 @@ export interface IPageSearch {
   highlight: string;
   tagMatchCount: number;
   tagSnippets: ITagSearchSnippet[];
+  databaseMatches?: IDatabaseSearchMatch[];
   breadcrumbs?: IPageSearchBreadcrumb[];
   labels?: IPageSearchLabel[];
   space: Partial<ISpace>;
 }
 
-interface ITagSearchMatch {
+export interface ITagSearchMatch {
   start: number;
   end: number;
   value: string;
+}
+
+export interface IDatabaseSearchMatch {
+  propertyId: string;
+  propertyName: string;
+  text: string;
+  matches: ITagSearchMatch[];
 }
 
 export interface ITagSearchSnippet {
@@ -77,6 +85,28 @@ export interface IPageSearchParams {
   tags?: BuiltInTagValue[];
   limit?: number;
   offset?: number;
+}
+
+export interface IDictionarySearchParams {
+  query: string;
+  spaceId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface IDictionarySearch {
+  id: string;
+  term: string;
+  matchedField: "term" | "form" | "definition";
+  matchedForm?: string;
+  snippet: ITagSearchSnippet;
+  rank: number;
+  space: {
+    id: string;
+    name: string;
+    slug: string;
+    icon: string | null;
+  };
 }
 
 export interface SearchTagFacetParams {
