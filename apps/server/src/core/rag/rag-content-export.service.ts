@@ -19,9 +19,12 @@ import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
 import { ExportService } from '../../integrations/export/export.service';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
-import { getPageAiRole } from '../page/utils/page-settings.utils';
 import { PageAccessService } from '../page-access/page-access.service';
 import { AiContentPolicyService } from '../ai-content-policy/ai-content-policy.service';
+import {
+  KnowledgeDocumentFieldsConfig,
+  KnowledgeProjectionService,
+} from './knowledge-projection.service';
 
 export interface RagAuthContext {
   user: User;
@@ -36,13 +39,6 @@ export interface RagSystemContext {
 }
 
 export type RagReadContext = RagAuthContext | RagSystemContext;
-
-interface RagDocumentFieldsConfig {
-  status: boolean;
-  assignee: boolean;
-  stakeholders: boolean;
-  aiRole: boolean;
-}
 
 type RagFeedPagination = {
   limit?: number;
@@ -83,6 +79,7 @@ export class RagContentExportService {
     private readonly exportService: ExportService,
     private readonly pageAccessService: PageAccessService,
     private readonly contentPolicy: AiContentPolicyService,
+    private readonly projection: KnowledgeProjectionService,
   ) {}
 
   /**
@@ -128,18 +125,16 @@ export class RagContentExportService {
       systemContext
         ? Promise.resolve(undefined)
         : this.getReadablePageIds(scope),
-      systemContext
-        ? Promise.resolve(undefined)
-        : this.db
-            .selectFrom('aiSpaceConfigs')
-            .select([
-              'retrievalAdapter',
-              'retrievalOpenWebuiBaseUrl',
-              'retrievalOpenWebuiKnowledgeId',
-            ])
-            .where('workspaceId', '=', scope.workspace.id)
-            .where('spaceId', '=', scope.space.id)
-            .executeTakeFirst(),
+      this.db
+        .selectFrom('aiSpaceConfigs')
+        .select([
+          'retrievalAdapter',
+          'retrievalOpenWebuiBaseUrl',
+          'retrievalOpenWebuiKnowledgeId',
+        ])
+        .where('workspaceId', '=', scope.workspace.id)
+        .where('spaceId', '=', scope.space.id)
+        .executeTakeFirst(),
     ]);
     const syncTarget =
       aiConfig?.retrievalAdapter === 'open-webui-knowledge-v1' &&
@@ -155,6 +150,7 @@ export class RagContentExportService {
       .update(
         JSON.stringify({
           schemaVersion: 2,
+          ...this.projection.fingerprintInput(scope.space),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
           syncTarget,
@@ -167,6 +163,7 @@ export class RagContentExportService {
       .digest('hex');
     return {
       schemaVersion: 2 as const,
+      projectionVersion: this.projection.version,
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget,
@@ -261,49 +258,15 @@ export class RagContentExportService {
       : rows;
   }
 
-  private getDocumentFieldsConfig(space: Space): RagDocumentFieldsConfig {
-    const documentFields = (space?.settings as any)?.documentFields ?? {};
-
-    return {
-      status: Boolean(documentFields.status),
-      assignee: Boolean(documentFields.assignee),
-      stakeholders: Boolean(documentFields.stakeholders),
-      aiRole: Boolean(documentFields.aiRole),
-    };
+  private getDocumentFieldsConfig(space: Space): KnowledgeDocumentFieldsConfig {
+    return this.projection.getDocumentFieldsConfig(space);
   }
 
   private buildCustomFields(
     settings: unknown,
-    docFields: RagDocumentFieldsConfig,
-  ): Record<string, unknown> | undefined {
-    const normalized = settings && typeof settings === 'object' ? settings : {};
-    const customFields: Record<string, unknown> = {};
-
-    if (docFields.status) {
-      customFields.status =
-        typeof normalized['status'] === 'string' ? normalized['status'] : null;
-    }
-
-    if (docFields.assignee) {
-      customFields.assigneeId =
-        typeof normalized['assigneeId'] === 'string'
-          ? normalized['assigneeId']
-          : null;
-    }
-
-    if (docFields.stakeholders) {
-      customFields.stakeholderIds = Array.isArray(normalized['stakeholderIds'])
-        ? normalized['stakeholderIds']
-            .filter((entry: unknown) => typeof entry === 'string')
-            .filter(Boolean)
-        : [];
-    }
-
-    if (docFields.aiRole) {
-      customFields.aiRole = getPageAiRole(normalized);
-    }
-
-    return Object.keys(customFields).length > 0 ? customFields : undefined;
+    docFields: KnowledgeDocumentFieldsConfig,
+  ) {
+    return this.projection.buildCustomFields(settings, docFields);
   }
 
   private toMarkdown(content: unknown): string | null {
@@ -510,6 +473,7 @@ export class RagContentExportService {
               'position',
               'settings',
               'content',
+              'updatedAt',
             ])
             .where('id', 'in', rowPageIds)
             .where('spaceId', '=', scope.space.id)
@@ -518,10 +482,49 @@ export class RagContentExportService {
 
     const rowPageMap = new Map(rowPages.map((row) => [row.id, row]));
     const documentFields = this.getDocumentFieldsConfig(scope.space);
+    const properties = rowList[0]?.databaseId
+      ? await this.databasePropertyRepo.findByDatabaseId(rowList[0].databaseId)
+      : [];
+    const customFields = rowList.map((row) =>
+      this.buildCustomFields(
+        rowPageMap.get(row.pageId)?.settings,
+        documentFields,
+      ),
+    );
+    const members = await this.projection.resolveMembers(
+      scope.workspace.id,
+      customFields,
+    );
+    const memberNames = this.projection.memberNames(members);
 
-    return rowList.map((row) => {
+    return rowList.map((row, index) => {
       const rowPage = rowPageMap.get(row.pageId);
       const rowMarkdown = this.toMarkdown(rowPage?.content ?? null);
+      const rowFields = this.projection.renderRowFields(
+        properties,
+        row.cells ?? [],
+      );
+      const fields = customFields[index];
+      const updatedAt = new Date(
+        Math.max(
+          new Date(row.updatedAt).getTime(),
+          rowPage?.updatedAt ? new Date(rowPage.updatedAt).getTime() : 0,
+        ),
+      );
+      const projectionBaseUpdatedAt = new Date(
+        Math.max(
+          updatedAt.getTime(),
+          ...(row.cells ?? []).map((cell: { updatedAt?: Date | string }) =>
+            cell.updatedAt ? new Date(cell.updatedAt).getTime() : 0,
+          ),
+        ),
+      );
+      const projectionUpdatedAt =
+        this.projection.projectionUpdatedAtFromMembers(
+          projectionBaseUpdatedAt,
+          fields,
+          members,
+        );
 
       return {
         id: row.id,
@@ -531,7 +534,8 @@ export class RagContentExportService {
         pageTitle: row.pageTitle,
         archivedAt: row.archivedAt,
         createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
+        updatedAt,
+        projectionUpdatedAt,
         page: rowPage
           ? {
               id: rowPage.id,
@@ -540,14 +544,19 @@ export class RagContentExportService {
               icon: rowPage.icon,
               parentPageId: rowPage.parentPageId,
               position: rowPage.position,
-              customFields: this.buildCustomFields(
-                rowPage.settings,
-                documentFields,
-              ),
+              customFields: fields,
             }
           : row.page,
-        cells: row.cells ?? [],
+        cells: rowFields.cells,
         rowMarkdown,
+        knowledgeMarkdown: [
+          `# ${rowPage?.title || row.pageTitle || row.id}`,
+          this.projection.renderDocumentFields(fields, memberNames),
+          rowFields.markdown,
+          rowMarkdown?.trim() ?? '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       };
     });
   }
@@ -591,11 +600,7 @@ export class RagContentExportService {
       .where('pages.id', 'in', [...readablePageIds])
       .where('pages.deletedAt', 'is', null)
       .where('pages.templateKind', 'is', null)
-      .where(
-        pageUpdatedAtMs,
-        '<=',
-        new Date(snapshot.snapshotUpperBoundMs),
-      )
+      .where(pageUpdatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -632,6 +637,7 @@ export class RagContentExportService {
         'pages.parentPageId',
         'pages.position',
         'pages.settings',
+        'pages.updatedAt as pageUpdatedAt',
       ])
       .$if(includeContent, (qb) => qb.select('pages.content'))
       .where('databases.workspaceId', '=', scope.workspace.id)
@@ -683,8 +689,19 @@ export class RagContentExportService {
             databaseNodesQuery.execute(),
           ]);
 
+    const regularFields = regularPages.map((page) =>
+      this.buildCustomFields(page.settings, documentFields),
+    );
+    const databaseFields = databaseNodes.map((database) =>
+      this.buildCustomFields(database.settings, documentFields),
+    );
+    const members = await this.projection.resolveMembers(scope.workspace.id, [
+      ...regularFields,
+      ...databaseFields,
+    ]);
+    const memberNames = this.projection.memberNames(members);
     const items = [
-      ...regularPages.map((page) => ({
+      ...regularPages.map((page, index) => ({
         type: 'page',
         id: page.id,
         slugId: page.slugId,
@@ -692,15 +709,28 @@ export class RagContentExportService {
         icon: page.icon,
         parentPageId: page.parentPageId,
         position: page.position,
-        customFields: this.buildCustomFields(page.settings, documentFields),
+        customFields: regularFields[index],
         settings: mapPageSettings(page.settings),
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
+        projectionUpdatedAt: this.projection.projectionUpdatedAtFromMembers(
+          page.updatedAt,
+          regularFields[index],
+          members,
+        ),
         ...(includeContent
-          ? { contentMarkdown: this.toMarkdown((page as any).content) }
+          ? {
+              contentMarkdown: this.toMarkdown((page as any).content),
+              knowledgeMarkdown: this.projection.renderPageKnowledgeMarkdown({
+                title: page.title,
+                contentMarkdown: this.toMarkdown((page as any).content),
+                customFields: regularFields[index],
+                memberNames,
+              }),
+            }
           : {}),
       })),
-      ...databaseNodes.map((database) => ({
+      ...databaseNodes.map((database, index) => ({
         type: 'database',
         id: database.id,
         databaseId: database.databaseId,
@@ -709,10 +739,20 @@ export class RagContentExportService {
         icon: database.icon,
         parentPageId: database.parentPageId,
         position: database.position,
-        customFields: this.buildCustomFields(database.settings, documentFields),
+        customFields: databaseFields[index],
         settings: mapPageSettings(database.settings),
         createdAt: database.createdAt,
         updatedAt: database.updatedAt,
+        projectionUpdatedAt: this.projection.projectionUpdatedAtFromMembers(
+          new Date(
+            Math.max(
+              new Date(database.updatedAt).getTime(),
+              new Date(database.pageUpdatedAt).getTime(),
+            ),
+          ),
+          databaseFields[index],
+          members,
+        ),
         ...(includeContent
           ? {
               descriptionMarkdown:
@@ -720,6 +760,19 @@ export class RagContentExportService {
                 database.description ??
                 '',
               contentMarkdown: this.toMarkdown((database as any).content),
+              knowledgeMarkdown: this.projection.renderPageKnowledgeMarkdown({
+                title: database.title,
+                contentMarkdown: [
+                  this.toMarkdown(database.descriptionContent) ??
+                    database.description ??
+                    '',
+                  this.toMarkdown((database as any).content) ?? '',
+                ]
+                  .filter(Boolean)
+                  .join('\n\n'),
+                customFields: databaseFields[index],
+                memberNames,
+              }),
             }
           : {}),
       })),
@@ -766,6 +819,16 @@ export class RagContentExportService {
     ]);
 
     const documentFields = this.getDocumentFieldsConfig(scope.space);
+    const customFields = this.buildCustomFields(page.settings, documentFields);
+    const members = await this.projection.resolveMembers(scope.workspace.id, [
+      customFields,
+    ]);
+    const memberNames = this.projection.memberNames(members);
+    const projectionUpdatedAt = this.projection.projectionUpdatedAtFromMembers(
+      page.updatedAt,
+      customFields,
+      members,
+    );
     const type = linkedDatabase
       ? 'database'
       : activeRow
@@ -782,13 +845,157 @@ export class RagContentExportService {
       position: page.position,
       spaceId: page.spaceId,
       settings: mapPageSettings(page.settings),
-      customFields: this.buildCustomFields(page.settings, documentFields),
+      customFields,
       databaseId: linkedDatabase?.id ?? activeRow?.databaseId ?? null,
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
+      projectionUpdatedAt,
       ...(includeContent
-        ? { contentMarkdown: this.toMarkdown(page.content) }
+        ? {
+            contentMarkdown: this.toMarkdown(page.content),
+            knowledgeMarkdown: this.projection.renderPageKnowledgeMarkdown({
+              title: page.title,
+              contentMarkdown: this.toMarkdown(page.content),
+              customFields,
+              memberNames,
+            }),
+          }
         : {}),
+    };
+  }
+
+  async listDictionaryTerms(
+    scope: RagReadContext,
+    pagination: RagFeedPagination = {},
+  ) {
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'dictionary-terms',
+      null,
+      pagination.cursor,
+    );
+    const items = this.projection.isDictionaryEnabled(scope.space)
+      ? await this.loadDictionaryTerms(scope, {
+          updatedBeforeOrAt: new Date(snapshot.snapshotUpperBoundMs),
+        })
+      : [];
+    const page = this.paginateFeed(
+      items,
+      'dictionary-terms',
+      pagination,
+      (item) => item.updatedAtMs,
+      (item) => item.id,
+      snapshot,
+    );
+    return {
+      items: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  async getDictionaryTerm(scope: RagReadContext, termId: string) {
+    if (!this.projection.isDictionaryEnabled(scope.space)) {
+      throw new NotFoundException('Dictionary term not found');
+    }
+    const items = await this.loadDictionaryTerms(scope, { termId });
+    const item = items[0];
+    if (!item) throw new NotFoundException('Dictionary term not found');
+    return item;
+  }
+
+  async getDictionaryUpdates(
+    scope: RagReadContext,
+    updatedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'dictionary-updates',
+      updatedSinceMs,
+      pagination.cursor,
+    );
+    const items = this.projection.isDictionaryEnabled(scope.space)
+      ? await this.loadDictionaryTerms(scope, {
+          updatedAfterOrAt: new Date(updatedSinceMs),
+          updatedBeforeOrAt: new Date(snapshot.snapshotUpperBoundMs),
+        })
+      : [];
+    const changes = items.map((item) => ({
+      type: 'dictionaryTerm' as const,
+      id: item.id,
+      term: item.term,
+      updatedAt: item.updatedAt,
+      updatedAtMs: item.updatedAtMs,
+    }));
+    const page = this.paginateFeed(
+      changes,
+      'dictionary-updates',
+      pagination,
+      (item) => item.updatedAtMs,
+      (item) => item.id,
+      snapshot,
+    );
+    return {
+      items: page.items,
+      maxUpdatedAtMs: this.feedWatermark(
+        page,
+        (item) => item.updatedAtMs,
+        updatedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  async getDictionaryDeleted(
+    scope: RagReadContext,
+    deletedSinceMs: number,
+    pagination: RagFeedPagination = {},
+  ) {
+    const snapshot = await this.prepareFeedSnapshot(
+      scope,
+      'dictionary-deleted',
+      deletedSinceMs,
+      pagination.cursor,
+    );
+    const deletedAtMs = this.millisecondTimestamp('deletedAt');
+    const rows = await this.db
+      .selectFrom('dictionaryTerms')
+      .select(['id', 'deletedAt'])
+      .where('workspaceId', '=', scope.workspace.id)
+      .where('spaceId', '=', scope.space.id)
+      .where('deletedAt', 'is not', null)
+      .where('deletedAt', '>=', new Date(deletedSinceMs))
+      .where(deletedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
+      .orderBy(deletedAtMs, 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    const items = rows.map((row) => ({
+      type: 'dictionaryTerm' as const,
+      id: row.id,
+      deletedAt: row.deletedAt!,
+      deletedAtMs: new Date(row.deletedAt!).getTime(),
+    }));
+    const page = this.paginateFeed(
+      items,
+      'dictionary-deleted',
+      pagination,
+      (item) => item.deletedAtMs,
+      (item) => item.id,
+      snapshot,
+    );
+    return {
+      items: page.items,
+      maxDeletedAtMs: this.feedWatermark(
+        page,
+        (item) => item.deletedAtMs,
+        deletedSinceMs,
+        snapshot.snapshotUpperBoundMs,
+      ),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
@@ -809,16 +1016,27 @@ export class RagContentExportService {
     );
     const cursor = snapshot.cursor;
     const queryLimit = pagination.limit ? pagination.limit + 1 : null;
-    const pageUpdatedAtMs = this.millisecondTimestamp('pages.updatedAt');
+    const documentFields = this.getDocumentFieldsConfig(scope.space);
+    const pageUpdatedAtMs = this.projectionTimestamp(
+      'pages.updatedAt',
+      'pages.settings',
+      scope.workspace.id,
+      documentFields,
+    );
 
     let pageUpdatesQuery = this.db
       .selectFrom('pages')
-      .select(['pages.id', 'pages.slugId', 'pages.title', 'pages.updatedAt'])
+      .select([
+        'pages.id',
+        'pages.slugId',
+        'pages.title',
+        pageUpdatedAtMs.as('projectionUpdatedAt'),
+      ])
       .where('pages.workspaceId', '=', scope.workspace.id)
       .where('pages.spaceId', '=', scope.space.id)
       .where('pages.deletedAt', 'is', null)
       .where('pages.templateKind', 'is', null)
-      .where('pages.updatedAt', '>=', updatedSince)
+      .where(pageUpdatedAtMs, '>=', updatedSince)
       .where(pageUpdatedAtMs, '<=', new Date(snapshot.snapshotUpperBoundMs))
       .$if(Boolean(readablePageIds), (qb) =>
         qb.where('pages.id', 'in', [...readablePageIds!]),
@@ -896,14 +1114,30 @@ export class RagContentExportService {
       .innerJoin('pages as rowPages', 'rowPages.id', 'databaseRows.pageId')
       .select([
         'databaseRows.databaseId as databaseId',
-        (eb) => eb.fn.max('rowPages.updatedAt').as('rowPagesUpdatedAt'),
+        (eb) =>
+          eb.fn
+            .max(
+              this.projectionTimestamp(
+                'rowPages.updatedAt',
+                'rowPages.settings',
+                scope.workspace.id,
+                documentFields,
+              ),
+            )
+            .as('rowPagesUpdatedAt'),
       ])
       .groupBy('databaseRows.databaseId')
       .as('rowPagesChanges');
 
+    const databasePageProjectionUpdatedAt = this.projectionTimestamp(
+      'databasePages.updatedAt',
+      'databasePages.settings',
+      scope.workspace.id,
+      documentFields,
+    );
     const lastChangedAtExpression = sql<Date>`GREATEST(
       COALESCE(${this.db.dynamic.ref('databases.updatedAt')}, to_timestamp(0)),
-      COALESCE(${this.db.dynamic.ref('databasePages.updatedAt')}, to_timestamp(0)),
+      COALESCE(${databasePageProjectionUpdatedAt}, to_timestamp(0)),
       COALESCE(${this.db.dynamic.ref('propertiesChanges.propertiesUpdatedAt')}, to_timestamp(0)),
       COALESCE(${this.db.dynamic.ref('rowsChanges.rowsUpdatedAt')}, to_timestamp(0)),
       COALESCE(${this.db.dynamic.ref('cellsChanges.cellsUpdatedAt')}, to_timestamp(0)),
@@ -996,8 +1230,8 @@ export class RagContentExportService {
         id: page.id,
         slugId: page.slugId,
         title: page.title,
-        updatedAt: page.updatedAt,
-        updatedAtMs: new Date(page.updatedAt).getTime(),
+        updatedAt: page.projectionUpdatedAt,
+        updatedAtMs: new Date(page.projectionUpdatedAt).getTime(),
       })),
       ...databaseUpdates,
     ]
@@ -1437,6 +1671,7 @@ export class RagContentExportService {
       this.toMarkdown(database.descriptionContent) ??
       database.description ??
       '';
+    const pageContentMarkdown = this.toMarkdown(databasePage.content) ?? '';
     const rowsMarkdown = rows
       .map((row) => {
         const title = row.page?.title || row.pageTitle || row.pageId;
@@ -1446,15 +1681,45 @@ export class RagContentExportService {
       .filter(Boolean)
       .join('\n\n');
 
+    const documentFields = this.getDocumentFieldsConfig(scope.space);
+    const customFields = this.buildCustomFields(
+      databasePage.settings,
+      documentFields,
+    );
+    const members = await this.projection.resolveMembers(scope.workspace.id, [
+      customFields,
+    ]);
+    const memberNames = this.projection.memberNames(members);
+    const baseProjectionUpdatedAt = new Date(
+      Math.max(
+        new Date(database.updatedAt).getTime(),
+        new Date(databasePage.updatedAt).getTime(),
+        ...normalizedProperties.map((property) =>
+          new Date(property.updatedAt).getTime(),
+        ),
+        ...rows.map((row) =>
+          new Date(row.projectionUpdatedAt).getTime(),
+        ),
+      ),
+    );
+    const projectionUpdatedAt = this.projection.projectionUpdatedAtFromMembers(
+      baseProjectionUpdatedAt,
+      customFields,
+      members,
+    );
     const knowledgeMarkdownParts = [
+      `# ${database.name}`,
+      this.projection.renderDocumentFields(customFields, memberNames),
+      this.projection.renderDatabaseSchema(normalizedProperties),
       descriptionMarkdown?.trim()
         ? `## Description\n\n${descriptionMarkdown}`
+        : '',
+      pageContentMarkdown.trim()
+        ? `## Database page\n\n${pageContentMarkdown}`
         : '',
       tableMarkdown?.trim() ? `## Table\n\n${tableMarkdown}` : '',
       rowsMarkdown?.trim() ? `## Rows\n\n${rowsMarkdown}` : '',
     ].filter(Boolean);
-
-    const documentFields = this.getDocumentFieldsConfig(scope.space);
 
     return {
       id: databasePage.id,
@@ -1468,10 +1733,7 @@ export class RagContentExportService {
       position: databasePage.position,
       spaceId: database.spaceId,
       settings: mapPageSettings(databasePage.settings),
-      customFields: this.buildCustomFields(
-        databasePage.settings,
-        documentFields,
-      ),
+      customFields,
       descriptionMarkdown,
       pageContentMarkdown: this.toMarkdown(databasePage.content),
       properties: normalizedProperties,
@@ -1479,6 +1741,7 @@ export class RagContentExportService {
       knowledgeMarkdown: knowledgeMarkdownParts.join('\n\n'),
       createdAt: database.createdAt,
       updatedAt: database.updatedAt,
+      projectionUpdatedAt,
     };
   }
 
@@ -1498,11 +1761,26 @@ export class RagContentExportService {
       database.description ??
       '';
     const pageContentMarkdown = this.toMarkdown(databasePage.content) ?? '';
+    const properties = await this.databasePropertyRepo.findByDatabaseId(
+      database.id,
+    );
+    const documentFields = this.getDocumentFieldsConfig(scope.space);
+    const customFields = this.buildCustomFields(
+      databasePage.settings,
+      documentFields,
+    );
+    const members = await this.projection.resolveMembers(scope.workspace.id, [
+      customFields,
+    ]);
+    const memberNames = this.projection.memberNames(members);
     return {
       id: databasePage.id,
       databaseId: database.id,
       title: database.name,
+      customFields,
       knowledgeMarkdown: [
+        this.projection.renderDocumentFields(customFields, memberNames),
+        this.projection.renderDatabaseSchema(properties),
         descriptionMarkdown.trim()
           ? `## Description\n\n${descriptionMarkdown}`
           : '',
@@ -1582,6 +1860,10 @@ export class RagContentExportService {
       .where('pageId', '=', page.id)
       .where('deletedAt', 'is', null)
       .execute();
+    const customFields = this.buildCustomFields(
+      page.settings,
+      this.getDocumentFieldsConfig(scope.space),
+    );
 
     return {
       pageId: page.id,
@@ -1597,6 +1879,7 @@ export class RagContentExportService {
         createdAt: attachment.createdAt,
         updatedAt: attachment.updatedAt,
         downloadUrl: `/api/rag/attachments/${attachment.id}/${encodeURIComponent(attachment.fileName)}`,
+        customFields,
       })),
     };
   }
@@ -1731,6 +2014,105 @@ export class RagContentExportService {
     return sql<Date>`date_trunc('milliseconds', ${this.db.dynamic.ref(reference)})`;
   }
 
+  private projectionTimestamp(
+    updatedAtReference: string,
+    settingsReference: string,
+    workspaceId: string,
+    config: KnowledgeDocumentFieldsConfig,
+  ) {
+    const sourceUpdatedAt = this.millisecondTimestamp(updatedAtReference);
+    const settings = this.db.dynamic.ref(settingsReference);
+    const memberConditions: Array<ReturnType<typeof sql<boolean>>> = [];
+
+    if (config.assignee) {
+      memberConditions.push(
+        sql<boolean>`projection_users.id = ${settings} ->> 'assigneeId'`,
+      );
+    }
+    if (config.stakeholders) {
+      memberConditions.push(
+        sql<boolean>`COALESCE(${settings} -> 'stakeholderIds', '[]'::jsonb) ? projection_users.id`,
+      );
+    }
+    if (memberConditions.length === 0) return sourceUpdatedAt;
+
+    return sql<Date>`GREATEST(
+      ${sourceUpdatedAt},
+      COALESCE((
+        SELECT MAX(date_trunc('milliseconds', projection_users.updated_at))
+        FROM users AS projection_users
+        WHERE projection_users.workspace_id = ${workspaceId}
+          AND (${sql.join(memberConditions, sql` OR `)})
+      ), to_timestamp(0))
+    )`;
+  }
+
+  private async loadDictionaryTerms(
+    scope: RagReadContext,
+    filters: {
+      termId?: string;
+      updatedAfterOrAt?: Date;
+      updatedBeforeOrAt?: Date;
+    },
+  ) {
+    let query = this.db
+      .selectFrom('dictionaryTerms')
+      .selectAll()
+      .where('workspaceId', '=', scope.workspace.id)
+      .where('spaceId', '=', scope.space.id)
+      .where('deletedAt', 'is', null);
+    if (filters.termId) query = query.where('id', '=', filters.termId);
+    if (filters.updatedAfterOrAt) {
+      query = query.where('updatedAt', '>=', filters.updatedAfterOrAt);
+    }
+    if (filters.updatedBeforeOrAt) {
+      query = query.where('updatedAt', '<=', filters.updatedBeforeOrAt);
+    }
+    const terms = await query
+      .orderBy('updatedAt', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    if (terms.length === 0) return [];
+
+    const aliases = await this.db
+      .selectFrom('dictionaryTermAliases')
+      .select(['termId', 'alias', 'isPrimary'])
+      .where(
+        'termId',
+        'in',
+        terms.map((term) => term.id),
+      )
+      .orderBy('alias', 'asc')
+      .execute();
+    const formsByTerm = new Map<string, string[]>();
+    for (const alias of aliases) {
+      if (alias.isPrimary) continue;
+      const forms = formsByTerm.get(alias.termId) ?? [];
+      forms.push(alias.alias);
+      formsByTerm.set(alias.termId, forms);
+    }
+
+    return terms.map((term) => {
+      const forms = formsByTerm.get(term.id) ?? [];
+      return {
+        id: term.id,
+        workspaceId: term.workspaceId,
+        spaceId: term.spaceId,
+        term: term.term,
+        forms,
+        definitionMarkdown: term.definitionMarkdown,
+        knowledgeMarkdown: this.projection.renderDictionaryKnowledgeMarkdown({
+          term: term.term,
+          forms,
+          definitionMarkdown: term.definitionMarkdown,
+        }),
+        createdAt: term.createdAt,
+        updatedAt: term.updatedAt,
+        updatedAtMs: new Date(term.updatedAt).getTime(),
+      };
+    });
+  }
+
   private async prepareFeedSnapshot(
     scope: RagReadContext,
     kind: string,
@@ -1767,7 +2149,10 @@ export class RagContentExportService {
     const snapshotUpperBoundMs = snapshot?.snapshotUpperBound
       ? new Date(snapshot.snapshotUpperBound).getTime()
       : Date.now();
-    if (!Number.isSafeInteger(snapshotUpperBoundMs) || snapshotUpperBoundMs < 0) {
+    if (
+      !Number.isSafeInteger(snapshotUpperBoundMs) ||
+      snapshotUpperBoundMs < 0
+    ) {
       throw new BadRequestException('Invalid RAG feed cursor');
     }
     return {
@@ -1791,6 +2176,7 @@ export class RagContentExportService {
       .update(
         JSON.stringify({
           schemaVersion: 2,
+          ...this.projection.fingerprintInput(scope.space),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
           policyFingerprint: policy.fingerprint,

@@ -137,6 +137,31 @@ const createService = (db: Kysely<any>) =>
         excludedPageIds: [],
       }),
     } as any,
+    {
+      version: 1,
+      fingerprintInput: () => ({
+        projectionVersion: 1,
+        documentFields: {
+          status: false,
+          assignee: false,
+          stakeholders: false,
+          aiRole: false,
+        },
+        dictionaryEnabled: false,
+      }),
+      getDocumentFieldsConfig: () => ({
+        status: false,
+        assignee: false,
+        stakeholders: false,
+        aiRole: false,
+      }),
+      buildCustomFields: () => undefined,
+      resolveMembers: async () => new Map(),
+      memberNames: () => new Map(),
+      projectionUpdatedAtFromMembers: (updatedAt: Date | string) =>
+        new Date(updatedAt),
+      renderPageKnowledgeMarkdown: () => '',
+    } as any,
   );
 
 const feedCursor = (
@@ -503,9 +528,9 @@ describe('RagService getUpdates SQL generation', () => {
         watermarkMs: 101,
       },
     ]) {
-      expect(() =>
-        (service as any).decodeFeedCursor(cursor, expected),
-      ).toThrow('Invalid RAG feed cursor');
+      expect(() => (service as any).decodeFeedCursor(cursor, expected)).toThrow(
+        'Invalid RAG feed cursor',
+      );
     }
   });
 

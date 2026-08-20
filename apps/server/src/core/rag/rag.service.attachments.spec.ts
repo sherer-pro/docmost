@@ -52,6 +52,7 @@ describe('RagService attachment download authorization', () => {
         isPageExcluded: jest.fn().mockResolvedValue(options?.excluded ?? false),
         getExcludedPageIds: jest.fn().mockResolvedValue(new Set()),
       } as any,
+      {} as any,
     );
     return { service, pageAccess };
   }

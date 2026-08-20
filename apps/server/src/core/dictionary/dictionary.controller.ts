@@ -184,6 +184,32 @@ export class DictionaryController {
     key: 'termId',
     resourceType: 'dictionaryTerm',
   })
+  @Get(':termId')
+  async get(
+    @Param('termId', ParseUUIDPipe) termId: string,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const existingTerm = await this.dictionaryService.getTermForPermission(
+      termId,
+      workspace.id,
+    );
+    const ability = await this.spaceAbility.createForUser(
+      user,
+      existingTerm.spaceId,
+    );
+
+    if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
+
+    return this.dictionaryService.getTerm(termId, workspace.id);
+  }
+
+  @AuthPolicyScope('resource', {
+    key: 'termId',
+    resourceType: 'dictionaryTerm',
+  })
   @Patch(':termId')
   async update(
     @Param('termId', ParseUUIDPipe) termId: string,

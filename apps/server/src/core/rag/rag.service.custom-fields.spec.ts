@@ -14,6 +14,28 @@ describe('RagService AI role custom field', () => {
     {} as any,
     {} as any,
     {} as any,
+    {
+      getDocumentFieldsConfig: (space: any) => ({
+        status: Boolean(space.settings?.documentFields?.status),
+        assignee: Boolean(space.settings?.documentFields?.assignee),
+        stakeholders: Boolean(space.settings?.documentFields?.stakeholders),
+        aiRole: Boolean(space.settings?.documentFields?.aiRole),
+      }),
+      buildCustomFields: (settings: any, config: any) =>
+        config.aiRole
+          ? {
+              aiRole: [
+                'NONE',
+                'EDITOR',
+                'COAUTHOR',
+                'COAUTHOR_PLUS',
+                'AUTHOR',
+              ].includes(settings?.aiRole)
+                ? settings.aiRole
+                : 'NONE',
+            }
+          : undefined,
+    } as any,
   );
 
   it('includes the normalized default only when the space field is enabled', () => {

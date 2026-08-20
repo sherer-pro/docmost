@@ -1,4 +1,5 @@
 import { RagContentExportService as RagService } from './rag-content-export.service';
+import { KnowledgeProjectionService } from './knowledge-projection.service';
 
 class FakeQuery<T> {
   constructor(private readonly rows: T[]) {}
@@ -90,6 +91,9 @@ function createService(options?: {
     findById: jest.fn().mockResolvedValue(options?.database ?? null),
     findByPageId: jest.fn().mockResolvedValue(options?.database ?? null),
   };
+  const databasePropertyRepo = {
+    findByDatabaseId: jest.fn().mockResolvedValue([]),
+  };
   const pageAccess = {
     getSidebarAccessSnapshot: jest.fn().mockResolvedValue({
       readablePageIds: new Set(options?.readablePageIds ?? []),
@@ -109,13 +113,14 @@ function createService(options?: {
     db as any,
     pageRepo as any,
     databaseRepo as any,
-    {} as any,
+    databasePropertyRepo as any,
     databaseRowRepo as any,
     {} as any,
     {} as any,
     {} as any,
     pageAccess as any,
     contentPolicy as any,
+    new KnowledgeProjectionService(db as any),
   );
   return { service, db, databaseRowRepo };
 }
@@ -208,7 +213,14 @@ describe('RagService security boundaries', () => {
           id: 'row-allowed',
           databaseId: 'database-1',
           pageId: 'row-page-allowed',
-          cells: [{ propertyId: 'property-1', value: 'allowed' }],
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          cells: [
+            {
+              propertyId: 'property-1',
+              value: 'allowed',
+              updatedAt: new Date('2026-03-01T00:00:00.000Z'),
+            },
+          ],
         },
         {
           id: 'row-denied',
@@ -223,6 +235,7 @@ describe('RagService security boundaries', () => {
           slugId: 'allowed',
           title: 'Allowed',
           content: null,
+          updatedAt: new Date('2026-02-01T00:00:00.000Z'),
         },
       ],
     });
@@ -236,6 +249,8 @@ describe('RagService security boundaries', () => {
     expect(rows[0]).toMatchObject({
       id: 'row-allowed',
       pageId: 'row-page-allowed',
+      updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+      projectionUpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
     });
     expect(JSON.stringify(rows)).not.toContain('secret');
     expect(db.selectFrom).toHaveBeenCalledTimes(1);
