@@ -45,7 +45,9 @@ export type RagSyncFeedKind =
   | 'updates'
   | 'deleted'
   | 'attachment-updates'
-  | 'attachment-deleted';
+  | 'attachment-deleted'
+  | 'dictionary-updates'
+  | 'dictionary-deleted';
 
 export interface RagSyncFeedProgress {
   baseCheckpoint: number;
@@ -80,7 +82,7 @@ export interface RagSyncSourceMapping {
   contentHash: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   databaseId?: string;
   updatedAtMs: number;
 }
@@ -90,7 +92,7 @@ export interface RagSyncUploadIntent {
   identity: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   databaseId?: string;
   configVersion: number;
   createdAt: number;
@@ -167,7 +169,7 @@ export type RagSyncDocmostMetadataV2 = {
   spaceId: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   databaseId?: string;
   sourceUpdatedAtMs: number;
   contentHash: string;
@@ -182,7 +184,7 @@ export type RagSyncLegacyDocmostMetadata = {
   spaceId: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   databaseId?: string;
   sourceUpdatedAtMs: number;
   contentHash: string;
@@ -229,6 +231,7 @@ export type RagSyncDiagnosticSourceKind =
   | 'database'
   | 'database-row'
   | 'attachment'
+  | 'dictionary-term'
   | 'tombstone'
   | 'unknown';
 

@@ -1446,16 +1446,18 @@ function isUploadIntent(value: unknown): value is RagSyncUploadIntent {
   return (
     typeof value.operationId === 'string' &&
     /^[0-9a-f]{64}$/.test(value.operationId) &&
-    ['page', 'database_row', 'attachment'].includes(sourceType) &&
+    ['page', 'database_row', 'attachment', 'dictionary_term'].includes(
+      sourceType,
+    ) &&
     typeof value.sourceId === 'string' &&
     isKeyPart(value.sourceId) &&
     value.identity === `${sourceType}:${value.sourceId}` &&
-    typeof value.pageId === 'string' &&
-    isKeyPart(value.pageId) &&
+    isSourcePageId(value.sourceType, value.pageId) &&
     (value.databaseId === undefined ||
       (typeof value.databaseId === 'string' && isKeyPart(value.databaseId))) &&
     (sourceType !== 'database_row' || typeof value.databaseId === 'string') &&
     (sourceType !== 'attachment' || value.databaseId === undefined) &&
+    (sourceType !== 'dictionary_term' || value.databaseId === undefined) &&
     isNonNegativeInteger(value.configVersion) &&
     value.configVersion >= 1 &&
     isNonNegativeInteger(value.createdAt) &&
@@ -1532,7 +1534,9 @@ function isSourceMapping(value: unknown): value is RagSyncSourceMapping {
   if (!isRecord(value)) return false;
   const sourceType = String(value.sourceType);
   return (
-    ['page', 'database_row', 'attachment'].includes(sourceType) &&
+    ['page', 'database_row', 'attachment', 'dictionary_term'].includes(
+      sourceType,
+    ) &&
     typeof value.sourceId === 'string' &&
     isKeyPart(value.sourceId) &&
     value.identity === `${sourceType}:${value.sourceId}` &&
@@ -1542,8 +1546,7 @@ function isSourceMapping(value: unknown): value is RagSyncSourceMapping {
     /^[a-f0-9]{64}$/.test(value.operationId) &&
     typeof value.contentHash === 'string' &&
     /^[a-f0-9]{64}$/.test(value.contentHash) &&
-    typeof value.pageId === 'string' &&
-    isKeyPart(value.pageId) &&
+    isSourcePageId(value.sourceType, value.pageId) &&
     (value.databaseId === undefined ||
       (typeof value.databaseId === 'string' && isKeyPart(value.databaseId))) &&
     isNonNegativeInteger(value.updatedAtMs)
@@ -1572,6 +1575,12 @@ function isRecord(value: unknown): value is Record<string, any> {
 
 function isKeyPart(value: string): boolean {
   return /^[A-Za-z0-9_-]{1,200}$/.test(value);
+}
+
+function isSourcePageId(sourceType: unknown, pageId: unknown): boolean {
+  return sourceType === 'dictionary_term'
+    ? pageId === null
+    : typeof pageId === 'string' && isKeyPart(pageId);
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

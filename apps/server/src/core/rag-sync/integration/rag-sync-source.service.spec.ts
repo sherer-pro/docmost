@@ -113,6 +113,9 @@ describe('RagSyncSourceService', () => {
           }),
           executeTakeFirst: jest.fn(async () => {
             if (table === 'workspaces') return { id: binding.workspaceId };
+            if (table === 'aiSpaceConfigs') {
+              return spaceOverrides.retrievalTarget;
+            }
             const space = {
               id: binding.spaceId,
               workspaceId: binding.workspaceId,
@@ -180,10 +183,17 @@ describe('RagSyncSourceService', () => {
       getAttachmentDeleted: jest
         .fn()
         .mockResolvedValue(emptyFeed('maxDeletedAtMs')),
+      getDictionaryDeleted: jest
+        .fn()
+        .mockResolvedValue(emptyFeed('maxDeletedAtMs')),
       getUpdates: jest.fn().mockResolvedValue(emptyFeed('maxUpdatedAtMs')),
       getAttachmentUpdates: jest
         .fn()
         .mockResolvedValue(emptyFeed('maxUpdatedAtMs')),
+      getDictionaryUpdates: jest
+        .fn()
+        .mockResolvedValue(emptyFeed('maxUpdatedAtMs')),
+      getDictionaryTerm: jest.fn(),
       getPageInfo: jest.fn(),
       getDatabaseSyncMetadata: jest.fn(),
       getDatabaseSyncRowsPage: jest
@@ -269,6 +279,26 @@ describe('RagSyncSourceService', () => {
     ).resolves.toMatchObject({ hasMore: false });
   });
 
+  it('stops before writes when the Open WebUI retrieval target does not match', async () => {
+    const { service, writer } = setup({
+      retrievalTarget: {
+        retrievalAdapter: 'open-webui-knowledge-v1',
+        retrievalOpenWebuiBaseUrl: 'https://other-open-webui.example',
+        retrievalOpenWebuiKnowledgeId: 'other-knowledge',
+      },
+    });
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).rejects.toMatchObject({
+      originalError: expect.objectContaining({
+        code: 'rag_sync_target_mismatch',
+        retryable: false,
+      }),
+    });
+    expect(writer.upload).not.toHaveBeenCalled();
+  });
+
   it('processes deletions before update feeds and advances the checkpoint', async () => {
     const { service, rag, state, writer } = setup();
     const mapping = {
@@ -323,6 +353,55 @@ describe('RagSyncSourceService', () => {
     expect(state.deleteMapping).toHaveBeenCalledWith(lease, 'page:page-1');
     expect(state.setCheckpoint).toHaveBeenCalledWith(lease, 'deleted', 101);
     expect(rag.getUpdates).not.toHaveBeenCalled();
+  });
+
+  it('uploads one dictionary term with nullable page ownership metadata', async () => {
+    const { service, rag, state, writer } = setup();
+    rag.getDictionaryUpdates.mockResolvedValue({
+      items: [
+        {
+          type: 'dictionaryTerm',
+          id: 'term-1',
+          term: 'Projection',
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.getDictionaryTerm.mockResolvedValue({
+      id: 'term-1',
+      term: 'Projection',
+      knowledgeMarkdown:
+        '# Projection\n\n## Word forms\n\n- Projections\n\n## Definition\n\nCanonical knowledge view.',
+      updatedAtMs: 200,
+    });
+    writer.upload.mockResolvedValue({ id: 'dictionary-file' });
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.upload).toHaveBeenCalledWith(
+      binding,
+      expect.objectContaining({
+        fileName: expect.stringContaining('Projection'),
+        metadata: expect.objectContaining({
+          sourceType: 'dictionary_term',
+          sourceId: 'term-1',
+          pageId: null,
+        }),
+      }),
+      context.signal,
+    );
+    expect(state.setMapping).toHaveBeenCalledWith(
+      lease,
+      expect.objectContaining({
+        sourceType: 'dictionary_term',
+        sourceId: 'term-1',
+        pageId: null,
+        fileId: 'dictionary-file',
+      }),
+    );
   });
 
   it('does not delete a remote file when a Redis mapping is corrupted', async () => {
@@ -1992,12 +2071,7 @@ function effectiveFingerprint(): string {
         schemaVersion: 2,
         serverScopeFingerprint: 'scope-fingerprint',
         maxAttachmentBytes: 25 * 1024 * 1024,
-        supportedAttachmentExtensions: [
-          '.docx',
-          '.md',
-          '.pdf',
-          '.txt',
-        ],
+        supportedAttachmentExtensions: ['.docx', '.md', '.pdf', '.txt'],
       }),
     )
     .digest('hex');

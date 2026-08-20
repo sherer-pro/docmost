@@ -31,6 +31,7 @@ import {
   RagSyncSourceMapping,
   RagSyncUploadIntent,
 } from '../runtime/rag-sync-runtime.types';
+import { sameOpenWebUiTarget } from '../rag-sync-target.util';
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   '.pdf',
@@ -45,7 +46,7 @@ type SyncSource = {
   identity: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   databaseId?: string;
   updatedAtMs: number;
   fileName: string;
@@ -108,6 +109,7 @@ type InternalRagPageDetail = {
   id: string;
   title: string | null;
   contentMarkdown?: string | null;
+  knowledgeMarkdown?: string | null;
 };
 
 type InternalRagDatabaseDetail = {
@@ -122,13 +124,36 @@ type InternalRagDatabaseRowsPage = {
     id: string;
     pageId: string;
     updatedAt?: string | Date;
+    projectionUpdatedAt?: string | Date;
     pageTitle?: string | null;
     rowMarkdown?: string | null;
-    cells?: Array<{ propertyId: string; value: unknown }>;
+    knowledgeMarkdown?: string | null;
+    cells?: Array<{
+      propertyId: string;
+      propertyName?: string;
+      value: unknown;
+    }>;
     page?: { title: string | null } | null;
   }>;
   hasMore: boolean;
   nextCursor: string | null;
+};
+
+type InternalRagDictionaryChange = {
+  id: string;
+  term: string;
+  updatedAtMs: number;
+};
+
+type InternalRagDictionaryDeletedItem = {
+  id: string;
+};
+
+type InternalRagDictionaryDetail = {
+  id: string;
+  term: string;
+  knowledgeMarkdown: string;
+  updatedAtMs: number;
 };
 
 @Injectable()
@@ -173,6 +198,38 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
   ): Promise<RagSyncQuantumResult> {
     const scope = await this.loadSystemScope(binding);
     const ragScope = await this.rag.getScope(scope);
+    const retrievalTarget = await this.db
+      .selectFrom('aiSpaceConfigs')
+      .select([
+        'retrievalAdapter',
+        'retrievalOpenWebuiBaseUrl',
+        'retrievalOpenWebuiKnowledgeId',
+      ])
+      .where('workspaceId', '=', binding.workspaceId)
+      .where('spaceId', '=', binding.spaceId)
+      .executeTakeFirst();
+    if (
+      (retrievalTarget?.retrievalAdapter === 'open-webui-knowledge-v1' &&
+        !sameOpenWebUiTarget(
+          binding.baseUrl,
+          binding.knowledgeId,
+          retrievalTarget.retrievalOpenWebuiBaseUrl,
+          retrievalTarget.retrievalOpenWebuiKnowledgeId,
+        )) ||
+      (ragScope.syncTarget &&
+        !sameOpenWebUiTarget(
+          binding.baseUrl,
+          binding.knowledgeId,
+          ragScope.syncTarget.baseUrl,
+          ragScope.syncTarget.knowledgeId,
+        ))
+    ) {
+      throw new RagSyncRuntimeError(
+        'rag_sync_target_mismatch',
+        false,
+        'RAG sync target does not match the Open WebUI retrieval target',
+      );
+    }
     const session: QuantumSession = {
       binding,
       context,
@@ -203,7 +260,11 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         effectiveFingerprint,
       );
       if (purged.hasMore) return purged;
-      for (const kind of ['updates', 'attachment-updates'] as const) {
+      for (const kind of [
+        'updates',
+        'attachment-updates',
+        'dictionary-updates',
+      ] as const) {
         await this.state.setCheckpoint(context.lease, kind, 0);
         await this.state.setFeedProgress(context.lease, kind, null);
       }
@@ -229,6 +290,20 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
 
     const limit = this.quantumLimit(session);
     const feeds: Array<() => Promise<RagSyncQuantumResult | null>> = [
+      () =>
+        this.processFeed<InternalRagDictionaryDeletedItem>(
+          session,
+          'dictionary-deleted',
+          (since, cursor) =>
+            this.rag.getDictionaryDeleted(scope, since, {
+              limit,
+              cursor,
+            }) as unknown as Promise<
+              FeedPage<InternalRagDictionaryDeletedItem>
+            >,
+          (item) => this.processDictionaryDeleted(session, item),
+          'maxDeletedAtMs',
+        ),
       () =>
         this.processFeed<InternalRagDeletedItem>(
           session,
@@ -265,6 +340,18 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
               cursor,
             }) as unknown as Promise<FeedPage<InternalRagUpdateItem>>,
           (item) => this.processUpdate(session, item),
+          'maxUpdatedAtMs',
+        ),
+      () =>
+        this.processFeed<InternalRagDictionaryChange>(
+          session,
+          'dictionary-updates',
+          (since, cursor) =>
+            this.rag.getDictionaryUpdates(scope, since, {
+              limit,
+              cursor,
+            }) as unknown as Promise<FeedPage<InternalRagDictionaryChange>>,
+          (item) => this.processDictionaryUpdate(session, item),
           'maxUpdatedAtMs',
         ),
       () =>
@@ -522,9 +609,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           fileName: safeFileName(database.title, database.id, '.md'),
           mimeType: 'text/markdown',
           content: encodeMarkdown(
-            [`# ${database.title}`, database.knowledgeMarkdown || '']
-              .filter(Boolean)
-              .join('\n\n'),
+            database.knowledgeMarkdown?.trim() || `# ${database.title}`,
           ),
         }))
       )
@@ -555,7 +640,10 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         if (!this.consumeBudget(session)) return false;
         const title = row.page?.title || row.pageTitle || row.id;
         const cells = (row.cells ?? [])
-          .map((cell) => `- ${cell.propertyId}: ${stringifyValue(cell.value)}`)
+          .map(
+            (cell) =>
+              `- ${cell.propertyName || cell.propertyId}: ${stringifyValue(cell.value) || 'Not set'}`,
+          )
           .join('\n');
         if (
           !(await this.upsertSource(session, {
@@ -564,13 +652,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             sourceId: row.id,
             pageId: row.pageId,
             databaseId: database.databaseId,
-            updatedAtMs: dateToMs(row.updatedAt, updatedAtMs),
+            updatedAtMs: dateToMs(
+              row.projectionUpdatedAt ?? row.updatedAt,
+              updatedAtMs,
+            ),
             fileName: safeFileName(title, row.id, '.md'),
             mimeType: 'text/markdown',
             content: encodeMarkdown(
-              [`# ${title}`, cells, row.rowMarkdown || '']
-                .filter(Boolean)
-                .join('\n\n'),
+              row.knowledgeMarkdown?.trim() ||
+                [`# ${title}`, cells, row.rowMarkdown || '']
+                  .filter(Boolean)
+                  .join('\n\n'),
             ),
           }))
         )
@@ -694,6 +786,45 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     }
     if (!this.consumeBudget(session)) return false;
     const identity = sourceIdentity('page', item.id);
+    await this.deleteIdentity(session, identity);
+    return this.requestUploadIntentCleanup(session, identity);
+  }
+
+  private async processDictionaryUpdate(
+    session: QuantumSession,
+    item: InternalRagDictionaryChange,
+  ): Promise<boolean> {
+    if (!this.consumeBudget(session)) return false;
+    const identity = sourceIdentity('dictionary_term', item.id);
+    let term: InternalRagDictionaryDetail;
+    try {
+      term = (await this.rag.getDictionaryTerm(
+        session.scope,
+        item.id,
+      )) as unknown as InternalRagDictionaryDetail;
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) throw error;
+      await this.deleteIdentity(session, identity);
+      return this.requestUploadIntentCleanup(session, identity);
+    }
+    return this.upsertSource(session, {
+      identity,
+      sourceType: 'dictionary_term',
+      sourceId: term.id,
+      pageId: null,
+      updatedAtMs: item.updatedAtMs || term.updatedAtMs,
+      fileName: safeFileName(term.term, term.id, '.md'),
+      mimeType: 'text/markdown',
+      content: encodeMarkdown(term.knowledgeMarkdown),
+    });
+  }
+
+  private async processDictionaryDeleted(
+    session: QuantumSession,
+    item: InternalRagDictionaryDeletedItem,
+  ): Promise<boolean> {
+    if (!this.consumeBudget(session)) return false;
+    const identity = sourceIdentity('dictionary_term', item.id);
     await this.deleteIdentity(session, identity);
     return this.requestUploadIntentCleanup(session, identity);
   }
@@ -1279,7 +1410,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       );
       let deleted = false;
       for (const mapping of scan.items) {
-        if (!blocked.has(mapping.pageId)) continue;
+        if (!mapping.pageId || !blocked.has(mapping.pageId)) continue;
         if (!this.consumeBudget(session)) return this.result(session, true);
         await this.deleteIdentity(session, mapping.identity);
         deleted = true;
@@ -1338,7 +1469,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       const finalCleanup = progress.stablePasses === 2;
       let barrierExtended = finalCleanup && progress.expectedTotal === 1;
       for (const intent of scan.items) {
-        if (!blocked.has(intent.pageId)) continue;
+        if (!intent.pageId || !blocked.has(intent.pageId)) continue;
         barrierUntil = Math.max(barrierUntil, intent.notBefore);
         if (finalCleanup && intent.notBefore <= now) {
           await this.state.deleteUploadIntent(
@@ -1457,7 +1588,11 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     let remoteChanged = false;
     for (const file of page.items) {
       const ownership = this.writer.readOwnership(file, session.binding);
-      if (!ownership || !blocked.has(ownership.metadata.pageId)) continue;
+      if (
+        !ownership?.metadata.pageId ||
+        !blocked.has(ownership.metadata.pageId)
+      )
+        continue;
       if (!this.consumeBudget(session)) {
         await this.state.clearRemoteScanSeen(session.context.lease, 'policy');
         await this.state.setRemoteScanProgress(
@@ -1545,14 +1680,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     const databaseIds = new Set<string>();
     const rowIds = new Set<string>();
     const attachmentIds = new Set<string>();
+    const dictionaryTermIds = new Set<string>();
     for (const { metadata } of ownerships) {
       if (metadata.sourceType === 'page') {
         pageIds.add(metadata.sourceId);
         if (metadata.databaseId) databaseIds.add(metadata.databaseId);
       } else if (metadata.sourceType === 'database_row') {
         rowIds.add(metadata.sourceId);
-      } else {
+      } else if (metadata.sourceType === 'attachment') {
         attachmentIds.add(metadata.sourceId);
+      } else {
+        dictionaryTermIds.add(metadata.sourceId);
       }
     }
 
@@ -1563,6 +1701,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       attachments,
       activeDatabasePages,
       activeRowPages,
+      dictionaryTerms,
     ] = await Promise.all([
       pageIds.size === 0
         ? Promise.resolve([])
@@ -1696,6 +1835,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             .where('rowPages.deletedAt', 'is', null)
             .where('databaseRows.pageId', 'in', [...pageIds])
             .execute(),
+      dictionaryTermIds.size === 0 ||
+      !this.isDictionaryEnabled(session.scope.space)
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('dictionaryTerms')
+            .select('id')
+            .where('workspaceId', '=', session.binding.workspaceId)
+            .where('spaceId', '=', session.binding.spaceId)
+            .where('deletedAt', 'is', null)
+            .where('id', 'in', [...dictionaryTermIds])
+            .execute(),
     ]);
     const livePages = new Set(pages.map((page) => page.id));
     const liveDatabases = new Set(
@@ -1723,6 +1873,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       activeDatabasePages.map((database) => database.pageId),
     );
     const rowPageIds = new Set(activeRowPages.map((row) => row.pageId));
+    const liveDictionaryTerms = new Set(dictionaryTerms.map((term) => term.id));
     const result = new Set<string>();
     for (const { metadata } of ownerships) {
       if (
@@ -1747,6 +1898,13 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         metadata.sourceType === 'attachment' &&
         !metadata.databaseId &&
         liveAttachments.has(`${metadata.sourceId}:${metadata.pageId}`)
+      ) {
+        result.add(remoteSourceTuple(metadata));
+      } else if (
+        metadata.sourceType === 'dictionary_term' &&
+        metadata.pageId === null &&
+        !metadata.databaseId &&
+        liveDictionaryTerms.has(metadata.sourceId)
       ) {
         result.add(remoteSourceTuple(metadata));
       }
@@ -1837,7 +1995,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         continue;
       }
       if (
-        blockedPageIds.has(ownership.metadata.pageId) ||
+        (Boolean(ownership.metadata.pageId) &&
+          blockedPageIds.has(ownership.metadata.pageId!)) ||
         file.data?.status === 'failed' ||
         isTargetTestMarker
       ) {
@@ -2670,6 +2829,20 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     );
   }
 
+  private isDictionaryEnabled(space: Space): boolean {
+    const settings = space.settings;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      return false;
+    }
+    const dictionary = (settings as Record<string, unknown>)['dictionary'];
+    return Boolean(
+      dictionary &&
+        typeof dictionary === 'object' &&
+        !Array.isArray(dictionary) &&
+        (dictionary as Record<string, unknown>)['enabled'],
+    );
+  }
+
   private result(
     session: QuantumSession,
     hasMore: boolean,
@@ -2723,7 +2896,8 @@ function pageToSource(
     fileName: safeFileName(title, page.id, '.md'),
     mimeType: 'text/markdown',
     content: encodeMarkdown(
-      [`# ${title}`, page.contentMarkdown || ''].filter(Boolean).join('\n\n'),
+      page.knowledgeMarkdown?.trim() ||
+        [`# ${title}`, page.contentMarkdown || ''].filter(Boolean).join('\n\n'),
     ),
   };
 }
@@ -2782,6 +2956,9 @@ function feedDiagnosticSourceKind(
 ): RagSyncDiagnosticSourceKind {
   if (kind === 'attachment-updates' || kind === 'attachment-deleted') {
     return 'attachment';
+  }
+  if (kind === 'dictionary-updates' || kind === 'dictionary-deleted') {
+    return 'dictionary-term';
   }
   if (item && typeof item === 'object' && 'type' in item) {
     const type = (item as { type?: unknown }).type;

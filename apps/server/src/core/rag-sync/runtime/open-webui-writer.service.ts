@@ -375,7 +375,7 @@ export class OpenWebUiWriterService {
       candidate.spaceId !== binding.spaceId ||
       !isSourceType(candidate.sourceType) ||
       typeof candidate.sourceId !== 'string' ||
-      typeof candidate.pageId !== 'string' ||
+      !isSourcePageId(candidate.sourceType, candidate.pageId) ||
       typeof candidate.contentHash !== 'string' ||
       !Number.isSafeInteger(candidate.sourceUpdatedAtMs) ||
       Number(candidate.sourceUpdatedAtMs) < 0
@@ -775,7 +775,15 @@ function isBoundedString(value: unknown, maxLength: number): value is string {
 }
 
 function isSourceType(value: unknown): boolean {
-  return ['page', 'database_row', 'attachment'].includes(String(value));
+  return ['page', 'database_row', 'attachment', 'dictionary_term'].includes(
+    String(value),
+  );
+}
+
+function isSourcePageId(sourceType: unknown, pageId: unknown): boolean {
+  return sourceType === 'dictionary_term'
+    ? pageId === null
+    : typeof pageId === 'string';
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {

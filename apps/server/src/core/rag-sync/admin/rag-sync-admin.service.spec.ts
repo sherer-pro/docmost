@@ -35,6 +35,11 @@ describe('RagSyncAdminService', () => {
     const repo = {
       spaceExists: jest.fn().mockResolvedValue(true),
       findBySpace: jest.fn().mockResolvedValue(binding),
+      findAiRetrievalTarget: jest.fn().mockResolvedValue({
+        retrievalAdapter: 'open-webui-knowledge-v1',
+        retrievalOpenWebuiBaseUrl: binding.baseUrl,
+        retrievalOpenWebuiKnowledgeId: binding.knowledgeId,
+      }),
       withSpaceLock: jest.fn(async (_workspaceId, _spaceId, callback) =>
         callback({}),
       ),
@@ -271,6 +276,21 @@ describe('RagSyncAdminService', () => {
       expect.anything(),
     );
     expect(result.state).toBe('enabled');
+  });
+
+  it('rejects enable when the Open WebUI retrieval target does not match', async () => {
+    const { service, repo } = setup();
+    repo.findAiRetrievalTarget.mockResolvedValue({
+      retrievalAdapter: 'open-webui-knowledge-v1',
+      retrievalOpenWebuiBaseUrl: 'https://other-open-webui.example',
+      retrievalOpenWebuiKnowledgeId: 'other-knowledge',
+    });
+
+    await expect(
+      service.enable('space-1', { expectedVersion: 3 }, user, workspace),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'rag_sync_target_mismatch' }),
+    });
   });
 
   it('rejects enabling a target that has not passed a successful test', async () => {
