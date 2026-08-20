@@ -21,6 +21,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { CommonSecurityModule } from './common/security/security.module';
 import { QueueOutboxWorkerBindingService } from './integrations/queue/outbox/queue-outbox-worker-binding.service';
+import { PerformanceDiagnosticsModule } from './integrations/performance/performance-diagnostics.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { QueueOutboxWorkerBindingService } from './integrations/queue/outbox/que
     }),
     EventEmitterModule.forRoot(),
     SecurityModule,
+    PerformanceDiagnosticsModule,
   ],
   controllers: [AppController],
   providers: [

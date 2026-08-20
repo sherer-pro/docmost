@@ -415,6 +415,13 @@ export class EnvironmentService {
     return debugMode === 'true';
   }
 
+  isPerformanceDiagnosticsEnabled(): boolean {
+    const enabled = this.configService
+      .get<string>('PERFORMANCE_DIAGNOSTICS_ENABLED', 'false')
+      .toLowerCase();
+    return enabled === 'true';
+  }
+
   isDebugDbEnabled(): boolean {
     const debugDb = this.configService
       .get<string>('DEBUG_DB', 'false')
