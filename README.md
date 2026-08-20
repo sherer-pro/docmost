@@ -764,12 +764,18 @@ cp .env.compose.example .env
 docker compose up -d --build
 ```
 
-Do not use the local Compose file as a production deployment definition.
-Production uses the separate `compose.production.yml`, immutable application
-and PostgreSQL image digests, external database/file volumes, an external
-one-shot schema migration, and fail-closed startup checks. Follow the
+Do not use the local Compose file as a production deployment definition. Follow
+the [production deployment guide](./docs/DEPLOYMENT.md) for prerequisites,
+immutable image selection, host configuration, external volumes and ingress,
+clean installation, health verification, upgrades, and rollback. Production
+uses the separate [`compose.production.yml`](./compose.production.yml), the
+[`env` template](./.env.production.example), immutable application and
+PostgreSQL image digests, external database/file volumes, an external one-shot
+schema migration, and fail-closed startup checks.
+
+Follow the
 [PostgreSQL production migration runbook](./apps/server/docs/postgresql-production-migration.md)
-before the first production deployment or any PostgreSQL runtime change.
+before any production database migration or PostgreSQL runtime change.
 
 For coordinated application backups and restore rehearsals, including the
 legacy archive boundary and separate-secret requirement, follow the
