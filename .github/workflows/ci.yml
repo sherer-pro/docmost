@@ -105,7 +105,7 @@ jobs:
           pnpm audit --prod --audit-level high
 
   integration:
-    name: PostgreSQL, Redis, migrations, and server E2E
+    name: PostgreSQL, Redis, Typesense, migrations, and server E2E
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -132,6 +132,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      typesense:
+        image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
+        env:
+          TYPESENSE_DATA_DIR: /data
+          TYPESENSE_API_KEY: docmost-typesense-ci-key
+        ports:
+          - 8108:8108
+        options: >-
+          --health-cmd "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     env:
       NODE_ENV: test
@@ -140,6 +152,9 @@ jobs:
       DATABASE_URL: postgresql://docmost:docmost-ci-password@127.0.0.1:5432/docmost
       REDIS_URL: redis://127.0.0.1:6379
       AUTH_RATE_LIMIT_STORAGE: redis
+      TYPESENSE_E2E_ISOLATED: "true"
+      TYPESENSE_URL: http://127.0.0.1:8108
+      TYPESENSE_API_KEY: docmost-typesense-ci-key
 
     steps:
       - name: Checkout

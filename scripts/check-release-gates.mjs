@@ -54,6 +54,10 @@ const REQUIRED_JOB_COMMANDS = {
 };
 
 const REQUIRED_JOB_METADATA = {
+  integration: [
+    "typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110",
+    'TYPESENSE_E2E_ISOLATED: "true"',
+  ],
   "production-smoke": [
     "-e DRAWIO_URL=https://embed.diagrams.net",
     "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",

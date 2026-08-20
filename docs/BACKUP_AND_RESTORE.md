@@ -28,7 +28,10 @@ secret escrow, restore decision, and post-restore acceptance. Before starting:
   state in a `finally` path.
 
 The archive never contains `.env`, Compose files, Docker secrets, Redis data,
-or optional provider credentials.
+Typesense collections, or optional provider credentials. Typesense is a
+rebuildable projection of PostgreSQL; after restore, use
+`search:reindex -- --workspace=all --entities=pages,attachments,dictionary` as
+documented in [the search runbook](./SEARCH.md).
 
 ## Create and verify
 
@@ -142,6 +145,9 @@ After restore, record:
   legacy inventory;
 - storage regular-file count and representative attachment reads;
 - authenticated UI login and representative page rendering;
+- completed database-row projection and Typesense rebuild, when Typesense is
+  enabled, followed by representative document, attachment, and Dictionary
+  searches;
 - whether optional outbound integrations remain disabled or were deliberately
   re-enabled from the target deployment's local configuration.
 

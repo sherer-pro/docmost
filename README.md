@@ -367,6 +367,10 @@ Search works across pages, databases, rows, and attachments while preserving cur
 
 - indexed candidates are always reloaded from PostgreSQL and rechecked against live access policy before being returned.
 
+See [Search architecture and operations](./docs/SEARCH.md) for Dictionary and
+database-cell indexing rules, Typesense aliases, fallback, reindex, and
+rollback procedures.
+
 ![Search filters and result breadcrumbs](./docs/images/fork-specific-enhancements/en/search-indexing.png)
 
 ### 9. Extended editor
@@ -738,6 +742,9 @@ legacy archive boundary and separate-secret requirement, follow the
 [backup and restore runbook](./docs/BACKUP_AND_RESTORE.md). The short commands
 are `corepack pnpm backup -- create|verify|restore`; restore never reuses Redis
 or a partially restored database volume.
+
+Typesense is a rebuildable projection and is not part of the required archive;
+rebuild it after restore using the [search runbook](./docs/SEARCH.md).
 
 `pnpm dev` starts the frontend, API, and collaboration process separately.
 `COLLAB_URL` is the browser-visible collaboration origin, while
