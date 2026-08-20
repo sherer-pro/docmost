@@ -135,6 +135,7 @@ export const AI_SOURCE_TYPES = [
   "database_row",
   "attachment",
   "chat_file",
+  "dictionary_term",
 ] as const;
 export type AiSourceType = (typeof AI_SOURCE_TYPES)[number];
 
@@ -142,6 +143,7 @@ export const AI_RETRIEVAL_SOURCE_TYPES = [
   "page",
   "database_row",
   "attachment",
+  "dictionary_term",
 ] as const;
 export type AiRetrievalSourceType = (typeof AI_RETRIEVAL_SOURCE_TYPES)[number];
 
@@ -602,13 +604,25 @@ export interface AiRetrievalQueryRequest {
   candidateLimit: number;
 }
 
-export interface AiRetrievalCandidate {
-  sourceType: AiRetrievalSourceType;
+interface AiPageBackedRetrievalCandidate {
+  sourceType: Exclude<AiRetrievalSourceType, "dictionary_term">;
   sourceId: string;
   pageId: string;
   text: string;
   score?: number;
 }
+
+export interface AiDictionaryRetrievalCandidate {
+  sourceType: "dictionary_term";
+  sourceId: string;
+  pageId: null;
+  text: string;
+  score?: number;
+}
+
+export type AiRetrievalCandidate =
+  | AiPageBackedRetrievalCandidate
+  | AiDictionaryRetrievalCandidate;
 
 export interface AiRetrievalQueryResponse {
   items: AiRetrievalCandidate[];

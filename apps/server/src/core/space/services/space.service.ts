@@ -269,6 +269,17 @@ export class SpaceService {
       workspaceId,
     );
 
+    if (
+      updateSpaceDto.documentFields ||
+      typeof updateSpaceDto.dictionaryEnabled !== 'undefined'
+    ) {
+      void this.eventEmitter
+        ?.emitAsync(EventName.RAG_SYNC_SCOPE_CHANGED, {
+          spaceId: updateSpaceDto.spaceId,
+        })
+        .catch(() => undefined);
+    }
+
     const workspace = await this.workspaceRepo.findById(workspaceId);
     return workspace && updatedSpace
       ? (this.spacePolicy.withPolicy(updatedSpace, workspace) as Space)

@@ -57,6 +57,34 @@ export class RagService {
     return this.content.getDeleted(scope, ...args);
   }
 
+  listDictionaryTerms(
+    scope: RagAuthContext,
+    ...args: Tail<Parameters<RagContentExportService['listDictionaryTerms']>>
+  ) {
+    return this.content.listDictionaryTerms(scope, ...args);
+  }
+
+  getDictionaryTerm(
+    scope: RagAuthContext,
+    ...args: Tail<Parameters<RagContentExportService['getDictionaryTerm']>>
+  ) {
+    return this.content.getDictionaryTerm(scope, ...args);
+  }
+
+  getDictionaryUpdates(
+    scope: RagAuthContext,
+    ...args: Tail<Parameters<RagContentExportService['getDictionaryUpdates']>>
+  ) {
+    return this.content.getDictionaryUpdates(scope, ...args);
+  }
+
+  getDictionaryDeleted(
+    scope: RagAuthContext,
+    ...args: Tail<Parameters<RagContentExportService['getDictionaryDeleted']>>
+  ) {
+    return this.content.getDictionaryDeleted(scope, ...args);
+  }
+
   getAttachmentUpdates(
     scope: RagAuthContext,
     ...args: Tail<Parameters<RagContentExportService['getAttachmentUpdates']>>

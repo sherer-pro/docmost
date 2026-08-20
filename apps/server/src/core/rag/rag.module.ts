@@ -6,6 +6,7 @@ import { ExportModule } from '../../integrations/export/export.module';
 import { StorageModule } from '../../integrations/storage/storage.module';
 import { AiContentPolicyModule } from '../ai-content-policy/ai-content-policy.module';
 import { ApiKeyTrafficModule } from '../api-key/traffic/api-key-traffic.module';
+import { KnowledgeProjectionService } from './knowledge-projection.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { ApiKeyTrafficModule } from '../api-key/traffic/api-key-traffic.module';
     ApiKeyTrafficModule,
   ],
   controllers: [RagController],
-  providers: [RagContentExportService, RagService],
-  exports: [RagContentExportService, RagService],
+  providers: [KnowledgeProjectionService, RagContentExportService, RagService],
+  exports: [KnowledgeProjectionService, RagContentExportService, RagService],
 })
 export class RagModule {}

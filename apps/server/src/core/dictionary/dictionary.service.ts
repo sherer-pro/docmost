@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectKysely } from 'nestjs-kysely';
 import { DictionaryTermRepo } from '@docmost/db/repos/dictionary/dictionary-term.repo';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
@@ -19,6 +21,7 @@ import {
   DictionaryTermResponse,
 } from './dictionary-term.types';
 import { User } from '@docmost/db/types/entity.types';
+import { EventName } from '../../common/events/event.contants';
 
 interface PreparedAlias {
   alias: string;
@@ -43,6 +46,7 @@ export class DictionaryService {
   constructor(
     private readonly dictionaryTermRepo: DictionaryTermRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async listTerms(
@@ -153,7 +157,7 @@ export class DictionaryService {
     }
 
     try {
-      return await executeTx(this.db, async (trx) => {
+      const result = await executeTx(this.db, async (trx) => {
         let created = 0;
         let updated = 0;
 
@@ -221,6 +225,8 @@ export class DictionaryService {
           total: preparedTerms.length,
         };
       });
+      this.wakeRagSync(spaceId);
+      return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
       throw err;
@@ -236,7 +242,7 @@ export class DictionaryService {
     await this.ensureAliasesAreAvailable(dto.spaceId, workspaceId, aliases);
 
     try {
-      return await executeTx(this.db, async (trx) => {
+      const result = await executeTx(this.db, async (trx) => {
         const term = await this.dictionaryTermRepo.insertTerm(
           {
             spaceId: dto.spaceId,
@@ -258,6 +264,8 @@ export class DictionaryService {
 
         return this.toResponse({ ...term, aliases: savedAliases });
       });
+      this.wakeRagSync(dto.spaceId);
+      return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
       throw err;
@@ -275,6 +283,14 @@ export class DictionaryService {
     }
 
     return existingTerm;
+  }
+
+  async getTerm(
+    termId: string,
+    workspaceId: string,
+  ): Promise<DictionaryTermResponse> {
+    const term = await this.getTermForPermission(termId, workspaceId);
+    return this.toResponse(term);
   }
 
   async updateTerm(
@@ -299,7 +315,7 @@ export class DictionaryService {
     );
 
     try {
-      return await executeTx(this.db, async (trx) => {
+      const result = await executeTx(this.db, async (trx) => {
         const updatedTerm = await this.dictionaryTermRepo.updateTerm(
           termId,
           workspaceId,
@@ -331,6 +347,8 @@ export class DictionaryService {
 
         return this.toResponse({ ...updatedTerm, aliases: savedAliases });
       });
+      this.wakeRagSync(existingTerm.spaceId);
+      return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
       throw err;
@@ -348,6 +366,7 @@ export class DictionaryService {
       );
       await this.dictionaryTermRepo.softDeleteTerm(termId, workspaceId, trx);
     });
+    this.wakeRagSync(existingTerm.spaceId);
   }
 
   mergeGeneratedForms(
@@ -369,7 +388,7 @@ export class DictionaryService {
     workspaceId: string,
     updates: DictionaryFormsUpdate[],
   ): Promise<{ updatedTerms: number; generatedForms: number }> {
-    return executeTx(this.db, async (trx) => {
+    const result = await executeTx(this.db, async (trx) => {
       const currentTerms = await this.dictionaryTermRepo.listBySpace(
         spaceId,
         workspaceId,
@@ -459,6 +478,14 @@ export class DictionaryService {
 
       return { updatedTerms: currentTerms.length, generatedForms };
     });
+    this.wakeRagSync(spaceId);
+    return result;
+  }
+
+  private wakeRagSync(spaceId: string): void {
+    void this.eventEmitter
+      ?.emitAsync(EventName.RAG_SYNC_SCOPE_CHANGED, { spaceId })
+      .catch(() => undefined);
   }
 
   private prepareAliases(

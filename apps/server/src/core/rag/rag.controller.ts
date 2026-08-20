@@ -23,6 +23,7 @@ import {
   RagBlockedPagesQueryDto,
   RagDatabaseRowsQueryDto,
   RagDeletedQueryDto,
+  RagDictionaryTermParamsDto,
   RagListPagesQueryDto,
   RagPageExportQueryDto,
   RagPageIdentifierParamsDto,
@@ -109,6 +110,64 @@ export class RagController {
     @AuthSpace() space: Space,
   ) {
     return this.ragService.getDeleted(
+      this.buildScope(user, workspace, space),
+      query.deletedSince,
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
+  @Get('dictionary/terms')
+  async listDictionaryTerms(
+    @Query() query: RagBlockedPagesQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.listDictionaryTerms(
+      this.buildScope(user, workspace, space),
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
+  @Get('dictionary/terms/:termId')
+  async getDictionaryTerm(
+    @Param() params: RagDictionaryTermParamsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getDictionaryTerm(
+      this.buildScope(user, workspace, space),
+      params.termId,
+    );
+  }
+
+  @SkipTransform()
+  @Get('dictionary/updates')
+  async getDictionaryUpdates(
+    @Query() query: RagUpdatesQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getDictionaryUpdates(
+      this.buildScope(user, workspace, space),
+      query.updatedSince,
+      { limit: query.limit, cursor: query.cursor },
+    );
+  }
+
+  @SkipTransform()
+  @Get('dictionary/deleted')
+  async getDictionaryDeleted(
+    @Query() query: RagDeletedQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @AuthSpace() space: Space,
+  ) {
+    return this.ragService.getDictionaryDeleted(
       this.buildScope(user, workspace, space),
       query.deletedSince,
       { limit: query.limit, cursor: query.cursor },

@@ -3,8 +3,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { comparePasswordHash } from '../../common/helpers/utils';
 import { Workspace } from '@docmost/db/types/entity.types';
@@ -18,10 +22,16 @@ import {
   normalizePreferenceBoolean,
   normalizeUserSettings,
 } from './utils/user-preferences.util';
+import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { EventName } from '../../common/events/event.contants';
 
 @Injectable()
 export class UserService {
-  constructor(private userRepo: UserRepo) {}
+  constructor(
+    private userRepo: UserRepo,
+    @Optional() @InjectKysely() private readonly db?: KyselyDB,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
+  ) {}
 
   private normalizeUserPreferencePayload<T extends { settings?: unknown }>(
     user: T,
@@ -257,6 +267,9 @@ export class UserService {
       return this.normalizeUserPreferencePayload(updatedUser);
     }
 
+    const displayNameChanged = Boolean(
+      updateUserDto.name && updateUserDto.name !== user.name,
+    );
     if (updateUserDto.name) {
       user.name = updateUserDto.name;
     }
@@ -311,6 +324,29 @@ export class UserService {
 
     if (!updatedUser) {
       throw new NotFoundException('User not found');
+    }
+
+    if (displayNameChanged && this.db) {
+      const affectedSpaces = await this.db
+        .selectFrom('pages')
+        .select('spaceId')
+        .distinct()
+        .where('workspaceId', '=', workspace.id)
+        .where('deletedAt', 'is', null)
+        .where(
+          sql<boolean>`(
+            settings ->> 'assigneeId' = ${userId}
+            OR COALESCE(settings -> 'stakeholderIds', '[]'::jsonb) ? ${userId}
+          )`,
+        )
+        .execute();
+      for (const affected of affectedSpaces) {
+        void this.eventEmitter
+          ?.emitAsync(EventName.RAG_SYNC_SCOPE_CHANGED, {
+            spaceId: affected.spaceId,
+          })
+          .catch(() => undefined);
+      }
     }
 
     return this.normalizeUserPreferencePayload(updatedUser);

@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -136,4 +137,9 @@ export class RagPageIdentifierParamsDto {
   @IsString()
   @IsNotEmpty()
   pageIdOrSlug: string;
+}
+
+export class RagDictionaryTermParamsDto {
+  @IsUUID()
+  termId: string;
 }
