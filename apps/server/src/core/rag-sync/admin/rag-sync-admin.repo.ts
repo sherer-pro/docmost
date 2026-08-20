@@ -81,6 +81,23 @@ export class RagSyncAdminRepo {
       .executeTakeFirst();
   }
 
+  findAiRetrievalTarget(
+    workspaceId: string,
+    spaceId: string,
+    trx: DbOrTx = this.db,
+  ) {
+    return trx
+      .selectFrom('aiSpaceConfigs')
+      .select([
+        'retrievalAdapter',
+        'retrievalOpenWebuiBaseUrl',
+        'retrievalOpenWebuiKnowledgeId',
+      ])
+      .where('workspaceId', '=', workspaceId)
+      .where('spaceId', '=', spaceId)
+      .executeTakeFirst();
+  }
+
   async insertBinding(
     workspaceId: string,
     spaceId: string,

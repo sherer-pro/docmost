@@ -41,6 +41,7 @@ import {
   RagSyncWriter,
   RagSyncWriterTarget,
 } from './rag-sync-admin.ports';
+import { sameOpenWebUiTarget } from '../rag-sync-target.util';
 
 const DEFAULT_STATUS: RagSyncStatus = {
   health: 'idle',
@@ -343,6 +344,7 @@ export class RagSyncAdminService {
           });
         }
         this.assertConfigured(current);
+        await this.assertRetrievalTargetMatches(current, trx);
         if (!current.lastTestedAt) {
           throw new ConflictException({
             code: 'rag_sync_target_not_tested',
@@ -562,6 +564,32 @@ export class RagSyncAdminService {
     }
     if (!(await this.repo.spaceExists(workspace.id, spaceId))) {
       throw new NotFoundException('Space not found');
+    }
+  }
+
+  private async assertRetrievalTargetMatches(
+    binding: RagSyncBinding,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    const retrieval = await this.repo.findAiRetrievalTarget(
+      binding.workspaceId,
+      binding.spaceId,
+      trx,
+    );
+    if (retrieval?.retrievalAdapter !== 'open-webui-knowledge-v1') return;
+    if (
+      !sameOpenWebUiTarget(
+        binding.baseUrl,
+        binding.knowledgeId,
+        retrieval.retrievalOpenWebuiBaseUrl,
+        retrieval.retrievalOpenWebuiKnowledgeId,
+      )
+    ) {
+      throw new ConflictException({
+        code: 'rag_sync_target_mismatch',
+        message:
+          'RAG sync target must match the Open WebUI retrieval origin and Knowledge ID',
+      });
     }
   }
 
