@@ -1,7 +1,4 @@
-import {
-  BadGatewayException,
-  Injectable,
-} from '@nestjs/common';
+import { BadGatewayException, Injectable } from '@nestjs/common';
 import { validate as isUuid } from 'uuid';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
 import {
@@ -19,10 +16,7 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
   constructor(private readonly http: AiRetrievalHttpClient) {}
 
   isConfigured(config: AiRetrievalConfig): boolean {
-    return Boolean(
-      config.adapter === this.kind &&
-        config.url?.trim(),
-    );
+    return Boolean(config.adapter === this.kind && config.url?.trim());
   }
 
   async test(
@@ -71,7 +65,7 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
 
     const parsed = hits
       .slice(0, AI_RETRIEVAL_DEFAULTS.candidateLimit)
-      .map((hit) => this.parseHit(hit))
+      .map((hit) => this.parseHit(hit, request))
       .filter((hit): hit is AiRetrievalHit => Boolean(hit));
     const deduplicated = new Map<string, AiRetrievalHit>();
     for (const hit of parsed) {
@@ -88,23 +82,27 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
     return [...deduplicated.values()];
   }
 
-  private parseHit(value: unknown): AiRetrievalHit | null {
+  private parseHit(
+    value: unknown,
+    request: AiRetrievalRequest,
+  ): AiRetrievalHit | null {
     if (!value || typeof value !== 'object') {
       return null;
     }
     const hit = value as Record<string, unknown>;
     if (
-      !['page', 'database_row', 'attachment'].includes(
+      !['page', 'database_row', 'attachment', 'dictionary_term'].includes(
         String(hit.sourceType),
       ) ||
+      !request.sourceTypes.includes(hit.sourceType as never) ||
       typeof hit.sourceId !== 'string' ||
-      typeof hit.pageId !== 'string' ||
       !isUuid(hit.sourceId) ||
-      !isUuid(hit.pageId) ||
+      (hit.sourceType === 'dictionary_term'
+        ? hit.pageId !== null
+        : typeof hit.pageId !== 'string' || !isUuid(hit.pageId)) ||
       typeof hit.text !== 'string' ||
       hit.text.length === 0 ||
-      Buffer.byteLength(hit.text, 'utf8') >
-        AI_RETRIEVAL_DEFAULTS.maxHitChars
+      Buffer.byteLength(hit.text, 'utf8') > AI_RETRIEVAL_DEFAULTS.maxHitChars
     ) {
       return null;
     }
@@ -112,12 +110,9 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
     return {
       sourceType: hit.sourceType as AiRetrievalHit['sourceType'],
       sourceId: hit.sourceId,
-      pageId: hit.pageId,
+      pageId: hit.pageId as string | null,
       text: hit.text,
-      ...(Number.isFinite(hit.score)
-        ? { score: Number(hit.score) }
-        : {}),
+      ...(Number.isFinite(hit.score) ? { score: Number(hit.score) } : {}),
     };
   }
-
 }

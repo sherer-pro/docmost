@@ -9,6 +9,7 @@ function queryReturning(rows: unknown[]) {
     innerJoin: jest.fn(() => query),
     where: jest.fn(() => query),
     execute: jest.fn(async () => rows),
+    executeTakeFirst: jest.fn(async () => rows[0]),
   };
   return query;
 }
@@ -21,7 +22,11 @@ describe('AiSourceAccessService', () => {
     spaceId: 'space-1',
   };
 
-  function createService(options?: { excluded?: string[] }) {
+  function createService(options?: {
+    excluded?: string[];
+    dictionaryEnabled?: boolean;
+    canReadDictionary?: boolean;
+  }) {
     const db = {
       selectFrom: jest.fn((table: string) => {
         if (table === 'pages') {
@@ -52,6 +57,18 @@ describe('AiSourceAccessService', () => {
             },
           ]);
         }
+        if (table === 'spaces') {
+          return queryReturning([
+            {
+              settings: {
+                dictionary: { enabled: options?.dictionaryEnabled ?? false },
+              },
+            },
+          ]);
+        }
+        if (table === 'dictionaryTerms') {
+          return queryReturning([{ id: 'term-1' }]);
+        }
         return queryReturning([]);
       }),
     };
@@ -66,6 +83,11 @@ describe('AiSourceAccessService', () => {
         getExcludedPageIds: jest.fn(
           async () => new Set(options?.excluded ?? []),
         ),
+      } as any,
+      {
+        createForUser: jest.fn(async () => ({
+          can: jest.fn(() => options?.canReadDictionary ?? true),
+        })),
       } as any,
     );
   }
@@ -118,5 +140,56 @@ describe('AiSourceAccessService', () => {
         params,
       ),
     ).rejects.toBeInstanceOf(AiSourceAccessChangedError);
+  });
+
+  it('accepts only active enabled dictionary terms with null pageId and Read Page ability', async () => {
+    const enabled = createService({ dictionaryEnabled: true });
+    await expect(
+      enabled.filterAccessible(
+        [
+          {
+            sourceType: 'dictionary_term',
+            sourceId: 'term-1',
+            pageId: null,
+          },
+          {
+            sourceType: 'dictionary_term',
+            sourceId: 'term-1',
+            pageId: 'page-1',
+          },
+        ],
+        params,
+      ),
+    ).resolves.toEqual([
+      { sourceType: 'dictionary_term', sourceId: 'term-1', pageId: null },
+    ]);
+
+    await expect(
+      createService({ dictionaryEnabled: false }).filterAccessible(
+        [
+          {
+            sourceType: 'dictionary_term',
+            sourceId: 'term-1',
+            pageId: null,
+          },
+        ],
+        params,
+      ),
+    ).resolves.toEqual([]);
+    await expect(
+      createService({
+        dictionaryEnabled: true,
+        canReadDictionary: false,
+      }).filterAccessible(
+        [
+          {
+            sourceType: 'dictionary_term',
+            sourceId: 'term-1',
+            pageId: null,
+          },
+        ],
+        params,
+      ),
+    ).resolves.toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
@@ -55,6 +56,7 @@ import { PageTemplatePolicyService } from '../../page/transclusion/page-template
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceRole } from '../../../common/helpers/types/permission';
+import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
 // rejected, or expired write proposal starts a new segment. The run-level
@@ -223,6 +225,10 @@ export class AiToolRegistryService {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly pageTemplatePolicy: PageTemplatePolicyService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    @Optional()
+    private readonly knowledgeProjection: KnowledgeProjectionService = new KnowledgeProjectionService(
+      db,
+    ),
   ) {
     this.tools = this.createTools();
     // The mcp__ prefix is reserved for outbound external MCP tools. Reusing it
@@ -346,7 +352,7 @@ export class AiToolRegistryService {
       {
         name: 'search',
         description:
-          'Search readable pages and database rows in the current space. Returns compact snippets and page IDs.',
+          'Search readable pages, database rows, and dictionary terms in the current space. Returns compact snippets and source IDs.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -1043,20 +1049,110 @@ export class AiToolRegistryService {
         excludedPageIds: excluded,
       },
     );
-    const items = response.items.map((item) => ({
-      pageId: item.id,
-      type: (item.databaseId ? 'database_row' : 'page') as
-        | 'page'
-        | 'database_row',
-      databaseId: item.databaseId ?? null,
-      title: item.title,
-      highlight: item.highlight,
-      breadcrumbs: item.breadcrumbs?.map((crumb) => crumb.title) ?? [],
-      updatedAt: item.updatedAt,
+    const pageIds = response.items.map((item) => item.id);
+    const [space, dictionaryTerms, pages] = await Promise.all([
+      this.db
+        .selectFrom('spaces')
+        .selectAll()
+        .where('id', '=', context.spaceId)
+        .where('workspaceId', '=', context.workspaceId)
+        .executeTakeFirst(),
+      this.knowledgeProjection.searchDictionaryTerms({
+        workspaceId: context.workspaceId,
+        spaceId: context.spaceId,
+        query,
+        limit,
+      }),
+      pageIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('pages')
+            .select(['id', 'settings'])
+            .where('workspaceId', '=', context.workspaceId)
+            .where('spaceId', '=', context.spaceId)
+            .where('id', 'in', pageIds)
+            .execute(),
+    ]);
+    const documentFields = space
+      ? this.knowledgeProjection.getDocumentFieldsConfig(space)
+      : { status: false, assignee: false, stakeholders: false, aiRole: false };
+    const customFieldsByPageId = new Map(
+      pages.map((page) => [
+        page.id,
+        this.knowledgeProjection.buildCustomFields(
+          page.settings,
+          documentFields,
+        ),
+      ]),
+    );
+    const members = await this.knowledgeProjection.resolveMembers(
+      context.workspaceId,
+      [...customFieldsByPageId.values()],
+    );
+    const memberNames = this.knowledgeProjection.memberNames(members);
+    const pageItems = response.items.map((item) => {
+      const customFields = customFieldsByPageId.get(item.id);
+      return {
+        pageId: item.id,
+        type: (item.databaseId ? 'database_row' : 'page') as
+          | 'page'
+          | 'database_row',
+        databaseId: item.databaseId ?? null,
+        title: item.title,
+        highlight: item.highlight,
+        breadcrumbs: item.breadcrumbs?.map((crumb) => crumb.title) ?? [],
+        updatedAt: item.updatedAt,
+        customFields,
+        documentFieldsMarkdown: this.knowledgeProjection.renderDocumentFields(
+          customFields,
+          memberNames,
+        ),
+      };
+    });
+    const dictionaryItems = dictionaryTerms.map((term) => ({
+      pageId: null,
+      sourceId: term.id,
+      type: 'dictionary_term' as const,
+      term: term.term,
+      forms: term.forms,
+      definitionMarkdown: term.definitionMarkdown.slice(0, 4_000),
+      score: term.score,
+      exact: term.exact,
+      deepLink: space
+        ? `/s/${encodeURIComponent(space.slug)}/dictionary?term=${encodeURIComponent(term.id)}`
+        : null,
     }));
+    const items = [
+      ...dictionaryItems.filter((item) => item.exact),
+      ...pageItems,
+      ...dictionaryItems.filter((item) => !item.exact),
+    ].slice(0, limit);
+    const pageResults = items.filter(
+      (item): item is (typeof pageItems)[number] =>
+        item.type !== 'dictionary_term',
+    );
+    const dictionaryResults = items.filter(
+      (item): item is (typeof dictionaryItems)[number] =>
+        item.type === 'dictionary_term',
+    );
     return {
       content: { items },
-      citations: await this.pageRootCitations(items, context),
+      citations: [
+        ...(await this.pageRootCitations(pageResults, context)),
+        ...dictionaryResults.map((term) => ({
+          candidateKey: `dictionary_term:${term.sourceId}:root`,
+          sourceType: 'dictionary_term' as const,
+          sourceId: term.sourceId,
+          pageId: null,
+          sourceTitle: term.term,
+          sourceUrl: term.deepLink,
+          excerpt: term.definitionMarkdown || null,
+          relevanceScore: term.score,
+          sectionId: null,
+          sectionTitle: null,
+          root: true,
+        })),
+      ],
     };
   }
 
@@ -1147,6 +1243,7 @@ export class AiToolRegistryService {
             .limit(50)
             .execute(),
     ]);
+    const projectedFields = await this.projectPageDocumentFields(page, context);
     return {
       content: {
         page: {
@@ -1154,6 +1251,7 @@ export class AiToolRegistryService {
           title: page.title,
           slugId: page.slugId,
           updatedAt: page.updatedAt,
+          ...projectedFields,
         },
         breadcrumbs: breadcrumbs
           .filter(
@@ -1183,12 +1281,14 @@ export class AiToolRegistryService {
       | undefined;
     const serializedContent = JSON.stringify(document);
     const fits = Buffer.byteLength(serializedContent, 'utf8') <= 24 * 1024;
+    const projectedFields = await this.projectPageDocumentFields(page, context);
     return {
       content: {
         id: page.id,
         title: page.title,
         slugId: page.slugId,
         updatedAt: page.updatedAt,
+        ...projectedFields,
         content: fits ? document : null,
         text: getProseMirrorText(document ?? {}).slice(0, 16000),
         outline: fits
@@ -1345,6 +1445,7 @@ export class AiToolRegistryService {
     context: AiToolExecutionContext,
   ): Promise<AiToolExecutionResult> {
     const database = await this.getReadableDatabase(databaseId, context);
+    const databasePage = await this.getReadablePage(database.pageId, context);
     const [properties, views] = await Promise.all([
       this.db
         .selectFrom('databaseProperties')
@@ -1363,9 +1464,13 @@ export class AiToolRegistryService {
         .orderBy('createdAt', 'asc')
         .execute(),
     ]);
+    const projectedFields = await this.projectPageDocumentFields(
+      databasePage,
+      context,
+    );
     return {
       content: {
-        database: this.curatedDatabase(database),
+        database: { ...this.curatedDatabase(database), ...projectedFields },
         properties: properties.map((property) =>
           this.curatedDatabaseProperty(property),
         ),
@@ -1397,6 +1502,7 @@ export class AiToolRegistryService {
         'page.title',
         'page.slugId',
         'page.icon',
+        'page.settings',
       ])
       .where('row.databaseId', '=', database.id)
       .where('row.workspaceId', '=', context.workspaceId)
@@ -1435,26 +1541,65 @@ export class AiToolRegistryService {
         snapshot.readablePageIds.has(row.pageId) && !excluded.has(row.pageId),
     );
     const pageIds = readableRows.map((row) => row.pageId);
-    const cells = pageIds.length
-      ? await this.db
-          .selectFrom('databaseCells')
-          .select(['id', 'pageId', 'propertyId', 'value', 'attachmentId'])
-          .where('databaseId', '=', database.id)
-          .where('workspaceId', '=', context.workspaceId)
-          .where('pageId', 'in', pageIds)
-          .where('deletedAt', 'is', null)
-          .execute()
-      : [];
+    const [cells, properties] = pageIds.length
+      ? await Promise.all([
+          this.db
+            .selectFrom('databaseCells')
+            .select(['id', 'pageId', 'propertyId', 'value', 'attachmentId'])
+            .where('databaseId', '=', database.id)
+            .where('workspaceId', '=', context.workspaceId)
+            .where('pageId', 'in', pageIds)
+            .where('deletedAt', 'is', null)
+            .execute(),
+          this.db
+            .selectFrom('databaseProperties')
+            .select(['id', 'name', 'type', 'settings'])
+            .where('databaseId', '=', database.id)
+            .where('workspaceId', '=', context.workspaceId)
+            .where('deletedAt', 'is', null)
+            .orderBy('position', 'asc')
+            .execute(),
+        ])
+      : [[], []];
     const cellsByPage = new Map<string, typeof cells>();
     for (const cell of cells) {
       const values = cellsByPage.get(cell.pageId) ?? [];
       values.push(this.curatedDatabaseCell(cell) as (typeof cells)[number]);
       cellsByPage.set(cell.pageId, values);
     }
-    const items = readableRows.map((row) => ({
-      ...row,
-      cells: cellsByPage.get(row.pageId) ?? [],
-    }));
+    const space = await this.db
+      .selectFrom('spaces')
+      .selectAll()
+      .where('id', '=', context.spaceId)
+      .where('workspaceId', '=', context.workspaceId)
+      .executeTakeFirstOrThrow();
+    const documentFields =
+      this.knowledgeProjection.getDocumentFieldsConfig(space);
+    const rowFields = readableRows.map((row) =>
+      this.knowledgeProjection.buildCustomFields(row.settings, documentFields),
+    );
+    const members = await this.knowledgeProjection.resolveMembers(
+      context.workspaceId,
+      rowFields,
+    );
+    const memberNames = this.knowledgeProjection.memberNames(members);
+    const items = readableRows.map((row, index) => {
+      const customFields = rowFields[index];
+      const { settings: _settings, ...safeRow } = row;
+      const rendered = this.knowledgeProjection.renderRowFields(
+        properties,
+        cellsByPage.get(row.pageId) ?? [],
+      );
+      return {
+        ...safeRow,
+        customFields,
+        documentFieldsMarkdown: this.knowledgeProjection.renderDocumentFields(
+          customFields,
+          memberNames,
+        ),
+        cells: rendered.cells,
+      };
+    });
     const fitted = fitAiToolItems(items, 28 * 1024);
     const consumedRows = fitted.truncated
       ? Math.max(
@@ -1524,6 +1669,11 @@ export class AiToolRegistryService {
         .where('deletedAt', 'is', null)
         .execute(),
     ]);
+    const projectedFields = await this.projectPageDocumentFields(page, context);
+    const renderedCells = this.knowledgeProjection.renderRowFields(
+      properties,
+      cells,
+    );
     return {
       content: {
         database: this.curatedDatabase(database),
@@ -1532,11 +1682,12 @@ export class AiToolRegistryService {
           title: page.title,
           slugId: page.slugId,
           icon: page.icon,
+          ...projectedFields,
         },
         properties: properties.map((property) =>
           this.curatedDatabaseProperty(property),
         ),
-        cells: cells.map((cell) => this.curatedDatabaseCell(cell)),
+        cells: renderedCells.cells,
       },
       citations: await this.pageRootCitations(
         [
@@ -2219,7 +2370,7 @@ export class AiToolRegistryService {
 
   private curatedDatabaseProperty(property: any) {
     const settings =
-      property.type === 'select' &&
+      (property.type === 'select' || property.type === 'status') &&
       property.settings &&
       typeof property.settings === 'object' &&
       Array.isArray((property.settings as any).options)
@@ -2602,6 +2753,34 @@ export class AiToolRegistryService {
       throw new ForbiddenException('Page is excluded from AI access');
     }
     return page;
+  }
+
+  private async projectPageDocumentFields(
+    page: { settings?: unknown },
+    context: AiToolExecutionContext,
+  ) {
+    const space = await this.db
+      .selectFrom('spaces')
+      .selectAll()
+      .where('id', '=', context.spaceId)
+      .where('workspaceId', '=', context.workspaceId)
+      .executeTakeFirstOrThrow();
+    const config = this.knowledgeProjection.getDocumentFieldsConfig(space);
+    const customFields = this.knowledgeProjection.buildCustomFields(
+      page.settings,
+      config,
+    );
+    const members = await this.knowledgeProjection.resolveMembers(
+      context.workspaceId,
+      [customFields],
+    );
+    return {
+      customFields,
+      documentFieldsMarkdown: this.knowledgeProjection.renderDocumentFields(
+        customFields,
+        this.knowledgeProjection.memberNames(members),
+      ),
+    };
   }
 
   /**

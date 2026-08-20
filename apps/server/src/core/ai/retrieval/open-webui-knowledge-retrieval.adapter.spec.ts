@@ -89,6 +89,43 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     });
   });
 
+  it('accepts dictionary ownership metadata only with null pageId', async () => {
+    const termId = '0198f2f5-a5a3-7000-8000-000000000009';
+    global.fetch = jest.fn(async () =>
+      jsonResponse({
+        documents: [['valid dictionary', 'invalid dictionary']],
+        metadatas: [
+          [
+            thisMetadata({
+              sourceType: 'dictionary_term',
+              sourceId: termId,
+              pageId: null,
+            }),
+            thisMetadata({
+              sourceType: 'dictionary_term',
+              sourceId: termId,
+              pageId,
+            }),
+          ],
+        ],
+        distances: [[0.1, 0.2]],
+      }),
+    ) as any;
+
+    await expect(
+      adapter.retrieve(config, {
+        ...request,
+        sourceTypes: ['page', 'dictionary_term'],
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        sourceType: 'dictionary_term',
+        sourceId: termId,
+        pageId: null,
+      }),
+    ]);
+  });
+
   it('accepts canonical nested and compatible top-level metadata', async () => {
     global.fetch = jest.fn(async () =>
       jsonResponse({

@@ -18,6 +18,7 @@ import {
   AiSourceAccessReference,
   AiSourceAccessService,
 } from '../services/ai-source-access.service';
+import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
@@ -40,6 +41,8 @@ export class AiRetrievalService {
     private readonly contentPolicy?: AiContentPolicyService,
     @Optional()
     private readonly sourceAccess?: AiSourceAccessService,
+    @Optional()
+    private readonly knowledgeProjection?: KnowledgeProjectionService,
   ) {}
 
   async assertSourcesAccessible(params: {
@@ -65,6 +68,7 @@ export class AiRetrievalService {
     if (
       params.sources.some(
         (source) =>
+          !source.pageId ||
           !snapshot.readablePageIds.has(source.pageId) ||
           excluded.has(source.pageId),
       )
@@ -81,7 +85,8 @@ export class AiRetrievalService {
     user: User,
   ) {
     const adapter = this.getAdapter(config);
-    const result = await adapter.test(config, request);
+    const safeRequest = await this.withDictionarySourceType(request);
+    const result = await adapter.test(config, safeRequest);
     const allowedPageIds = [
       ...(await this.currentAllowedPageIds(
         user,
@@ -90,7 +95,7 @@ export class AiRetrievalService {
       )),
     ];
     const hits = await adapter.retrieve(config, {
-      ...request,
+      ...safeRequest,
       allowedPageIds,
     });
     const sources = await this.resolveSafeSources(
@@ -132,10 +137,11 @@ export class AiRetrievalService {
           params.request.spaceId,
         )),
       ];
+      const safeRequest = await this.withDictionarySourceType(params.request);
       const hits = await adapter.retrieve(
         params.config,
         {
-          ...params.request,
+          ...safeRequest,
           allowedPageIds,
         },
         params.signal,
@@ -240,7 +246,10 @@ export class AiRetrievalService {
     const attachmentIds = hits
       .filter((hit) => hit.sourceType === 'attachment')
       .map((hit) => hit.sourceId);
-    const [rows, attachments] = await Promise.all([
+    const dictionaryIds = hits
+      .filter((hit) => hit.sourceType === 'dictionary_term')
+      .map((hit) => hit.sourceId);
+    const [rows, attachments, dictionaryTerms] = await Promise.all([
       rowIds.length
         ? db
             .selectFrom('databaseRows')
@@ -262,6 +271,22 @@ export class AiRetrievalService {
             .where('id', 'in', attachmentIds)
             .execute()
         : [],
+      dictionaryIds.length
+        ? db
+            .selectFrom('dictionaryTerms as term')
+            .innerJoin('spaces', 'spaces.id', 'term.spaceId')
+            .select([
+              'term.id as id',
+              'term.term as term',
+              'term.workspaceId as workspaceId',
+              'term.spaceId as spaceId',
+              'term.deletedAt as deletedAt',
+              'spaces.slug as spaceSlug',
+              'spaces.settings as spaceSettings',
+            ])
+            .where('term.id', 'in', dictionaryIds)
+            .execute()
+        : [],
     ]);
     const rowPageIds = rows.map((row: any) => row.pageId);
     const attachmentPageIds = attachments
@@ -281,13 +306,34 @@ export class AiRetrievalService {
         'pages.spaceId as spaceId',
         'pages.deletedAt as deletedAt',
         'pages.content as content',
+        'pages.settings as settings',
         'spaces.slug as spaceSlug',
+        'spaces.settings as spaceSettings',
       ])
       .where('pages.id', 'in', pageIds)
       .execute();
     const pagesById = new Map<string, any>(
       pages.map((page: any) => [page.id, page]),
     );
+    const pageCustomFields = new Map<string, any>();
+    if (this.knowledgeProjection) {
+      for (const page of pages) {
+        const config = this.knowledgeProjection.getDocumentFieldsConfig({
+          settings: page.spaceSettings,
+        } as any);
+        pageCustomFields.set(
+          page.id,
+          this.knowledgeProjection.buildCustomFields(page.settings, config),
+        );
+      }
+    }
+    const projectedMembers = this.knowledgeProjection
+      ? await this.knowledgeProjection.resolveMembers(workspaceId, [
+          ...pageCustomFields.values(),
+        ])
+      : new Map();
+    const projectedMemberNames =
+      this.knowledgeProjection?.memberNames(projectedMembers);
 
     const rowsById = new Map<string, any>(
       rows.map((row: any) => [row.id, row]),
@@ -295,9 +341,44 @@ export class AiRetrievalService {
     const attachmentsById = new Map<string, any>(
       attachments.map((file: any) => [file.id, file]),
     );
+    const dictionaryTermsById = new Map<string, any>(
+      dictionaryTerms.map((term: any) => [term.id, term]),
+    );
 
     const safe: AiSafeRetrievalSource[] = [];
     for (const hit of hits) {
+      if (hit.sourceType === 'dictionary_term') {
+        const term = dictionaryTermsById.get(hit.sourceId);
+        const dictionaryEnabled = Boolean(
+          term?.spaceSettings &&
+            typeof term.spaceSettings === 'object' &&
+            !Array.isArray(term.spaceSettings) &&
+            term.spaceSettings.dictionary?.enabled,
+        );
+        if (
+          hit.pageId !== null ||
+          !term ||
+          term.deletedAt ||
+          term.workspaceId !== workspaceId ||
+          term.spaceId !== spaceId ||
+          !dictionaryEnabled
+        ) {
+          continue;
+        }
+        safe.push({
+          sourceType: 'dictionary_term',
+          sourceId: hit.sourceId,
+          pageId: null,
+          sourceTitle: term.term,
+          sourceUrl: `/s/${encodeURIComponent(term.spaceSlug)}/dictionary?term=${encodeURIComponent(term.id)}`,
+          excerpt: this.sanitizeExcerpt(hit.text),
+          relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
+          sectionId: null,
+          sectionTitle: null,
+        });
+        if (safe.length >= topK) break;
+        continue;
+      }
       const row =
         hit.sourceType === 'database_row'
           ? rowsById.get(hit.sourceId)
@@ -307,6 +388,7 @@ export class AiRetrievalService {
           ? attachmentsById.get(hit.sourceId)
           : undefined;
       const resolvedPageId = hit.pageId;
+      if (!resolvedPageId) continue;
       const page = pagesById.get(resolvedPageId);
       if (
         !page ||
@@ -345,6 +427,13 @@ export class AiRetrievalService {
           ? null
           : this.matchPageSection(page.content, hit.text);
       const pageUrl = `/s/${encodeURIComponent(page.spaceSlug)}/p/${encodeURIComponent(page.slugId)}`;
+      const customFields = pageCustomFields.get(page.id);
+      const documentFieldsMarkdown = this.knowledgeProjection
+        ? this.knowledgeProjection.renderDocumentFields(
+            customFields,
+            projectedMemberNames ?? new Map(),
+          )
+        : '';
       safe.push({
         sourceType: hit.sourceType,
         sourceId: hit.sourceId,
@@ -356,8 +445,11 @@ export class AiRetrievalService {
             : section
               ? `${pageUrl}#${encodeURIComponent(section.id)}`
               : pageUrl,
-        excerpt: this.sanitizeExcerpt(hit.text),
+        excerpt: [documentFieldsMarkdown, this.sanitizeExcerpt(hit.text)]
+          .filter(Boolean)
+          .join('\n\n'),
         relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
+        customFields,
         sectionId: section?.id ?? null,
         sectionTitle: section?.title ?? null,
       });
@@ -367,6 +459,29 @@ export class AiRetrievalService {
     }
 
     return safe;
+  }
+
+  private async withDictionarySourceType(
+    request: AiRetrievalRequest,
+  ): Promise<AiRetrievalRequest> {
+    const space = await this.db
+      .selectFrom('spaces')
+      .select('settings')
+      .where('id', '=', request.spaceId)
+      .where('workspaceId', '=', request.workspaceId)
+      .executeTakeFirst();
+    const dictionaryEnabled = Boolean(
+      space?.settings &&
+        typeof space.settings === 'object' &&
+        !Array.isArray(space.settings) &&
+        (space.settings as any).dictionary?.enabled,
+    );
+    const sourceTypes: AiRetrievalRequest['sourceTypes'] =
+      request.sourceTypes.filter(
+        (sourceType) => sourceType !== 'dictionary_term',
+      );
+    if (dictionaryEnabled) sourceTypes.push('dictionary_term');
+    return { ...request, sourceTypes };
   }
 
   private sanitizeExcerpt(value: string): string {

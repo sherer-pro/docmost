@@ -25,9 +25,7 @@ type OpenWebUiFileResponse = {
 @Injectable()
 export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
   readonly kind = 'open-webui-knowledge-v1' as const;
-  private readonly logger = new Logger(
-    OpenWebUiKnowledgeRetrievalAdapter.name,
-  );
+  private readonly logger = new Logger(OpenWebUiKnowledgeRetrievalAdapter.name);
 
   constructor(private readonly http: AiRetrievalHttpClient) {}
 
@@ -283,20 +281,22 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       ![1, 2].includes(Number(docmost.schemaVersion)) ||
       docmost.workspaceId !== request.workspaceId ||
       docmost.spaceId !== request.spaceId ||
-      !['page', 'database_row', 'attachment'].includes(
+      !['page', 'database_row', 'attachment', 'dictionary_term'].includes(
         String(docmost.sourceType),
       ) ||
+      !request.sourceTypes.includes(docmost.sourceType as never) ||
       typeof docmost.sourceId !== 'string' ||
-      typeof docmost.pageId !== 'string' ||
       !isUuid(docmost.sourceId) ||
-      !isUuid(docmost.pageId)
+      (docmost.sourceType === 'dictionary_term'
+        ? docmost.pageId !== null
+        : typeof docmost.pageId !== 'string' || !isUuid(docmost.pageId))
     ) {
       return null;
     }
     return {
       sourceType: docmost.sourceType as AiRetrievalHit['sourceType'],
       sourceId: docmost.sourceId,
-      pageId: docmost.pageId,
+      pageId: docmost.pageId as string | null,
       text: document,
       ...(Number.isFinite(distance)
         ? { score: this.distanceToScore(Number(distance)) }

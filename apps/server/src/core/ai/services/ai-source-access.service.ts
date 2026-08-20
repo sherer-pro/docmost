@@ -4,11 +4,16 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { User } from '@docmost/db/types/entity.types';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
+import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '../../casl/interfaces/space-ability.type';
 
 export type AiSourceAccessReference = {
   sourceType: string;
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
 };
 
 export class AiSourceAccessChangedError extends Error {
@@ -26,6 +31,7 @@ export class AiSourceAccessService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageAccessService: PageAccessService,
     private readonly contentPolicy: AiContentPolicyService,
+    private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
   async getAllowedPageIds(params: {
@@ -38,10 +44,7 @@ export class AiSourceAccessService {
         params.user,
         params.spaceId,
       ),
-      this.contentPolicy.getExcludedPageIds(
-        params.spaceId,
-        params.workspaceId,
-      ),
+      this.contentPolicy.getExcludedPageIds(params.spaceId, params.workspaceId),
     ]);
     const candidates = [...snapshot.readablePageIds].filter(
       (pageId) => !excluded.has(pageId),
@@ -64,7 +67,39 @@ export class AiSourceAccessService {
   ): Promise<T[]> {
     if (sources.length === 0) return [];
     const allowedPageIds = await this.getAllowedPageIds(params);
-    if (allowedPageIds.size === 0) return [];
+    const dictionaryIds = sources
+      .filter((source) => source.sourceType === 'dictionary_term')
+      .map((source) => source.sourceId);
+    const space = await this.db
+      .selectFrom('spaces')
+      .select(['settings'])
+      .where('id', '=', params.spaceId)
+      .where('workspaceId', '=', params.workspaceId)
+      .executeTakeFirst();
+    const dictionaryEnabled = Boolean(
+      space?.settings &&
+        typeof space.settings === 'object' &&
+        !Array.isArray(space.settings) &&
+        (space.settings as any).dictionary?.enabled,
+    );
+    let readableDictionaryIds = new Set<string>();
+    if (dictionaryEnabled && dictionaryIds.length > 0) {
+      const ability = await this.spaceAbility.createForUser(
+        params.user,
+        params.spaceId,
+      );
+      if (ability.can(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+        const terms = await this.db
+          .selectFrom('dictionaryTerms')
+          .select('id')
+          .where('workspaceId', '=', params.workspaceId)
+          .where('spaceId', '=', params.spaceId)
+          .where('deletedAt', 'is', null)
+          .where('id', 'in', dictionaryIds)
+          .execute();
+        readableDictionaryIds = new Set(terms.map((term) => term.id));
+      }
+    }
 
     const rowIds = sources
       .filter((source) => source.sourceType === 'database_row')
@@ -80,10 +115,7 @@ export class AiSourceAccessService {
         ? this.db
             .selectFrom('databaseRows')
             .innerJoin('databases', 'databases.id', 'databaseRows.databaseId')
-            .select([
-              'databaseRows.id as id',
-              'databaseRows.pageId as pageId',
-            ])
+            .select(['databaseRows.id as id', 'databaseRows.pageId as pageId'])
             .where('databaseRows.id', 'in', rowIds)
             .where('databaseRows.workspaceId', '=', params.workspaceId)
             .where('databaseRows.archivedAt', 'is', null)
@@ -128,6 +160,12 @@ export class AiSourceAccessService {
     );
 
     return sources.filter((source) => {
+      if (source.sourceType === 'dictionary_term') {
+        return (
+          source.pageId === null && readableDictionaryIds.has(source.sourceId)
+        );
+      }
+      if (!source.pageId) return false;
       if (!allowedPageIds.has(source.pageId)) return false;
       switch (source.sourceType) {
         case 'page':

@@ -131,6 +131,49 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     ]);
   });
 
+  it('accepts null pageId only for requested dictionary terms', async () => {
+    const termId = '0198f2f5-a5a3-7000-8000-000000000009';
+    global.fetch = jest.fn(async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              sourceType: 'dictionary_term',
+              sourceId: termId,
+              pageId: null,
+              text: 'Dictionary definition',
+            },
+            {
+              sourceType: 'dictionary_term',
+              sourceId: termId,
+              pageId: request.pageId,
+              text: 'Invalid dictionary page identity',
+            },
+            {
+              sourceType: 'page',
+              sourceId: request.pageId,
+              pageId: null,
+              text: 'Invalid page identity',
+            },
+          ],
+        }),
+      ),
+    ) as any;
+
+    await expect(
+      adapter.retrieve(config, {
+        ...request,
+        sourceTypes: ['page', 'dictionary_term'],
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        sourceType: 'dictionary_term',
+        sourceId: termId,
+        pageId: null,
+      }),
+    ]);
+  });
+
   it('rejects an oversized serialized retrieval request before fetch', async () => {
     global.fetch = jest.fn() as any;
     await expect(

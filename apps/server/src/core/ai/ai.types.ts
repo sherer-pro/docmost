@@ -72,27 +72,30 @@ export type AiRetrievalRequest = {
   pageId: string;
   query: string;
   allowedPageIds: string[];
-  sourceTypes: Array<'page' | 'database_row' | 'attachment'>;
+  sourceTypes: Array<
+    'page' | 'database_row' | 'attachment' | 'dictionary_term'
+  >;
   limit: number;
   candidateLimit: number;
 };
 
 export type AiRetrievalHit = {
-  sourceType: 'page' | 'database_row' | 'attachment';
+  sourceType: 'page' | 'database_row' | 'attachment' | 'dictionary_term';
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   text: string;
   score?: number;
 };
 
 export type AiSafeRetrievalSource = {
-  sourceType: 'page' | 'database_row' | 'attachment';
+  sourceType: 'page' | 'database_row' | 'attachment' | 'dictionary_term';
   sourceId: string;
-  pageId: string;
+  pageId: string | null;
   sourceTitle: string;
   sourceUrl: string | null;
   excerpt: string;
   relevanceScore: number | null;
+  customFields?: import('@docmost/api-contract').RagDocumentCustomFields;
   sectionId?: string | null;
   sectionTitle?: string | null;
 };
@@ -100,7 +103,13 @@ export type AiSafeRetrievalSource = {
 export type AiCitationCandidate = {
   marker: string;
   candidateKey: string;
-  sourceType: 'page' | 'database' | 'database_row' | 'attachment' | 'chat_file';
+  sourceType:
+    | 'page'
+    | 'database'
+    | 'database_row'
+    | 'attachment'
+    | 'dictionary_term'
+    | 'chat_file';
   sourceId: string;
   pageId: string | null;
   sourceTitle: string;

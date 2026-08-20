@@ -269,8 +269,7 @@ export class AiRunExecutionService {
             250_000,
             Math.max(
               8_000,
-              (providerRuntime.contextWindow -
-                providerConfig.maxOutputTokens) *
+              (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
                 1.5,
             ),
           ),
@@ -278,8 +277,7 @@ export class AiRunExecutionService {
             2 * 1024 * 1024,
             Math.max(
               256 * 1024,
-              (providerRuntime.contextWindow -
-                providerConfig.maxOutputTokens) *
+              (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
                 4,
             ),
           ),
@@ -996,7 +994,11 @@ export class AiRunExecutionService {
     run: AiRun,
     user: User,
     operation: () => Promise<T>,
-    sources: Array<{ sourceType: string; sourceId: string; pageId: string }> = [],
+    sources: Array<{
+      sourceType: string;
+      sourceId: string;
+      pageId: string;
+    }> = [],
   ): Promise<T> {
     await this.assertRunSourceAccess(run, user, sources);
     await this.assertCurrentAgentPageAccess(run, user);
@@ -1216,12 +1218,7 @@ export class AiRunExecutionService {
       .where('runId', '=', run.id)
       .execute();
     const references = [
-      ...sources.filter(
-        (
-          source,
-        ): source is { sourceType: string; sourceId: string; pageId: string } =>
-          source.sourceType !== 'chat_file' && Boolean(source.pageId),
-      ),
+      ...sources.filter((source) => source.sourceType !== 'chat_file'),
       ...dependencies.map((dependency) => ({
         sourceType: 'page',
         sourceId: dependency.pageId,
@@ -1501,28 +1498,20 @@ export class AiRunExecutionService {
     citationCandidates: AiCitationCandidate[];
     user: User;
   }): Promise<void> {
-    await this.assertRunSourceAccess(
-      params.run,
-      params.user,
-      [
-        ...params.retrievalOutcome.sources,
-        ...params.fileCitations,
-      ],
-    );
+    await this.assertRunSourceAccess(params.run, params.user, [
+      ...params.retrievalOutcome.sources,
+      ...params.fileCitations,
+    ]);
     const completedAt = new Date();
     const finalized = this.citations.finalize(
       params.content,
       params.citationCandidates,
     );
     const completion = await this.db.transaction().execute(async (trx) => {
-      await this.assertRunSourceAccess(
-        params.run,
-        params.user,
-        [
-          ...params.retrievalOutcome.sources,
-          ...params.fileCitations,
-        ],
-      );
+      await this.assertRunSourceAccess(params.run, params.user, [
+        ...params.retrievalOutcome.sources,
+        ...params.fileCitations,
+      ]);
       const updated = await trx
         .updateTable('aiRuns')
         .set({
