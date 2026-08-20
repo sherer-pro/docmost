@@ -36,12 +36,19 @@ const tsquery = require('pg-tsquery')();
 // `pg-tsquery` keeps characters it does not recognize as operators inside the
 // tokens it emits. `f_unaccent` then expands some of them into tsquery
 // structure - guillemets become `<<` and `>>`, for example - and `to_tsquery`
-// raises a syntax error for the whole request. Keep word characters, marks and
-// the operators `pg-tsquery` understands, and drop everything else.
-const UNSAFE_SEARCH_QUERY_CHARS = /[^\p{L}\p{M}\p{Nd}_\s&|!()"'+,\-*]/gu;
+// raises a syntax error for the whole request. PostgreSQL also treats dots
+// embedded in word characters as searchable host, file, or version tokens.
+// Preserve those dots and the operators `pg-tsquery` understands, and drop
+// everything else.
+const UNSAFE_SEARCH_QUERY_CHARS = /[^\p{L}\p{M}\p{Nd}_.\s&|!()"'+,\-*]/gu;
+const NON_EMBEDDED_SEARCH_QUERY_DOTS =
+  /(?<![\p{L}\p{M}\p{Nd}_])\.|\.(?![\p{L}\p{M}\p{Nd}_])/gu;
 
 export function buildSearchTsQuery(rawQuery: string): string | undefined {
-  const normalized = rawQuery.replace(UNSAFE_SEARCH_QUERY_CHARS, ' ').trim();
+  const normalized = rawQuery
+    .replace(UNSAFE_SEARCH_QUERY_CHARS, ' ')
+    .replace(NON_EMBEDDED_SEARCH_QUERY_DOTS, ' ')
+    .trim();
   if (!normalized) return undefined;
   const searchQuery = tsquery(normalized + '*');
   return typeof searchQuery === 'string' && searchQuery.trim().length > 0
