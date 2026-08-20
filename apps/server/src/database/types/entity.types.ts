@@ -103,6 +103,10 @@ export interface SpaceDictionarySettings {
   enabled?: boolean;
 }
 
+export interface SpaceTagSettings {
+  disabled?: string[];
+}
+
 export type HeadingNumberingSettings = {
   enabled?: boolean;
 } & Record<string, JsonValue>;
@@ -139,6 +143,7 @@ export interface SpaceSharingSettings {
 export interface SpaceSettings {
   documentFields?: SpaceDocumentFieldsSettings;
   dictionary?: SpaceDictionarySettings;
+  tags?: SpaceTagSettings;
   headingNumbering?: HeadingNumberingSettings;
   customLinks?: SpaceCustomLinksSettings;
   security?: SpaceSecuritySettings;
@@ -166,8 +171,7 @@ export type InsertableAiAssistantProfile = Insertable<AiAssistantProfiles>;
 export type UpdatableAiAssistantProfile = Updateable<
   Omit<AiAssistantProfiles, 'id'>
 >;
-export type AiAssistantProfileMcpTool =
-  Selectable<AiAssistantProfileMcpTools>;
+export type AiAssistantProfileMcpTool = Selectable<AiAssistantProfileMcpTools>;
 export type AiAssistantProfileGroupPolicy =
   Selectable<AiAssistantProfileGroupPolicies>;
 export type AiAssistantProfileWorkspaceSetting =
@@ -461,8 +465,7 @@ export type AuthAccount = Selectable<AuthAccounts>;
 export type InsertableAuthAccount = Insertable<AuthAccounts>;
 export type UpdatableAuthAccount = Updateable<Omit<AuthAccounts, 'id'>>;
 
-export type AuthProviderGroupMapping =
-  Selectable<AuthProviderGroupMappings>;
+export type AuthProviderGroupMapping = Selectable<AuthProviderGroupMappings>;
 export type AuthProviderGroupMembership =
   Selectable<AuthProviderGroupMemberships>;
 export type SsoLoginState = Selectable<SsoLoginStates>;

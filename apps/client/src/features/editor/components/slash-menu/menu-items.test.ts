@@ -4,7 +4,7 @@ import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-s
 import { getSuggestionItems } from "./menu-items";
 
 describe("tag slash menu", () => {
-  it("opens a tag picker from enabled workspace tags", () => {
+  it("opens a tag picker from enabled space tags", () => {
     const items = getSuggestionItems({ query: "tag" });
     const tagItem = items.basic.find((item) => item.title === "Tag");
     const enabledTags = getEnabledTagDefinitions({ disabled: ["done"] });
@@ -20,13 +20,19 @@ describe("tag slash menu", () => {
         : [];
 
     expect(tagItem).toBeTruthy();
-    expect(children.map((item) => item.title)).toEqual(["Tag TBD", "Tag TODO"]);
+    expect(children.map((item) => item.title)).toEqual([
+      "Tag TBD",
+      "Tag TODO",
+      "Tag Core",
+      "Tag Future",
+      "Tag Pilot",
+    ]);
     expect(builtInTagDefinitions.map((tag) => tag.titleKey)).toContain(
       "Tag DONE",
     );
   });
 
-  it("keeps the tag picker empty when every workspace tag is disabled", () => {
+  it("keeps the tag picker empty when every space tag is disabled", () => {
     const items = getSuggestionItems({ query: "tag" });
     const tagItem = items.basic.find((item) => item.title === "Tag");
     const children =

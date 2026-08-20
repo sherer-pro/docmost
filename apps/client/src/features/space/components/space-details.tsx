@@ -40,13 +40,17 @@ import {
   IconArchiveOff,
   IconInfoCircle,
 } from "@tabler/icons-react";
-import { ISpaceDocumentFieldsSettings } from "@/features/space/types/space.types.ts";
+import {
+  ISpaceDocumentFieldsSettings,
+  ISpaceTagSettings,
+} from "@/features/space/types/space.types.ts";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hasFullSpaceAccess } from "@/features/space/permissions/export-access.ts";
 import { PageTemplateSpacePolicySettings } from "@/features/page-template/components/page-template-policy-settings";
 import SpaceLabelsSettings from "@/features/label/components/space-labels-settings";
+import SpaceTagsSettings from "@/features/space/components/space-tags-settings";
 
 interface SpaceDetailsProps {
   spaceId: string;
@@ -129,6 +133,14 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
       spaceId,
       dictionaryEnabled: checked,
     });
+  };
+
+  const handleTagSettingsChange = (tagSettings: ISpaceTagSettings) => {
+    if (!space || readOnly) {
+      return;
+    }
+
+    updateSpace({ spaceId, tagSettings });
   };
 
   const handleHeadingNumberingEnabledChange = (checked: boolean) => {
@@ -221,6 +233,16 @@ export default function SpaceDetails({ spaceId, readOnly }: SpaceDetailsProps) {
           <Divider my="lg" />
 
           {!readOnly && <SpaceLabelsSettings spaceId={spaceId} />}
+
+          {!readOnly && <Divider my="lg" />}
+
+          {!readOnly && (
+            <SpaceTagsSettings
+              settings={space.settings?.tags}
+              disabled={isUpdatingSpace}
+              onChange={handleTagSettingsChange}
+            />
+          )}
 
           {!readOnly && <Divider my="lg" />}
 

@@ -9,7 +9,9 @@ jest.mock('../../collaboration/collaboration.util', () => ({
   jsonToHtml: (input: any) => {
     const render = (node: any): string => {
       const text = (node.content ?? [])
-        .map((child: any) => child.text ?? '')
+        .map((child: any) =>
+          child.type === 'tag' ? render(child) : (child.text ?? ''),
+        )
         .join('');
       if (node.type === 'heading') {
         return `<h${node.attrs?.level}>${text}</h${node.attrs?.level}>`;
@@ -19,6 +21,18 @@ jest.mock('../../collaboration/collaboration.util', () => ({
       }
       if (node.type === 'pageBreak') {
         return '<div data-type="pageBreak" class="page-break"></div>';
+      }
+      if (node.type === 'tag') {
+        const labels: Record<string, string> = {
+          tbd: 'TBD',
+          todo: 'TODO',
+          done: 'DONE',
+          core: 'Core',
+          future: 'Future',
+          pilot: 'Pilot',
+        };
+        const value = String(node.attrs?.value ?? 'todo').toLowerCase();
+        return `<span data-type="tag" data-tag-value="${value}">${labels[value] ?? value.toUpperCase()}</span>`;
       }
       return `<p>${text || 'mock-content'}</p>`;
     };
@@ -224,6 +238,51 @@ describe('ExportService PDF export', () => {
     spaceSettings = {};
     mockUserLookup([]);
     transclusionService.lookup.mockResolvedValue({ items: [] });
+  });
+
+  it('adds visible export-safe styles for all built-in tags', async () => {
+    const page = createPage({
+      id: 'page-tags',
+      slugId: 'tags',
+      title: 'Tags',
+      parentPageId: null,
+      text: 'unused',
+    });
+    (page as any).content.content[0].content = [
+      { type: 'tag', attrs: { value: 'core' } },
+      { type: 'text', text: ' ' },
+      { type: 'tag', attrs: { value: 'future' } },
+      { type: 'text', text: ' ' },
+      { type: 'tag', attrs: { value: 'pilot' } },
+    ];
+
+    const html = await service.exportPage(ExportFormat.HTML, page as any, true);
+    expect(html).toContain('data-tag-value="core">Core</span>');
+    expect(html).toContain('[data-tag-value="core"]');
+    expect(html).toContain('[data-tag-value="future"]');
+    expect(html).toContain('[data-tag-value="pilot"]');
+
+    await service.exportPage(ExportFormat.PDF, page as any, true);
+    const pdfHtml = htmlPdfRendererService.render.mock.calls.at(-1)?.[0] ?? '';
+    expect(pdfHtml).toContain('data-tag-value="future">Future</span>');
+    expect(pdfHtml).toContain('[data-tag-value="pilot"]');
+  });
+
+  it('exports normalized tag settings as an additive v4 setting', () => {
+    expect(
+      (service as any).getPortableSpaceSettings({
+        dictionary: { enabled: true },
+        tags: {
+          disabled: [' Future ', 'pilot', 'future', 'missing'],
+        },
+      }),
+    ).toEqual({
+      dictionary: { enabled: true },
+      tags: { disabled: ['future', 'pilot'] },
+    });
+    expect((service as any).getPortableSpaceSettings({})).toEqual({
+      tags: { disabled: [] },
+    });
   });
 
   it('materializes references with a framed localized snapshot', async () => {

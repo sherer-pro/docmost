@@ -495,6 +495,70 @@ describe('DocmostArchiveImportService label import', () => {
 });
 
 describe('DocmostArchiveImportService dictionary import', () => {
+  it('applies normalized tag settings without dropping neighboring settings', async () => {
+    let updatedSettings: Record<string, unknown> | undefined;
+    const spacesQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      executeTakeFirstOrThrow: jest.fn().mockResolvedValue({
+        settings: {
+          dictionary: { enabled: true },
+          customLinks: { links: [{ id: 'link-1' }] },
+        },
+      }),
+    };
+    const updateQuery = {
+      set: jest.fn((value: { settings: Record<string, unknown> }) => {
+        updatedSettings = value.settings;
+        return updateQuery;
+      }),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const trx = {
+      selectFrom: jest.fn(() => spacesQuery),
+      updateTable: jest.fn(() => updateQuery),
+    };
+    const service = new DocmostArchiveImportService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).applySettingsAndDictionary({
+      data: {
+        sourceSpace: {
+          settings: {
+            tags: { disabled: [' Future ', 'pilot', 'future', 'missing'] },
+          },
+        },
+        dictionary: [],
+      },
+      fileTask: { spaceId: 'space-1' },
+      options: {
+        applyDictionary: false,
+        applyDocumentFields: false,
+        applyHeadingNumbering: false,
+        applyTags: true,
+        cleanupLegacyHeadingNumbers: true,
+      },
+      report: {},
+      trx,
+    });
+
+    expect(updatedSettings).toEqual({
+      dictionary: { enabled: true },
+      customLinks: { links: [{ id: 'link-1' }] },
+      tags: { disabled: ['future', 'pilot'] },
+    });
+  });
+
   it('deduplicates aliases after Unicode and case normalization', async () => {
     let insertedAliases: Array<Record<string, unknown>> = [];
     const spacesQuery = {
@@ -560,6 +624,7 @@ describe('DocmostArchiveImportService dictionary import', () => {
         applyDictionary: true,
         applyDocumentFields: false,
         applyHeadingNumbering: false,
+        applyTags: false,
         cleanupLegacyHeadingNumbers: true,
       },
       report: {
@@ -658,9 +723,7 @@ describe('DocmostArchiveImportService import durability', () => {
           ],
         },
         pageIdMap: new Map([['page-source', 'page-target']]),
-        attachmentIdMap: new Map([
-          ['attachment-source', 'attachment-target'],
-        ]),
+        attachmentIdMap: new Map([['attachment-source', 'attachment-target']]),
         snapshotAttachmentMapsByConsumer: new Map(),
       });
 

@@ -1,24 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateWorkspaceDto } from './create-workspace.dto';
-import { Type } from 'class-transformer';
-import {
-  ArrayUnique,
-  IsArray,
-  IsBoolean,
-  IsIn,
-  IsOptional,
-  IsString,
-  ValidateNested,
-} from 'class-validator';
-import { builtInTagValues } from '@docmost/editor-ext/server';
-
-export class WorkspaceTagSettingsDto {
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsIn(builtInTagValues, { each: true })
-  disabled?: string[];
-}
+import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
   @IsOptional()
@@ -44,9 +26,4 @@ export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
   @IsOptional()
   @IsBoolean()
   disablePublicSharing: boolean;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => WorkspaceTagSettingsDto)
-  tagSettings?: WorkspaceTagSettingsDto;
 }

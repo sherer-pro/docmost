@@ -2,6 +2,7 @@
 
 import { DOMParser, Schema } from "@tiptap/pm/model";
 import { describe, expect, it } from "vitest";
+import { getTagLabel } from "@docmost/editor-ext";
 import { createTransclusionClipboardPayload } from "./transclusion-clipboard";
 
 const schema = new Schema({
@@ -14,6 +15,25 @@ const schema = new Schema({
       toDOM: () => ["p", 0],
     },
     text: { group: "inline" },
+    tag: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { value: { default: "todo" } },
+      parseDOM: [
+        {
+          tag: 'span[data-type="tag"]',
+          getAttrs: (element) => ({
+            value: (element as HTMLElement).dataset.tagValue,
+          }),
+        },
+      ],
+      toDOM: (node) => [
+        "span",
+        { "data-type": "tag", "data-tag-value": node.attrs.value },
+        getTagLabel(node.attrs.value),
+      ],
+    },
     transclusionReference: {
       group: "block",
       atom: true,
@@ -66,7 +86,10 @@ describe("transclusion clipboard", () => {
               content: [
                 {
                   type: "paragraph",
-                  content: [{ type: "text", text: "Shared text" }],
+                  content: [
+                    { type: "text", text: "Shared " },
+                    { type: "tag", attrs: { value: "pilot" } },
+                  ],
                 },
               ],
             },
@@ -77,8 +100,12 @@ describe("transclusion clipboard", () => {
 
     expect(payload.html).toContain('data-source-page-id="page-1"');
     expect(payload.html).toContain("Synced block");
-    expect(payload.html).toContain("Shared text");
-    expect(payload.text.trim()).toBe("> **Synced block**\n>\n> Shared text");
+    expect(payload.html).toContain(
+      'data-type="tag" data-tag-value="pilot">Pilot</span>',
+    );
+    expect(payload.text.trim()).toBe(
+      "> **Synced block**\n>\n> Shared ::tag[Pilot]",
+    );
 
     const pasteHost = document.createElement("div");
     pasteHost.innerHTML = payload.html;
@@ -120,5 +147,4 @@ describe("transclusion clipboard", () => {
     expect(payload.html).toBe("<p>Ordinary text</p>");
     expect(payload.text).toBe("Ordinary text");
   });
-
 });

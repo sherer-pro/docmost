@@ -9,7 +9,6 @@ import {
   IPublicWorkspace,
   IInvitationLink,
   IVersion,
-  IWorkspaceTagSettings,
   WorkspaceMembersPresenceResponse,
 } from "../types/workspace.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
@@ -80,9 +79,7 @@ export async function deactivateWorkspaceMember(data: {
   return req.data;
 }
 
-export async function updateWorkspace(
-  data: Partial<IWorkspace> & { tagSettings?: IWorkspaceTagSettings },
-) {
+export async function updateWorkspace(data: Partial<IWorkspace>) {
   const req = await api.post<IWorkspace>("/workspace/update", data);
   return req.data;
 }

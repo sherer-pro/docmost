@@ -25,6 +25,45 @@
   );
 }
 
+.violet {
+  color: light-dark(
+    var(--mantine-color-violet-8),
+    var(--mantine-color-violet-2)
+  );
+  background: light-dark(
+    var(--mantine-color-violet-0),
+    rgba(132, 94, 247, 0.14)
+  );
+  border-color: light-dark(
+    var(--mantine-color-violet-2),
+    rgba(177, 151, 252, 0.28)
+  );
+}
+
+.cyan {
+  color: light-dark(var(--mantine-color-cyan-9), var(--mantine-color-cyan-2));
+  background: light-dark(var(--mantine-color-cyan-0), rgba(34, 184, 207, 0.14));
+  border-color: light-dark(
+    var(--mantine-color-cyan-2),
+    rgba(102, 217, 232, 0.28)
+  );
+}
+
+.orange {
+  color: light-dark(
+    var(--mantine-color-orange-9),
+    var(--mantine-color-orange-2)
+  );
+  background: light-dark(
+    var(--mantine-color-orange-0),
+    rgba(253, 126, 20, 0.14)
+  );
+  border-color: light-dark(
+    var(--mantine-color-orange-2),
+    rgba(255, 169, 77, 0.28)
+  );
+}
+
 .gray {
   color: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-2));
   background: light-dark(

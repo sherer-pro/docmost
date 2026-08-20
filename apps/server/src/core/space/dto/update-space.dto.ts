@@ -2,6 +2,7 @@ import { PartialType } from '@nestjs/mapped-types';
 import { CreateSpaceDto } from './create-space.dto';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsIn,
@@ -14,6 +15,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  builtInTagValues,
+  type BuiltInTagValue,
+} from '@docmost/editor-ext/server';
 
 /**
  * Allowed icon identifiers for space custom links.
@@ -208,6 +213,14 @@ export class UpdateSpaceDocumentFieldsDto {
   readingTime?: boolean;
 }
 
+export class UpdateSpaceTagSettingsDto {
+  @IsArray()
+  @ArrayMaxSize(builtInTagValues.length)
+  @ArrayUnique()
+  @IsIn(builtInTagValues, { each: true })
+  disabled: BuiltInTagValue[];
+}
+
 export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
   @IsString()
   @IsNotEmpty()
@@ -234,6 +247,11 @@ export class UpdateSpaceDto extends PartialType(CreateSpaceDto) {
   @IsOptional()
   @IsBoolean()
   dictionaryEnabled?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateSpaceTagSettingsDto)
+  tagSettings?: UpdateSpaceTagSettingsDto;
 
   @IsOptional()
   @IsBoolean()

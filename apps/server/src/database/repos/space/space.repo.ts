@@ -9,6 +9,7 @@ import {
   SpaceCustomLinksSettings,
   SpaceDictionarySettings,
   SpaceDocumentFieldsSettings,
+  SpaceTagSettings,
   UpdatableSpace,
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
@@ -218,6 +219,25 @@ export class SpaceRepo {
       .returningAll();
 
     return query.executeTakeFirst();
+  }
+
+  async updateTagSettings(
+    spaceId: string,
+    workspaceId: string,
+    tags: SpaceTagSettings,
+  ) {
+    return this.db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('tags', COALESCE(settings->'tags', '{}'::jsonb)
+          || ${sql.lit(JSON.stringify(tags))}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
   }
 
   async updateHeadingNumberingSettings(

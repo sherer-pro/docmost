@@ -39,6 +39,7 @@ EXPECTED_EDITOR_MERMAID_TEXT = (
     "Rendered locally",
     "Visible error",
 )
+EXPECTED_TAG_LABELS = ("TBD", "TODO", "DONE", "Core", "Future", "Pilot")
 
 
 def parse_markdown_token_count(content: str) -> int:
@@ -82,6 +83,9 @@ def verify_markdown(archive_path: Path) -> dict[str, Any]:
         )
     for expected in EXPECTED_SYNCED_TEXT:
         assert expected in content, f"Markdown omits {expected}"
+    for label in EXPECTED_TAG_LABELS:
+        syntax = f"::tag[{label}]"
+        assert syntax in content, f"Markdown omits tag syntax {syntax}"
     for forbidden in FORBIDDEN_PRESENTATION_TOKENS:
         assert forbidden not in content, f"Markdown leaks {forbidden}"
     assert not re.search(r"javascript\s*:", content, re.IGNORECASE)
@@ -105,6 +109,8 @@ def verify_html(archive_path: Path) -> dict[str, Any]:
     combined_text = " ".join(" ".join(document.itertext()) for document in documents)
     for expected in EXPECTED_SYNCED_TEXT:
         assert expected in combined_text, f"HTML omits {expected}"
+    for label in EXPECTED_TAG_LABELS:
+        assert label in combined_text, f"HTML omits tag label {label}"
     unsafe_urls: list[str] = []
     service_nodes: list[str] = []
     for document in documents:
@@ -135,6 +141,8 @@ def verify_pdf(pdf_path: Path) -> dict[str, Any]:
         page_count = len(pdf.pages)
     for expected in EXPECTED_SYNCED_TEXT:
         assert expected in extracted, f"PDF text omits {expected}"
+    for label in EXPECTED_TAG_LABELS:
+        assert label in extracted, f"PDF text omits tag label {label}"
     for forbidden in FORBIDDEN_PRESENTATION_TOKENS:
         assert forbidden not in extracted, f"PDF leaks {forbidden}"
     return {"pages": page_count, "characters": len(extracted)}
@@ -160,6 +168,7 @@ def verify_docmost(archive_path: Path) -> dict[str, Any]:
     page_ids = {page["id"] for page in data["pages"]}
     internal_references = 0
     external_references = 0
+    tag_values: set[str] = set()
     snapshot_keys = {
         (
             snapshot.get("referencePageId"),
@@ -171,6 +180,8 @@ def verify_docmost(archive_path: Path) -> dict[str, Any]:
     for page in data["pages"]:
         for node in iter_nodes(page["content"]):
             assert node.get("type") != "pageEmbed"
+            if node.get("type") == "tag":
+                tag_values.add(node.get("attrs", {}).get("value"))
             if node.get("type") != "transclusionReference":
                 continue
             source_page_id = node.get("attrs", {}).get("sourcePageId")
@@ -184,6 +195,14 @@ def verify_docmost(archive_path: Path) -> dict[str, Any]:
                 source_page_id,
                 transclusion_id,
             ) in snapshot_keys, "Archive contains a dangling foreign reference"
+    assert tag_values == {
+        "tbd",
+        "todo",
+        "done",
+        "core",
+        "future",
+        "pilot",
+    }, f"Archive tag values differ: {tag_values}"
     return {
         "pages": len(page_ids),
         "internalReferences": internal_references,

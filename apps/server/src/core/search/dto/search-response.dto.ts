@@ -34,7 +34,7 @@ export class SearchTagSnippetDto {
 }
 
 export class SearchTagFacetDto {
-  value: 'tbd' | 'todo' | 'done';
+  value: BuiltInTagValue;
   documentCount: number;
 }
 
@@ -100,3 +100,4 @@ export class AttachmentSearchResponseDto {
     slugId: string;
   };
 }
+import type { BuiltInTagValue } from '@docmost/editor-ext/server';

@@ -48,6 +48,7 @@ import {
   remapDatabaseViewConfig,
 } from '../../../core/database/utils/database-copy.utils';
 import { sql } from 'kysely';
+import { normalizeBuiltInTagValues } from '@docmost/editor-ext/server';
 import { QueueJob, QueueName } from '../../queue/constants';
 import { CONTENT_INDEXABLE_EXTENSIONS } from '../../../core/attachment/attachment.constants';
 import {
@@ -490,6 +491,7 @@ export class DocmostArchiveImportService {
       applyDocumentFields: source.applyDocumentFields === true,
       applyDictionary: source.applyDictionary === true,
       applyHeadingNumbering: source.applyHeadingNumbering === true,
+      applyTags: source.applyTags === true,
       cleanupLegacyHeadingNumbers: source.cleanupLegacyHeadingNumbers !== false,
     };
   }
@@ -1035,6 +1037,11 @@ export class DocmostArchiveImportService {
     }
     if (options.applyHeadingNumbering && portable.headingNumbering) {
       current.headingNumbering = portable.headingNumbering;
+    }
+    if (options.applyTags && portable.tags) {
+      current.tags = {
+        disabled: normalizeBuiltInTagValues(portable.tags.disabled),
+      };
     }
     if (options.applyDictionary && portable.dictionary) {
       current.dictionary = portable.dictionary;

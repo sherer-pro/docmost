@@ -1,9 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { plainToInstance } from 'class-transformer';
-import { validateSync } from 'class-validator';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { EventName } from '../../../common/events/event.contants';
-import { UpdateWorkspaceDto } from '../dto/update-workspace.dto';
 
 jest.mock('../../space/services/space.service', () => ({
   SpaceService: class SpaceService {},
@@ -18,7 +15,6 @@ describe('WorkspaceService', () => {
   const createService = (ssoEndpointAllowed = true, db: any = {}) => {
     const workspaceRepo = {
       findById: jest.fn(),
-      updateTagSettings: jest.fn(),
       updateWorkspace: jest.fn(),
     };
     const userRepo = {
@@ -273,53 +269,5 @@ describe('WorkspaceService', () => {
       workspaceId,
     );
     expect(eventEmitter.emit).not.toHaveBeenCalled();
-  });
-
-  it('should persist workspace tag settings', async () => {
-    const { service, workspaceRepo } = createService();
-
-    workspaceRepo.updateTagSettings.mockResolvedValue({});
-    workspaceRepo.updateWorkspace.mockResolvedValue({});
-    workspaceRepo.findById.mockResolvedValue({
-      id: workspaceId,
-      settings: {
-        tags: {
-          disabled: ['done'],
-        },
-      },
-    });
-
-    await expect(
-      service.update(workspaceId, {
-        tagSettings: {
-          disabled: ['done'],
-        },
-      } as any),
-    ).resolves.toMatchObject({
-      id: workspaceId,
-    });
-
-    expect(workspaceRepo.updateTagSettings).toHaveBeenCalledWith(
-      workspaceId,
-      'disabled',
-      ['done'],
-    );
-    expect(workspaceRepo.updateWorkspace).toHaveBeenCalledWith({}, workspaceId);
-  });
-
-  it('should validate workspace tag settings against built-in tags', () => {
-    const validDto = plainToInstance(UpdateWorkspaceDto, {
-      tagSettings: {
-        disabled: ['done'],
-      },
-    });
-    const invalidDto = plainToInstance(UpdateWorkspaceDto, {
-      tagSettings: {
-        disabled: ['missing'],
-      },
-    });
-
-    expect(validateSync(validDto)).toHaveLength(0);
-    expect(validateSync(invalidDto).length).toBeGreaterThan(0);
   });
 });

@@ -1,4 +1,9 @@
-import { mergeAttributes, Node, nodeInputRule } from '@tiptap/core';
+import {
+  mergeAttributes,
+  Node,
+  nodeInputRule,
+  nodePasteRule,
+} from '@tiptap/core';
 import { builtInTagDefinitions, getTagLabel, getValidTagValue } from './utils';
 import type { BuiltInTagValue, TagDefinition, TagValue } from './utils';
 
@@ -32,6 +37,11 @@ const builtInTagPattern = builtInTagDefinitions
 export const tagInputRegex = new RegExp(
   `(?:^|\\s)(::tag\\[(${builtInTagPattern})\\])$`,
   'i',
+);
+
+export const tagPasteRegex = new RegExp(
+  `::tag\\[(${builtInTagPattern})\\]`,
+  'gi',
 );
 
 export const Tag = Node.create<TagOptions>({
@@ -129,6 +139,18 @@ export const Tag = Node.create<TagOptions>({
         type: this.type,
         getAttributes: (match) => ({
           value: getValidTagValue(match[2]),
+        }),
+      }),
+    ];
+  },
+
+  addPasteRules() {
+    return [
+      nodePasteRule({
+        find: tagPasteRegex,
+        type: this.type,
+        getAttributes: (match) => ({
+          value: getValidTagValue(match[1]),
         }),
       }),
     ];

@@ -1,18 +1,17 @@
 import {
   builtInTagDefinitions,
-  isBuiltInTagValue,
+  normalizeBuiltInTagValues,
   type BuiltInTagValue,
   type TagDefinition,
 } from "@docmost/editor-ext";
 
-export interface WorkspaceTagSettings {
+export interface SpaceTagSettings {
   disabled?: string[] | string;
 }
 
 export function normalizeDisabledTags(
   disabled?: string[] | string,
 ): BuiltInTagValue[] {
-  const normalized = new Set<BuiltInTagValue>();
   let values: unknown = disabled ?? [];
 
   if (typeof values === "string") {
@@ -23,22 +22,11 @@ export function normalizeDisabledTags(
     }
   }
 
-  for (const value of Array.isArray(values) ? values : []) {
-    if (typeof value !== "string") {
-      continue;
-    }
-
-    const tagValue = value.trim().toLowerCase();
-    if (isBuiltInTagValue(tagValue)) {
-      normalized.add(tagValue);
-    }
-  }
-
-  return Array.from(normalized);
+  return normalizeBuiltInTagValues(values);
 }
 
 export function getEnabledTagDefinitions(
-  settings?: WorkspaceTagSettings,
+  settings?: SpaceTagSettings,
 ): readonly TagDefinition[] {
   const disabled = new Set(normalizeDisabledTags(settings?.disabled));
 

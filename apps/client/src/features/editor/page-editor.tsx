@@ -30,10 +30,7 @@ import {
 } from "@/features/editor/extensions/extensions";
 import { useAtom, useSetAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
-import {
-  currentUserAtom,
-  workspaceAtom,
-} from "@/features/user/atoms/current-user-atom";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import {
   activePageUsersAtom,
   pageEditorAtom,
@@ -87,6 +84,8 @@ import { getEnabledTagDefinitions } from "@/features/editor/components/tag/tag-s
 import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { useTranslation } from "react-i18next";
 import type { TemplateKind } from "@docmost/api-contract";
+import type { BuiltInTagValue } from "@docmost/editor-ext";
+import type { ISpaceTagSettings } from "@/features/space/types/space.types";
 import { TemplateBlockToolbar } from "@/features/editor/components/page-template/template-block-toolbar";
 import { Alert, Button } from "@mantine/core";
 import { IconWifiOff } from "@tabler/icons-react";
@@ -105,6 +104,7 @@ interface PageEditorProps {
   editorContentClassName?: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
+  tagSettings?: ISpaceTagSettings;
   canManageDictionary?: boolean;
   canCreateInlineComments?: boolean;
   headingNumberingEnabled?: boolean;
@@ -121,6 +121,7 @@ export default function PageEditor({
   editorContentClassName,
   spaceId,
   dictionaryEnabled = false,
+  tagSettings,
   canManageDictionary = false,
   canCreateInlineComments = editable,
   headingNumberingEnabled = false,
@@ -141,7 +142,6 @@ export default function PageEditor({
   }, []);
 
   const [currentUser] = useAtom(currentUserAtom);
-  const [workspace] = useAtom(workspaceAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
   const [, setUnsyncedChanges] = useAtom(pageEditorUnsyncedChangesAtom);
@@ -200,11 +200,11 @@ export default function PageEditor({
   );
   const { handleScrollTo } = useEditorScroll({ canScroll });
   const tagDefinitions = useMemo(
-    () => getEnabledTagDefinitions(workspace?.settings?.tags),
-    [workspace?.settings?.tags],
+    () => getEnabledTagDefinitions(tagSettings),
+    [tagSettings],
   );
   const handleSearchTag = useCallback(
-    (tag: "tbd" | "todo" | "done") => {
+    (tag: BuiltInTagValue) => {
       if (!spaceId) return;
       setSearchSpotlightIntent({ intent: { spaceId, tags: [tag] } });
       searchSpotlight.open();

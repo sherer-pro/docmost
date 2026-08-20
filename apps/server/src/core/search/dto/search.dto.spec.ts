@@ -45,6 +45,16 @@ describe('SearchDTO', () => {
     expect(validateSync(dto)).toHaveLength(0);
   });
 
+  it('accepts Core, Future, and Pilot filters', () => {
+    const dto = plainToInstance(SearchDTO, {
+      query: '',
+      tags: ['CORE', 'future', 'Pilot'],
+    });
+
+    expect(dto.tags).toEqual(['core', 'future', 'pilot']);
+    expect(validateSync(dto)).toHaveLength(0);
+  });
+
   it('rejects duplicate, unknown, and oversized built-in tag lists', () => {
     const duplicate = plainToInstance(SearchDTO, {
       query: '',
@@ -56,7 +66,7 @@ describe('SearchDTO', () => {
     });
     const oversized = plainToInstance(SearchDTO, {
       query: '',
-      tags: ['tbd', 'todo', 'done', 'todo'],
+      tags: ['tbd', 'todo', 'done', 'core', 'future', 'pilot', 'todo'],
     });
 
     expect(validateSync(duplicate).length).toBeGreaterThan(0);

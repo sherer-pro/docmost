@@ -5,6 +5,7 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { ExportFormat } from "@/features/page/types/export.types.ts";
 import type { SpacePolicy } from "@docmost/api-contract";
+import type { BuiltInTagValue } from "@docmost/editor-ext";
 
 export interface ISpaceSharingSettings {
   disabled?: boolean;
@@ -27,6 +28,10 @@ export interface ISpaceDictionarySettings {
   enabled?: boolean;
 }
 
+export interface ISpaceTagSettings {
+  disabled?: BuiltInTagValue[];
+}
+
 export interface IHeadingNumberingSettings {
   enabled?: boolean;
 }
@@ -47,6 +52,7 @@ export interface ISpaceSettings {
   sharing?: ISpaceSharingSettings;
   documentFields?: ISpaceDocumentFieldsSettings;
   dictionary?: ISpaceDictionarySettings;
+  tags?: ISpaceTagSettings;
   headingNumbering?: IHeadingNumberingSettings;
   customLinks?: ISpaceCustomLinksSettings;
 }
@@ -74,6 +80,7 @@ export interface ISpace {
   enforceMfa?: boolean | null;
   enforceSso?: boolean | null;
   dictionaryEnabled?: boolean;
+  tagSettings?: ISpaceTagSettings;
   headingNumberingEnabled?: boolean;
   customLinks?: ISpaceCustomLinksSettings;
 }

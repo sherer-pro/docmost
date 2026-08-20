@@ -35,6 +35,12 @@ describe('tag markdown', () => {
   it('exports new and future-safe tag nodes without coercing them', () => {
     assert.equal(
       htmlToMarkdown(
+        '<p>Scope <span data-type="tag" data-tag-value="core">Core</span> <span data-type="tag" data-tag-value="future">Future</span> <span data-type="tag" data-tag-value="pilot">Pilot</span></p>',
+      ).trim(),
+      'Scope ::tag[Core] ::tag[Future] ::tag[Pilot]',
+    );
+    assert.equal(
+      htmlToMarkdown(
         '<p>Release <span data-type="tag" data-tag-value="done">DONE</span></p>',
       ).trim(),
       'Release ::tag[DONE]',
@@ -63,6 +69,17 @@ describe('tag markdown', () => {
 
     assert.equal(tagNode?.type, 'tag');
     assert.equal(tagNode?.attrs?.value, 'done');
+
+    const newHtml = markdownToHtml(
+      'Scope ::tag[Core] ::tag[Future] ::tag[Pilot]',
+    ).toString();
+    const newJson = generateJSON(newHtml, extensions);
+    assert.deepEqual(
+      newJson.content?.[0].content
+        ?.filter((node) => node.type === 'tag')
+        .map((node) => node.attrs?.value),
+      ['core', 'future', 'pilot'],
+    );
 
     const futureHtml = markdownToHtml('Wait ::tag[BLOCKED] here').toString();
     const futureJson = generateJSON(futureHtml, extensions);

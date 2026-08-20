@@ -44,6 +44,17 @@ const paragraph = (value?: string) => ({
   ...(value ? { content: [{ type: "text", text: value }] } : {}),
 });
 
+const builtInTagValues = [
+  "tbd",
+  "todo",
+  "done",
+  "core",
+  "future",
+  "pilot",
+] as const;
+
+const builtInTagLabels = ["TBD", "TODO", "DONE", "Core", "Future", "Pilot"];
+
 async function makeEditable(page: import("@playwright/test").Page) {
   const editor = mainEditor(page);
   if ((await editor.getAttribute("contenteditable")) === "true") return;
@@ -222,7 +233,21 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         {
           type: "transclusionSource",
           attrs: { id: ids.text },
-          content: [paragraph(`Shared text ${suffix}`)],
+          content: [
+            paragraph(`Shared text ${suffix}`),
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Shared tags " },
+                ...builtInTagValues.flatMap((value, index) => [
+                  { type: "tag", attrs: { value } },
+                  ...(index < builtInTagValues.length - 1
+                    ? [{ type: "text", text: " " }]
+                    : []),
+                ]),
+              ],
+            },
+          ],
         },
         {
           type: "transclusionSource",
@@ -346,6 +371,16 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         expect(rendered).not.toContain("data-source-page-id");
         expect(rendered).not.toContain("data-transclusion-id");
         expect(rendered).not.toMatch(/javascript\s*:/i);
+        for (const [index, label] of builtInTagLabels.entries()) {
+          if (format === "markdown") {
+            expect(rendered).toContain(`::tag[${label}]`);
+          } else {
+            expect(rendered).toContain(
+              `data-tag-value="${builtInTagValues[index]}"`,
+            );
+            expect(rendered).toContain(`>${label}</span>`);
+          }
+        }
       } else if (format === "pdf") {
         const entry = Object.keys(exportZip.files).find((name) =>
           name.endsWith(".pdf"),
@@ -373,17 +408,22 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         const serializedArchive = JSON.stringify(data);
         expect(serializedArchive).not.toContain('"type":"pageEmbed"');
         expect(data.transclusionSnapshots).toEqual([]);
+        const archivedTags: string[] = [];
         for (const archivedPage of data.pages) {
           const stack = [archivedPage.content];
           while (stack.length > 0) {
             const node = stack.pop();
             if (!node || typeof node !== "object") continue;
+            if (node.type === "tag") {
+              archivedTags.push(node.attrs?.value);
+            }
             if (node.type === "transclusionReference") {
               expect(archivedPageIds).toContain(node.attrs.sourcePageId);
             }
             stack.push(...(node.content ?? []));
           }
         }
+        expect(new Set(archivedTags)).toEqual(new Set(builtInTagValues));
       }
     }
 
@@ -411,6 +451,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       applyDocumentFields: false,
       applyDictionary: false,
       applyHeadingNumbering: false,
+      applyTags: false,
       cleanupLegacyHeadingNumbers: true,
     });
     await expect
@@ -751,6 +792,12 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       `data-transclusion-id="${ids.text}"`,
     );
     expect(clipboardPayload.text).toContain(`Shared text ${suffix}`);
+    for (const [index, label] of builtInTagLabels.entries()) {
+      expect(clipboardPayload.html).toContain(
+        `data-tag-value="${builtInTagValues[index]}"`,
+      );
+      expect(clipboardPayload.text).toContain(`::tag[${label}]`);
+    }
 
     await page.goto(pageUrl(state, workflowPage));
     await makeEditable(page);

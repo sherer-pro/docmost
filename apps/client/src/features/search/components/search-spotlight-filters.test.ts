@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { builtInTagDefinitions } from "@docmost/editor-ext";
+import { builtInTagDefinitions, builtInTagValues } from "@docmost/editor-ext";
 import { getSearchContentTypeOptions } from "./search-content-type-options";
 import {
   getSearchFilterPayload,
+  OPEN_TAGS,
   sameSearchTags,
   shouldClearUnavailableSearchTags,
   shouldShowSearchTagFilter,
@@ -45,6 +46,9 @@ describe("getSearchFilterPayload", () => {
       "TBD",
       "TODO",
       "DONE",
+      "Core",
+      "Future",
+      "Pilot",
     ]);
   });
 
@@ -157,6 +161,18 @@ describe("tag filter visibility", () => {
 });
 
 describe("tag presets", () => {
+  it("keeps Open scoped and All backed by all six built-in tags", () => {
+    expect(OPEN_TAGS).toEqual(["tbd", "todo"]);
+    expect(builtInTagValues).toEqual([
+      "tbd",
+      "todo",
+      "done",
+      "core",
+      "future",
+      "pilot",
+    ]);
+  });
+
   it("compares presets without depending on selection order", () => {
     expect(
       sameSearchTags(["done", "tbd", "todo"], ["tbd", "todo", "done"]),

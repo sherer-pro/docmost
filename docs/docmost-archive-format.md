@@ -71,7 +71,7 @@ always contains the full database with all saved views.
 Workspace members, access rules, public shares, comments, history, favorites,
 API keys, and personal preferences are intentionally excluded. Space identity
 and security settings are not overwritten. Portable document-field,
-dictionary, and heading-numbering settings are applied only when selected in
+dictionary, heading-numbering, and editor-tag settings are applied only when selected in
 the import preview.
 
 ## Import workflow

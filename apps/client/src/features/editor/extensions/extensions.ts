@@ -103,6 +103,7 @@ import EmojiCommand from "./emoji-command";
 import { InlineCodeNoWrap } from "./inline-code-no-wrap";
 import { TransclusionClipboard } from "./transclusion-clipboard";
 import { TransclusionDeletionGuard } from "./transclusion-deletion-guard";
+import { TagClipboard } from "./tag-clipboard";
 import { notifications } from "@mantine/notifications";
 
 const lowlight = createLowlight(common);
@@ -324,6 +325,7 @@ export const mainExtensions = [
     },
   }),
   TransclusionClipboard,
+  TagClipboard,
   MarkdownClipboard.configure({
     transformPastedText: true,
   }),
