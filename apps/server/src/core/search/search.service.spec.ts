@@ -406,7 +406,13 @@ describe('SearchService', () => {
     );
 
     expect(result.items).toEqual([{ ...expectedRow, breadcrumbs: [] }]);
-    expect(state.whereCalls.some(([column]) => column === 'tsv')).toBe(true);
+    const fullTextPredicate = state.whereCalls.find(
+      (args) => args.length === 1,
+    )?.[0] as { toOperationNode: () => unknown } | undefined;
+    expect(fullTextPredicate).toBeDefined();
+    expect(JSON.stringify(fullTextPredicate?.toOperationNode())).toContain(
+      'database_search_tsv',
+    );
     expect(state.selectFromCalls).toContain('pageLabels as labelFilter');
     expect(state.orderByCalls).toContainEqual(['rank', 'desc']);
   });
