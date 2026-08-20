@@ -28,6 +28,12 @@ export enum QueueJob {
 
   SEARCH_INDEX_ATTACHMENT = 'search-index-attachment',
   TYPESENSE_FLUSH = 'typesense-flush',
+  TYPESENSE_CLEANUP_GENERATION = 'typesense-cleanup-generation',
+  DICTIONARY_TERMS_UPDATED = 'dictionary-terms-updated',
+  DICTIONARY_SPACE_UPDATED = 'dictionary-space-updated',
+  DATABASE_SEARCH_REBUILD_DATABASE = 'database-search-rebuild-database',
+  DATABASE_SEARCH_REBUILD_USER = 'database-search-rebuild-user',
+  DATABASE_SEARCH_REBUILD_WORKSPACE = 'database-search-rebuild-workspace',
 
   PAGE_CREATED = 'page-created',
   PAGE_UPDATED = 'page-updated',

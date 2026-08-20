@@ -225,7 +225,7 @@ export class DictionaryService {
           total: preparedTerms.length,
         };
       });
-      this.wakeRagSync(spaceId);
+      this.wakeProjections(spaceId);
       return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
@@ -264,7 +264,7 @@ export class DictionaryService {
 
         return this.toResponse({ ...term, aliases: savedAliases });
       });
-      this.wakeRagSync(dto.spaceId);
+      this.wakeProjections(dto.spaceId, [result.id]);
       return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
@@ -347,7 +347,7 @@ export class DictionaryService {
 
         return this.toResponse({ ...updatedTerm, aliases: savedAliases });
       });
-      this.wakeRagSync(existingTerm.spaceId);
+      this.wakeProjections(existingTerm.spaceId, [termId]);
       return result;
     } catch (err) {
       this.rethrowDuplicateAliasError(err);
@@ -366,7 +366,7 @@ export class DictionaryService {
       );
       await this.dictionaryTermRepo.softDeleteTerm(termId, workspaceId, trx);
     });
-    this.wakeRagSync(existingTerm.spaceId);
+    this.wakeProjections(existingTerm.spaceId, [termId]);
   }
 
   mergeGeneratedForms(
@@ -478,13 +478,19 @@ export class DictionaryService {
 
       return { updatedTerms: currentTerms.length, generatedForms };
     });
-    this.wakeRagSync(spaceId);
+    this.wakeProjections(
+      spaceId,
+      updates.map((update) => update.id),
+    );
     return result;
   }
 
-  private wakeRagSync(spaceId: string): void {
+  private wakeProjections(spaceId: string, termIds?: string[]): void {
     void this.eventEmitter
       ?.emitAsync(EventName.RAG_SYNC_SCOPE_CHANGED, { spaceId })
+      .catch(() => undefined);
+    void this.eventEmitter
+      ?.emitAsync(EventName.DICTIONARY_CHANGED, { spaceId, termIds })
       .catch(() => undefined);
   }
 

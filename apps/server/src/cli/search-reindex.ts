@@ -13,19 +13,19 @@ import {
   runCli,
 } from './cli.util';
 
-const VALID_ENTITIES = ['pages', 'attachments'] as const;
+const VALID_ENTITIES = ['pages', 'attachments', 'dictionary'] as const;
 type Entity = (typeof VALID_ENTITIES)[number];
 
 const SEARCH_REINDEX_USAGE = `Usage:
   pnpm --filter ./apps/server search:reindex -- \\
     --workspace=<uuid|all> \\
-    [--entities=pages,attachments] \\
+    [--entities=pages,attachments,dictionary] \\
     [--reextract-attachments] \\
     [--retry-failed]
 
 Options:
   --workspace=<uuid|all>       Required workspace scope.
-  --entities=<list>            pages, attachments, or both (default: both).
+  --entities=<list>            pages, attachments, dictionary (default: all).
   --reextract-attachments      Reset supported ready/skipped files and queue extraction.
   --retry-failed               Also reset failed files; requires --reextract-attachments.
   --help                       Show this help without connecting to services.`;
@@ -35,7 +35,7 @@ Options:
  *
  * pnpm --filter ./apps/server search:reindex -- \
  *   --workspace=<uuid|all> \
- *   --entities=pages,attachments \
+ *   --entities=pages,attachments,dictionary \
  *   --reextract-attachments \
  *   --retry-failed
  */
@@ -120,6 +120,25 @@ async function main(): Promise<void> {
       );
     }
 
+    if (entities.includes('pages')) {
+      for (const workspaceId of workspaceIds) {
+        await searchQueue.add(
+          QueueJob.DATABASE_SEARCH_REBUILD_WORKSPACE,
+          { workspaceId },
+          {
+            jobId: `database-search-rebuild-workspace-${workspaceId}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 20_000 },
+            removeOnComplete: true,
+            removeOnFail: 20,
+          },
+        );
+      }
+      console.log(
+        `Queued database-row search projection rebuild for ${workspaceIds.length} workspace(s).`,
+      );
+    }
+
     if (process.env.SEARCH_DRIVER === 'typesense') {
       await searchQueue.add(
         QueueJob.TYPESENSE_FLUSH,
@@ -128,6 +147,7 @@ async function main(): Promise<void> {
           ...(workspace === 'all' ? {} : { workspaceId: workspaceIds[0] }),
         },
         {
+          jobId: `typesense-rebuild-${workspace === 'all' ? 'all' : workspaceIds[0]}-${entities.join('-')}`,
           attempts: 3,
           backoff: { type: 'exponential', delay: 20_000 },
           removeOnComplete: true,

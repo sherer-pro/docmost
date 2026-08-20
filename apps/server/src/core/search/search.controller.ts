@@ -14,6 +14,7 @@ import {
 import { SearchService } from './search.service';
 import {
   SearchDTO,
+  DictionarySearchDTO,
   SearchShareDTO,
   SearchSuggestionDTO,
   SearchTagFacetDTO,
@@ -27,9 +28,17 @@ import { EnvironmentService } from '../../integrations/environment/environment.s
 import { PageAccessService } from '../page-access/page-access.service';
 import { AuthRateLimitGuard } from '../auth/rate-limit/auth-rate-limit.guard';
 import { AuthRateLimit } from '../auth/rate-limit/auth-rate-limit.decorator';
-import { TypesenseSearchService } from './typesense-search.service';
+import {
+  TypesenseAvailabilityException,
+  TypesenseSearchService,
+} from './typesense-search.service';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
 import { FastifyReply } from 'fastify';
+import { DictionarySearchService } from '../dictionary/dictionary-search.service';
+import {
+  SearchEntity,
+  SearchOperationalMetricsService,
+} from './search-operational-metrics.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
@@ -39,6 +48,8 @@ export class SearchController {
     private readonly typesenseSearchService: TypesenseSearchService,
     private readonly pageAccessService: PageAccessService,
     private readonly environmentService: EnvironmentService,
+    private readonly dictionarySearchService: DictionarySearchService,
+    private readonly searchMetrics: SearchOperationalMetricsService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -72,16 +83,27 @@ export class SearchController {
       !searchDto.tag &&
       !searchDto.tags?.length
     ) {
-      return this.typesenseSearchService.searchPages(searchDto, {
-        userId: user.id,
-        workspaceId: workspace.id,
-      });
+      return this.withTypesenseFallback(
+        'pages',
+        () =>
+          this.typesenseSearchService.searchPages(searchDto, {
+            userId: user.id,
+            workspaceId: workspace.id,
+          }),
+        () =>
+          this.searchService.searchPage(searchDto, {
+            userId: user.id,
+            workspaceId: workspace.id,
+          }),
+      );
     }
 
-    return this.searchService.searchPage(searchDto, {
-      userId: user.id,
-      workspaceId: workspace.id,
-    });
+    return this.withDatabaseMetrics('pages', () =>
+      this.searchService.searchPage(searchDto, {
+        userId: user.id,
+        workspaceId: workspace.id,
+      }),
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -150,10 +172,49 @@ export class SearchController {
       workspaceId: workspace.id,
     };
     if (this.environmentService.getSearchDriver() === 'typesense') {
-      return this.typesenseSearchService.searchAttachments(searchDto, search);
+      return this.withTypesenseFallback(
+        'attachments',
+        () => this.typesenseSearchService.searchAttachments(searchDto, search),
+        () => this.searchService.searchAttachments(searchDto, search),
+      );
     }
 
-    return this.searchService.searchAttachments(searchDto, search);
+    return this.withDatabaseMetrics('attachments', () =>
+      this.searchService.searchAttachments(searchDto, search),
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('space', {
+    source: 'body',
+    key: 'spaceId',
+    optional: true,
+  })
+  @Post('dictionary')
+  async dictionarySearch(
+    @Body() searchDto: DictionarySearchDTO,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (searchDto.spaceId) {
+      const hasReadablePages =
+        await this.pageAccessService.hasAnyReadablePageInSpace(
+          user,
+          searchDto.spaceId,
+        );
+      if (!hasReadablePages) throw new ForbiddenException();
+    }
+    const options = { userId: user.id, workspaceId: workspace.id };
+    if (this.environmentService.getSearchDriver() === 'typesense') {
+      return this.withTypesenseFallback(
+        'dictionary',
+        () => this.typesenseSearchService.searchDictionary(searchDto, options),
+        () => this.dictionarySearchService.search(searchDto, options),
+      );
+    }
+    return this.withDatabaseMetrics('dictionary', () =>
+      this.dictionarySearchService.search(searchDto, options),
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -196,14 +257,24 @@ export class SearchController {
     }
 
     if (this.environmentService.getSearchDriver() === 'typesense') {
-      return this.typesenseSearchService.searchPages(searchDto, {
-        workspaceId: workspace.id,
-      });
+      return this.withTypesenseFallback(
+        'pages',
+        () =>
+          this.typesenseSearchService.searchPages(searchDto, {
+            workspaceId: workspace.id,
+          }),
+        () =>
+          this.searchService.searchPage(searchDto, {
+            workspaceId: workspace.id,
+          }),
+      );
     }
 
-    return this.searchService.searchPage(searchDto, {
-      workspaceId: workspace.id,
-    });
+    return this.withDatabaseMetrics('pages', () =>
+      this.searchService.searchPage(searchDto, {
+        workspaceId: workspace.id,
+      }),
+    );
   }
 
   async searchSuggestions(
@@ -212,5 +283,36 @@ export class SearchController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     return this.searchService.searchSuggestions(dto, user, workspace.id);
+  }
+
+  private async withTypesenseFallback<T>(
+    entity: SearchEntity,
+    typesenseSearch: () => Promise<T>,
+    databaseSearch: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      const result = await typesenseSearch();
+      this.searchMetrics.recordDuration(entity, 'typesense', startedAt);
+      return result;
+    } catch (error) {
+      if (!(error instanceof TypesenseAvailabilityException)) throw error;
+      this.searchMetrics.recordFallback(entity, error);
+      const result = await databaseSearch();
+      this.searchMetrics.recordDuration(entity, 'database-fallback', startedAt);
+      return result;
+    }
+  }
+
+  private async withDatabaseMetrics<T>(
+    entity: SearchEntity,
+    databaseSearch: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      return await databaseSearch();
+    } finally {
+      this.searchMetrics.recordDuration(entity, 'database', startedAt);
+    }
   }
 }

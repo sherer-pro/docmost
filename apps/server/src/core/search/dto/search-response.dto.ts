@@ -20,6 +20,13 @@ export class SearchTagMatchDto {
   value: string;
 }
 
+export class SearchDatabaseMatchDto {
+  propertyId: string;
+  propertyName: string;
+  text: string;
+  matches: SearchTagMatchDto[];
+}
+
 export class SearchTagSnippetDto {
   anchorId?: string;
   text: string;
@@ -44,11 +51,32 @@ export class SearchResponseDto {
   highlight: string;
   tagMatchCount: number;
   tagSnippets: SearchTagSnippetDto[];
+  databaseMatches?: SearchDatabaseMatchDto[];
   createdAt: Date;
   updatedAt: Date;
   breadcrumbs?: SearchBreadcrumbDto[];
   labels?: SearchLabelDto[];
   space: Partial<Space>;
+}
+
+export type DictionarySearchMatchedField = 'term' | 'form' | 'definition';
+
+export class DictionarySearchResponseDto {
+  id: string;
+  term: string;
+  matchedField: DictionarySearchMatchedField;
+  matchedForm?: string;
+  snippet: {
+    text: string;
+    matches: SearchTagMatchDto[];
+  };
+  rank: number;
+  space: {
+    id: string;
+    name: string;
+    slug: string;
+    icon: string | null;
+  };
 }
 
 export class AttachmentSearchResponseDto {

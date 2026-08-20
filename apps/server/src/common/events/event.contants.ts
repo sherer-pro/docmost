@@ -18,4 +18,6 @@ export enum EventName {
 
   AUTHORIZATION_CHANGED = 'authorization.changed',
   RAG_SYNC_SCOPE_CHANGED = 'rag-sync.scope.changed',
+  DICTIONARY_CHANGED = 'dictionary.changed',
+  USER_DISPLAY_NAME_CHANGED = 'user.display_name.changed',
 }

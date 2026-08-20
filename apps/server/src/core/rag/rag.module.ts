@@ -7,6 +7,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
 import { AiContentPolicyModule } from '../ai-content-policy/ai-content-policy.module';
 import { ApiKeyTrafficModule } from '../api-key/traffic/api-key-traffic.module';
 import { KnowledgeProjectionService } from './knowledge-projection.service';
+import { DictionaryModule } from '../dictionary/dictionary.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { KnowledgeProjectionService } from './knowledge-projection.service';
     StorageModule,
     AiContentPolicyModule,
     ApiKeyTrafficModule,
+    DictionaryModule,
   ],
   controllers: [RagController],
   providers: [KnowledgeProjectionService, RagContentExportService, RagService],

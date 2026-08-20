@@ -349,6 +349,15 @@ export class UserService {
       }
     }
 
+    if (displayNameChanged) {
+      void this.eventEmitter
+        ?.emitAsync(EventName.USER_DISPLAY_NAME_CHANGED, {
+          userId,
+          workspaceId: workspace.id,
+        })
+        .catch(() => undefined);
+    }
+
     return this.normalizeUserPreferencePayload(updatedUser);
   }
 }

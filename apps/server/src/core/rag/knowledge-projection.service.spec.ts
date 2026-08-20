@@ -143,4 +143,25 @@ describe('KnowledgeProjectionService', () => {
 
     expect(result.toISOString()).toBe('2026-08-20T11:00:00.000Z');
   });
+
+  it('delegates dictionary ranking to the shared search service', async () => {
+    const searchKnowledge = jest.fn().mockResolvedValue([{ id: 'term-1' }]);
+    const projection = new KnowledgeProjectionService(
+      {} as any,
+      {
+        searchKnowledge,
+      } as any,
+    );
+    const input = {
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      query: 'term',
+      limit: 5,
+    };
+
+    await expect(projection.searchDictionaryTerms(input)).resolves.toEqual([
+      { id: 'term-1' },
+    ]);
+    expect(searchKnowledge).toHaveBeenCalledWith(input);
+  });
 });

@@ -20,12 +20,11 @@ export class PageListener {
 
   @OnEvent(EventName.PAGE_CREATED)
   async handlePageCreated(event: PageEvent) {
-    const { pageIds } = event;
-    if (this.isTypesense()) {
-      await this.searchQueue.add(QueueJob.PAGE_CREATED, {
-        pageIds,
-      });
-    }
+    const { pageIds, workspaceId } = event;
+    await this.searchQueue.add(QueueJob.PAGE_CREATED, {
+      pageIds,
+      workspaceId,
+    });
   }
 
   @OnEvent(EventName.PAGE_UPDATED)

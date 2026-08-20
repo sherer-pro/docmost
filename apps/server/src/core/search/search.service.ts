@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   BUILT_IN_SEARCH_TAGS,
   SearchDTO,
@@ -29,6 +29,7 @@ import {
 } from '../page-access/page-access.service';
 import { ShareService } from '../share/share.service';
 import { buildTagSearchMetadata } from './tag-search.utils';
+import { DatabaseSearchProjectionService } from '../database/services/database-search-projection.service';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tsquery = require('pg-tsquery')();
@@ -83,6 +84,8 @@ export class SearchService {
     private userRepo: UserRepo,
     private readonly pageAccessService: PageAccessService,
     private readonly shareService: ShareService,
+    @Optional()
+    private readonly databaseSearchProjection?: DatabaseSearchProjectionService,
   ) {}
 
   private normalizeSearchHighlights<T extends { highlight?: string | null }>(
@@ -370,11 +373,21 @@ export class SearchService {
       return { items: [] };
     }
 
+    const searchVector = opts.userId
+      ? sql<string>`COALESCE(tsv, ''::tsvector) || COALESCE(database_search_tsv, ''::tsvector)`
+      : sql<string>`tsv`;
+    const textQuery = sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`;
     const rankExpression = hasTextQuery
-      ? sql<number>`ts_rank(tsv, to_tsquery('english', f_unaccent(${searchQuery})))`
+      ? sql<number>`ts_rank(${searchVector}, ${textQuery})`
       : sql<number>`0`;
     const highlightExpression = hasTextQuery
-      ? sql<string>`ts_headline('english', text_content, to_tsquery('english', f_unaccent(${searchQuery})), ${TS_HEADLINE_OPTIONS})`
+      ? opts.userId
+        ? sql<string>`CASE
+            WHEN tsv @@ ${textQuery}
+              THEN ts_headline('english', text_content, ${textQuery}, ${TS_HEADLINE_OPTIONS})
+            ELSE ts_headline('english', database_search_text, ${textQuery}, ${TS_HEADLINE_OPTIONS})
+          END`
+        : sql<string>`ts_headline('english', text_content, ${textQuery}, ${TS_HEADLINE_OPTIONS})`
       : sql<string>`${''}`;
 
     let queryResults = this.db
@@ -418,9 +431,7 @@ export class SearchService {
 
     if (hasTextQuery) {
       queryResults = queryResults.where(
-        'tsv',
-        '@@',
-        sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`,
+        sql<boolean>`${searchVector} @@ ${textQuery}`,
       );
     }
 
@@ -637,6 +648,20 @@ export class SearchService {
           searchResultsWithTagMetadata,
           visiblePageIdsBySpaceId,
         );
+
+      if (this.databaseSearchProjection && query) {
+        const databaseRows = searchResultsWithBreadcrumbs.filter(
+          (result) => result.contentKind === 'databaseRow',
+        );
+        const matches = await this.databaseSearchProjection.buildMatches(
+          databaseRows.map((result) => result.id),
+          opts.workspaceId,
+          query,
+        );
+        for (const result of databaseRows) {
+          result.databaseMatches = matches.get(result.id);
+        }
+      }
 
       return { items: searchResultsWithBreadcrumbs };
     } else {

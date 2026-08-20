@@ -110,6 +110,32 @@ export class SearchShareDTO extends SearchDTO {
   spaceId: string;
 }
 
+export class DictionarySearchDTO {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(512)
+  query: string;
+
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(10_000)
+  offset?: number;
+}
+
 export class SearchTagFacetDTO {
   @IsOptional()
   @IsUUID()
