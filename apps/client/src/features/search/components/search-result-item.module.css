@@ -3,10 +3,51 @@
     light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
 }
 
+.searchSection + .searchSection {
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
 .tagSnippets {
   display: grid;
   gap: 4px;
   padding: 0 12px 10px 44px;
+}
+
+.databaseMatches {
+  display: grid;
+  gap: 4px;
+  padding: 0 12px 10px 44px;
+}
+
+.dictionaryPreview {
+  padding: 6px 16px 12px 44px;
+}
+
+.disclosureOpen {
+  transform: rotate(180deg);
+}
+
+.databaseMatch {
+  display: block;
+  padding: 5px 8px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-text);
+  text-decoration: none;
+  background: light-dark(
+    var(--mantine-color-gray-0),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.databaseMatch:hover,
+.databaseMatch:focus-visible {
+  background: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-6)
+  );
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 1px;
 }
 
 .tagSnippet {
@@ -44,6 +85,10 @@
 
 @media (max-width: 48em) {
   .tagSnippets {
+    padding-left: 12px;
+  }
+
+  .databaseMatches {
     padding-left: 12px;
   }
 }

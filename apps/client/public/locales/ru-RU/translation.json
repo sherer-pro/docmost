@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Открыть совпадение с тегом {{index}} в документе «{{title}}»",
   "+{{count}} more tag matches": "+{{count}} совпадений с тегами",
   "Tag actions": "Действия с тегом",
-  "Find this tag in the space": "Найти этот тег в пространстве"
+  "Find this tag in the space": "Найти этот тег в пространстве",
+  "Show all": "Показать все",
+  "Word form": "Словоформа",
+  "Matched form": "Совпавшая форма",
+  "Open in Dictionary": "Открыть в словаре",
+  "Unable to load dictionary term.": "Не удалось загрузить термин словаря.",
+  "This search section is temporarily unavailable.": "Эта секция поиска временно недоступна."
 }

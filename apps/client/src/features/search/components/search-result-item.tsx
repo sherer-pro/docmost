@@ -17,6 +17,7 @@ import { buildAttachmentFileUrl, getTagColor } from "@docmost/editor-ext";
 import { buildDatabaseUrl, buildPageUrl } from "@/features/page/page.utils";
 import type {
   IAttachmentSearch,
+  IDatabaseSearchMatch,
   IPageSearch,
   ITagSearchSnippet,
 } from "@/features/search/types/search.types";
@@ -95,6 +96,53 @@ function TagSnippet({
       onClick={() => searchSpotlight.close()}
     >
       {segments}
+    </Link>
+  );
+}
+
+function DatabaseMatch({
+  match,
+  href,
+}: {
+  match: IDatabaseSearchMatch;
+  href: string;
+}) {
+  const segments: React.ReactNode[] = [];
+  let cursor = 0;
+  [...match.matches]
+    .sort((left, right) => left.start - right.start)
+    .forEach((range, index) => {
+      if (
+        range.start < cursor ||
+        range.start < 0 ||
+        range.end <= range.start ||
+        range.end > match.text.length
+      ) {
+        return;
+      }
+      if (range.start > cursor)
+        segments.push(match.text.slice(cursor, range.start));
+      segments.push(
+        <mark key={`${range.start}-${range.end}-${index}`}>
+          {match.text.slice(range.start, range.end)}
+        </mark>,
+      );
+      cursor = range.end;
+    });
+  if (cursor < match.text.length) segments.push(match.text.slice(cursor));
+
+  return (
+    <Link
+      to={href}
+      className={classes.databaseMatch}
+      onClick={() => searchSpotlight.close()}
+    >
+      <Text component="span" size="xs" fw={600}>
+        {match.propertyName}:{" "}
+      </Text>
+      <Text component="span" size="xs">
+        {segments}
+      </Text>
     </Link>
   );
 }
@@ -179,6 +227,7 @@ export function SearchResultItem({
     : null;
   const labels = pageResult.labels ?? [];
   const snippets = pageResult.tagSnippets ?? [];
+  const databaseMatches = pageResult.databaseMatches ?? [];
   const shownMatchCount = snippets.reduce(
     (count, snippet) => count + snippet.matches.length,
     0,
@@ -239,6 +288,17 @@ export function SearchResultItem({
           </div>
         </Group>
       </Spotlight.Action>
+      {databaseMatches.length > 0 && (
+        <div className={classes.databaseMatches}>
+          {databaseMatches.map((match) => (
+            <DatabaseMatch
+              key={match.propertyId}
+              match={match}
+              href={pageUrl}
+            />
+          ))}
+        </div>
+      )}
       {snippets.length > 0 && (
         <div className={classes.tagSnippets}>
           {snippets.map((snippet, index) => (

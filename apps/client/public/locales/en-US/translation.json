@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Open tag match {{index}} in {{title}}",
   "+{{count}} more tag matches": "+{{count}} more tag matches",
   "Tag actions": "Tag actions",
-  "Find this tag in the space": "Find this tag in the space"
+  "Find this tag in the space": "Find this tag in the space",
+  "Show all": "Show all",
+  "Word form": "Word form",
+  "Matched form": "Matched form",
+  "Open in Dictionary": "Open in Dictionary",
+  "Unable to load dictionary term.": "Unable to load dictionary term.",
+  "This search section is temporarily unavailable.": "This search section is temporarily unavailable."
 }

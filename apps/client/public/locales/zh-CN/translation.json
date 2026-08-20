@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "打开 {{title}} 中的第 {{index}} 个标签匹配项",
   "+{{count}} more tag matches": "还有 {{count}} 个标签匹配项",
   "Tag actions": "标签操作",
-  "Find this tag in the space": "在此空间中查找此标签"
+  "Find this tag in the space": "在此空间中查找此标签",
+  "Show all": "显示全部",
+  "Word form": "词形",
+  "Matched form": "匹配词形",
+  "Open in Dictionary": "在词典中打开",
+  "Unable to load dictionary term.": "无法加载词典术语。",
+  "This search section is temporarily unavailable.": "此搜索部分暂时不可用。"
 }

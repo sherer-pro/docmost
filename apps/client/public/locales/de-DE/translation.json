@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Tag-Treffer {{index}} in {{title}} öffnen",
   "+{{count}} more tag matches": "+{{count}} weitere Tag-Treffer",
   "Tag actions": "Tag-Aktionen",
-  "Find this tag in the space": "Dieses Tag im Bereich suchen"
+  "Find this tag in the space": "Dieses Tag im Bereich suchen",
+  "Show all": "Alle anzeigen",
+  "Word form": "Wortform",
+  "Matched form": "Gefundene Form",
+  "Open in Dictionary": "Im Wörterbuch öffnen",
+  "Unable to load dictionary term.": "Der Wörterbucheintrag konnte nicht geladen werden.",
+  "This search section is temporarily unavailable.": "Dieser Suchbereich ist vorübergehend nicht verfügbar."
 }

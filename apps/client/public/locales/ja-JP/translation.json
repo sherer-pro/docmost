@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "{{title}} のタグ一致 {{index}} を開く",
   "+{{count}} more tag matches": "他 {{count}} 件のタグ一致",
   "Tag actions": "タグの操作",
-  "Find this tag in the space": "このスペースでこのタグを検索"
+  "Find this tag in the space": "このスペースでこのタグを検索",
+  "Show all": "すべて表示",
+  "Word form": "語形",
+  "Matched form": "一致した語形",
+  "Open in Dictionary": "辞書で開く",
+  "Unable to load dictionary term.": "辞書の用語を読み込めませんでした。",
+  "This search section is temporarily unavailable.": "この検索セクションは一時的に利用できません。"
 }

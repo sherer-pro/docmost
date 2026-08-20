@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "{{title}}에서 태그 일치 {{index}} 열기",
   "+{{count}} more tag matches": "태그 일치 {{count}}개 더 있음",
   "Tag actions": "태그 작업",
-  "Find this tag in the space": "이 스페이스에서 이 태그 찾기"
+  "Find this tag in the space": "이 스페이스에서 이 태그 찾기",
+  "Show all": "모두 보기",
+  "Word form": "단어 형태",
+  "Matched form": "일치한 형태",
+  "Open in Dictionary": "사전에서 열기",
+  "Unable to load dictionary term.": "사전 용어를 불러올 수 없습니다.",
+  "This search section is temporarily unavailable.": "이 검색 섹션을 일시적으로 사용할 수 없습니다."
 }

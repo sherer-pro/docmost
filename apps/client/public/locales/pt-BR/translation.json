@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Abrir correspondência de tag {{index}} em {{title}}",
   "+{{count}} more tag matches": "+{{count}} outras correspondências de tag",
   "Tag actions": "Ações do tag",
-  "Find this tag in the space": "Encontrar este tag no espaço"
+  "Find this tag in the space": "Encontrar este tag no espaço",
+  "Show all": "Mostrar tudo",
+  "Word form": "Forma da palavra",
+  "Matched form": "Forma correspondente",
+  "Open in Dictionary": "Abrir no dicionário",
+  "Unable to load dictionary term.": "Não foi possível carregar o termo do dicionário.",
+  "This search section is temporarily unavailable.": "Esta seção de pesquisa está temporariamente indisponível."
 }

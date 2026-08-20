@@ -2769,5 +2769,11 @@
   "Open tag match {{index}} in {{title}}": "Відкрити збіг тегу {{index}} у документі «{{title}}»",
   "+{{count}} more tag matches": "+{{count}} інших збігів тегів",
   "Tag actions": "Дії з тегом",
-  "Find this tag in the space": "Знайти цей тег у просторі"
+  "Find this tag in the space": "Знайти цей тег у просторі",
+  "Show all": "Показати все",
+  "Word form": "Словоформа",
+  "Matched form": "Збіг форми",
+  "Open in Dictionary": "Відкрити у словнику",
+  "Unable to load dictionary term.": "Не вдалося завантажити термін словника.",
+  "This search section is temporarily unavailable.": "Цей розділ пошуку тимчасово недоступний."
 }

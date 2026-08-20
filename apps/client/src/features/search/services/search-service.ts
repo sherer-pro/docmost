@@ -5,6 +5,8 @@ import {
   IPageSearchParams,
   IPageSearchLabel,
   ITagSearchFacet,
+  IDictionarySearch,
+  IDictionarySearchParams,
   ISuggestionResult,
   SearchLabelParams,
   SearchSuggestionParams,
@@ -41,6 +43,16 @@ export async function searchAttachments(
 ): Promise<IAttachmentSearch[]> {
   const req = await api.post<{ items: IAttachmentSearch[] }>(
     "/search/attachments",
+    params,
+  );
+  return req.data.items;
+}
+
+export async function searchDictionary(
+  params: IDictionarySearchParams,
+): Promise<IDictionarySearch[]> {
+  const req = await api.post<{ items: IDictionarySearch[] }>(
+    "/search/dictionary",
     params,
   );
   return req.data.items;
