@@ -143,6 +143,7 @@ jobs:
         ports:
           - 8108:8108
         options: >-
+          --tmpfs /data
           --health-cmd "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108'"
           --health-interval 5s
           --health-timeout 5s
