@@ -23,6 +23,13 @@ export async function getDictionaryTerms(
   return req.data;
 }
 
+export async function getDictionaryTerm(
+  termId: string,
+): Promise<IDictionaryTerm> {
+  const req = await api.get<IDictionaryTerm>(`/dictionary-terms/${termId}`);
+  return req.data;
+}
+
 export async function createDictionaryTerm(
   payload: ICreateDictionaryTermPayload,
 ): Promise<IDictionaryTerm> {

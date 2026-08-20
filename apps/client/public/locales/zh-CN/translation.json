@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "删除词典术语",
   "Dictionary": "词典",
   "Dictionary is disabled": "词典已禁用",
+  "Dictionary term is unavailable": "词典术语不可用",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "链接的词典术语已被删除、禁用或在此空间中不可用。",
   "Dictionary term actions": "词典术语操作",
   "Dictionary term created": "词典术语已创建",
   "Dictionary term deleted": "词典术语已删除",
@@ -1532,7 +1534,7 @@
           },
           "success": "响应返回 200，稳定的游标，并且只有密钥创建者的实时可读范围",
           "rollback": "撤销密钥并停止索引器；创建新的恢复密钥",
-          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。"
+          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。投影 v1 通过独立的分页 feed 导出已启用的文档字段、命名数据库单元格和已启用的词典。"
         },
         "ragSync": {
           "description": "内置Open WebUI RAG同步在Docmost内部运行，通过Docmost服务直接读取PostgreSQL，与Redis协调，并使用单独的加密每空间凭证进行写入。它从不调用公共/api/rag/* API；查询和写入者凭据保持独立。",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "由于访问权限发生了变化，部分答案和引用被清除。仅在有意恢复权限后重新打开源。"
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "请让规范化后的 Open WebUI 检索来源和 Knowledge ID 与写入目标完全一致，然后重新测试并启用。二者不一致时不会执行写入。"
           },
           "sourceRemoved": {
             "signal": "源已删除",

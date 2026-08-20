@@ -100,6 +100,11 @@ RAG APIs use:
 - `page`
 - `database`
 - `databaseRow` (in page detail and deleted tombstones)
+- `dictionaryTerm` (in the independent dictionary list and feeds)
+
+The synchronizer source types are `page`, `database_row`, `attachment`, and
+`dictionary_term`. A dictionary source has `pageId: null`; every page-backed
+source keeps a required page UUID.
 
 ### 4.2 Full list (`/rag/pages`)
 
@@ -136,12 +141,25 @@ Rules:
   - `status: string | null`
   - `assigneeId: string | null`
   - `stakeholderIds: string[]` (empty array allowed)
+  - `aiRole: "NONE"|"EDITOR"|"COAUTHOR"|"COAUTHOR_PLUS"|"AUTHOR"`
+
+UUIDs remain in structured metadata. `knowledgeMarkdown` resolves assignee and
+stakeholder UUIDs to current display names without email addresses. A missing
+member is rendered as `Unknown member (<id>)`.
+
+`contentMarkdown`, `descriptionMarkdown`, and `rowMarkdown` keep their existing
+semantics. `knowledgeMarkdown` is the canonical AI/index projection ordered as
+title, `Document fields`, database schema or named cells where applicable, and
+then the source text. Every configured database property is emitted by name;
+an empty cell is represented explicitly as `null` in metadata and `Not set` in
+Markdown. Database select/status settings include their user-defined options.
 
 ### 4.5 Delta pagination
 
 `/rag/pages`, `/rag/updates`, `/rag/deleted`,
 `/rag/attachments/updates`, `/rag/attachments/deleted`, and
-`/rag/scope/blocked` accept:
+`/rag/dictionary/terms`, `/rag/dictionary/updates`,
+`/rag/dictionary/deleted`, and `/rag/scope/blocked` accept:
 
 - `limit` (optional, `1..1000`);
 - `cursor` (optional opaque string returned as `nextCursor`).
@@ -164,6 +182,7 @@ Returns the current effective indexing scope:
 ```json
 {
   "schemaVersion": 2,
+  "projectionVersion": 1,
   "workspaceId": "<workspace-uuid>",
   "spaceId": "<space-uuid>",
   "syncTarget": {
@@ -185,10 +204,12 @@ space in AI settings, or `null` when the space does not use the
 `open-webui-knowledge-v1` retrieval adapter. Credentials are never returned.
 
 The fingerprint is based on the workspace and space identifiers, the effective
-content policy, and the sorted set of pages currently readable by the key
-creator. A key-scope, ACL, group-membership, space-role, or exclusion change
-therefore invalidates an external sync. The legacy `excludedPageIds` field
-remains for one compatibility transition.
+content policy, the sorted set of pages currently readable by the key creator,
+`projectionVersion`, the enabled document-field mask, and the dictionary
+switch. A key-scope, ACL, group-membership, space-role, exclusion, projection,
+document-field, or dictionary-switch change therefore invalidates an external
+sync. The legacy `excludedPageIds` field remains for one compatibility
+transition.
 
 ### 5.0.1 `GET /api/rag/scope/blocked`
 
@@ -207,7 +228,10 @@ Query:
   - falsy: `0|false|no|off`
 - optional `limit` and opaque `cursor` as described above
 
-`contentMarkdown` and `descriptionMarkdown` are returned only when `includeContent=true`.
+`contentMarkdown` and `descriptionMarkdown` are returned only when
+`includeContent=true`. Page/database entries also expose structured
+`customFields`, `projectionUpdatedAt`, and canonical `knowledgeMarkdown` when
+content is requested.
 
 ### 5.2 `GET /api/rag/updates`
 
@@ -230,6 +254,13 @@ Database delta includes changes from:
 - `database_rows.updatedAt`
 - `database_cells.updatedAt`
 - row page `pages.updatedAt`
+- `users.updatedAt` for assignees and stakeholders actually referenced by the
+  projected page, database container, or row
+
+`updatedAt` and `updatedAtMs` are the time of the last RAG-relevant change, not
+only the base entity write. A property rename therefore replays the database
+and every row. Detail responses expose the same derived time as
+`projectionUpdatedAt`.
 
 ### 5.3 `GET /api/rag/deleted`
 
@@ -260,7 +291,8 @@ Query:
 - optional `limit` and `cursor` as described above
 
 Items include `fileId`, file metadata, owning `pageId`, `updatedAtMs`, and an
-API-key-authenticated `downloadUrl`.
+API-key-authenticated `downloadUrl`. At read time they also include the current
+parent-page `customFields`. Changing a page field does not re-upload the binary.
 
 ### 5.5 `GET /api/rag/attachments/deleted`
 
@@ -293,11 +325,16 @@ Params:
   - database UUID
   - or database container page UUID/slug
 
-Includes metadata, properties, rows/cells, and composed `knowledgeMarkdown`.
+Includes container-page `customFields`, metadata, named/type-bearing
+properties, their select/status options, rows/cells, `projectionUpdatedAt`, and
+composed `knowledgeMarkdown`.
 
 ### 5.8 `GET /api/rag/databases/:databaseIdOrPageSlug/rows`
 
-Rows export (raw cells + row markdown).
+Rows export (raw cell value and `propertyId`, property name/type, row Markdown,
+row-page `customFields`, `projectionUpdatedAt`, and canonical
+`knowledgeMarkdown`). Every database property is present even when no cell row
+exists.
 
 Query:
 
@@ -345,6 +382,28 @@ Query:
 
 - `format`: `markdown|html` (default `markdown`)
 - `includeAttachments`: boolean (default `true`)
+
+### 5.14 `GET /api/rag/dictionary/terms`
+
+Paginated full list of active dictionary terms. The route returns an empty page
+when the space dictionary switch is disabled. Each item contains the term UUID,
+term, forms, definition, canonical `knowledgeMarkdown`, and timestamps.
+
+### 5.15 `GET /api/rag/dictionary/terms/:termId`
+
+Returns one active dictionary term by UUID. A disabled dictionary, a deleted
+term, or a term outside the authenticated workspace/space returns `404`.
+
+### 5.16 `GET /api/rag/dictionary/updates`
+
+Independent at-least-once change feed. It accepts `updatedSince`, `limit`, and
+an opaque cursor and returns `maxUpdatedAtMs` on the terminal page.
+
+### 5.17 `GET /api/rag/dictionary/deleted`
+
+Independent dictionary tombstone feed. It accepts `deletedSince`, `limit`, and
+an opaque cursor. Tombstones remain available while the dictionary is disabled
+so consumers can remove previously indexed sources.
 
 ## 6. API key management (to obtain RAG token)
 
@@ -426,10 +485,14 @@ highest score. Timeout, oversized payload, `401`, `429`, `5xx`, or no readable
 results degrades safely to document/file context and never invokes the model
 inside the retrieval adapter.
 
-The chat's external retrieval source types remain `page`, `database_row`, and
-`attachment`. Core chat may separately resolve a whole database as an explicit
-conversation-context source, but that internal `database` type does not extend
-the external `http-json-v1` query contract.
+The chat's external retrieval source types are `page`, `database_row`,
+`attachment`, and `dictionary_term`. The request includes `dictionary_term`
+only while `space.settings.dictionary.enabled` is true. A dictionary candidate
+must use a term UUID as `sourceId` and `pageId: null`; this is an intentional
+extension of the `http-json-v1` response shape, so strict external validators
+must be updated. Core chat may separately resolve a whole database as explicit
+conversation context, but that internal `database` type does not extend the
+external query contract.
 
 ### 7.0.1 Built-in Open WebUI writer
 
@@ -445,7 +508,7 @@ mapping rules. One Knowledge Base maps to one Docmost space. The module:
   mapping and deleting the previous file;
 - reconstructs lost Redis mappings from `meta.data.docmost`, removes duplicate
   superseded files, and ignores foreign workspace/space metadata;
-- supports page, database-row, PDF, DOCX, TXT, MD, JPEG, PNG, and WebP sources;
+- supports page, database-row, dictionary-term, PDF, DOCX, TXT, and MD sources;
 - logs only low-cardinality states, counters, reason codes, lag, and durations;
   stable binding, space, source, checkpoint, and fingerprint IDs are excluded;
 - reads the internal policy scope before each cycle; on fingerprint change it
@@ -455,6 +518,10 @@ mapping rules. One Knowledge Base maps to one Docmost space. The module:
 - deletes an existing attachment mapping when the file becomes too large or
   its extension is no longer allowed, while retaining mappings on transient
   remote/read errors for a later retry.
+- refuses enable with `409 rag_sync_target_mismatch` unless the normalized
+  writer origin and Knowledge ID match the configured Open WebUI retrieval
+  target. A running binding performs the same check before remote writes and
+  stops non-retryably on mismatch.
 - renews the distributed binding lease and global slot during each cycle. Lease
   or slot loss aborts the current HTTP request; abort checks run before and after
   upload, delete, list, and processing polls. No later external request or
@@ -493,17 +560,22 @@ built-in writer.
 5. For pages with attachments:
    - call `GET /api/rag/pages/:id/attachments`
    - download binaries through `downloadUrl` or `/api/rag/attachments/:fileId/:fileName`
-6. Initialize checkpoints:
+6. If the dictionary is enabled, page through
+   `GET /api/rag/dictionary/terms?limit=500` and upsert one source per term.
+7. Initialize checkpoints:
    - `updatedSince = 0`
    - `deletedSince = 0`
    - attachment `updatedSince = 0`
    - attachment `deletedSince = 0`
+   - dictionary `updatedSince = 0`
+   - dictionary `deletedSince = 0`
 
 ### 7.2 Incremental sync loop
 
 1. Read `/api/rag/scope`. If the fingerprint changed, purge mappings whose
-   backing `pageId` is excluded and reset document/attachment update
-   checkpoints to `0`.
+   backing `pageId` is excluded and reset document, attachment, and dictionary
+   update checkpoints to `0`. Reconcile `dictionary_term` mappings separately
+   because their `pageId` is `null`.
 2. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>&limit=500`
 3. Upsert updated documents:
    - `type=page` -> `GET /api/rag/pages/:id?includeContent=true`
@@ -511,14 +583,17 @@ built-in writer.
 4. Follow `nextCursor` while `hasMore=true`, always repeating the original
    `updatedSince`/`deletedSince` value for that snapshot
 5. Process `/api/rag/attachments/updates` using its own checkpoint
-6. Process `/api/rag/deleted` and `/api/rag/attachments/deleted`
-7. Delete/deactivate tombstoned records in the index
-8. Update each checkpoint only after the complete snapshot reaches
+6. Process `/api/rag/dictionary/updates` with its own checkpoint when enabled
+7. Process `/api/rag/deleted`, `/api/rag/attachments/deleted`, and
+   `/api/rag/dictionary/deleted`
+8. Delete/deactivate tombstoned records in the index
+9. Update each checkpoint only after the complete snapshot reaches
    `hasMore=false`:
    - `lastUpdatedCheckpoint = maxUpdatedAtMs`
    - `lastDeletedCheckpoint = maxDeletedAtMs`
    - attachment update/delete checkpoints advance independently
-9. Persist the new scope fingerprint only after the complete cycle succeeds.
+   - dictionary update/delete checkpoints advance independently
+10. Persist the new scope fingerprint only after the complete cycle succeeds.
 
 ### 7.3 Idempotency requirement
 

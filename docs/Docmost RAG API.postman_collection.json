@@ -709,6 +709,122 @@
           "response": []
         },
         {
+          "name": "GET /rag/dictionary/terms",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/dictionary/terms?limit={{limit}}&cursor={{cursor}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "dictionary", "terms"],
+              "query": [
+                { "key": "limit", "value": "{{limit}}" },
+                { "key": "cursor", "value": "{{cursor}}", "disabled": true }
+              ]
+            },
+            "description": "Paginated active dictionary knowledge projections. Returns an empty page while the space dictionary is disabled."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /rag/dictionary/terms/:termId",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/dictionary/terms/{{termId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "dictionary", "terms", "{{termId}}"]
+            },
+            "description": "One active dictionary term projection. Disabled, deleted, or out-of-scope terms fail closed."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /rag/dictionary/updates",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/dictionary/updates?updatedSince={{dictionaryUpdatedSince}}&limit={{limit}}&cursor={{cursor}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "dictionary", "updates"],
+              "query": [
+                {
+                  "key": "updatedSince",
+                  "value": "{{dictionaryUpdatedSince}}"
+                },
+                { "key": "limit", "value": "{{limit}}" },
+                { "key": "cursor", "value": "{{cursor}}", "disabled": true }
+              ]
+            },
+            "description": "Independent at-least-once dictionary update feed. Advance the watermark only on the terminal page."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /rag/dictionary/deleted",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ragApiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rag/dictionary/deleted?deletedSince={{dictionaryDeletedSince}}&limit={{limit}}&cursor={{cursor}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rag", "dictionary", "deleted"],
+              "query": [
+                {
+                  "key": "deletedSince",
+                  "value": "{{dictionaryDeletedSince}}"
+                },
+                { "key": "limit", "value": "{{limit}}" },
+                { "key": "cursor", "value": "{{cursor}}", "disabled": true }
+              ]
+            },
+            "description": "Dictionary tombstone feed. Remains available while the dictionary is disabled for remote cleanup."
+          },
+          "response": []
+        },
+        {
           "name": "GET /rag/space/export",
           "request": {
             "auth": {
@@ -778,6 +894,11 @@
       "type": "string"
     },
     {
+      "key": "termId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "includeContent",
       "value": "true",
       "type": "string"
@@ -794,6 +915,16 @@
     },
     {
       "key": "updatedSince",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "dictionaryUpdatedSince",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "dictionaryDeletedSince",
       "value": "0",
       "type": "string"
     },

@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "anchors": [
     "assistant",
     "retrieval",
@@ -170,6 +170,8 @@
     "troubleshooting.rows.leaseLost.signal",
     "troubleshooting.rows.runtimeStopped.action",
     "troubleshooting.rows.runtimeStopped.signal",
+    "troubleshooting.rows.targetMismatch.action",
+    "troubleshooting.rows.targetMismatch.signal",
     "troubleshooting.rows.sourceAccessChanged.action",
     "troubleshooting.rows.sourceAccessChanged.signal",
     "troubleshooting.rows.sourceRemoved.action",

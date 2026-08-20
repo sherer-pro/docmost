@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "Woordenboekterm verwijderen",
   "Dictionary": "Woordenboek",
   "Dictionary is disabled": "Woordenboek is uitgeschakeld",
+  "Dictionary term is unavailable": "Woordenboekterm is niet beschikbaar",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "De gekoppelde woordenboekterm is verwijderd, uitgeschakeld of niet beschikbaar in deze ruimte.",
   "Dictionary term actions": "Acties voor woordenboekterm",
   "Dictionary term created": "Woordenboekterm aangemaakt",
   "Dictionary term deleted": "Woordenboekterm verwijderd",
@@ -1532,7 +1534,7 @@
           },
           "success": "Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker",
           "rollback": "Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel",
-          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd."
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. Projectie v1 exporteert ingeschakelde documentvelden, benoemde databasecellen en het ingeschakelde woordenboek via onafhankelijke gepagineerde feeds."
         },
         "ragSync": {
           "description": "Ingebouwde Open WebUI RAG Sync draait binnen Docmost, leest PostgreSQL rechtstreeks via Docmost-services, coördineert met Redis en schrijft met een afzonderlijke gecodeerde referentie per ruimte.",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "Het gedeeltelijke antwoord en de citaten zijn verwijderd omdat de toegang is gewijzigd. Open de broncode pas opnieuw nadat de machtigingen opzettelijk zijn hersteld."
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "Laat de genormaliseerde Open WebUI-retrievalorigin en Knowledge ID exact overeenkomen met het writerdoel en voer daarna Test en inschakelen opnieuw uit. Zolang ze verschillen wordt niets geschreven."
           },
           "sourceRemoved": {
             "signal": "bron verwijderd",

@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "Excluir termo do dicionário",
   "Dictionary": "Dicionário",
   "Dictionary is disabled": "O dicionário está desativado",
+  "Dictionary term is unavailable": "O termo do dicionário não está disponível",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "O termo vinculado foi excluído, desativado ou não está disponível neste espaço.",
   "Dictionary term actions": "Ações do termo do dicionário",
   "Dictionary term created": "Termo do dicionário criado",
   "Dictionary term deleted": "Termo do dicionário excluído",
@@ -1532,7 +1534,7 @@
           },
           "success": "As respostas retornam 200 cursores estáveis e apenas o escopo legível ao vivo do criador da chave",
           "rollback": "Revogue a chave e pare o indexador; crie uma nova chave para recuperação",
-          "technical": "Os endpoints de entrada /mcp e /api/rag/* aceitam somente seus próprios tipos de chave; sessões de usuário e outro tipo de chave são rejeitados. As chaves continuam limitadas ao acesso atual de seu criador ao espaço e à visibilidade das páginas. Arquivar o espaço associado invalida imediatamente suas chaves. O token é retornado apenas na criação; tipo, espaço, criador e expiração não podem ser alterados."
+          "technical": "Os endpoints de entrada /mcp e /api/rag/* aceitam somente seus próprios tipos de chave; sessões de usuário e outro tipo de chave são rejeitados. As chaves continuam limitadas ao acesso atual de seu criador ao espaço e à visibilidade das páginas. Arquivar o espaço associado invalida imediatamente suas chaves. O token é retornado apenas na criação; tipo, espaço, criador e expiração não podem ser alterados. A projeção v1 exporta campos de documento habilitados, células de banco de dados nomeadas e o dicionário habilitado por feeds paginados independentes."
         },
         "ragSync": {
           "description": "Open WebUI RAG Sync integrado é executado dentro do Docmost, lê PostgreSQL diretamente por meio dos serviços Docmost, coordena com Redis e grava com uma credencial criptografada separada por espaço.",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "A resposta parcial e as citações foram apagadas porque o acesso mudou. Reabra a fonte somente depois que as permissões forem restauradas intencionalmente."
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "Faça a origem normalizada de recuperação do Open WebUI e o Knowledge ID corresponderem exatamente ao destino de escrita; depois teste e habilite novamente. Nenhuma gravação é enviada enquanto forem diferentes."
           },
           "sourceRemoved": {
             "signal": "fonte removida",

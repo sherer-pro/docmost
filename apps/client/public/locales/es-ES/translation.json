@@ -1112,6 +1112,8 @@
   "Delete dictionary term": "Eliminar término del diccionario",
   "Dictionary": "Diccionario",
   "Dictionary is disabled": "El diccionario está desactivado",
+  "Dictionary term is unavailable": "El término del diccionario no está disponible",
+  "The linked dictionary term was deleted, disabled, or is not available in this space.": "El término enlazado se eliminó, se desactivó o no está disponible en este espacio.",
   "Dictionary term actions": "Acciones del término del diccionario",
   "Dictionary term created": "Término del diccionario creado",
   "Dictionary term deleted": "Término del diccionario eliminado",
@@ -1532,7 +1534,7 @@
           },
           "success": "Las respuestas devuelven 200 cursores estables y solo el alcance legible en vivo del creador de la clave",
           "rollback": "Revocar la clave y detener el indexador; crear una nueva clave para la recuperación",
-          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad."
+          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad. La proyección v1 exporta los campos de documento habilitados, las celdas de base de datos con nombre y el diccionario habilitado mediante feeds paginados independientes."
         },
         "ragSync": {
           "description": "La sincronización integrada Open WebUI RAG se ejecuta dentro de Docmost, lee PostgreSQL directamente a través de los servicios Docmost, se coordina con Redis y escribe con una credencial cifrada separada por espacio.",
@@ -1696,6 +1698,10 @@
           "sourceAccessChanged": {
             "signal": "source_access_changed",
             "action": "La respuesta parcial y las citas fueron eliminadas porque el acceso cambió. Vuelva a abrir la fuente solo después de que los permisos se restablezcan intencionalmente."
+          },
+          "targetMismatch": {
+            "signal": "rag_sync_target_mismatch",
+            "action": "Haz que el origen normalizado de recuperación de Open WebUI y el Knowledge ID coincidan exactamente con el destino de escritura; después vuelve a probar y habilitar. No se escribe nada mientras difieran."
           },
           "sourceRemoved": {
             "signal": "fuente eliminada",

@@ -72,6 +72,7 @@ const ERROR_KEYS: Record<RagSyncErrorCode, string> = {
   rag_sync_deployment_disabled: "ai.ragSync.error.deploymentDisabled",
   rag_sync_not_configured: "ai.ragSync.error.notConfigured",
   rag_sync_target_not_tested: "ai.ragSync.error.targetNotTested",
+  rag_sync_target_mismatch: "ai.ragSync.targetMismatchDescription",
   rag_sync_target_in_use: "ai.ragSync.error.targetInUse",
   rag_sync_config_conflict: "ai.ragSync.error.configConflict",
   rag_sync_cleanup_required: "ai.ragSync.error.cleanupRequired",
@@ -366,7 +367,8 @@ export function RagSyncSettings({
 
             {targetMismatch && (
               <Alert
-                color="yellow"
+                color="red"
+                icon={<IconAlertTriangle size={18} />}
                 title={t("ai.ragSync.targetMismatchTitle")}
                 classNames={{ label: classes.alertLabel }}
               >
@@ -618,7 +620,7 @@ export function RagSyncSettings({
                     isBusy,
                     hasSavedTarget,
                     hasUnsavedChanges,
-                  })
+                  }) || targetMismatch
                 }
                 onClick={() =>
                   void runAction("enable", "ai.ragSync.enabledNotification")
