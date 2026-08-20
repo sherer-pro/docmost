@@ -5,7 +5,7 @@ import {
   PostgresIntrospector,
   PostgresQueryCompiler,
 } from 'kysely';
-import { jsonbPreferenceValue, jsonbTextArray } from './workspace.repo';
+import { jsonbPreferenceValue } from './workspace.repo';
 
 function createCompiler() {
   return new Kysely<any>({
@@ -36,17 +36,6 @@ describe('workspace settings SQL values', () => {
     expect(jsonbPreferenceValue('admin').compile(db)).toMatchObject({
       sql: '$1::text',
       parameters: ['admin'],
-    });
-  });
-
-  it('keeps tag settings as a JSON-compatible text array', () => {
-    expect(jsonbTextArray(['todo', 'done']).compile(db)).toMatchObject({
-      sql: 'ARRAY[$1, $2]::text[]',
-      parameters: ['todo', 'done'],
-    });
-    expect(jsonbTextArray([]).compile(db)).toMatchObject({
-      sql: 'ARRAY[]::text[]',
-      parameters: [],
     });
   });
 });

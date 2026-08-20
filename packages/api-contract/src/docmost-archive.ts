@@ -131,6 +131,7 @@ export interface DocmostPortableSpaceSettings {
   documentFields?: Record<string, boolean>;
   dictionary?: { enabled?: boolean };
   headingNumbering?: { enabled?: boolean };
+  tags?: { disabled?: string[] };
 }
 
 export interface DocmostArchiveDataV2 {
@@ -201,6 +202,7 @@ export interface ImportPreview {
     documentFields: boolean;
     dictionary: boolean;
     headingNumbering: boolean;
+    tags: boolean;
   };
   warnings: string[];
 }
@@ -209,6 +211,7 @@ export interface DocmostImportOptions {
   applyDocumentFields: boolean;
   applyDictionary: boolean;
   applyHeadingNumbering: boolean;
+  applyTags: boolean;
   cleanupLegacyHeadingNumbers?: boolean;
 }
 

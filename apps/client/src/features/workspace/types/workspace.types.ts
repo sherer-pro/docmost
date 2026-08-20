@@ -21,15 +21,10 @@ export interface IWorkspace {
 
 export interface IWorkspaceSettings {
   sharing?: IWorkspaceSharingSettings;
-  tags?: IWorkspaceTagSettings;
 }
 
 export interface IWorkspaceSharingSettings {
   disabled?: boolean;
-}
-
-export interface IWorkspaceTagSettings {
-  disabled?: string[];
 }
 
 export interface ICreateInvite {

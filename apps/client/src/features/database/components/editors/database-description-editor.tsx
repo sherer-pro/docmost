@@ -1,5 +1,6 @@
-import PageEditor from '@/features/editor/page-editor';
-import classes from '@/pages/database/database-page.module.css';
+import PageEditor from "@/features/editor/page-editor";
+import classes from "@/pages/database/database-page.module.css";
+import type { ISpaceTagSettings } from "@/features/space/types/space.types";
 
 export interface DatabaseDescriptionEditorProps {
   pageId: string;
@@ -8,6 +9,7 @@ export interface DatabaseDescriptionEditorProps {
   cacheSlugId?: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
+  tagSettings?: ISpaceTagSettings;
   canCreateInlineComments?: boolean;
   headingNumberingEnabled?: boolean;
   spaceHeadingNumberingEnabled?: boolean;
@@ -26,6 +28,7 @@ export function DatabaseDescriptionEditor({
   cacheSlugId,
   spaceId,
   dictionaryEnabled = false,
+  tagSettings,
   canCreateInlineComments = editable,
   headingNumberingEnabled = false,
   spaceHeadingNumberingEnabled = false,
@@ -41,6 +44,7 @@ export function DatabaseDescriptionEditor({
         editorContentClassName={classes.databaseDescriptionEditor}
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
+        tagSettings={tagSettings}
         canManageDictionary={editable}
         canCreateInlineComments={canCreateInlineComments}
         headingNumberingEnabled={headingNumberingEnabled}

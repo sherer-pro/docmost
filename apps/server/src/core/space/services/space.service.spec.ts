@@ -15,6 +15,7 @@ describe('SpaceService', () => {
   let spaceRepo: {
     slugExists: jest.Mock;
     updateDictionarySettings: jest.Mock;
+    updateTagSettings: jest.Mock;
     updateHeadingNumberingSettings: jest.Mock;
     updateSpace: jest.Mock;
     archiveSpace: jest.Mock;
@@ -35,6 +36,7 @@ describe('SpaceService', () => {
     spaceRepo = {
       slugExists: jest.fn(),
       updateDictionarySettings: jest.fn(),
+      updateTagSettings: jest.fn(),
       updateHeadingNumberingSettings: jest.fn(),
       updateSpace: jest.fn(),
       archiveSpace: jest.fn(),
@@ -130,6 +132,27 @@ describe('SpaceService', () => {
     );
   });
 
+  it('updates tag settings without replacing other space settings', async () => {
+    spaceRepo.updateSpace.mockResolvedValue({
+      id: 'space-1',
+      settings: {
+        dictionary: { enabled: true },
+        tags: { disabled: ['future'] },
+      },
+    });
+
+    await service.updateSpace(
+      { spaceId: 'space-1', tagSettings: { disabled: ['future'] } },
+      'workspace-1',
+    );
+
+    expect(spaceRepo.updateTagSettings).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+      { disabled: ['future'] },
+    );
+  });
+
   it('archives a space', async () => {
     const archivedAt = new Date();
     spaceRepo.archiveSpace.mockResolvedValue({
@@ -196,10 +219,7 @@ describe('SpaceService', () => {
       'space-1',
       'workspace-1',
     );
-    expect(attachmentQueue.add).toHaveBeenCalledWith(
-      expect.anything(),
-      space,
-    );
+    expect(attachmentQueue.add).toHaveBeenCalledWith(expect.anything(), space);
   });
 
   it('rejects a space administrator transition that weakens MFA', async () => {

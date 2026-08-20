@@ -174,7 +174,7 @@ export class ImportController {
       WorkspaceCaslSubject.Settings,
     );
     if (
-      (dto.applyDocumentFields || dto.applyHeadingNumbering) &&
+      (dto.applyDocumentFields || dto.applyHeadingNumbering || dto.applyTags) &&
       !canManageSpaceSettings
     ) {
       throw new ForbiddenException(
@@ -192,6 +192,7 @@ export class ImportController {
         applyDocumentFields: dto.applyDocumentFields,
         applyDictionary: dto.applyDictionary,
         applyHeadingNumbering: dto.applyHeadingNumbering,
+        applyTags: dto.applyTags,
         cleanupLegacyHeadingNumbers: dto.cleanupLegacyHeadingNumbers ?? true,
       },
       user.id,
@@ -306,6 +307,7 @@ export class ImportController {
         {
           documentFields: canManageSpaceSettings,
           headingNumbering: canManageSpaceSettings,
+          tags: canManageSpaceSettings,
           dictionary: workspaceAbility.can(
             WorkspaceCaslAction.Manage,
             WorkspaceCaslSubject.Settings,

@@ -78,24 +78,12 @@ function duplicateCentralDirectoryEntry(
   const endRecord = Buffer.from(archive.subarray(endOffset));
   endRecord.writeUInt16LE(endRecord.readUInt16LE(8) + 1, 8);
   endRecord.writeUInt16LE(endRecord.readUInt16LE(10) + 1, 10);
-  endRecord.writeUInt32LE(
-    endRecord.readUInt32LE(12) + duplicate.length,
-    12,
-  );
-  return Buffer.concat([
-    archive.subarray(0, endOffset),
-    duplicate,
-    endRecord,
-  ]);
+  endRecord.writeUInt32LE(endRecord.readUInt32LE(12) + duplicate.length, 12);
+  return Buffer.concat([archive.subarray(0, endOffset), duplicate, endRecord]);
 }
 
 describe('ImportService Docmost archive preview', () => {
-  const service = new ImportService(
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-  );
+  const service = new ImportService({} as any, {} as any, {} as any, {} as any);
 
   const buildArchive = async (overrides?: {
     schemaVersion?: number;
@@ -132,6 +120,7 @@ describe('ImportService Docmost archive preview', () => {
             documentFields: { status: true },
             dictionary: { enabled: true },
             headingNumbering: { enabled: true },
+            tags: { disabled: ['future'] },
           },
         },
         pages: [
@@ -226,6 +215,7 @@ describe('ImportService Docmost archive preview', () => {
           documentFields: true,
           dictionary: true,
           headingNumbering: true,
+          tags: true,
         },
       }),
     );

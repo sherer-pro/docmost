@@ -26,7 +26,14 @@ export const UniqueID = { configure: () => ({}) } as any;
 export const Indent = { configure: () => ({}) } as any;
 export const PageBreak = {} as any;
 export const Tag = {} as any;
-export const builtInTagValues = ['tbd', 'todo', 'done'];
+export const builtInTagValues = [
+  'tbd',
+  'todo',
+  'done',
+  'core',
+  'future',
+  'pilot',
+];
 export const TiptapAudio = {} as any;
 export const TiptapPdf = {} as any;
 export const TableReadonlySort = {} as any;
@@ -188,6 +195,17 @@ export function htmlToMarkdown(input: string) {
 }
 export function markdownToHtml(input: string) {
   return input;
+}
+export function normalizeBuiltInTagValues(values: unknown) {
+  const supported = new Set(['tbd', 'todo', 'done', 'core', 'future', 'pilot']);
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => supported.has(value)),
+    ),
+  );
 }
 export function sanitizeUrl(input: string | undefined) {
   if (!input) return '';

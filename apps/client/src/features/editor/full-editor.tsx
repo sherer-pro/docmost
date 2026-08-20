@@ -13,6 +13,7 @@ import { resolvePageFullWidth } from "@/features/user/utils/page-width.ts";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 import type { TemplateKind } from "@docmost/api-contract";
+import type { ISpaceTagSettings } from "@/features/space/types/space.types";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -25,6 +26,7 @@ export interface FullEditorProps {
   spaceSlug: string;
   spaceId?: string;
   dictionaryEnabled?: boolean;
+  tagSettings?: ISpaceTagSettings;
   headingNumberingEnabled?: boolean;
   spaceHeadingNumberingEnabled?: boolean;
   readingTimeEnabled?: boolean;
@@ -43,6 +45,7 @@ export function FullEditor({
   spaceSlug,
   spaceId,
   dictionaryEnabled = false,
+  tagSettings,
   headingNumberingEnabled = false,
   spaceHeadingNumberingEnabled = false,
   readingTimeEnabled = false,
@@ -107,6 +110,7 @@ export function FullEditor({
         showBottomSpacer={!footer}
         spaceId={spaceId}
         dictionaryEnabled={dictionaryEnabled}
+        tagSettings={tagSettings}
         headingNumberingEnabled={headingNumberingEnabled}
         spaceHeadingNumberingEnabled={spaceHeadingNumberingEnabled}
         canManageDictionary={editable}

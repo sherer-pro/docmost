@@ -369,15 +369,6 @@ export class WorkspaceService {
       delete updateWorkspaceDto.disablePublicSharing;
     }
 
-    if (typeof updateWorkspaceDto.tagSettings !== 'undefined') {
-      await this.workspaceRepo.updateTagSettings(
-        workspaceId,
-        'disabled',
-        updateWorkspaceDto.tagSettings.disabled ?? [],
-      );
-      delete updateWorkspaceDto.tagSettings;
-    }
-
     await this.workspaceRepo.updateWorkspace(updateWorkspaceDto, workspaceId);
 
     if (updatesAuthenticationPolicy) {

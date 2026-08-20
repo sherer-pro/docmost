@@ -2,6 +2,7 @@ import { validate } from 'class-validator';
 import {
   UpdateSpaceDocumentFieldsDto,
   UpdateSpaceDto,
+  UpdateSpaceTagSettingsDto,
 } from './update-space.dto';
 
 describe('UpdateSpaceDto heading numbering', () => {
@@ -25,6 +26,36 @@ describe('UpdateSpaceDto heading numbering', () => {
     expect(
       errors.some((error) => error.property === 'headingNumberingEnabled'),
     ).toBe(true);
+  });
+});
+
+describe('UpdateSpaceDto tag settings', () => {
+  it('accepts all six built-in tag values', async () => {
+    const tagSettings = Object.assign(new UpdateSpaceTagSettingsDto(), {
+      disabled: ['tbd', 'todo', 'done', 'core', 'future', 'pilot'],
+    });
+    const dto = Object.assign(new UpdateSpaceDto(), {
+      spaceId: '11111111-1111-4111-8111-111111111111',
+      tagSettings,
+    });
+
+    expect(await validate(dto)).toEqual([]);
+  });
+
+  it.each([
+    ['unknown values', ['missing']],
+    ['duplicates', ['core', 'core']],
+  ])('rejects %s', async (_label, disabled) => {
+    const tagSettings = Object.assign(new UpdateSpaceTagSettingsDto(), {
+      disabled,
+    });
+    const dto = Object.assign(new UpdateSpaceDto(), {
+      spaceId: '11111111-1111-4111-8111-111111111111',
+      tagSettings,
+    });
+
+    const errors = await validate(dto);
+    expect(errors.some((error) => error.property === 'tagSettings')).toBe(true);
   });
 });
 

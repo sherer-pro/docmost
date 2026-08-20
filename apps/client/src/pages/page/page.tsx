@@ -228,6 +228,7 @@ function PageContent({
           dictionaryEnabled={
             resolvedSpaceSettings?.dictionary?.enabled === true
           }
+          tagSettings={resolvedSpaceSettings?.tags}
           headingNumberingEnabled={headingNumberingEnabled}
           spaceHeadingNumberingEnabled={
             resolvedSpaceSettings?.headingNumbering?.enabled === true

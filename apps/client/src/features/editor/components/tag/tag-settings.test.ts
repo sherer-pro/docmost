@@ -6,10 +6,17 @@ import {
 
 describe("tag settings", () => {
   it("normalizes disabled built-in tags", () => {
-    expect(normalizeDisabledTags([" TODO ", "done", "missing"])).toEqual([
-      "todo",
-      "done",
-    ]);
+    expect(
+      normalizeDisabledTags([
+        " TODO ",
+        "done",
+        " Core ",
+        "FUTURE",
+        "pilot",
+        "missing",
+        "core",
+      ]),
+    ).toEqual(["todo", "done", "core", "future", "pilot"]);
   });
 
   it("reads legacy JSON-encoded tag arrays", () => {
@@ -23,5 +30,13 @@ describe("tag settings", () => {
 
   it("ignores malformed legacy values", () => {
     expect(normalizeDisabledTags("not-json")).toEqual([]);
+  });
+
+  it("keeps new tags enabled for an old disabled list", () => {
+    expect(
+      getEnabledTagDefinitions({ disabled: ["tbd", "todo", "done"] }).map(
+        (tag) => tag.value,
+      ),
+    ).toEqual(["core", "future", "pilot"]);
   });
 });

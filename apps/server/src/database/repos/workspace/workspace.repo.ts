@@ -12,25 +12,15 @@ import type { DB, Workspaces } from '@docmost/db/types/db';
 
 const WORKSPACE_API_SETTINGS_KEYS = ['restrictToAdmins'] as const;
 const WORKSPACE_SHARING_SETTINGS_KEYS = ['disabled'] as const;
-const WORKSPACE_TAG_SETTINGS_KEYS = ['disabled'] as const;
 
 type WorkspaceApiSettingsKey = (typeof WORKSPACE_API_SETTINGS_KEYS)[number];
 type WorkspaceSharingSettingsKey =
   (typeof WORKSPACE_SHARING_SETTINGS_KEYS)[number];
-type WorkspaceTagSettingsKey = (typeof WORKSPACE_TAG_SETTINGS_KEYS)[number];
 
 export function jsonbPreferenceValue(prefValue: string | boolean) {
   return typeof prefValue === 'boolean'
     ? sql`${prefValue}::boolean`
     : sql`${prefValue}::text`;
-}
-
-export function jsonbTextArray(prefValue: string[]) {
-  if (prefValue.length === 0) {
-    return sql`ARRAY[]::text[]`;
-  }
-
-  return sql`ARRAY[${sql.join(prefValue.map((value) => sql`${value}`))}]::text[]`;
 }
 
 @Injectable()
@@ -210,30 +200,6 @@ export class WorkspaceRepo {
       .set({
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
-                || jsonb_build_object(${prefKey}::text, ${value}))`,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', workspaceId)
-      .returning(this.baseFields)
-      .executeTakeFirst();
-  }
-
-  async updateTagSettings(
-    workspaceId: string,
-    prefKey: WorkspaceTagSettingsKey,
-    prefValue: string[],
-  ) {
-    if (!WORKSPACE_TAG_SETTINGS_KEYS.includes(prefKey)) {
-      throw new Error(`Unsupported workspace tag setting key: ${prefKey}`);
-    }
-
-    const value = jsonbTextArray(prefValue);
-
-    return this.db
-      .updateTable('workspaces')
-      .set({
-        settings: sql`COALESCE(settings, '{}'::jsonb)
-                || jsonb_build_object('tags', COALESCE(settings->'tags', '{}'::jsonb)
                 || jsonb_build_object(${prefKey}::text, ${value}))`,
         updatedAt: new Date(),
       })

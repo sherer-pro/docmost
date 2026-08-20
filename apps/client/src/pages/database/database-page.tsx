@@ -317,6 +317,7 @@ export default function DatabasePage() {
               cacheSlugId={databasePage?.slugId}
               spaceId={space?.id}
               dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
+              tagSettings={space?.settings?.tags}
               canCreateInlineComments={!readOnly}
               headingNumberingEnabled={headingNumberingEnabled}
               spaceHeadingNumberingEnabled={

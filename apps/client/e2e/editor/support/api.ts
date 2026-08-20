@@ -84,6 +84,14 @@ export async function apiGet<T>(
   return parseResponse<T>(await api.get(url));
 }
 
+export async function apiPatch<T>(
+  api: APIRequestContext,
+  url: string,
+  data: JsonObject,
+): Promise<T> {
+  return parseResponse<T>(await api.patch(url, { data }));
+}
+
 export async function createPage(
   api: APIRequestContext,
   spaceId: string,

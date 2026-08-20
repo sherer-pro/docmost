@@ -46,6 +46,7 @@ import {
   collectPageEmbedPresentationReferences,
   detachTemplateContent,
   materializePageEmbedsForPresentation,
+  normalizeBuiltInTagValues,
 } from '@docmost/editor-ext/server';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
@@ -96,6 +97,51 @@ const PAGE_STATUS_LABELS: Record<string, string> = {
   REJECTED: 'Rejected',
   ARCHIVED: 'Archived',
 };
+
+const TAG_EXPORT_STYLES = `
+  [data-type="tag"][data-tag-value] {
+    display: inline-block;
+    padding: 0 0.35em;
+    border: 1px solid #dee2e6;
+    border-radius: 0.3em;
+    color: #495057;
+    background: #f8f9fa;
+    font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  [data-type="tag"][data-tag-value="tbd"] {
+    color: #c92a2a;
+    background: #fff5f5;
+    border-color: #ffc9c9;
+  }
+  [data-type="tag"][data-tag-value="todo"] {
+    color: #1864ab;
+    background: #e7f5ff;
+    border-color: #a5d8ff;
+  }
+  [data-type="tag"][data-tag-value="done"] {
+    color: #2b8a3e;
+    background: #ebfbee;
+    border-color: #b2f2bb;
+  }
+  [data-type="tag"][data-tag-value="core"] {
+    color: #6741d9;
+    background: #f3f0ff;
+    border-color: #d0bfff;
+  }
+  [data-type="tag"][data-tag-value="future"] {
+    color: #0b7285;
+    background: #e3fafc;
+    border-color: #99e9f2;
+  }
+  [data-type="tag"][data-tag-value="pilot"] {
+    color: #d9480f;
+    background: #fff4e6;
+    border-color: #ffd8a8;
+  }
+`;
 
 const PAGE_AI_ROLE_LABELS: Record<
   PageAiRole,
@@ -197,6 +243,7 @@ export class ExportService {
          <style>
            [data-docmost-transclusion="true"] { break-inside: avoid; }
            [data-docmost-transclusion-label="true"] { line-height: 1.4; }
+           ${TAG_EXPORT_STYLES}
          </style>
         </head>
         <body>${pageHtml}</body>
@@ -763,6 +810,7 @@ export class ExportService {
       [data-docmost-transclusion-label="true"] {
         line-height: 1.4;
       }
+      ${TAG_EXPORT_STYLES}
       .page-break,
       [data-type="pageBreak"] {
         display: block;
@@ -2579,6 +2627,15 @@ export class ExportService {
         enabled?: boolean;
       };
     }
+    const tagSettings =
+      source.tags &&
+      typeof source.tags === 'object' &&
+      !Array.isArray(source.tags)
+        ? (source.tags as Record<string, unknown>)
+        : {};
+    portable.tags = {
+      disabled: normalizeBuiltInTagValues(tagSettings.disabled),
+    };
     return portable;
   }
 

@@ -172,6 +172,7 @@ function ImportFormatSelection({
     applyDocumentFields: true,
     applyDictionary: true,
     applyHeadingNumbering: true,
+    applyTags: true,
     cleanupLegacyHeadingNumbers: true,
   });
   const [isInspecting, setIsInspecting] = useState(false);
@@ -215,6 +216,7 @@ function ImportFormatSelection({
         applyDocumentFields: preview.availableSettings.documentFields,
         applyDictionary: preview.availableSettings.dictionary,
         applyHeadingNumbering: preview.availableSettings.headingNumbering,
+        applyTags: preview.availableSettings.tags,
         cleanupLegacyHeadingNumbers: true,
       });
     } catch (err: any) {
@@ -549,6 +551,17 @@ function ImportFormatSelection({
               setDocmostOptions((current) => ({
                 ...current,
                 applyDictionary: event.currentTarget.checked,
+              }))
+            }
+          />
+          <Switch
+            label={t("Tags")}
+            checked={docmostOptions.applyTags}
+            disabled={!docmostPreview.availableSettings.tags}
+            onChange={(event) =>
+              setDocmostOptions((current) => ({
+                ...current,
+                applyTags: event.currentTarget.checked,
               }))
             }
           />

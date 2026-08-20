@@ -16,6 +16,10 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import {
+  builtInTagValues,
+  type BuiltInTagValue,
+} from '@docmost/editor-ext/server';
 
 function parseOptionalBoolean(value: unknown): unknown {
   if (value === 'true') {
@@ -28,8 +32,8 @@ function parseOptionalBoolean(value: unknown): unknown {
   return value;
 }
 
-export const BUILT_IN_SEARCH_TAGS = ['tbd', 'todo', 'done'] as const;
-export type BuiltInSearchTag = (typeof BUILT_IN_SEARCH_TAGS)[number];
+export const BUILT_IN_SEARCH_TAGS = builtInTagValues;
+export type BuiltInSearchTag = BuiltInTagValue;
 
 function hasDocumentFilter(dto: SearchDTO): boolean {
   return Boolean(dto.labelId || dto.tag || dto.tags?.length);

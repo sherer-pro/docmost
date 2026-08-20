@@ -24,6 +24,9 @@ export class ConfirmDocmostImportDto extends FileTaskIdDto {
   @IsBoolean()
   applyHeadingNumbering: boolean;
 
+  @IsBoolean()
+  applyTags: boolean;
+
   @IsOptional()
   @IsBoolean()
   cleanupLegacyHeadingNumbers?: boolean;

@@ -26,7 +26,10 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
 import { isEnforcementReadyProvider } from '../../sso/sso-provider.util';
 import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
-import type { AuthProvider, SpaceSettings } from '@docmost/db/types/entity.types';
+import type {
+  AuthProvider,
+  SpaceSettings,
+} from '@docmost/db/types/entity.types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 
@@ -236,6 +239,14 @@ export class SpaceService {
       );
     }
 
+    if (updateSpaceDto.tagSettings) {
+      await this.spaceRepo.updateTagSettings(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        updateSpaceDto.tagSettings,
+      );
+    }
+
     if (typeof updateSpaceDto.headingNumberingEnabled !== 'undefined') {
       await this.spaceRepo.updateHeadingNumberingSettings(
         updateSpaceDto.spaceId,
@@ -364,21 +375,9 @@ export class SpaceService {
     settings.security = { ...(settings.security ?? {}) };
     settings.sharing = { ...(settings.sharing ?? {}) };
 
-    this.applyOverride(
-      settings.security,
-      'enforceMfa',
-      dto.enforceMfa,
-    );
-    this.applyOverride(
-      settings.security,
-      'enforceSso',
-      dto.enforceSso,
-    );
-    this.applyOverride(
-      settings.sharing,
-      'disabled',
-      dto.disablePublicSharing,
-    );
+    this.applyOverride(settings.security, 'enforceMfa', dto.enforceMfa);
+    this.applyOverride(settings.security, 'enforceSso', dto.enforceSso);
+    this.applyOverride(settings.sharing, 'disabled', dto.disablePublicSharing);
 
     if (Object.keys(settings.security).length === 0) {
       delete settings.security;

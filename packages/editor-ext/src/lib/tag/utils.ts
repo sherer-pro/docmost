@@ -1,6 +1,19 @@
-export type BuiltInTagValue = 'tbd' | 'todo' | 'done';
+export type BuiltInTagValue =
+  | 'tbd'
+  | 'todo'
+  | 'done'
+  | 'core'
+  | 'future'
+  | 'pilot';
 export type TagValue = string;
-export type TagColor = 'red' | 'blue' | 'green' | 'gray';
+export type TagColor =
+  | 'red'
+  | 'blue'
+  | 'green'
+  | 'violet'
+  | 'cyan'
+  | 'orange'
+  | 'gray';
 
 export interface TagDefinition {
   value: BuiltInTagValue;
@@ -40,6 +53,33 @@ export const builtInTagDefinitions = [
     menuDescriptionKey: 'Mark text that is resolved or completed.',
     searchTerms: ['tag', 'done', 'complete', 'completed', 'resolved'],
   },
+  {
+    value: 'core',
+    label: 'Core',
+    color: 'violet',
+    titleKey: 'Tag Core',
+    descriptionKey: 'Tag Core description',
+    menuDescriptionKey: 'Mark foundational or essential content.',
+    searchTerms: ['tag', 'core', 'foundation', 'foundational', 'essential'],
+  },
+  {
+    value: 'future',
+    label: 'Future',
+    color: 'cyan',
+    titleKey: 'Tag Future',
+    descriptionKey: 'Tag Future description',
+    menuDescriptionKey: 'Mark content planned for a future phase.',
+    searchTerms: ['tag', 'future', 'later', 'planned', 'roadmap'],
+  },
+  {
+    value: 'pilot',
+    label: 'Pilot',
+    color: 'orange',
+    titleKey: 'Tag Pilot',
+    descriptionKey: 'Tag Pilot description',
+    menuDescriptionKey: 'Mark experimental or pilot content.',
+    searchTerms: ['tag', 'pilot', 'experiment', 'experimental', 'prototype'],
+  },
 ] as const satisfies readonly TagDefinition[];
 
 export const builtInTagValues = builtInTagDefinitions.map(
@@ -67,6 +107,18 @@ export function isBuiltInTagValue(
     isSafeTagValue(normalized) &&
     builtInTagValues.includes(normalized as BuiltInTagValue)
   );
+}
+
+export function normalizeBuiltInTagValues(values: unknown): BuiltInTagValue[] {
+  const normalized = new Set<BuiltInTagValue>();
+
+  for (const value of Array.isArray(values) ? values : []) {
+    if (typeof value !== 'string') continue;
+    const tagValue = value.trim().toLowerCase();
+    if (isBuiltInTagValue(tagValue)) normalized.add(tagValue);
+  }
+
+  return Array.from(normalized);
 }
 
 export function getBuiltInTagDefinition(

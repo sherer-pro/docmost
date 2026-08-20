@@ -297,10 +297,13 @@ export class ImportService {
       dictionary: sourceSettings.dictionary && settingPermissions.dictionary,
       headingNumbering:
         sourceSettings.headingNumbering && settingPermissions.headingNumbering,
+      tags: sourceSettings.tags && settingPermissions.tags,
     };
     if (
       (sourceSettings.documentFields && !settingPermissions.documentFields) ||
-      (sourceSettings.headingNumbering && !settingPermissions.headingNumbering)
+      (sourceSettings.headingNumbering &&
+        !settingPermissions.headingNumbering) ||
+      (sourceSettings.tags && !settingPermissions.tags)
     ) {
       preview.warnings.push(
         'Portable space settings are unavailable because you cannot manage the target space settings. Content can still be imported.',
@@ -713,6 +716,7 @@ export class ImportService {
         dictionary:
           Boolean(settings.dictionary) || (data.dictionary?.length ?? 0) > 0,
         headingNumbering: Boolean(settings.headingNumbering),
+        tags: Boolean(settings.tags),
       },
       warnings: [],
     };
