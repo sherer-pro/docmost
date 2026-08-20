@@ -6,11 +6,10 @@ import { Helmet } from "react-helmet-async";
 import PageHeader from "@/features/page/components/header/page-header.tsx";
 import { extractPageSlugId } from "@/lib";
 import { useTranslation } from "react-i18next";
-import React from "react";
-import { useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
-import { Button } from "@mantine/core";
+import { Button, Container, Skeleton, Stack } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel.tsx";
@@ -18,16 +17,33 @@ import { TemplateEditingAlert } from "@/features/page/components/template-editin
 import { TemplateInstanceAlert } from "@/features/page/components/template-instance-alert.tsx";
 import { useAtom } from "jotai";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
-import PageCommentSection from "@/features/comment/components/page-comment-section";
 import { useSpaceQuery } from "@/features/space/queries/space-query";
 import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
-import { AiDocumentContextSync } from "@/features/ai/components/ai-document-context-sync.tsx";
+import { DeferredAiDocumentContextSync } from "@/features/ai/components/deferred-ai-document-context-sync";
 import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
 const MemoizedHistoryModal = React.memo(HistoryModal);
+const LazyPageCommentSection = lazy(
+  () => import("@/features/comment/components/page-comment-section"),
+);
+
+function PageSkeleton() {
+  return (
+    <Container size={900} py="xl" aria-busy="true">
+      <Stack gap="lg">
+        <Skeleton height={42} width="58%" radius="sm" />
+        <Skeleton height={18} width="32%" radius="sm" />
+        <Skeleton height={18} radius="sm" />
+        <Skeleton height={18} radius="sm" />
+        <Skeleton height={18} width="88%" radius="sm" />
+        <Skeleton height={180} radius="md" />
+      </Stack>
+    </Container>
+  );
+}
 
 export default function Page() {
   const { t } = useTranslation();
@@ -76,6 +92,7 @@ function PageContent({
     isLoading,
     isError,
     error,
+    refetch,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
   const templateCapabilitiesQuery = usePageTemplateCapabilitiesQuery(
     page?.spaceId,
@@ -116,7 +133,7 @@ function PageContent({
   }, [location.pathname, location.state, navigate, page?.id, setAsideState]);
 
   if (isLoading) {
-    return <></>;
+    return <PageSkeleton />;
   }
 
   if (isError || !page) {
@@ -143,14 +160,27 @@ function PageContent({
       );
     }
     return (
-      <EmptyState icon={IconFileOff} title={t("Error fetching page data.")} />
+      <EmptyState
+        icon={IconFileOff}
+        title={t("Error fetching page data.")}
+        action={
+          <Button
+            variant="default"
+            size="sm"
+            mt="xs"
+            onClick={() => void refetch()}
+          >
+            {t("Try again")}
+          </Button>
+        }
+      />
     );
   }
 
   return (
     page && (
       <div>
-        <AiDocumentContextSync
+        <DeferredAiDocumentContextSync
           pageId={page.id}
           spaceId={page.spaceId}
           spaceSlug={resolvedSpaceSlug}
@@ -184,7 +214,9 @@ function PageContent({
           }
           footer={
             isCommentsAsideOpen ? undefined : (
-              <PageCommentSection pageId={page.id} />
+              <Suspense fallback={null}>
+                <LazyPageCommentSection pageId={page.id} />
+              </Suspense>
             )
           }
           pageId={page.id}

@@ -62,27 +62,27 @@ import {
 import type { BuiltInTagValue, TagDefinition } from "@docmost/editor-ext";
 import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
-import MathInlineView from "@/features/editor/components/math/math-inline.tsx";
-import MathBlockView from "@/features/editor/components/math/math-block.tsx";
-import ImageView from "@/features/editor/components/image/image-view.tsx";
 import CalloutView from "@/features/editor/components/callout/callout-view.tsx";
-import VideoView from "@/features/editor/components/video/video-view.tsx";
-import AudioView from "@/features/editor/components/audio/audio-view.tsx";
-import AttachmentView from "@/features/editor/components/attachment/attachment-view.tsx";
-import CodeBlockView from "@/features/editor/components/code-block/code-block-view.tsx";
-import DrawioView from "../components/drawio/drawio-view";
-import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view.tsx";
-import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
-import LinkPreviewView from "@/features/editor/components/link-preview/link-preview-view.tsx";
-import PdfView from "@/features/editor/components/pdf/pdf-view.tsx";
-import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
 import TagView from "@/features/editor/components/tag/tag-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import {
-  TemplateFieldView,
-  TemplateManagedBlockView,
-} from "@/features/editor/components/page-template/template-node-views";
+  LazyAttachmentView,
+  LazyAudioView,
+  LazyCodeBlockView,
+  LazyDrawioView,
+  LazyEmbedView,
+  LazyExcalidrawView,
+  LazyImageView,
+  LazyLinkPreviewView,
+  LazyMathBlockView,
+  LazyMathInlineView,
+  LazyPdfView,
+  LazySubpagesView,
+  LazyTemplateFieldView,
+  LazyTemplateManagedBlockView,
+  LazyVideoView,
+} from "@/features/editor/components/lazy-node-views";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -229,10 +229,10 @@ export const mainExtensions = [
     },
   }),
   MathInline.configure({
-    view: ReactNodeViewRenderer(MathInlineView),
+    view: ReactNodeViewRenderer(LazyMathInlineView),
   }),
   MathBlock.configure({
-    view: ReactNodeViewRenderer(MathBlockView),
+    view: ReactNodeViewRenderer(LazyMathBlockView),
   }),
   Details.configure({
     getToggleButtonLabel: () => i18n.t("Toggle title"),
@@ -252,20 +252,20 @@ export const mainExtensions = [
     },
   }),
   TiptapImage.configure({
-    view: ReactNodeViewRenderer(ImageView),
+    view: ReactNodeViewRenderer(LazyImageView),
     allowBase64: false,
   }),
   TiptapVideo.configure({
-    view: ReactNodeViewRenderer(VideoView),
+    view: ReactNodeViewRenderer(LazyVideoView),
   }),
   TiptapAudio.configure({
-    view: ReactNodeViewRenderer(AudioView),
+    view: ReactNodeViewRenderer(LazyAudioView),
   }),
   Callout.configure({
     view: ReactNodeViewRenderer(CalloutView),
   }),
   CustomCodeBlock.configure({
-    view: ReactNodeViewRenderer(CodeBlockView),
+    view: ReactNodeViewRenderer(LazyCodeBlockView),
     //@ts-ignore
     lowlight,
     HTMLAttributes: {
@@ -274,25 +274,25 @@ export const mainExtensions = [
   }),
   Selection,
   Attachment.configure({
-    view: ReactNodeViewRenderer(AttachmentView),
+    view: ReactNodeViewRenderer(LazyAttachmentView),
   }),
   TiptapPdf.configure({
-    view: ReactNodeViewRenderer(PdfView),
+    view: ReactNodeViewRenderer(LazyPdfView),
   }),
   Drawio.configure({
-    view: ReactNodeViewRenderer(DrawioView),
+    view: ReactNodeViewRenderer(LazyDrawioView),
   }),
   Excalidraw.configure({
-    view: ReactNodeViewRenderer(ExcalidrawView),
+    view: ReactNodeViewRenderer(LazyExcalidrawView),
   }),
   Embed.configure({
-    view: ReactNodeViewRenderer(EmbedView),
+    view: ReactNodeViewRenderer(LazyEmbedView),
   }),
   LinkPreview.configure({
-    view: ReactNodeViewRenderer(LinkPreviewView),
+    view: ReactNodeViewRenderer(LazyLinkPreviewView),
   }),
   Subpages.configure({
-    view: ReactNodeViewRenderer(SubpagesView),
+    view: ReactNodeViewRenderer(LazySubpagesView),
   }),
   TransclusionSource.configure({
     view: ReactNodeViewRenderer(TransclusionView),
@@ -302,9 +302,11 @@ export const mainExtensions = [
     getContentExtensions: () => transclusionContentExtensions,
   }),
   TemplateManagedBlock.configure({
-    view: ReactNodeViewRenderer(TemplateManagedBlockView),
+    view: ReactNodeViewRenderer(LazyTemplateManagedBlockView),
   }),
-  TemplateField.configure({ view: ReactNodeViewRenderer(TemplateFieldView) }),
+  TemplateField.configure({
+    view: ReactNodeViewRenderer(LazyTemplateFieldView),
+  }),
   TransclusionDeletionGuard.configure({
     onBlocked: (reason) => {
       notifications.show({
@@ -350,7 +352,7 @@ export const mainExtensions = [
   }).configure(),
 ] as any;
 
-const transclusionReadOnlyExcludedExtensions = new Set([
+const readOnlyExcludedExtensions = new Set([
   "uniqueID",
   "globalDragHandle",
   "placeholder",
@@ -368,8 +370,7 @@ const transclusionReadOnlyExcludedExtensions = new Set([
 ]);
 
 export const transclusionContentExtensions = mainExtensions.filter(
-  (extension: any) =>
-    !transclusionReadOnlyExcludedExtensions.has(extension.name),
+  (extension: any) => !readOnlyExcludedExtensions.has(extension.name),
 );
 
 export interface MainExtensionsOptions {
@@ -389,6 +390,11 @@ export const createMainExtensions = ({
           onSearch: onSearchTag,
         })
       : extension,
+  );
+
+export const createReadOnlyExtensions = (options?: MainExtensionsOptions) =>
+  createMainExtensions(options).filter(
+    (extension: any) => !readOnlyExcludedExtensions.has(extension.name),
   );
 
 type CollabExtensions = (provider: HocuspocusProvider, user: IUser) => any[];

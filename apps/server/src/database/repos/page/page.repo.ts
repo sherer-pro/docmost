@@ -431,6 +431,27 @@ export class PageRepo {
     return restoredPageIds;
   }
 
+  async findReferencesByIds(
+    pageIds: string[],
+    workspaceId: string,
+  ): Promise<
+    Array<
+      Pick<Page, 'id' | 'slugId' | 'title' | 'icon' | 'spaceId' | 'workspaceId'>
+    >
+  > {
+    if (pageIds.length === 0) {
+      return [];
+    }
+
+    return this.db
+      .selectFrom('pages')
+      .select(['id', 'slugId', 'title', 'icon', 'spaceId', 'workspaceId'])
+      .where('id', 'in', [...new Set(pageIds)])
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+  }
+
   async getRecentPagesInSpace(spaceId: string, pagination: PaginationOptions) {
     const query = this.db
       .selectFrom('pages')

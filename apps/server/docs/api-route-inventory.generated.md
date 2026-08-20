@@ -177,6 +177,7 @@
 | POST | `/pages/move` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/move-to-space` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/recent` | `apps/server/src/core/page/page.controller.ts` |
+| GET | `/pages/references` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/restore` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/sidebar-pages` | `apps/server/src/core/page/page.controller.ts` |
 | GET | `/pages/templates` | `apps/server/src/core/page/page-template.controller.ts` |

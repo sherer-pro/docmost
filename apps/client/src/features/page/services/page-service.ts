@@ -20,6 +20,7 @@ import { IFileTask } from "@/features/file-task/types/file-task.types.ts";
 import type {
   DocmostImportOptions,
   ImportPreview,
+  PageReference,
 } from "@docmost/api-contract";
 import { IAttachment } from "@/features/attachments/types/attachment.types.ts";
 import { downloadBlobFromAxiosResponse } from "@/lib/download";
@@ -88,6 +89,25 @@ export async function getPageById(
 ): Promise<IPage> {
   const req = await api.get<IPage>("/pages/info", { params: pageInput });
   return req.data;
+}
+
+export async function getPageReferences(
+  pageIds: string[],
+): Promise<PageReference[]> {
+  const uniqueIds = [...new Set(pageIds)];
+  const chunks = Array.from(
+    { length: Math.ceil(uniqueIds.length / 50) },
+    (_, index) => uniqueIds.slice(index * 50, (index + 1) * 50),
+  );
+  const responses = await Promise.all(
+    chunks.map((ids) =>
+      api.get<PageReference[]>("/pages/references", {
+        params: { ids: ids.join(",") },
+      }),
+    ),
+  );
+
+  return responses.flatMap((response) => response.data);
 }
 
 export async function updatePage(data: IUpdatePageInput): Promise<IPage> {

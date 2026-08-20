@@ -1,9 +1,8 @@
 import { VisuallyHidden } from "@mantine/core";
 import type { Editor } from "@tiptap/core";
-import { useEditorState } from "@tiptap/react";
 import { IconBook } from "@tabler/icons-react";
 import clsx from "clsx";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import classes from "./page-reading-time.module.css";
 import { estimateReadingTime } from "./reading-time";
@@ -26,22 +25,52 @@ export function PageReadingTime({
   className,
 }: PageReadingTimeProps) {
   const { t } = useTranslation();
-  const wordCount = useEditorState({
-    editor,
-    selector: ({ editor: currentEditor }) =>
-      currentEditor?.storage?.characterCount?.words?.() ?? 0,
-  });
+  const [wordCount, setWordCount] = useState(0);
   const editorPageId = (editor?.storage as { pageId?: string } | undefined)
     ?.pageId;
   const hasCurrentEditor = Boolean(
     editor && (!pageId || editorPageId === pageId),
   );
 
+  useEffect(() => {
+    if (!enabled || !hasCurrentEditor || !editor) {
+      setWordCount(0);
+      return;
+    }
+
+    let debounceHandle: number | undefined;
+    let idleHandle: number | undefined;
+    const calculate = () => {
+      if (!editor.isDestroyed) {
+        setWordCount(editor.storage?.characterCount?.words?.() ?? 0);
+      }
+    };
+    const scheduleUpdate = () => {
+      window.clearTimeout(debounceHandle);
+      debounceHandle = window.setTimeout(calculate, 750);
+    };
+
+    if (typeof requestIdleCallback === "function") {
+      idleHandle = requestIdleCallback(calculate, { timeout: 1500 });
+    } else {
+      debounceHandle = window.setTimeout(calculate, 0);
+    }
+    editor.on("update", scheduleUpdate);
+
+    return () => {
+      editor.off("update", scheduleUpdate);
+      window.clearTimeout(debounceHandle);
+      if (idleHandle !== undefined) {
+        cancelIdleCallback(idleHandle);
+      }
+    };
+  }, [editor, enabled, hasCurrentEditor]);
+
   if (!enabled || !hasCurrentEditor) {
     return null;
   }
 
-  const estimate = estimateReadingTime(wordCount ?? 0);
+  const estimate = estimateReadingTime(wordCount);
   const label =
     estimate.kind === "less-than-minute"
       ? t("readingTime.lessThanMinute")
