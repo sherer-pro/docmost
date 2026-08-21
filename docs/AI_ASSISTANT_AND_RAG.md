@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 9 -->
+<!-- ai-admin-guide-contract-version: 10 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -864,7 +864,8 @@ files; do not abandon those targets merely to work around the rotation.
 When query-time retrieval uses `open-webui-knowledge-v1`, Enable additionally
 requires the normalized retrieval origin and Knowledge ID to match the writer
 target. Mismatch returns `409 rag_sync_target_mismatch`; the UI treats it as a
-blocking alert. Every runtime quantum repeats the comparison from PostgreSQL
+blocking alert and offers to copy the existing space-search target into the
+disabled, clean writer binding. Every runtime quantum repeats the comparison from PostgreSQL
 before any remote write, so a later mismatch stops the binding non-retryably
 without writing to the wrong Knowledge Base. The writer key remains separate
 and must still pass its own upload/process/delete Test.
@@ -917,17 +918,40 @@ Enable is accepted. Runtime failure logs contain only an allowlisted processing
 stage and source kind; they never include source identifiers, target URLs,
 credentials, or document content.
 
+The settings screen presents the required order as a three-step workflow:
+save the target, verify the writer, then enable synchronization. A new or
+changed target uses one primary **Save and verify writer** action. Test begins
+with a bounded read-only Knowledge Base preflight. A failure before any remote
+write leaves `cleanupRequired=false`. Only after that preflight succeeds does
+Docmost durably arm cleanup and upload the marker; from that point an interrupted
+or failed write/process/delete stage keeps `cleanupRequired=true` until managed
+files are confirmed absent. Recovery accepts an optional replacement writer key
+and then retries cleanup as one sequential UI operation. While cleanup is
+required or the binding is draining, the client polls the redacted status every
+10 seconds. Abandon cleanup remains an explicitly dangerous secondary action.
+
+The existing Test endpoint preserves safe, actionable writer codes instead of
+collapsing them into `rag_sync_target_unavailable`. These include
+`rag_sync_url_rejected`, `rag_sync_writer_unauthorized`,
+`rag_sync_target_timeout`, `rag_sync_processing_timeout`,
+`rag_sync_processing_failed`, `rag_sync_invalid_response`,
+`rag_sync_redirect_rejected`, `rag_sync_source_too_large`,
+`rag_sync_lease_lost`, and `rag_sync_aborted`; an unknown writer failure still uses the generic
+unavailable code. The UI shows the safe reason and next recovery step in the
+main flow, keeps timestamps and technical state in expandable details, and
+stores the latest UI operation result only in transient component state.
+
 The management contract is:
 
 - `GET /api/spaces/:spaceId/ai/rag-sync` reads redacted configuration and status;
 - `PATCH /api/spaces/:spaceId/ai/rag-sync` changes target fields only on a
   disabled, clean binding, rotates its writer key while enabled, and applies
   optimistic `expectedVersion` checking;
-- `POST /api/spaces/:spaceId/ai/rag-sync/actions/test` performs a bounded
-  upload/process/delete probe on a clean disabled binding. Before the upload it
-  durably marks cleanup as required; only a confirmed marker deletion clears
-  that flag and records `lastTestedAt`, so an interrupted test must be recovered
-  through cleanup;
+- `POST /api/spaces/:spaceId/ai/rag-sync/actions/test` first performs a bounded
+  read-only target preflight on a clean disabled binding. It then durably marks
+  cleanup as required before the upload/process/delete probe; only confirmed
+  marker deletion clears that flag and records `lastTestedAt`, so a preflight
+  failure stays clean while an interrupted write-stage test requires cleanup;
 - `POST /api/spaces/:spaceId/ai/rag-sync/actions/enable` starts scheduling only
   after the current target and writer credential have passed Test. Otherwise it
   returns `rag_sync_target_not_tested`;

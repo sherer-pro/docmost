@@ -1393,7 +1393,18 @@
       "privacyTitle": "De Knowledge Base bevat de volledige toegestane ruimte",
       "privacyDescription": "Docmost indexeert alle door het AI-beleid toegestane pagina's, ook beperkte. Alleen ophalen via Docmost controleert rechten opnieuw.",
       "targetMismatchTitle": "Zoeken en synchronisatie gebruiken verschillende doelen",
-      "targetMismatchDescription": "Dit is toegestaan, maar het Open WebUI-zoekdoel wijkt af van het synchronisatiedoel.",
+      "workflow": {
+        "target": "Doel opslaan",
+        "targetDescription": "Origin, Knowledge-ID en writer-sleutel",
+        "writer": "Writer controleren",
+        "writerDescription": "Doel lezen en een testmarkering uploaden, verwerken en verwijderen",
+        "sync": "Synchronisatie inschakelen",
+        "syncDescription": "Knowledge Base publiceren en actueel houden"
+      },
+      "targetMismatchDescription": "Synchronisatie kan pas worden ingeschakeld wanneer origin en Knowledge-ID overeenkomen met het zoekdoel van de ruimte.",
+      "useRetrievalTarget": "Zoekdoel van de ruimte gebruiken",
+      "targetMismatchRecoveryFirst": "Voltooi eerst het opruimen voordat je naar het zoekdoel overschakelt.",
+      "cleanupRecoveryHint": "Roteer zo nodig de writer-sleutel en probeer opnieuw op te ruimen. Daarna worden de doelvelden ontgrendeld.",
       "cleanupRequiredTitle": "Externe opschoning is onvolledig",
       "cleanupRequiredDescription": "Het doel kan pas wijzigen na voltooide of expliciet opgegeven opschoning.",
       "targetTestRequiredTitle": "Test het doel vóór activering",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Open WebUI-writer-API-sleutel",
       "writerKeyConfigured": "Er is een sleutel ingesteld. Voer een nieuwe in om te roteren.",
       "writerKeyRequired": "Vereist voor uploaden, verwerken, afstemmen en verwijderen.",
+      "writerKeyRecoveryDescription": "Voer een actuele sleutel in om deze op te slaan en opnieuw op te ruimen, of laat leeg om de opgeslagen sleutel te gebruiken.",
       "writerKeyRotatePlaceholder": "Voer een nieuwe sleutel in",
       "writerKeyWillBeCleared": "De sleutel wordt bij opslaan verwijderd.",
       "clearWriterKey": "Writer-sleutel wissen",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "Sleutel behouden",
       "test": "Writer testen",
       "testSucceeded": "Writer-test geslaagd in {{latency}} ms.",
+      "operationSucceeded": "De laatste bewerking is geslaagd.",
+      "operationFailed": "De laatste bewerking is mislukt.",
+      "saveAndTest": "Opslaan en writer controleren",
+      "saveWriterKey": "Writer-sleutel opslaan",
+      "saveKeyAndRetryCleanup": "Sleutel opslaan en opnieuw opruimen",
+      "technicalDetails": "Technische details",
       "enable": "Synchronisatie inschakelen",
       "disable": "Uitschakelen en opschonen",
       "disableConfirm": "Nieuwe uploads stoppen en Docmost verwijdert beheerde bestanden. Doorgaan?",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "Voer een geldige HTTP(S)-origin in zonder pad, query, aanmeldgegevens of fragment.",
-        "knowledgeId": "Knowledge Base-ID is verplicht."
+        "knowledgeId": "Knowledge Base-ID is verplicht.",
+        "writerApiKey": "Voer een writer-API-sleutel in voor het nieuwe doel."
       },
       "error": {
         "deploymentDisabled": "RAG-synchronisatie is uitgeschakeld voor deze implementatie.",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "De Open WebUI-writer is niet beschikbaar.",
         "writerUnauthorized": "Open WebUI heeft de API-sleutel geweigerd.",
         "targetUnavailable": "De Open WebUI Knowledge Base is niet beschikbaar.",
+        "targetInvalid": "De opgeslagen Knowledge-ID is ongeldig. Corrigeer het doel en sla opnieuw op.",
+        "targetTimeout": "Het lezen van de Knowledge Base duurde te lang. Controleer Open WebUI en het netwerk.",
+        "processingTimeout": "Open WebUI verwerkte de testmarkering niet op tijd. Controleer de verwerkingswachtrij.",
+        "processingFailed": "Open WebUI kon de testmarkering niet verwerken. Controleer de workers.",
+        "invalidResponse": "Open WebUI gaf een niet-ondersteund antwoord. Controleer versie en compatibiliteit.",
+        "redirectRejected": "Open WebUI stuurde het verzoek door. Gebruik de exacte toegestane origin zonder redirects.",
+        "sourceTooLarge": "De testbron overschreed de limiet. Controleer de writer-limieten.",
+        "urlRejected": "Het netwerkbeleid weigert de Open WebUI-origin. Controleer RAG_SYNC_ALLOWED_ORIGINS.",
+        "leaseLost": "Docmost verloor de synchronisatie-lease. Controleer Redis en probeer opnieuw.",
+        "aborted": "Het writer-verzoek is afgebroken. Probeer opnieuw wanneer het doel stabiel is.",
+        "scopeUnavailable": "Het AI-exportbereik is niet beschikbaar. Controleer de ruimte en het inhoudsbeleid.",
+        "invalidFeed": "Docmost kon geen geldige synchronisatie-feed maken. Probeer opnieuw en controleer zo nodig de serverfout.",
         "unknown": "De RAG-synchronisatieaanvraag is mislukt."
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel",
           "result": "Docmost onderhoudt pagina’s, databaserijen en actieve woordenboektermen stapsgewijs in de geselecteerde Open WebUI Knowledge Base; van de bijlagen gaan alleen PDF, DOCX, TXT en Markdown naar de draagbare index",
           "steps": {
-            "step1": "Save de doel- en schrijverreferentie",
-            "step2": "Voer Test uit voor het huidige doel",
-            "step3": "Enable de binding"
+            "step1": "Sla het doel en de writer-referentie op",
+            "step2": "Controleer de writer: alleen-lezen preflight, daarna testmarkering uploaden, verwerken en verwijderen",
+            "step3": "Schakel synchronisatie in na een geslaagde controle"
           },
           "success": "Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan",
           "rollback": "Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "Laat de genormaliseerde Open WebUI-retrievalorigin en Knowledge ID exact overeenkomen met het writerdoel en voer daarna Test en inschakelen opnieuw uit. Zolang ze verschillen wordt niets geschreven."
+          },
+          "writerVerification": {
+            "signal": "Writer-controle mislukt",
+            "action": "De test begint met een alleen-lezen controle; een fout daar vereist geen opruiming. Na de upload blijft opruiming vereist totdat Docmost de verwijdering bevestigt. Los de getoonde code op, roteer zo nodig de sleutel en probeer opnieuw."
           },
           "sourceRemoved": {
             "signal": "bron verwijderd",

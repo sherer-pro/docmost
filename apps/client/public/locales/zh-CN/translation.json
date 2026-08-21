@@ -1393,7 +1393,18 @@
       "privacyTitle": "Knowledge Base 包含整个允许的空间",
       "privacyDescription": "Docmost 会索引 AI 策略允许的所有页面，包括受限页面。只有通过 Docmost 检索才会重新检查权限。",
       "targetMismatchTitle": "搜索和同步使用不同目标",
-      "targetMismatchDescription": "这是允许的，但搜索所用的 Open WebUI 目标与同步目标不一致。",
+      "workflow": {
+        "target": "保存目标",
+        "targetDescription": "Origin、Knowledge ID 和 writer 密钥",
+        "writer": "验证 writer",
+        "writerDescription": "读取目标，然后上传、处理并删除测试标记",
+        "sync": "启用同步",
+        "syncDescription": "发布并保持 Knowledge Base 最新"
+      },
+      "targetMismatchDescription": "在 Origin 和 Knowledge ID 与空间搜索目标一致之前，无法启用同步。",
+      "useRetrievalTarget": "使用空间搜索目标",
+      "targetMismatchRecoveryFirst": "切换到搜索目标前，请先完成清理。",
+      "cleanupRecoveryHint": "必要时轮换 writer 密钥，然后重试清理。完成后目标字段将解锁。",
       "cleanupRequiredTitle": "远程清理尚未完成",
       "cleanupRequiredDescription": "完成清理或明确放弃清理之前不能更改目标。",
       "targetTestRequiredTitle": "启用前请先测试目标",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Open WebUI writer API 密钥",
       "writerKeyConfigured": "已配置 writer 密钥。输入新值可轮换。",
       "writerKeyRequired": "上传、处理、核对和删除文件时必需。",
+      "writerKeyRecoveryDescription": "输入当前密钥以保存并重试清理，或留空以继续使用已保存的密钥。",
       "writerKeyRotatePlaceholder": "输入新密钥",
       "writerKeyWillBeCleared": "保存时将删除 writer 密钥。",
       "clearWriterKey": "删除 writer 密钥",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "保留 writer 密钥",
       "test": "测试 writer",
       "testSucceeded": "writer 测试在 {{latency}} 毫秒内成功。",
+      "operationSucceeded": "上一次操作已成功完成。",
+      "operationFailed": "上一次操作失败。",
+      "saveAndTest": "保存并验证 writer",
+      "saveWriterKey": "保存 writer 密钥",
+      "saveKeyAndRetryCleanup": "保存密钥并重试清理",
+      "technicalDetails": "技术详情",
       "enable": "启用同步",
       "disable": "禁用并清理",
       "disableConfirm": "将停止新上传，并由 Docmost 删除管理的文件。继续吗？",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "请输入不含路径、query、凭据或 fragment 的有效 HTTP(S) origin。",
-        "knowledgeId": "必须填写 Knowledge Base ID。"
+        "knowledgeId": "必须填写 Knowledge Base ID。",
+        "writerApiKey": "请输入新目标的 writer API 密钥。"
       },
       "error": {
         "deploymentDisabled": "此部署已禁用 RAG 同步。",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "Open WebUI writer 不可用。",
         "writerUnauthorized": "Open WebUI 拒绝了 writer API 密钥。",
         "targetUnavailable": "Open WebUI Knowledge Base 不可用。",
+        "targetInvalid": "已保存的 Knowledge ID 无效。请修正目标并重新保存。",
+        "targetTimeout": "读取 Knowledge Base 超时。请检查 Open WebUI 和网络路由。",
+        "processingTimeout": "Open WebUI 未及时处理测试标记。请检查处理队列。",
+        "processingFailed": "Open WebUI 处理测试标记失败。请检查处理 worker。",
+        "invalidResponse": "Open WebUI 返回了不支持的响应。请检查版本和兼容性。",
+        "redirectRejected": "Open WebUI 重定向了请求。请使用无重定向的准确允许 Origin。",
+        "sourceTooLarge": "测试源超过配置限制。请检查 writer 限制。",
+        "urlRejected": "网络策略拒绝了 Open WebUI Origin。请检查 RAG_SYNC_ALLOWED_ORIGINS。",
+        "leaseLost": "Docmost 丢失了同步 lease。请检查 Redis 后重试。",
+        "aborted": "writer 请求被中止。请在目标稳定后重试。",
+        "scopeUnavailable": "AI 导出范围不可用。请检查空间和内容策略。",
+        "invalidFeed": "Docmost 无法创建有效的同步 feed。请重试；如仍失败，请检查服务器错误。",
         "unknown": "RAG 同步请求失败。"
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED、允许的 Open WebUI 来源、Knowledge ID 和写入器密钥",
           "result": "Docmost 会在所选 Open WebUI Knowledge Base 中增量维护页面、数据库行和已启用的词典术语；附件中只有 PDF、DOCX、TXT 和 Markdown 会进入可移植索引",
           "steps": {
-            "step1": "Save 目标和作者凭证",
-            "step2": "针对当前目标运行Test",
-            "step3": "Enable 绑定"
+            "step1": "保存目标和 writer 凭据",
+            "step2": "验证 writer：只读 preflight，然后上传、处理并删除测试标记",
+            "step3": "验证成功后启用同步"
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "请让规范化后的 Open WebUI 检索来源和 Knowledge ID 与写入目标完全一致，然后重新测试并启用。二者不一致时不会执行写入。"
+          },
+          "writerVerification": {
+            "signal": "writer 验证失败",
+            "action": "测试从只读目标检查开始；此阶段失败不需要清理。上传开始后，必须保持清理状态，直到 Docmost 确认删除。修复显示的错误代码，必要时轮换密钥，然后重试。"
           },
           "sourceRemoved": {
             "signal": "源已删除",

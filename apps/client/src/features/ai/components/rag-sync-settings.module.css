@@ -10,6 +10,14 @@
   color: var(--mantine-color-text);
 }
 
+.workflowStepper {
+  padding: var(--mantine-spacing-xs) 0;
+}
+
+.inlineAction {
+  align-self: flex-start;
+}
+
 .statusGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -73,6 +81,16 @@
 
   .statusGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workflowStepper :global(.mantine-Stepper-steps) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--mantine-spacing-sm);
+  }
+
+  .workflowStepper :global(.mantine-Stepper-separator) {
+    display: none;
   }
 
   .actions {

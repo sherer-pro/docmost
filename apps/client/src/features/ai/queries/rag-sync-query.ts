@@ -16,7 +16,9 @@ export const RAG_SYNC_QUERY_KEYS = {
 };
 
 export function getRagSyncPollingInterval(config?: RagSyncSpaceConfig) {
-  return config?.state === "enabled" || config?.state === "draining"
+  return config?.state === "enabled" ||
+    config?.state === "draining" ||
+    config?.cleanupRequired
     ? 10_000
     : 60_000;
 }

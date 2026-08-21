@@ -1393,7 +1393,18 @@
       "privacyTitle": "Knowledge Base містить увесь дозволений простір",
       "privacyDescription": "Docmost індексує всі сторінки, дозволені політикою AI, включно з обмеженими. Лише пошук через Docmost повторно перевіряє права.",
       "targetMismatchTitle": "Пошук і синхронізація використовують різні цілі",
-      "targetMismatchDescription": "Це дозволено, але ціль Open WebUI для пошуку не збігається з ціллю синхронізації.",
+      "workflow": {
+        "target": "Зберегти ціль",
+        "targetDescription": "Origin, ID Knowledge Base і writer key",
+        "writer": "Перевірити writer",
+        "writerDescription": "Прочитати ціль, потім завантажити, обробити й видалити тестовий маркер",
+        "sync": "Увімкнути синхронізацію",
+        "syncDescription": "Публікувати й підтримувати Knowledge Base в актуальному стані"
+      },
+      "targetMismatchDescription": "Синхронізацію не можна ввімкнути, доки origin та ID не збігаються з ціллю пошуку простору.",
+      "useRetrievalTarget": "Використати ціль пошуку",
+      "targetMismatchRecoveryFirst": "Спочатку завершіть очищення, а потім перейдіть на ціль пошуку.",
+      "cleanupRecoveryHint": "За потреби замініть writer key, потім повторіть очищення. Поля цілі розблокуються після завершення.",
       "cleanupRequiredTitle": "Віддалене очищення не завершене",
       "cleanupRequiredDescription": "Ціль не можна змінити, доки очищення не завершено або явно не скасовано.",
       "targetTestRequiredTitle": "Перевірте ціль перед увімкненням",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Writer API key Open WebUI",
       "writerKeyConfigured": "Writer key налаштовано. Введіть нове значення для ротації.",
       "writerKeyRequired": "Потрібен для завантаження, обробки, звірки та видалення файлів.",
+      "writerKeyRecoveryDescription": "Введіть актуальний ключ, щоб зберегти його й повторити очищення, або залиште поле порожнім, щоб використати збережений ключ.",
       "writerKeyRotatePlaceholder": "Введіть новий ключ",
       "writerKeyWillBeCleared": "Writer key буде видалено після збереження.",
       "clearWriterKey": "Видалити writer key",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "Зберегти writer key",
       "test": "Перевірити writer",
       "testSucceeded": "Перевірка writer успішна за {{latency}} мс.",
+      "operationSucceeded": "Останню операцію успішно завершено.",
+      "operationFailed": "Остання операція завершилася помилкою.",
+      "saveAndTest": "Зберегти й перевірити",
+      "saveWriterKey": "Зберегти writer key",
+      "saveKeyAndRetryCleanup": "Зберегти ключ і повторити очищення",
+      "technicalDetails": "Технічні деталі",
       "enable": "Увімкнути синхронізацію",
       "disable": "Вимкнути й очистити",
       "disableConfirm": "Нові завантаження припиняться, а Docmost видалить керовані файли. Продовжити?",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "Введіть коректний HTTP(S) origin без шляху, query, облікових даних і fragment.",
-        "knowledgeId": "Укажіть ID Knowledge Base."
+        "knowledgeId": "Укажіть ID Knowledge Base.",
+        "writerApiKey": "Введіть writer API key для нової цілі."
       },
       "error": {
         "deploymentDisabled": "RAG-синхронізацію вимкнено для розгортання.",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "Writer Open WebUI недоступний.",
         "writerUnauthorized": "Open WebUI відхилив writer API key.",
         "targetUnavailable": "Knowledge Base Open WebUI недоступна.",
+        "targetInvalid": "Збережено неправильний ID Knowledge Base. Виправте ціль і збережіть її знову.",
+        "targetTimeout": "Docmost не дочекався читання Knowledge Base. Перевірте Open WebUI і мережу.",
+        "processingTimeout": "Open WebUI не встиг обробити тестовий маркер. Перевірте чергу обробки.",
+        "processingFailed": "Open WebUI не зміг обробити тестовий маркер. Перевірте workers.",
+        "invalidResponse": "Open WebUI повернув непідтримувану відповідь. Перевірте версію та сумісність.",
+        "redirectRejected": "Open WebUI перенаправив запит. Використовуйте точний дозволений origin без redirects.",
+        "sourceTooLarge": "Тестове джерело перевищило ліміт. Перевірте ліміти writer.",
+        "urlRejected": "Мережева політика відхилила origin Open WebUI. Перевірте RAG_SYNC_ALLOWED_ORIGINS.",
+        "leaseLost": "Docmost втратив lease синхронізації. Перевірте Redis і повторіть.",
+        "aborted": "Запит writer перервано. Повторіть після стабілізації цілі.",
+        "scopeUnavailable": "AI export scope простору недоступний. Перевірте простір і політику контенту.",
+        "invalidFeed": "Docmost не зміг створити коректний feed. Повторіть і перевірте помилку сервера, якщо проблема зберігається.",
         "unknown": "Запит RAG-синхронізації завершився помилкою."
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED, дозволене походження Open WebUI, Knowledge ID і ключ запису",
           "result": "Docmost поступово підтримує сторінки, рядки баз даних і терміни ввімкненого словника у вибраній Open WebUI Knowledge Base; серед вкладень до переносного індексу потрапляють лише PDF, DOCX, TXT і Markdown",
           "steps": {
-            "step1": "Save облікові дані цілі та автора",
-            "step2": "Запустіть Test для поточної цілі",
-            "step3": "Enable палітурка"
+            "step1": "Збережіть ціль і writer credentials",
+            "step2": "Перевірте writer: read-only preflight, потім завантаження, обробка й видалення тестового маркера",
+            "step3": "Увімкніть синхронізацію після успішної перевірки"
           },
           "success": "Останній успіх продовжується, і стан очищення чи невідповідності цілей не залишається",
           "rollback": "Вимкніть прив'язку і завершіть очищення; для екстреного відкату вимкніть RAG_SYNC_ENABLED і перезапустіть",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "Зробіть нормалізований origin Open WebUI retrieval і Knowledge ID повністю однаковими з writer target, потім повторіть тест і ввімкнення. Поки вони різняться, запис не виконується."
+          },
+          "writerVerification": {
+            "signal": "Помилка перевірки writer",
+            "action": "Тест починається з read-only перевірки цілі; помилка на цьому етапі не потребує очищення. Після початку upload очищення обов’язкове до підтвердження видалення. Виправте показаний код, за потреби замініть ключ і повторіть."
           },
           "sourceRemoved": {
             "signal": "джерело видалено",

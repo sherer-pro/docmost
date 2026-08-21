@@ -203,6 +203,7 @@ export const AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS = [
     rows: [
       "409",
       "targetMismatch",
+      "writerVerification",
       "sourceRemoved",
       "runtimeStopped",
       "cleanupRequired",

@@ -1,4 +1,5 @@
 import {
+  Accordion,
   Alert,
   Badge,
   Button,
@@ -7,6 +8,7 @@ import {
   Paper,
   PasswordInput,
   Stack,
+  Stepper,
   Text,
   TextInput,
   ThemeIcon,
@@ -38,7 +40,10 @@ import {
   useUpdateRagSyncSpaceConfigMutation,
 } from "@/features/ai/queries/rag-sync-query.ts";
 import type { RagSyncAction } from "@/features/ai/services/rag-sync-service.ts";
-import { canEnableRagSync } from "./rag-sync-settings.utils.ts";
+import {
+  canEnableRagSync,
+  getRagSyncWorkflowStep,
+} from "./rag-sync-settings.utils.ts";
 import classes from "./rag-sync-settings.module.css";
 
 type RagSyncForm = {
@@ -81,20 +86,25 @@ const ERROR_KEYS: Record<RagSyncErrorCode, string> = {
   rag_sync_writer_unavailable: "ai.ragSync.error.writerUnavailable",
   rag_sync_writer_unauthorized: "ai.ragSync.error.writerUnauthorized",
   rag_sync_target_unavailable: "ai.ragSync.error.targetUnavailable",
-  rag_sync_target_invalid: "ai.ragSync.error.targetUnavailable",
-  rag_sync_target_timeout: "ai.ragSync.error.targetUnavailable",
-  rag_sync_processing_timeout: "ai.ragSync.error.writerUnavailable",
-  rag_sync_processing_failed: "ai.ragSync.error.writerUnavailable",
-  rag_sync_invalid_response: "ai.ragSync.error.writerUnavailable",
-  rag_sync_redirect_rejected: "ai.ragSync.error.targetUnavailable",
-  rag_sync_source_too_large: "ai.ragSync.error.writerUnavailable",
-  rag_sync_url_rejected: "ai.ragSync.error.targetUnavailable",
+  rag_sync_target_invalid: "ai.ragSync.error.targetInvalid",
+  rag_sync_target_timeout: "ai.ragSync.error.targetTimeout",
+  rag_sync_processing_timeout: "ai.ragSync.error.processingTimeout",
+  rag_sync_processing_failed: "ai.ragSync.error.processingFailed",
+  rag_sync_invalid_response: "ai.ragSync.error.invalidResponse",
+  rag_sync_redirect_rejected: "ai.ragSync.error.redirectRejected",
+  rag_sync_source_too_large: "ai.ragSync.error.sourceTooLarge",
+  rag_sync_url_rejected: "ai.ragSync.error.urlRejected",
   rag_sync_writer_key_missing: "ai.ragSync.error.notConfigured",
-  rag_sync_lease_lost: "ai.ragSync.error.unknown",
-  rag_sync_aborted: "ai.ragSync.error.unknown",
+  rag_sync_lease_lost: "ai.ragSync.error.leaseLost",
+  rag_sync_aborted: "ai.ragSync.error.aborted",
   rag_sync_internal_error: "ai.ragSync.error.unknown",
-  rag_sync_scope_unavailable: "ai.ragSync.error.unknown",
-  rag_sync_invalid_feed: "ai.ragSync.error.unknown",
+  rag_sync_scope_unavailable: "ai.ragSync.error.scopeUnavailable",
+  rag_sync_invalid_feed: "ai.ragSync.error.invalidFeed",
+};
+
+type OperationFeedback = {
+  color: "green" | "red";
+  message: string;
 };
 
 function isHttpOrigin(value: string) {
@@ -144,6 +154,8 @@ export function RagSyncSettings({
   const testTarget = useTestRagSyncTargetMutation(spaceId);
   const actionMutation = useRagSyncActionMutation(spaceId);
   const [clearWriterApiKey, setClearWriterApiKey] = useState(false);
+  const [operationFeedback, setOperationFeedback] =
+    useState<OperationFeedback | null>(null);
   const initializedConfig = useRef<string | null>(null);
   const form = useForm<RagSyncForm>({
     initialValues: EMPTY_FORM,
@@ -198,8 +210,23 @@ export function RagSyncSettings({
     (normalizeOrigin(retrievalTarget?.baseUrl) !==
       normalizeOrigin(form.values.baseUrl) ||
       (retrievalTarget?.knowledgeId ?? "") !== form.values.knowledgeId.trim());
+  const targetChanged = Boolean(
+    config &&
+      (normalizeOrigin(config.target.baseUrl) !==
+        normalizeOrigin(form.values.baseUrl) ||
+        (config.target.knowledgeId ?? "") !== form.values.knowledgeId.trim()),
+  );
+  const writerKeyRequired = Boolean(
+    !config?.target.writerApiKeyConfigured || targetChanged,
+  );
+  const hasWriterKeyForTarget = Boolean(
+    !writerKeyRequired || form.values.writerApiKey.trim(),
+  );
   const isBusy =
     updateConfig.isPending || testTarget.isPending || actionMutation.isPending;
+  const workflowStep = config
+    ? getRagSyncWorkflowStep(config, hasSavedTarget)
+    : 0;
 
   const formatDate = (value: string | null) =>
     value
@@ -219,11 +246,25 @@ export function RagSyncSettings({
   };
 
   const showRequestError = (error: unknown) => {
-    notifications.show({ color: "red", message: resolveRequestError(error) });
+    const message = resolveRequestError(error);
+    setOperationFeedback({ color: "red", message });
+    notifications.show({ color: "red", message });
   };
 
-  const save = async () => {
-    if (!config || form.validate().hasErrors) return;
+  const validateTarget = () => {
+    if (form.validate().hasErrors) return false;
+    if (writerKeyRequired && !form.values.writerApiKey.trim()) {
+      form.setFieldError(
+        "writerApiKey",
+        t("ai.ragSync.validation.writerApiKey"),
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const save = async (showSuccess = true) => {
+    if (!config || !validateTarget()) return null;
     try {
       const next = await updateConfig.mutateAsync({
         expectedVersion: config.configVersion,
@@ -246,23 +287,82 @@ export function RagSyncSettings({
       setClearWriterApiKey(false);
       initializedConfig.current = configIdentity(next);
       onDirtyChange?.(false);
-      notifications.show({ color: "green", message: t("ai.ragSync.saved") });
+      if (showSuccess) {
+        const message = t("ai.ragSync.saved");
+        setOperationFeedback({ color: "green", message });
+        notifications.show({ color: "green", message });
+      }
+      return next;
     } catch (error) {
       showRequestError(error);
+      return null;
     }
   };
 
-  const runAction = async (action: RagSyncAction, successKey: string) => {
-    if (config.configVersion === null) return;
+  const runAction = async (
+    action: RagSyncAction,
+    successKey: string,
+    expectedVersion = config.configVersion,
+  ) => {
+    if (expectedVersion === null) return null;
     try {
-      await actionMutation.mutateAsync({
+      const next = await actionMutation.mutateAsync({
         action,
-        expectedVersion: config.configVersion,
+        expectedVersion,
       });
-      notifications.show({ color: "green", message: t(successKey) });
+      const message = t(successKey);
+      setOperationFeedback({ color: "green", message });
+      notifications.show({ color: "green", message });
+      return next;
     } catch (error) {
       showRequestError(error);
+      return null;
     }
+  };
+
+  const runTargetTest = async () => {
+    setOperationFeedback(null);
+    try {
+      const result = await testTarget.mutateAsync();
+      const message = t("ai.ragSync.testSucceeded", {
+        latency: result.latencyMs,
+      });
+      setOperationFeedback({ color: "green", message });
+      notifications.show({ color: "green", message });
+      return result;
+    } catch (error) {
+      showRequestError(error);
+      return null;
+    }
+  };
+
+  const saveAndTest = async () => {
+    setOperationFeedback(null);
+    const saved = hasUnsavedChanges ? await save(false) : config;
+    if (!saved) return;
+    await runTargetTest();
+  };
+
+  const recoverCleanup = async () => {
+    setOperationFeedback(null);
+    const saved = hasUnsavedChanges ? await save(false) : config;
+    if (!saved?.configVersion) return;
+    await runAction(
+      "retry-cleanup",
+      "ai.ragSync.cleanupStarted",
+      saved.configVersion,
+    );
+  };
+
+  const useRetrievalTarget = () => {
+    if (!retrievalTarget || !canEditTarget) return;
+    form.setValues({
+      baseUrl: retrievalTarget.baseUrl ?? "",
+      knowledgeId: retrievalTarget.knowledgeId ?? "",
+      writerApiKey: "",
+    });
+    setClearWriterApiKey(false);
+    setOperationFeedback(null);
   };
 
   const confirmAction = (
@@ -320,30 +420,54 @@ export function RagSyncSettings({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        void save();
       }}
     >
       <Stack gap="lg">
         <Paper withBorder radius="md" p="lg" className={classes.section}>
           <Stack gap="md">
-            <Group wrap="nowrap" align="flex-start">
-              <ThemeIcon
-                variant="light"
-                color="teal"
-                radius="md"
-                className={classes.headerIcon}
-              >
-                <IconDatabaseCog size={18} />
-              </ThemeIcon>
-              <div>
-                <Title order={2} size="h4">
-                  {t("ai.ragSync.title")}
-                </Title>
-                <Text size="sm" c="dimmed">
-                  {t("ai.ragSync.description")}
-                </Text>
-              </div>
+            <Group wrap="nowrap" align="flex-start" justify="space-between">
+              <Group wrap="nowrap" align="flex-start">
+                <ThemeIcon
+                  variant="light"
+                  color="teal"
+                  radius="md"
+                  className={classes.headerIcon}
+                >
+                  <IconDatabaseCog size={18} />
+                </ThemeIcon>
+                <div>
+                  <Title order={2} size="h4">
+                    {t("ai.ragSync.title")}
+                  </Title>
+                  <Text size="sm" c="dimmed">
+                    {t("ai.ragSync.description")}
+                  </Text>
+                </div>
+              </Group>
+              <Badge variant="filled" color={BINDING_COLORS[state]}>
+                {t("ai.ragSync.state." + state)}
+              </Badge>
             </Group>
+
+            <Stepper
+              active={workflowStep}
+              size="sm"
+              allowNextStepsSelect={false}
+              className={classes.workflowStepper}
+            >
+              <Stepper.Step
+                label={t("ai.ragSync.workflow.target")}
+                description={t("ai.ragSync.workflow.targetDescription")}
+              />
+              <Stepper.Step
+                label={t("ai.ragSync.workflow.writer")}
+                description={t("ai.ragSync.workflow.writerDescription")}
+              />
+              <Stepper.Step
+                label={t("ai.ragSync.workflow.sync")}
+                description={t("ai.ragSync.workflow.syncDescription")}
+              />
+            </Stepper>
 
             {!config.deploymentEnabled && (
               <Alert
@@ -372,17 +496,45 @@ export function RagSyncSettings({
                 title={t("ai.ragSync.targetMismatchTitle")}
                 classNames={{ label: classes.alertLabel }}
               >
-                {t("ai.ragSync.targetMismatchDescription")}
+                <Stack gap="xs">
+                  <Text size="sm">
+                    {t("ai.ragSync.targetMismatchDescription")}
+                  </Text>
+                  {canEditTarget && retrievalTarget ? (
+                    <Button
+                      type="button"
+                      variant="light"
+                      color="red"
+                      size="xs"
+                      className={classes.inlineAction}
+                      onClick={useRetrievalTarget}
+                    >
+                      {t("ai.ragSync.useRetrievalTarget")}
+                    </Button>
+                  ) : (
+                    <Text size="xs" c="dimmed">
+                      {t("ai.ragSync.targetMismatchRecoveryFirst")}
+                    </Text>
+                  )}
+                </Stack>
               </Alert>
             )}
 
             {config.cleanupRequired && (
               <Alert
                 color="red"
+                icon={<IconRefresh size={18} />}
                 title={t("ai.ragSync.cleanupRequiredTitle")}
                 classNames={{ label: classes.alertLabel }}
               >
-                {t("ai.ragSync.cleanupRequiredDescription")}
+                <Stack gap="xs">
+                  <Text size="sm">
+                    {t("ai.ragSync.cleanupRequiredDescription")}
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {t("ai.ragSync.cleanupRecoveryHint")}
+                  </Text>
+                </Stack>
               </Alert>
             )}
 
@@ -400,81 +552,19 @@ export function RagSyncSettings({
                 </Alert>
               )}
 
-            <div className={classes.statusGrid}>
-              <Paper
-                withBorder
-                radius="md"
-                p="sm"
-                className={classes.statusCard}
+            {operationFeedback && (
+              <Alert
+                color={operationFeedback.color}
+                title={t(
+                  operationFeedback.color === "green"
+                    ? "ai.ragSync.operationSucceeded"
+                    : "ai.ragSync.operationFailed",
+                )}
+                classNames={{ label: classes.alertLabel }}
               >
-                <Text size="xs" c="dimmed">
-                  {t("ai.ragSync.bindingState")}
-                </Text>
-                <Badge mt={4} variant="filled" color={BINDING_COLORS[state]}>
-                  {t(`ai.ragSync.state.${state}`)}
-                </Badge>
-              </Paper>
-              <Paper
-                withBorder
-                radius="md"
-                p="sm"
-                className={classes.statusCard}
-              >
-                <Text size="xs" c="dimmed">
-                  {t("ai.ragSync.health")}
-                </Text>
-                <Badge
-                  mt={4}
-                  variant="filled"
-                  color={HEALTH_COLORS[config.status.health]}
-                >
-                  {t(`ai.ragSync.healthState.${config.status.health}`)}
-                </Badge>
-              </Paper>
-              <Paper
-                withBorder
-                radius="md"
-                p="sm"
-                className={classes.statusCard}
-              >
-                <Text size="xs" c="dimmed">
-                  {t("ai.ragSync.lastAttempt")}
-                </Text>
-                <Text size="sm" fw={500} mt={4} truncate="end">
-                  {formatDate(config.status.lastAttemptAt)}
-                </Text>
-              </Paper>
-              <Paper
-                withBorder
-                radius="md"
-                p="sm"
-                className={classes.statusCard}
-              >
-                <Text size="xs" c="dimmed">
-                  {t("ai.ragSync.lastSuccess")}
-                </Text>
-                <Text size="sm" fw={500} mt={4} truncate="end">
-                  {formatDate(config.status.lastSuccessAt)}
-                </Text>
-              </Paper>
-              <Paper
-                withBorder
-                radius="md"
-                p="sm"
-                className={classes.statusCard}
-              >
-                <Text size="xs" c="dimmed">
-                  {t("ai.ragSync.lag")}
-                </Text>
-                <Text size="sm" fw={500} mt={4}>
-                  {config.status.lagMs === null
-                    ? t("ai.ragSync.never")
-                    : t("ai.ragSync.lagValue", {
-                        seconds: Math.ceil(config.status.lagMs / 1000),
-                      })}
-                </Text>
-              </Paper>
-            </div>
+                {operationFeedback.message}
+              </Alert>
+            )}
 
             {config.status.errorCode && (
               <Alert
@@ -508,11 +598,13 @@ export function RagSyncSettings({
               }}
               label={t("ai.ragSync.writerApiKey")}
               description={
-                clearWriterApiKey
-                  ? t("ai.ragSync.writerKeyWillBeCleared")
-                  : config.target.writerApiKeyConfigured
-                    ? t("ai.ragSync.writerKeyConfigured")
-                    : t("ai.ragSync.writerKeyRequired")
+                config.cleanupRequired
+                  ? t("ai.ragSync.writerKeyRecoveryDescription")
+                  : clearWriterApiKey
+                    ? t("ai.ragSync.writerKeyWillBeCleared")
+                    : config.target.writerApiKeyConfigured
+                      ? t("ai.ragSync.writerKeyConfigured")
+                      : t("ai.ragSync.writerKeyRequired")
               }
               placeholder={
                 config.target.writerApiKeyConfigured
@@ -542,53 +634,117 @@ export function RagSyncSettings({
                   : t("ai.ragSync.clearWriterKey")}
               </Button>
             )}
+
+            <Accordion variant="contained" radius="md">
+              <Accordion.Item value="technical-details">
+                <Accordion.Control>
+                  {t("ai.ragSync.technicalDetails")}
+                </Accordion.Control>
+                <Accordion.Panel>
+                  <div className={classes.statusGrid}>
+                    <Paper
+                      withBorder
+                      radius="md"
+                      p="sm"
+                      className={classes.statusCard}
+                    >
+                      <Text size="xs" c="dimmed">
+                        {t("ai.ragSync.bindingState")}
+                      </Text>
+                      <Badge
+                        mt={4}
+                        variant="filled"
+                        color={BINDING_COLORS[state]}
+                      >
+                        {t("ai.ragSync.state." + state)}
+                      </Badge>
+                    </Paper>
+                    <Paper
+                      withBorder
+                      radius="md"
+                      p="sm"
+                      className={classes.statusCard}
+                    >
+                      <Text size="xs" c="dimmed">
+                        {t("ai.ragSync.health")}
+                      </Text>
+                      <Badge
+                        mt={4}
+                        variant="filled"
+                        color={HEALTH_COLORS[config.status.health]}
+                      >
+                        {t("ai.ragSync.healthState." + config.status.health)}
+                      </Badge>
+                    </Paper>
+                    <Paper
+                      withBorder
+                      radius="md"
+                      p="sm"
+                      className={classes.statusCard}
+                    >
+                      <Text size="xs" c="dimmed">
+                        {t("ai.ragSync.lastAttempt")}
+                      </Text>
+                      <Text size="sm" fw={500} mt={4} truncate="end">
+                        {formatDate(config.status.lastAttemptAt)}
+                      </Text>
+                    </Paper>
+                    <Paper
+                      withBorder
+                      radius="md"
+                      p="sm"
+                      className={classes.statusCard}
+                    >
+                      <Text size="xs" c="dimmed">
+                        {t("ai.ragSync.lastSuccess")}
+                      </Text>
+                      <Text size="sm" fw={500} mt={4} truncate="end">
+                        {formatDate(config.status.lastSuccessAt)}
+                      </Text>
+                    </Paper>
+                    <Paper
+                      withBorder
+                      radius="md"
+                      p="sm"
+                      className={classes.statusCard}
+                    >
+                      <Text size="xs" c="dimmed">
+                        {t("ai.ragSync.lag")}
+                      </Text>
+                      <Text size="sm" fw={500} mt={4}>
+                        {config.status.lagMs === null
+                          ? t("ai.ragSync.never")
+                          : t("ai.ragSync.lagValue", {
+                              seconds: Math.ceil(config.status.lagMs / 1000),
+                            })}
+                      </Text>
+                    </Paper>
+                  </div>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
           </Stack>
         </Paper>
 
         <div className={classes.actionBar}>
           <Group justify="flex-end" className={classes.actions}>
-            <Button
-              type="button"
-              variant="default"
-              leftSection={<IconPlayerPlay size={16} />}
-              loading={testTarget.isPending}
-              disabled={
-                isBusy ||
-                !config.deploymentEnabled ||
-                !hasSavedTarget ||
-                hasUnsavedChanges ||
-                state !== "disabled" ||
-                config.cleanupRequired
-              }
-              onClick={() =>
-                void testTarget
-                  .mutateAsync()
-                  .then((result) =>
-                    notifications.show({
-                      color: "green",
-                      message: t("ai.ragSync.testSucceeded", {
-                        latency: result.latencyMs,
-                      }),
-                    }),
-                  )
-                  .catch(showRequestError)
-              }
-            >
-              {t("ai.ragSync.test")}
-            </Button>
-
             {state === "disabled" && config.cleanupRequired && (
               <>
                 <Button
                   type="button"
                   variant="default"
                   leftSection={<IconRefresh size={16} />}
-                  disabled={isBusy || !config.deploymentEnabled}
-                  onClick={() =>
-                    void runAction("retry-cleanup", "ai.ragSync.cleanupStarted")
+                  loading={updateConfig.isPending || actionMutation.isPending}
+                  disabled={
+                    isBusy ||
+                    !config.deploymentEnabled ||
+                    !hasWriterKeyForTarget
                   }
+                  onClick={() => void recoverCleanup()}
                 >
-                  {t("ai.ragSync.retryCleanup")}
+                  {hasUnsavedChanges
+                    ? t("ai.ragSync.saveKeyAndRetryCleanup")
+                    : t("ai.ragSync.retryCleanup")}
                 </Button>
                 <Button
                   type="button"
@@ -611,22 +767,59 @@ export function RagSyncSettings({
             )}
 
             {state === "disabled" && !config.cleanupRequired && (
+              <>
+                {(!config.target.lastTestedAt || hasUnsavedChanges) && (
+                  <Button
+                    type="button"
+                    color="teal"
+                    className={classes.enableAction}
+                    leftSection={<IconPlayerPlay size={16} />}
+                    loading={updateConfig.isPending || testTarget.isPending}
+                    disabled={
+                      isBusy ||
+                      !config.deploymentEnabled ||
+                      !isHttpOrigin(form.values.baseUrl) ||
+                      !form.values.knowledgeId.trim() ||
+                      !hasWriterKeyForTarget ||
+                      targetMismatch
+                    }
+                    onClick={() => void saveAndTest()}
+                  >
+                    {hasUnsavedChanges
+                      ? t("ai.ragSync.saveAndTest")
+                      : t("ai.ragSync.test")}
+                  </Button>
+                )}
+                {config.target.lastTestedAt && !hasUnsavedChanges && (
+                  <Button
+                    type="button"
+                    color="teal"
+                    className={classes.enableAction}
+                    disabled={
+                      !canEnableRagSync(config, {
+                        isBusy,
+                        hasSavedTarget,
+                        hasUnsavedChanges,
+                      }) || targetMismatch
+                    }
+                    onClick={() =>
+                      void runAction("enable", "ai.ragSync.enabledNotification")
+                    }
+                  >
+                    {t("ai.ragSync.enable")}
+                  </Button>
+                )}
+              </>
+            )}
+
+            {state === "enabled" && hasUnsavedChanges && (
               <Button
                 type="button"
-                color="teal"
-                className={classes.enableAction}
-                disabled={
-                  !canEnableRagSync(config, {
-                    isBusy,
-                    hasSavedTarget,
-                    hasUnsavedChanges,
-                  }) || targetMismatch
-                }
-                onClick={() =>
-                  void runAction("enable", "ai.ragSync.enabledNotification")
-                }
+                loading={updateConfig.isPending}
+                disabled={isBusy}
+                onClick={() => void save()}
               >
-                {t("ai.ragSync.enable")}
+                {t("ai.ragSync.saveWriterKey")}
               </Button>
             )}
 
@@ -670,14 +863,6 @@ export function RagSyncSettings({
                 {t("ai.ragSync.forceDisable")}
               </Button>
             )}
-
-            <Button
-              type="submit"
-              loading={updateConfig.isPending}
-              disabled={isBusy || !hasUnsavedChanges || state === "draining"}
-            >
-              {t("ai.save")}
-            </Button>
           </Group>
         </div>
       </Stack>

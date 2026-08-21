@@ -1393,7 +1393,18 @@
       "privacyTitle": "A Knowledge Base contém todo o espaço permitido",
       "privacyDescription": "O Docmost indexa todas as páginas permitidas pela política de AI, inclusive restritas. Somente a busca pelo Docmost verifica novamente as permissões.",
       "targetMismatchTitle": "Busca e sincronização usam destinos diferentes",
-      "targetMismatchDescription": "Isso é permitido, mas o destino Open WebUI da busca não corresponde ao da sincronização.",
+      "workflow": {
+        "target": "Salvar destino",
+        "targetDescription": "Origem, ID da Knowledge Base e chave writer",
+        "writer": "Verificar writer",
+        "writerDescription": "Ler o destino e enviar, processar e excluir um marcador de teste",
+        "sync": "Ativar sincronização",
+        "syncDescription": "Publicar e manter a Knowledge Base atualizada"
+      },
+      "targetMismatchDescription": "A sincronização não pode ser ativada até que origem e ID correspondam ao destino de busca do espaço.",
+      "useRetrievalTarget": "Usar destino de busca do espaço",
+      "targetMismatchRecoveryFirst": "Conclua a limpeza antes de mudar para o destino de busca.",
+      "cleanupRecoveryHint": "Troque a chave writer se necessário e repita a limpeza. Os campos serão desbloqueados após a conclusão.",
       "cleanupRequiredTitle": "A limpeza remota está incompleta",
       "cleanupRequiredDescription": "O destino não pode ser alterado até concluir ou abandonar explicitamente a limpeza.",
       "targetTestRequiredTitle": "Teste o destino antes de habilitar",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Chave API de escrita do Open WebUI",
       "writerKeyConfigured": "Uma chave está configurada. Informe outra para fazer a rotação.",
       "writerKeyRequired": "Necessária para enviar, processar, reconciliar e excluir arquivos.",
+      "writerKeyRecoveryDescription": "Insira uma chave atual para salvá-la e repetir a limpeza, ou deixe em branco para usar a chave salva.",
       "writerKeyRotatePlaceholder": "Informe uma nova chave",
       "writerKeyWillBeCleared": "A chave será removida ao salvar.",
       "clearWriterKey": "Remover chave de escrita",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "Manter chave",
       "test": "Testar escrita",
       "testSucceeded": "Teste concluído em {{latency}} ms.",
+      "operationSucceeded": "A última operação foi concluída.",
+      "operationFailed": "A última operação falhou.",
+      "saveAndTest": "Salvar e verificar writer",
+      "saveWriterKey": "Salvar chave writer",
+      "saveKeyAndRetryCleanup": "Salvar chave e repetir limpeza",
+      "technicalDetails": "Detalhes técnicos",
       "enable": "Ativar sincronização",
       "disable": "Desativar e limpar",
       "disableConfirm": "Novos envios serão interrompidos e o Docmost excluirá os arquivos gerenciados. Continuar?",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "Informe uma origem HTTP(S) válida sem caminho, consulta, credenciais ou fragmento.",
-        "knowledgeId": "O ID da Knowledge Base é obrigatório."
+        "knowledgeId": "O ID da Knowledge Base é obrigatório.",
+        "writerApiKey": "Insira uma chave API writer para o novo destino."
       },
       "error": {
         "deploymentDisabled": "A sincronização RAG está desativada nesta implantação.",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "O writer do Open WebUI não está disponível.",
         "writerUnauthorized": "O Open WebUI rejeitou a chave API.",
         "targetUnavailable": "A Knowledge Base do Open WebUI não está disponível.",
+        "targetInvalid": "O ID salvo é inválido. Corrija o destino e salve novamente.",
+        "targetTimeout": "A leitura da Knowledge Base excedeu o tempo. Verifique Open WebUI e a rede.",
+        "processingTimeout": "Open WebUI não processou o marcador a tempo. Verifique a fila de processamento.",
+        "processingFailed": "Open WebUI não processou o marcador. Verifique os workers.",
+        "invalidResponse": "Open WebUI retornou uma resposta incompatível. Verifique versão e compatibilidade.",
+        "redirectRejected": "Open WebUI redirecionou a solicitação. Use a origem permitida exata sem redirecionamentos.",
+        "sourceTooLarge": "A fonte de teste excedeu o limite. Verifique os limites do writer.",
+        "urlRejected": "A política de rede rejeitou a origem Open WebUI. Verifique RAG_SYNC_ALLOWED_ORIGINS.",
+        "leaseLost": "Docmost perdeu o lease de sincronização. Verifique Redis e tente novamente.",
+        "aborted": "A solicitação writer foi interrompida. Tente novamente quando o destino estiver estável.",
+        "scopeUnavailable": "O escopo de exportação de AI não está disponível. Verifique o espaço e a política de conteúdo.",
+        "invalidFeed": "Docmost não criou um feed válido. Tente novamente e verifique o erro do servidor se persistir.",
         "unknown": "A solicitação de sincronização RAG falhou."
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED, uma origem Open WebUI permitida, Knowledge ID e chave de gravador",
           "result": "O Docmost mantém incrementalmente páginas, linhas de banco e termos do dicionário habilitado na Knowledge Base Open WebUI selecionada; entre os anexos, somente PDF, DOCX, TXT e Markdown entram no índice portátil",
           "steps": {
-            "step1": "Save o destino e a credencial do gravador",
-            "step2": "Execute Test para o destino atual",
-            "step3": "Enable a ligação"
+            "step1": "Salve o destino e a credencial writer",
+            "step2": "Verifique o writer: preflight somente leitura e depois envio, processamento e exclusão do marcador",
+            "step3": "Ative a sincronização após a verificação bem-sucedida"
           },
           "success": "O último sucesso avança e nenhum estado de limpeza ou incompatibilidade de destino permanece",
           "rollback": "Desative a ligação e finalize a limpeza; para reversão de emergência, desative RAG_SYNC_ENABLED e reinicie",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "Faça a origem normalizada de recuperação do Open WebUI e o Knowledge ID corresponderem exatamente ao destino de escrita; depois teste e habilite novamente. Nenhuma gravação é enviada enquanto forem diferentes."
+          },
+          "writerVerification": {
+            "signal": "Falha na verificação writer",
+            "action": "O teste começa com leitura do destino; falha nessa etapa não exige limpeza. Após iniciar o envio, a limpeza continua obrigatória até Docmost confirmar a exclusão. Corrija o código exibido, troque a chave se necessário e tente novamente."
           },
           "sourceRemoved": {
             "signal": "fonte removida",

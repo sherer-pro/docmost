@@ -49,4 +49,13 @@ describe("RAG Sync polling interval", () => {
       ).toBe(60_000);
     },
   );
+
+  it("polls a disabled recovery binding every ten seconds", () => {
+    expect(
+      getRagSyncPollingInterval({
+        ...config("disabled"),
+        cleanupRequired: true,
+      }),
+    ).toBe(10_000);
+  });
 });

@@ -1393,7 +1393,18 @@
       "privacyTitle": "Knowledge Base에 허용된 공간 전체가 포함됩니다",
       "privacyDescription": "Docmost는 AI 정책이 허용한 모든 페이지(제한된 페이지 포함)를 색인합니다. Docmost를 통한 검색만 권한을 다시 확인합니다.",
       "targetMismatchTitle": "검색과 동기화가 서로 다른 대상을 사용합니다",
-      "targetMismatchDescription": "허용되지만 검색용 Open WebUI 대상이 동기화 대상과 일치하지 않습니다.",
+      "workflow": {
+        "target": "대상 저장",
+        "targetDescription": "Origin, Knowledge ID 및 writer 키",
+        "writer": "writer 확인",
+        "writerDescription": "대상을 읽고 테스트 마커를 업로드, 처리 및 삭제",
+        "sync": "동기화 활성화",
+        "syncDescription": "Knowledge Base를 게시하고 최신 상태로 유지"
+      },
+      "targetMismatchDescription": "Origin과 Knowledge ID가 공간 검색 대상과 일치할 때까지 동기화를 활성화할 수 없습니다.",
+      "useRetrievalTarget": "공간 검색 대상 사용",
+      "targetMismatchRecoveryFirst": "검색 대상으로 전환하기 전에 정리를 완료하세요.",
+      "cleanupRecoveryHint": "필요하면 writer 키를 교체한 후 정리를 다시 시도하세요. 완료되면 대상 필드가 잠금 해제됩니다.",
       "cleanupRequiredTitle": "원격 정리가 완료되지 않음",
       "cleanupRequiredDescription": "정리를 완료하거나 명시적으로 포기할 때까지 대상을 변경할 수 없습니다.",
       "targetTestRequiredTitle": "활성화하기 전에 대상을 테스트하세요",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Open WebUI writer API 키",
       "writerKeyConfigured": "writer 키가 설정되어 있습니다. 교체하려면 새 값을 입력하세요.",
       "writerKeyRequired": "파일 업로드, 처리, 조정 및 삭제에 필요합니다.",
+      "writerKeyRecoveryDescription": "현재 키를 입력하여 저장하고 정리를 재시도하거나 비워 두어 저장된 키를 사용하세요.",
       "writerKeyRotatePlaceholder": "새 키 입력",
       "writerKeyWillBeCleared": "저장할 때 writer 키가 삭제됩니다.",
       "clearWriterKey": "writer 키 삭제",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "writer 키 유지",
       "test": "writer 테스트",
       "testSucceeded": "writer 테스트가 {{latency}}ms에 성공했습니다.",
+      "operationSucceeded": "마지막 작업이 성공했습니다.",
+      "operationFailed": "마지막 작업이 실패했습니다.",
+      "saveAndTest": "저장하고 writer 확인",
+      "saveWriterKey": "writer 키 저장",
+      "saveKeyAndRetryCleanup": "키 저장 후 정리 재시도",
+      "technicalDetails": "기술 세부 정보",
       "enable": "동기화 활성화",
       "disable": "비활성화 및 정리",
       "disableConfirm": "새 업로드를 중지하고 Docmost 관리 파일을 삭제합니다. 계속할까요?",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "경로, query, 자격 증명 또는 fragment가 없는 유효한 HTTP(S) origin을 입력하세요.",
-        "knowledgeId": "Knowledge Base ID가 필요합니다."
+        "knowledgeId": "Knowledge Base ID가 필요합니다.",
+        "writerApiKey": "새 대상의 writer API 키를 입력하세요."
       },
       "error": {
         "deploymentDisabled": "이 배포에서 RAG 동기화가 비활성화되어 있습니다.",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "Open WebUI writer를 사용할 수 없습니다.",
         "writerUnauthorized": "Open WebUI가 writer API 키를 거부했습니다.",
         "targetUnavailable": "Open WebUI Knowledge Base를 사용할 수 없습니다.",
+        "targetInvalid": "저장된 Knowledge ID가 잘못되었습니다. 대상을 수정하고 다시 저장하세요.",
+        "targetTimeout": "Knowledge Base 읽기 시간이 초과되었습니다. Open WebUI와 네트워크를 확인하세요.",
+        "processingTimeout": "테스트 마커 처리가 제시간에 끝나지 않았습니다. 처리 큐를 확인하세요.",
+        "processingFailed": "테스트 마커 처리에 실패했습니다. 처리 worker를 확인하세요.",
+        "invalidResponse": "Open WebUI가 지원되지 않는 응답을 반환했습니다. 버전과 호환성을 확인하세요.",
+        "redirectRejected": "Open WebUI가 요청을 리디렉션했습니다. 리디렉션 없는 정확한 허용 origin을 사용하세요.",
+        "sourceTooLarge": "테스트 소스가 설정된 제한을 초과했습니다. writer 제한을 확인하세요.",
+        "urlRejected": "네트워크 정책이 Open WebUI origin을 거부했습니다. RAG_SYNC_ALLOWED_ORIGINS를 확인하세요.",
+        "leaseLost": "동기화 lease가 손실되었습니다. Redis를 확인하고 다시 시도하세요.",
+        "aborted": "writer 요청이 중단되었습니다. 대상이 안정되면 다시 시도하세요.",
+        "scopeUnavailable": "AI 내보내기 범위를 사용할 수 없습니다. 공간과 콘텐츠 정책을 확인하세요.",
+        "invalidFeed": "유효한 동기화 feed를 만들 수 없습니다. 다시 시도하고 지속되면 서버 오류를 확인하세요.",
         "unknown": "RAG 동기화 요청에 실패했습니다."
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키",
           "result": "Docmost는 선택된 Open WebUI Knowledge Base의 페이지, 데이터베이스 행 및 활성 사전 용어를 점진적으로 유지합니다. 첨부 파일 중에서는 PDF, DOCX, TXT 및 Markdown만 이식 가능한 인덱스에 추가됩니다.",
           "steps": {
-            "step1": "Save 대상 및 작성자 자격 증명",
-            "step2": "현재 대상에 대해 Test를 실행하십시오.",
-            "step3": "Enable 바인딩"
+            "step1": "대상과 writer 자격 증명 저장",
+            "step2": "writer 확인: 읽기 전용 preflight 후 테스트 마커 업로드, 처리 및 삭제",
+            "step3": "확인 성공 후 동기화 활성화"
           },
           "success": "마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.",
           "rollback": "바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요.",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "정규화된 Open WebUI 검색 origin과 Knowledge ID를 writer 대상과 정확히 일치시킨 뒤 다시 테스트하고 활성화하세요. 서로 다른 동안에는 쓰기를 전송하지 않습니다."
+          },
+          "writerVerification": {
+            "signal": "writer 확인 실패",
+            "action": "테스트는 읽기 전용 대상 확인으로 시작하며 이 단계의 실패에는 정리가 필요하지 않습니다. 업로드가 시작된 후에는 삭제가 확인될 때까지 정리가 필요합니다. 표시된 코드를 해결하고 필요하면 키를 교체한 뒤 재시도하세요."
           },
           "sourceRemoved": {
             "signal": "소스 삭제됨",
