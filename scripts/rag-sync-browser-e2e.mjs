@@ -2,11 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
 
-const baseUrl = new URL(process.env.RAG_SYNC_E2E_BASE_URL ?? "http://127.0.0.1:3200");
+const baseUrl = new URL(
+  process.env.RAG_SYNC_E2E_BASE_URL ?? "http://127.0.0.1:3200",
+);
 const fixtureUrl = new URL(
   process.env.RAG_SYNC_E2E_FIXTURE_URL ?? "http://127.0.0.1:18081",
 );
-const outputDir = process.env.RAG_SYNC_E2E_OUTPUT ?? "output/audit/rag-sync-browser";
+const outputDir =
+  process.env.RAG_SYNC_E2E_OUTPUT ?? "output/audit/rag-sync-browser";
 await mkdir(outputDir, { recursive: true });
 
 function findObject(value, predicate) {
@@ -27,10 +30,15 @@ class Session {
   collect(response) {
     const values = response.headers.getSetCookie?.() ?? [];
     const fallback = response.headers.get("set-cookie");
-    const raw = values.length ? values : fallback ? fallback.split(/,(?=\s*\w+=)/) : [];
+    const raw = values.length
+      ? values
+      : fallback
+        ? fallback.split(/,(?=\s*\w+=)/)
+        : [];
     const pairs = raw.map((value) => value.split(";", 1)[0]);
     this.cookie = pairs.join("; ");
-    this.csrf = pairs.find((value) => value.startsWith("csrfToken="))?.slice(10) ?? "";
+    this.csrf =
+      pairs.find((value) => value.startsWith("csrfToken="))?.slice(10) ?? "";
   }
 
   async api(path, { method = "GET", body, publicRequest = false } = {}) {
@@ -49,7 +57,9 @@ class Session {
     const text = await response.text();
     const payload = text ? JSON.parse(text) : undefined;
     if (!response.ok) {
-      throw new Error(`${method} ${path} returned ${response.status}: ${text.slice(0, 500)}`);
+      throw new Error(
+        `${method} ${path} returned ${response.status}: ${text.slice(0, 500)}`,
+      );
     }
     return { response, payload: payload?.data ?? payload };
   }
@@ -91,9 +101,8 @@ await admin.api("api/workspace/invites/create", {
   method: "POST",
   body: { emails: ["rag-member@example.test"], groupIds: [], role: "member" },
 });
-const pendingInvitations = (
-  await admin.api("api/workspace/invites?limit=100")
-).payload;
+const pendingInvitations = (await admin.api("api/workspace/invites?limit=100"))
+  .payload;
 const invitation = findObject(
   pendingInvitations,
   (value) => value.email === "rag-member@example.test" && value.id,
@@ -104,7 +113,8 @@ const linkResponse = await admin.api("api/workspace/invites/link", {
   body: { invitationId: invitation.id },
 });
 const inviteUrl = new URL(linkResponse.payload.inviteLink, baseUrl);
-const invitationId = inviteUrl.searchParams.get("invitationId") ?? invitation.id;
+const invitationId =
+  inviteUrl.searchParams.get("invitationId") ?? invitation.id;
 const invitationToken = inviteUrl.searchParams.get("token");
 if (!invitationToken) throw new Error("Invitation link omitted token");
 const accepted = await member.api("api/workspace/invites/accept", {
@@ -129,10 +139,18 @@ const spaceResponse = await admin.api("api/spaces", {
   method: "POST",
   body: { name: "RAG Browser Audit", slug: `ragbrowser${Date.now()}` },
 });
-const space = findObject(spaceResponse.payload, (value) => value.id && value.slug);
+const space = findObject(
+  spaceResponse.payload,
+  (value) => value.id && value.slug,
+);
 await admin.api("api/spaces/members/add", {
   method: "POST",
-  body: { spaceId: space.id, role: "reader", userIds: [memberEntity.id], groupIds: [] },
+  body: {
+    spaceId: space.id,
+    role: "reader",
+    userIds: [memberEntity.id],
+    groupIds: [],
+  },
 });
 
 async function createPage(title) {
@@ -159,7 +177,10 @@ async function createPage(title) {
       },
     },
   });
-  return findObject(result.payload, (value) => value.id && value.spaceId === space.id);
+  return findObject(
+    result.payload,
+    (value) => value.id && value.spaceId === space.id,
+  );
 }
 
 const currentPage = await createPage("RAG current page");
@@ -277,19 +298,25 @@ const conversation = await createConversation();
 const firstRun = await send(conversation);
 let firstMessages;
 try {
-  await waitFor("first cited answer", async () => {
-    const payload = (
-      await member.api(`api/ai/conversations/${conversation.id}/messages?limit=50`)
-    ).payload;
-    firstMessages = payload.items ?? payload;
-    return firstMessages.some(
-      (message) =>
-        message.id === firstRun.assistantMessage.id &&
-        message.runStatus === "completed" &&
-        message.content.includes("[C1]") &&
-        message.sources?.length === 1,
-    );
-  }, 20_000);
+  await waitFor(
+    "first cited answer",
+    async () => {
+      const payload = (
+        await member.api(
+          `api/ai/conversations/${conversation.id}/messages?limit=50`,
+        )
+      ).payload;
+      firstMessages = payload.items ?? payload;
+      return firstMessages.some(
+        (message) =>
+          message.id === firstRun.assistantMessage.id &&
+          message.runStatus === "completed" &&
+          message.content.includes("[C1]") &&
+          message.sources?.length === 1,
+      );
+    },
+    20_000,
+  );
 } catch (error) {
   await writeFile(
     `${outputDir}/first-messages.json`,
@@ -315,8 +342,13 @@ try {
     new URL(`/s/${space.slug}/p/${currentPage.slugId}`, baseUrl).toString(),
   );
   await page.getByRole("button", { name: "Open AI assistant" }).click();
-  await page.getByText("Fixture answer supported by the synchronized source").waitFor();
-  await page.getByRole("link", { name: /RAG source page|C1/ }).first().waitFor();
+  await page
+    .getByText("Fixture answer supported by the synchronized source")
+    .waitFor();
+  await page
+    .getByRole("link", { name: /RAG source page|C1/ })
+    .first()
+    .waitFor();
   await page.screenshot({ path: `${outputDir}/citation.png`, fullPage: true });
 
   const accessInvalidationReload = page.waitForNavigation({
@@ -330,27 +362,43 @@ try {
       "This message is hidden because you no longer have access to one or more of its sources.",
     )
     .waitFor();
-  await page.screenshot({ path: `${outputDir}/restricted.png`, fullPage: true });
+  await page.screenshot({
+    path: `${outputDir}/restricted.png`,
+    fullPage: true,
+  });
 
   await grantSource();
   await fetch(new URL("__control", fixtureUrl), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      fault: { operation: "provider", mode: "delayed_side_effect", delayMs: 1500, count: 1 },
+      fault: {
+        operation: "provider",
+        mode: "delayed_side_effect",
+        delayMs: 1500,
+        count: 1,
+      },
     }),
   });
   const secondConversation = await createConversation();
-  const stateBefore = await fetch(new URL("__state", fixtureUrl)).then((response) => response.json());
+  const stateBefore = await fetch(new URL("__state", fixtureUrl)).then(
+    (response) => response.json(),
+  );
   const secondRun = await send(secondConversation);
   await waitFor("provider call to start", async () => {
-    const state = await fetch(new URL("__state", fixtureUrl)).then((response) => response.json());
-    return state.counters.providerRequests > stateBefore.counters.providerRequests;
+    const state = await fetch(new URL("__state", fixtureUrl)).then((response) =>
+      response.json(),
+    );
+    return (
+      state.counters.providerRequests > stateBefore.counters.providerRequests
+    );
   });
   await revokeSource();
   await waitFor("source-access failure", async () => {
     const messages = (
-      await member.api(`api/ai/conversations/${secondConversation.id}/messages?limit=50`)
+      await member.api(
+        `api/ai/conversations/${secondConversation.id}/messages?limit=50`,
+      )
     ).payload.items;
     return messages.some(
       (message) =>
@@ -361,8 +409,14 @@ try {
         message.reasoning === "",
     );
   });
-  const fixtureState = await fetch(new URL("__state", fixtureUrl)).then((response) => response.json());
-  if (!fixtureState.files.some((file) => file.meta?.data?.docmost?.sourceId === sourcePage.id)) {
+  const fixtureState = await fetch(new URL("__state", fixtureUrl)).then(
+    (response) => response.json(),
+  );
+  if (
+    !fixtureState.files.some(
+      (file) => file.meta?.data?.docmost?.sourceId === sourcePage.id,
+    )
+  ) {
     throw new Error("Personal ACL revoke removed shared Knowledge content");
   }
 
@@ -417,20 +471,58 @@ try {
     .getByRole("heading", { name: "Open WebUI synchronization" })
     .waitFor();
   await adminPage
-    .getByRole("textbox", { name: "Open WebUI base URL", exact: true })
-    .fill("http://open-webui-fixture:8080");
+    .getByRole("alert")
+    .filter({ hasText: "Search and synchronization use different targets" })
+    .waitFor();
   await adminPage
-    .getByRole("textbox", { name: "Knowledge Base ID", exact: true })
-    .fill("knowledge-two");
+    .getByRole("button", {
+      name: "Use the space-search target",
+      exact: true,
+    })
+    .click();
+  await adminPage
+    .getByRole("textbox", { name: "Open WebUI base URL", exact: true })
+    .waitFor();
+  if (
+    (await adminPage
+      .getByRole("textbox", { name: "Open WebUI base URL", exact: true })
+      .inputValue()) !== "http://toxiproxy:8666" ||
+    (await adminPage
+      .getByRole("textbox", { name: "Knowledge Base ID", exact: true })
+      .inputValue()) !== "knowledge-one"
+  ) {
+    throw new Error("Space-search target was not copied into RAG Sync");
+  }
   await adminPage
     .getByRole("textbox", {
       name: "Open WebUI writer API key",
       exact: true,
     })
-    .fill("ci-writer-two");
-  await adminPage.getByRole("button", { name: "Save", exact: true }).click();
+    .fill("ci-writer-one");
+  const saveAndVerifyButton = adminPage.getByRole("button", {
+    name: "Save and verify writer",
+    exact: true,
+  });
+  await saveAndVerifyButton.waitFor();
+  if (
+    (await adminPage
+      .getByRole("button", {
+        name: "Enable synchronization",
+        exact: true,
+      })
+      .count()) !== 0
+  ) {
+    throw new Error("Enable was available before writer verification");
+  }
+  await adminPage.screenshot({
+    path: `${outputDir}/rag-sync-untested.png`,
+    fullPage: true,
+  });
+  await saveAndVerifyButton.click();
   await adminPage
-    .getByText("RAG synchronization settings saved.", { exact: true })
+    .getByRole("alert")
+    .filter({ hasText: /Writer test succeeded in \d+ ms\./ })
+    .first()
     .waitFor();
   const keyInput = adminPage.getByRole("textbox", {
     name: "Open WebUI writer API key",
@@ -443,7 +535,7 @@ try {
     throw new Error("Writer credential remained in the browser after save");
   }
   if (
-    (await adminPage.locator("body").textContent()).includes("ci-writer-two")
+    (await adminPage.locator("body").textContent()).includes("ci-writer-one")
   ) {
     throw new Error("Writer credential was rendered back into the settings UI");
   }
@@ -452,24 +544,6 @@ try {
     name: "Enable synchronization",
     exact: true,
   });
-  await adminPage
-    .getByRole("alert")
-    .filter({ hasText: "Test the target before enabling" })
-    .waitFor();
-  if (await enableButton.isEnabled()) {
-    throw new Error(
-      "Enable was available before the writer target passed Test",
-    );
-  }
-  await adminPage.screenshot({
-    path: `${outputDir}/rag-sync-untested.png`,
-    fullPage: true,
-  });
-
-  await adminPage
-    .getByRole("button", { name: "Test writer", exact: true })
-    .click();
-  await adminPage.getByText(/Writer test succeeded in \d+ ms\./).waitFor();
   await waitFor("tested target to become enableable", () =>
     enableButton.isEnabled(),
   );
@@ -563,6 +637,8 @@ try {
         simultaneousBrowserContexts: 2,
         readerUiDenied: true,
         readerApiDenied: true,
+        retrievalTargetCopied: true,
+        saveAndVerifySequential: true,
         enableBlockedBeforeTest: true,
         enableAllowedAfterTest: true,
         secretRendered: false,

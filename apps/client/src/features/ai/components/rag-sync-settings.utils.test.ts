@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { RagSyncSpaceConfig } from "@docmost/api-contract";
-import { canEnableRagSync } from "./rag-sync-settings.utils.ts";
+import {
+  canEnableRagSync,
+  getRagSyncWorkflowStep,
+} from "./rag-sync-settings.utils.ts";
 
 const config: RagSyncSpaceConfig = {
   deploymentEnabled: true,
@@ -53,6 +56,39 @@ describe("RAG Sync enablement", () => {
     ).toBe(false);
     expect(canEnableRagSync({ ...config, cleanupRequired: true }, ready)).toBe(
       false,
+    );
+  });
+});
+
+describe("RAG Sync workflow", () => {
+  it("advances from target setup through verification and enablement", () => {
+    expect(
+      getRagSyncWorkflowStep(
+        {
+          ...config,
+          target: {
+            ...config.target,
+            baseUrl: null,
+            knowledgeId: null,
+            writerApiKeyConfigured: false,
+            lastTestedAt: null,
+          },
+        },
+        false,
+      ),
+    ).toBe(0);
+    expect(
+      getRagSyncWorkflowStep(
+        {
+          ...config,
+          target: { ...config.target, lastTestedAt: null },
+        },
+        true,
+      ),
+    ).toBe(1);
+    expect(getRagSyncWorkflowStep(config, true)).toBe(2);
+    expect(getRagSyncWorkflowStep({ ...config, state: "enabled" }, true)).toBe(
+      3,
     );
   });
 });

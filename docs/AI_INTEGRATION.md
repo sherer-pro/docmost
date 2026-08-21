@@ -338,14 +338,19 @@ Docmost Compose `.env`. The default local values create an isolated
 
 For each space, open its AI settings and configure the pre-created Knowledge
 Base URL, Knowledge ID, and a dedicated writer API key. The writer key is
-encrypted in PostgreSQL and is separate from the Open WebUI query key. Use Test,
-then Enable. The UI disables Enable and the API returns
+encrypted in PostgreSQL and is separate from the Open WebUI query key. The UI
+guides administrators through Save target, Verify writer, and Enable. For a new
+or changed target use **Save and verify writer**; the test first reads the target
+without modifying it, then uploads, processes, and deletes a marker. The UI disables Enable and the API returns
 `rag_sync_target_not_tested` until the current saved target and writer key have
 passed Test. Changing either clears the saved non-secret `lastTestedAt`
 evidence. Existing bindings are not backfilled and require a fresh Test before
-their next Enable. Test is available only while the binding is clean and disabled;
-an interrupted probe leaves a durable cleanup requirement instead of an
-untracked remote marker. A single Knowledge Base cannot be assigned to two
+their next Enable. A failed read-only preflight leaves the binding clean. After
+the marker upload starts, an interrupted probe leaves a durable cleanup
+requirement instead of an untracked remote marker. The Test response retains
+safe error codes for network-policy rejection, authorization, timeout,
+incompatible responses, and processing failures so the UI can show the next
+step. A single Knowledge Base cannot be assigned to two
 spaces. Saving a complete target reserves it immediately, so only trusted space
 administrators should configure targets and unused clean bindings should be
 cleared. Keep `APP_SECRET` stable. Before rotating it, normally disable every RAG
@@ -360,6 +365,10 @@ remote service is unavailable, Force disable stops scheduling while preserving
 the cleanup requirement and target claim. Successful cleanup keeps the
 configured target reserved for the same space until that clean target is
 changed or cleared. Retry cleanup after connectivity or credential recovery.
+The recovery action can save a rotated writer key and immediately retry cleanup;
+status refreshes every 10 seconds until cleanup finishes. When retrieval and
+writer targets differ, Enable is blocked and the UI can copy the existing
+space-search target after cleanup.
 Abandon cleanup is a last-resort action that requires explicit confirmation. It
 allows the binding to use a new target but leaves the previous target claim
 orphaned, preventing another space from claiming a Knowledge Base that may

@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "anchors": [
     "assistant",
     "retrieval",
@@ -199,6 +199,8 @@
     "troubleshooting.rows.runtimeStopped.signal",
     "troubleshooting.rows.targetMismatch.action",
     "troubleshooting.rows.targetMismatch.signal",
+    "troubleshooting.rows.writerVerification.action",
+    "troubleshooting.rows.writerVerification.signal",
     "troubleshooting.rows.sourceAccessChanged.action",
     "troubleshooting.rows.sourceAccessChanged.signal",
     "troubleshooting.rows.sourceRemoved.action",

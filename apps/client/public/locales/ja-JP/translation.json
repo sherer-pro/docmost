@@ -1393,7 +1393,18 @@
       "privacyTitle": "Knowledge Base には許可されたスペース全体が含まれます",
       "privacyDescription": "Docmost は AI ポリシーで許可されたすべてのページ（制限付きページを含む）を索引化します。権限を再確認するのは Docmost 経由の検索だけです。",
       "targetMismatchTitle": "検索と同期で異なるターゲットを使用しています",
-      "targetMismatchDescription": "許可されていますが、検索用 Open WebUI ターゲットは同期ターゲットと一致しません。",
+      "workflow": {
+        "target": "ターゲットを保存",
+        "targetDescription": "Origin、Knowledge ID、writer キー",
+        "writer": "writer を検証",
+        "writerDescription": "ターゲットを読み取り、テストマーカーをアップロード、処理、削除",
+        "sync": "同期を有効化",
+        "syncDescription": "Knowledge Base を公開し最新に保つ"
+      },
+      "targetMismatchDescription": "Origin と Knowledge ID がスペース検索ターゲットと一致するまで同期を有効化できません。",
+      "useRetrievalTarget": "スペース検索ターゲットを使用",
+      "targetMismatchRecoveryFirst": "検索ターゲットへ切り替える前にクリーンアップを完了してください。",
+      "cleanupRecoveryHint": "必要に応じて writer キーを更新し、クリーンアップを再試行してください。完了後にターゲット欄が解除されます。",
       "cleanupRequiredTitle": "リモートクリーンアップが未完了です",
       "cleanupRequiredDescription": "クリーンアップを完了するか明示的に放棄するまでターゲットを変更できません。",
       "targetTestRequiredTitle": "有効化する前にターゲットをテストしてください",
@@ -1413,6 +1424,7 @@
       "writerApiKey": "Open WebUI writer API キー",
       "writerKeyConfigured": "writer キーが設定済みです。更新するには新しい値を入力します。",
       "writerKeyRequired": "ファイルのアップロード、処理、照合、削除に必要です。",
+      "writerKeyRecoveryDescription": "現在のキーを入力して保存とクリーンアップ再試行を行うか、空欄のまま保存済みキーを使用します。",
       "writerKeyRotatePlaceholder": "新しいキーを入力",
       "writerKeyWillBeCleared": "保存時に writer キーを削除します。",
       "clearWriterKey": "writer キーを削除",
@@ -1420,6 +1432,12 @@
       "keepWriterKey": "writer キーを保持",
       "test": "writer をテスト",
       "testSucceeded": "writer テストは {{latency}} ms で成功しました。",
+      "operationSucceeded": "直前の操作は正常に完了しました。",
+      "operationFailed": "直前の操作に失敗しました。",
+      "saveAndTest": "保存して writer を検証",
+      "saveWriterKey": "writer キーを保存",
+      "saveKeyAndRetryCleanup": "キーを保存してクリーンアップを再試行",
+      "technicalDetails": "技術的な詳細",
       "enable": "同期を有効化",
       "disable": "無効化してクリーンアップ",
       "disableConfirm": "新規アップロードを停止し、Docmost 管理ファイルを削除します。続行しますか？",
@@ -1451,7 +1469,8 @@
       },
       "validation": {
         "baseUrl": "パス、query、認証情報、fragment を含まない有効な HTTP(S) origin を入力してください。",
-        "knowledgeId": "Knowledge Base ID は必須です。"
+        "knowledgeId": "Knowledge Base ID は必須です。",
+        "writerApiKey": "新しいターゲットの writer API キーを入力してください。"
       },
       "error": {
         "deploymentDisabled": "この環境では RAG 同期が無効です。",
@@ -1465,6 +1484,18 @@
         "writerUnavailable": "Open WebUI writer を利用できません。",
         "writerUnauthorized": "Open WebUI が writer API キーを拒否しました。",
         "targetUnavailable": "Open WebUI Knowledge Base を利用できません。",
+        "targetInvalid": "保存済み Knowledge ID が無効です。ターゲットを修正して再保存してください。",
+        "targetTimeout": "Knowledge Base の読み取りがタイムアウトしました。Open WebUI とネットワークを確認してください。",
+        "processingTimeout": "テストマーカーの処理が時間内に完了しませんでした。処理キューを確認してください。",
+        "processingFailed": "テストマーカーの処理に失敗しました。処理 worker を確認してください。",
+        "invalidResponse": "Open WebUI が未対応の応答を返しました。バージョンと互換性を確認してください。",
+        "redirectRejected": "Open WebUI がリダイレクトしました。リダイレクトのない正確な許可 origin を使用してください。",
+        "sourceTooLarge": "テストソースが設定上限を超えました。writer の制限を確認してください。",
+        "urlRejected": "ネットワークポリシーが Open WebUI origin を拒否しました。RAG_SYNC_ALLOWED_ORIGINS を確認してください。",
+        "leaseLost": "同期 lease が失われました。Redis を確認して再試行してください。",
+        "aborted": "writer リクエストが中断されました。ターゲットが安定してから再試行してください。",
+        "scopeUnavailable": "AI エクスポート範囲を利用できません。スペースとコンテンツポリシーを確認してください。",
+        "invalidFeed": "有効な同期 feed を作成できませんでした。再試行し、続く場合はサーバーエラーを確認してください。",
         "unknown": "RAG 同期リクエストに失敗しました。"
       }
     },
@@ -1551,9 +1582,9 @@
           "prerequisite": "RAG_SYNC_ENABLED、許可された Open WebUI オリジン、Knowledge ID、およびライター キー",
           "result": "Docmost は、選択された Open WebUI Knowledge Base のページ、データベース行、有効な辞書用語を増分的に維持します。添付ファイルのうちポータブル索引に入るのは PDF、DOCX、TXT、Markdown のみです",
           "steps": {
-            "step1": "Save ターゲットおよびライターの資格情報",
-            "step2": "現在のターゲットに対して Test を実行します",
-            "step3": "Enable バインディング"
+            "step1": "ターゲットと writer 資格情報を保存",
+            "step2": "writer を検証：読み取り専用 preflight の後、テストマーカーをアップロード、処理、削除",
+            "step3": "検証成功後に同期を有効化"
           },
           "success": "最後の成功が進み、クリーンアップやターゲットの不一致状態は残りません。",
           "rollback": "バインドを無効にしてクリーンアップを終了します。緊急ロールバックのために RAG_SYNC_ENABLED を無効にして再起動します",
@@ -1711,6 +1742,10 @@
           "targetMismatch": {
             "signal": "rag_sync_target_mismatch",
             "action": "正規化された Open WebUI の検索元と Knowledge ID を書き込み先と完全に一致させてから、再度テストして有効化してください。一致しない間は書き込みません。"
+          },
+          "writerVerification": {
+            "signal": "writer 検証失敗",
+            "action": "テストは読み取り専用のターゲット確認から始まり、ここでの失敗にはクリーンアップ不要です。アップロード開始後は削除確認までクリーンアップが必要です。表示コードを修正し、必要ならキーを更新して再試行してください。"
           },
           "sourceRemoved": {
             "signal": "ソースが削除されました",
