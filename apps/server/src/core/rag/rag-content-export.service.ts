@@ -2026,12 +2026,12 @@ export class RagContentExportService {
 
     if (config.assignee) {
       memberConditions.push(
-        sql<boolean>`projection_users.id = ${settings} ->> 'assigneeId'`,
+        sql<boolean>`projection_users.id::text = ${settings} ->> 'assigneeId'`,
       );
     }
     if (config.stakeholders) {
       memberConditions.push(
-        sql<boolean>`COALESCE(${settings} -> 'stakeholderIds', '[]'::jsonb) ? projection_users.id`,
+        sql<boolean>`COALESCE(${settings} -> 'stakeholderIds', '[]'::jsonb) ? projection_users.id::text`,
       );
     }
     if (memberConditions.length === 0) return sourceUpdatedAt;
