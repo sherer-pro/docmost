@@ -974,6 +974,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       const extractedText = await this.getAttachmentExtractedText(
         session,
         item.id,
+        item.pageId,
       );
       if (extractedText) {
         return this.upsertSource(session, {
@@ -1031,14 +1032,26 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
   private async getAttachmentExtractedText(
     session: QuantumSession,
     attachmentId: string,
+    pageId: string,
   ): Promise<string | null> {
     const attachment = await this.db
       .selectFrom('attachments')
-      .select(['textContent', 'contentIndexStatus'])
-      .where('id', '=', attachmentId)
-      .where('workspaceId', '=', session.binding.workspaceId)
-      .where('spaceId', '=', session.binding.spaceId)
-      .where('deletedAt', 'is', null)
+      .innerJoin(
+        'pages as attachmentPage',
+        'attachmentPage.id',
+        'attachments.pageId',
+      )
+      .select([
+        'attachments.textContent as textContent',
+        'attachments.contentIndexStatus as contentIndexStatus',
+      ])
+      .where('attachments.id', '=', attachmentId)
+      .where('attachments.pageId', '=', pageId)
+      .where('attachments.workspaceId', '=', session.binding.workspaceId)
+      .where('attachmentPage.workspaceId', '=', session.binding.workspaceId)
+      .where('attachmentPage.spaceId', '=', session.binding.spaceId)
+      .where('attachments.deletedAt', 'is', null)
+      .where('attachmentPage.deletedAt', 'is', null)
       .executeTakeFirst();
     if (attachment?.contentIndexStatus !== 'ready') return null;
     return attachment.textContent?.trim() || null;

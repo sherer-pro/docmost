@@ -87,7 +87,11 @@ describe('RagSyncSourceService', () => {
     activeRowPageIds: string[] = [],
     attachmentTextById: Record<
       string,
-      { textContent: string | null; contentIndexStatus: string }
+      {
+        textContent: string | null;
+        contentIndexStatus: string;
+        spaceId?: string | null;
+      }
     > = {},
   ) {
     const db = {
@@ -96,10 +100,14 @@ describe('RagSyncSourceService', () => {
         let selectedIds: string[] = [];
         let selectedColumn = '';
         const equality = new Map<string, unknown>();
+        const joinedTables = new Set<string>();
         const query = {
           selectAll: jest.fn(() => query),
           select: jest.fn(() => query),
-          innerJoin: jest.fn(() => query),
+          innerJoin: jest.fn((joinedTable: string) => {
+            joinedTables.add(joinedTable);
+            return query;
+          }),
           where: jest.fn((column: string, operator: string, value: unknown) => {
             if (
               column === 'archivedAt' &&
@@ -121,7 +129,26 @@ describe('RagSyncSourceService', () => {
               return spaceOverrides.retrievalTarget;
             }
             if (table === 'attachments') {
-              return attachmentTextById[String(equality.get('id'))];
+              const attachment =
+                attachmentTextById[
+                  String(
+                    equality.get('attachments.id') ?? equality.get('id'),
+                  )
+                ];
+              if (!attachment) return undefined;
+              const directSpaceId =
+                equality.get('attachments.spaceId') ?? equality.get('spaceId');
+              if (directSpaceId && attachment.spaceId === null) {
+                return undefined;
+              }
+              if (
+                attachment.spaceId === null &&
+                (!joinedTables.has('pages as attachmentPage') ||
+                  equality.get('attachmentPage.spaceId') !== binding.spaceId)
+              ) {
+                return undefined;
+              }
+              return attachment;
             }
             const space = {
               id: binding.spaceId,
@@ -867,6 +894,7 @@ describe('RagSyncSourceService', () => {
         'attachment-1': {
           textContent: 'Extracted searchable content',
           contentIndexStatus: 'ready',
+          spaceId: null,
         },
       },
     );
