@@ -537,10 +537,13 @@ test.describe("page template lifecycle", () => {
     await expect(templateToolbar).toContainText(
       "Shared content updates every linked page. Editable fields keep each page's own value.",
     );
-    await templateToolbar
-      .getByRole("button", { name: "Add to template" })
-      .click();
+    const addToTemplateButton = templateToolbar.getByRole("button", {
+      name: "Add to template",
+    });
+    await expect(addToTemplateButton).toBeEnabled({ timeout: 30_000 });
+    await addToTemplateButton.click();
     const addMenu = page.getByRole("menu");
+    await expect(addMenu).toBeVisible({ timeout: 30_000 });
     await expect(addMenu).toContainText("Shared content");
     await expect(addMenu).toContainText("Editable field");
     await expect(addMenu).toContainText(
@@ -602,16 +605,9 @@ test.describe("page template lifecycle", () => {
     const publishDialog = page
       .locator('[role="dialog"]:visible')
       .filter({ hasText: "Publish template version 1" });
-    await expect
-      .poll(
-        async () => {
-          if (await publishDialog.isVisible()) return true;
-          if (await reviewButton.isEnabled()) await reviewButton.click();
-          return publishDialog.isVisible();
-        },
-        { timeout: 15_000 },
-      )
-      .toBe(true);
+    await expect(reviewButton).toBeEnabled({ timeout: 30_000 });
+    await reviewButton.click();
+    await expect(publishDialog).toBeVisible({ timeout: 30_000 });
     await expect(publishDialog).toContainText("Shared content");
     await expect(publishDialog).toContainText("Editable fields");
     await publishDialog
