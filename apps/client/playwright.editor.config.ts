@@ -19,12 +19,10 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
-  // 51 browser tests drive a real production stack, and the engines behave
-  // differently per host: measured runs failed media-clipboard and
-  // lifecycle-collab only on the Linux runner's Firefox, and
-  // templates-transclusion only on the Windows WebKit build, each passing on the
-  // other host. One retry keeps a single host-specific hiccup from blocking a
-  // release while a reproducible failure still fails twice and stays reported.
+  // These browser tests drive a real production stack, and the engines behave
+  // differently per host. One retry keeps a single host-specific hiccup from
+  // blocking a release while a reproducible failure still fails twice and stays
+  // reported.
   retries: 1,
   outputDir: path.join(auditRoot, "playwright-artifacts"),
   reporter: [

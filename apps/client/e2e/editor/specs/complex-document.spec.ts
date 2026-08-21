@@ -19,6 +19,8 @@ import {
 import { downloadsDir } from "../support/paths";
 import { baseUrl } from "../support/auth";
 
+const ASYNC_EDITOR_READY_TIMEOUT_MS = 30_000;
+
 function collectNodeTypes(
   node: unknown,
   types = new Set<string>(),
@@ -131,7 +133,15 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
     await expect(
       page.locator("iframe[src*='audit-document.pdf']"),
     ).toBeVisible();
-    await expect(editor.getByText(seeded.childPage.title)).toBeVisible();
+    const subpagesNavigation = editor.getByRole("navigation", {
+      name: "Subpages",
+    });
+    await expect(subpagesNavigation).toHaveAttribute("data-state", "ready", {
+      timeout: ASYNC_EDITOR_READY_TIMEOUT_MS,
+    });
+    await expect(
+      subpagesNavigation.getByText(seeded.childPage.title),
+    ).toBeVisible();
     const transclusionReference = editor
       .locator('[data-type="transclusionReference"]')
       .first();
@@ -187,13 +197,25 @@ test("renders the all-node document, marks, widths, numbering, readonly and expo
       await route.continue();
     });
     const publicPage = await publicContext.newPage();
+    const publicPageInfoResponse = publicPage.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/shares/page-info" &&
+        response.request().method() === "GET",
+      { timeout: ASYNC_EDITOR_READY_TIMEOUT_MS },
+    );
     const publicResponse = await publicPage.goto(
       `/share/${share.id}/p/${seeded.page.slugId}`,
       { waitUntil: "domcontentloaded" },
     );
     expect(publicResponse?.ok(), "public share shell status").toBe(true);
+    expect(
+      (await publicPageInfoResponse).ok(),
+      "public share page-info status",
+    ).toBe(true);
     const publicEditor = publicDocument(publicPage);
-    await expect(publicEditor).toContainText("Editor regression audit");
+    await expect(publicEditor).toContainText("Editor regression audit", {
+      timeout: ASYNC_EDITOR_READY_TIMEOUT_MS,
+    });
     await expect(publicEditor).toHaveAttribute("contenteditable", "false");
     await expect(
       publicPage.getByAltText("Editor audit image alt text"),
