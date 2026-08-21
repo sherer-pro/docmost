@@ -20,14 +20,6 @@
   padding: 0 12px 10px 44px;
 }
 
-.dictionaryPreview {
-  padding: 6px 16px 12px 44px;
-}
-
-.disclosureOpen {
-  transform: rotate(180deg);
-}
-
 .databaseMatch {
   display: block;
   padding: 5px 8px;

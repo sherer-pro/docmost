@@ -70,6 +70,10 @@ export class DictionarySearchResponseDto {
     text: string;
     matches: SearchTagMatchDto[];
   };
+  definitionSnippet: {
+    text: string;
+    matches: SearchTagMatchDto[];
+  };
   rank: number;
   space: {
     id: string;

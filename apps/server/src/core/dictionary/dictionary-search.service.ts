@@ -273,6 +273,10 @@ export class DictionarySearchService {
       matchedField,
       ...(matchedField === 'form' ? { matchedForm: row.matchedAlias } : {}),
       snippet: buildDictionarySearchSnippet(snippetSource, query),
+      definitionSnippet: buildDictionaryDefinitionSnippet(
+        row.definitionMarkdown,
+        query,
+      ),
       rank: Number(row.score),
       space: {
         id: row.spaceId,
@@ -316,6 +320,13 @@ export function buildDictionarySearchSnippet(
       },
     ],
   };
+}
+
+export function buildDictionaryDefinitionSnippet(
+  definitionMarkdown: string,
+  query: string,
+): { text: string; matches: SearchTagMatchDto[] } {
+  return buildDictionarySearchSnippet(stripMarkdown(definitionMarkdown), query);
 }
 
 function findNormalizedMatch(
