@@ -13,6 +13,7 @@ function createStore() {
     hget: jest.fn(),
     hmget: jest.fn(),
     hscan: jest.fn(),
+    hlen: jest.fn(),
     hexists: jest.fn(),
     time: jest.fn(),
     eval: jest.fn(),
@@ -354,6 +355,18 @@ describe('RagSyncStateStore', () => {
       'lease-token',
       intent.operationId,
       JSON.stringify(intent),
+    );
+  });
+
+  it('checks whether the target has pending upload intents', async () => {
+    const { redis, store } = createStore();
+    redis.hlen.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
+    await expect(store.hasUploadIntents(lease)).resolves.toBe(true);
+    await expect(store.hasUploadIntents(lease)).resolves.toBe(false);
+
+    expect(redis.hlen).toHaveBeenCalledWith(
+      'docmost:rag-sync:v2:state:binding-1:3:upload-intents',
     );
   });
 

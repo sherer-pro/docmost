@@ -476,6 +476,12 @@ export class RagSyncStateStore
     return intent;
   }
 
+  async hasUploadIntents(lease: RagSyncLease): Promise<boolean> {
+    return (
+      (await this.redis.hlen(this.stateKey(lease, 'upload-intents'))) > 0
+    );
+  }
+
   async scanUploadIntents(
     lease: RagSyncLease,
     cursor: string,
