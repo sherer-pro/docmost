@@ -120,11 +120,19 @@ section. When running only the production image, the equivalent in-container
 command is:
 
 ```bash
-docker compose exec docmost node \
+docker compose \
+  --env-file /etc/docmost/docmost.env \
+  --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml \
+  exec docmost node \
   apps/server/dist/apps/server/src/cli/search-reindex.js \
   --workspace=all \
   --entities=pages,attachments,dictionary
 ```
+
+The production CLI resolves `DATABASE_URL_FILE` and `REDIS_URL_FILE` from the
+mounted Compose secrets. Do not copy either connection string into the command
+line or inject it with `docker compose exec -e`.
 
 Do not publish `8108`, reuse the Typesense admin key in browser code, or depend
 on the Typesense volume for recovery. Size memory and disk from a representative
