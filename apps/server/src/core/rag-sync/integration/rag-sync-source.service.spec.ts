@@ -85,6 +85,10 @@ describe('RagSyncSourceService', () => {
     deletedSourceIds: string[] = [],
     activeDatabasePageIds: string[] = [],
     activeRowPageIds: string[] = [],
+    attachmentTextById: Record<
+      string,
+      { textContent: string | null; contentIndexStatus: string }
+    > = {},
   ) {
     const db = {
       selectFrom: jest.fn((table: string) => {
@@ -115,6 +119,9 @@ describe('RagSyncSourceService', () => {
             if (table === 'workspaces') return { id: binding.workspaceId };
             if (table === 'aiSpaceConfigs') {
               return spaceOverrides.retrievalTarget;
+            }
+            if (table === 'attachments') {
+              return attachmentTextById[String(equality.get('id'))];
             }
             const space = {
               id: binding.spaceId,
@@ -758,6 +765,70 @@ describe('RagSyncSourceService', () => {
     );
     expect(storage.readStream).not.toHaveBeenCalled();
     expect(writer.upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads extracted text for PDF attachments when local indexing is ready', async () => {
+    const { service, rag, state, storage, writer } = setup(
+      {},
+      [],
+      [],
+      [],
+      [],
+      {
+        'attachment-1': {
+          textContent: 'Extracted searchable content',
+          contentIndexStatus: 'ready',
+        },
+      },
+    );
+    rag.getAttachmentUpdates.mockResolvedValue({
+      items: [
+        {
+          id: 'attachment-1',
+          fileName: 'guide.pdf',
+          fileExt: '.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 100,
+          pageId: 'page-1',
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    writer.upload.mockResolvedValue({ id: 'attachment-file' });
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.upload).toHaveBeenCalledWith(
+      binding,
+      expect.objectContaining({
+        fileName: 'guide.pdf.md',
+        mimeType: 'text/markdown',
+        content: expect.any(Uint8Array),
+        metadata: expect.objectContaining({
+          sourceType: 'attachment',
+          sourceId: 'attachment-1',
+          pageId: 'page-1',
+        }),
+      }),
+      context.signal,
+    );
+    const upload = writer.upload.mock.calls[0][1];
+    expect(new TextDecoder().decode(upload.content)).toBe(
+      '# guide.pdf\n\nExtracted searchable content',
+    );
+    expect(rag.resolveAttachmentForDownload).not.toHaveBeenCalled();
+    expect(storage.readStream).not.toHaveBeenCalled();
+    expect(state.setMapping).toHaveBeenCalledWith(
+      lease,
+      expect.objectContaining({
+        sourceType: 'attachment',
+        sourceId: 'attachment-1',
+        fileId: 'attachment-file',
+      }),
+    );
   });
 
   it('adds only safe feed stage and source-kind diagnostics to unknown errors', async () => {

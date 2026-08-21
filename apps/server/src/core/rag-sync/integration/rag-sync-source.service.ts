@@ -39,6 +39,7 @@ const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   '.txt',
   '.md',
 ]);
+const EXTRACTED_TEXT_ATTACHMENT_EXTENSIONS = new Set(['.pdf', '.docx']);
 const CHECKPOINT_SETTLE_MS = 5_000;
 const TARGET_TEST_TIMEOUT_MS = 120_000;
 
@@ -962,6 +963,26 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       await this.deleteIdentity(session, identity);
       return this.requestUploadIntentCleanup(session, identity);
     }
+    if (EXTRACTED_TEXT_ATTACHMENT_EXTENSIONS.has(extension)) {
+      const extractedText = await this.getAttachmentExtractedText(
+        session,
+        item.id,
+      );
+      if (extractedText) {
+        return this.upsertSource(session, {
+          identity,
+          sourceType: 'attachment',
+          sourceId: item.id,
+          pageId: item.pageId,
+          updatedAtMs: item.updatedAtMs,
+          fileName: safeFileName(item.fileName, item.id, '.md'),
+          mimeType: 'text/markdown',
+          content: encodeMarkdown(
+            [`# ${item.fileName}`, extractedText].join('\n\n'),
+          ),
+        });
+      }
+    }
     return this.memoryBudget.run(
       session.context.maxAttachmentBytes,
       session.context.signal,
@@ -998,6 +1019,22 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         );
       },
     );
+  }
+
+  private async getAttachmentExtractedText(
+    session: QuantumSession,
+    attachmentId: string,
+  ): Promise<string | null> {
+    const attachment = await this.db
+      .selectFrom('attachments')
+      .select(['textContent', 'contentIndexStatus'])
+      .where('id', '=', attachmentId)
+      .where('workspaceId', '=', session.binding.workspaceId)
+      .where('spaceId', '=', session.binding.spaceId)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+    if (attachment?.contentIndexStatus !== 'ready') return null;
+    return attachment.textContent?.trim() || null;
   }
 
   private async upsertSource(

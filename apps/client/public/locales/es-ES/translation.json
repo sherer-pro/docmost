@@ -1487,7 +1487,7 @@
         "targetInvalid": "El ID guardado no es válido. Corrige el destino y vuelve a guardarlo.",
         "targetTimeout": "Docmost agotó el tiempo al leer la Knowledge Base. Comprueba Open WebUI y la red.",
         "processingTimeout": "Open WebUI no procesó el marcador a tiempo. Comprueba la cola de procesamiento.",
-        "processingFailed": "Open WebUI no pudo procesar el marcador. Comprueba sus workers.",
+        "processingFailed": "Open WebUI no pudo procesar un archivo cargado. Comprueba sus workers de procesamiento y vuelve a intentarlo.",
         "invalidResponse": "Open WebUI devolvió una respuesta no compatible. Comprueba la versión y compatibilidad.",
         "redirectRejected": "Open WebUI redirigió la solicitud. Usa el origen permitido exacto sin redirecciones.",
         "sourceTooLarge": "La fuente de prueba superó el límite configurado. Comprueba los límites del writer.",
@@ -1588,7 +1588,7 @@
           },
           "success": "El último éxito avanza y no queda ningún estado de limpieza o desajuste de objetivos",
           "rollback": "Deshabilite el enlace y finalice la limpieza; para reversión de emergencia, deshabilite RAG_SYNC_ENABLED y reinicie",
-          "technical": "La sincronización integrada lee mediante servicios internos de Docmost y nunca llama a /api/rag/*. Las páginas, las filas de base de datos y los términos del diccionario habilitado se administran por separado; los términos usan el tipo de origen `dictionary_term`. Cada fuente usa un cursor opaco vinculado a una instantánea fija de la base de datos. Conserve la marca de agua inicial hasta hasMore=false; solo la página terminal avanza el checkpoint y los reintentos deben ser idempotentes. Las fuentes se procesan al menos una vez. Perder el lease o el cupo cancela la solicitud remota actual e impide nuevo trabajo; la conciliación gestiona efectos que terminaron antes de que llegara la cancelación."
+          "technical": "La sincronización integrada lee mediante servicios internos de Docmost y nunca llama a /api/rag/*. Las páginas, las filas de base de datos y los términos del diccionario habilitado se administran por separado; los términos usan el tipo de origen `dictionary_term`. Cada fuente usa un cursor opaco vinculado a una instantánea fija de la base de datos. Conserve la marca de agua inicial hasta hasMore=false; solo la página terminal avanza el checkpoint y los reintentos deben ser idempotentes. Las fuentes se procesan al menos una vez. Perder el lease o el cupo cancela la solicitud remota actual e impide nuevo trabajo; la conciliación gestiona efectos que terminaron antes de que llegara la cancelación. Para PDF y DOCX, Docmost usa una proyección Markdown del texto extraído cuando la indexación local está lista."
         },
         "inboundMcp": {
           "description": "Los asistentes externos se conectan al punto final raíz /mcp con una clave MCP con alcance.",
