@@ -1588,7 +1588,7 @@
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
-          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、数据库行和已启用的词典术语分别管理；词典术语使用 `dictionary_term` 来源类型。每个流都使用绑定到固定数据库快照的不透明游标。保持起始 watermark 不变直到 hasMore=false；只有终止页才推进 checkpoint，重试必须保持幂等。 流至少投递一次。lease 或 slot 丢失会中止当前外部请求并禁止新工作；取消到达远端前已经完成的副作用由 reconciliation 处理。对于本地索引已就绪的 PDF 和 DOCX，Docmost 使用提取文本的 Markdown 投影。远程附件文件名包含 Docmost 附件 ID，因此同一 Knowledge Base 中的同名文件不会发生冲突。"
+          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、数据库行和已启用的词典术语分别管理；词典术语使用 `dictionary_term` 来源类型。每个流都使用绑定到固定数据库快照的不透明游标。保持起始 watermark 不变直到 hasMore=false；只有终止页才推进 checkpoint，重试必须保持幂等。 流至少投递一次。lease 或 slot 丢失会中止当前外部请求并禁止新工作；取消到达远端前已经完成的副作用由 reconciliation 处理。对于本地索引已就绪的 PDF 和 DOCX，Docmost 使用提取文本的 Markdown 投影。远程附件文件名包含 Docmost 附件 ID，因此同一 Knowledge Base 中的同名文件不会发生冲突。upstream 文件哈希限定在来源操作范围内，而签名的 ownership metadata 保留来源内容哈希。"
         },
         "inboundMcp": {
           "description": "外部助手使用作用域 MCP 密钥连接到根 /mcp 端点。它是无状态的，仅公开允许的读取工具，并返回附件元数据而不是二进制附件内容。",

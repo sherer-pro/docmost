@@ -181,7 +181,7 @@ describe('OpenWebUiWriterService', () => {
     ).toBeNull();
   });
 
-  it('pins the approved address and sends an idempotency key for uploads', async () => {
+  it('pins the approved address and sends operation-scoped upload identity', async () => {
     const { outboundPolicy, writer } = createWriter();
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ id: 'file-1' }), {
@@ -218,6 +218,16 @@ describe('OpenWebUiWriterService', () => {
     );
     expect(fetchMock.mock.calls[0][1]?.headers).toEqual(
       expect.objectContaining({ 'idempotency-key': 'operation-id' }),
+    );
+    const form = fetchMock.mock.calls[0][1]?.body as FormData;
+    expect(JSON.parse(String(form.get('metadata')))).toEqual(
+      expect.objectContaining({
+        file_hash: 'operation-id',
+        docmost: expect.objectContaining({
+          contentHash: 'hash',
+          operationId: 'operation-id',
+        }),
+      }),
     );
   });
 

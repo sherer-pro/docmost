@@ -167,7 +167,7 @@ export class OpenWebUiWriterService {
     };
     const metadata = JSON.stringify({
       knowledge_id: binding.knowledgeId,
-      file_hash: input.metadata.contentHash,
+      file_hash: input.metadata.operationId,
       docmost: signedMetadata,
     });
     const form = new FormData();

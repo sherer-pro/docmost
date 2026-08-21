@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 12 -->
+<!-- ai-admin-guide-contract-version: 13 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -912,6 +912,9 @@ the target to parse the binary again; ownership metadata still identifies the
 original attachment. TXT and Markdown keep their original portable content.
 Remote attachment file names include the Docmost attachment ID, preventing
 same-named attachments from colliding inside one Knowledge Base.
+The upstream `file_hash` is scoped to the source operation so equal content
+from distinct sources remains valid; signed ownership metadata retains the
+source content hash used by Docmost reconciliation.
 JPEG, PNG, and WebP remain available in Docmost but are not synchronized because
 their processing depends on target-specific OCR or vision configuration and can
 otherwise poison an incremental document queue.
