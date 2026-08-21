@@ -71,6 +71,23 @@ async function setPageEditMode(
   );
 }
 
+async function expectTemplateEditability(
+  templateNode: import("@playwright/test").Locator,
+  editable: boolean,
+) {
+  await expect(templateNode).toHaveAttribute(
+    "data-template-editable",
+    editable ? "true" : "false",
+  );
+  await expect
+    .poll(() =>
+      templateNode
+        .locator("[data-node-view-content]")
+        .evaluate((element) => (element as HTMLElement).isContentEditable),
+    )
+    .toBe(editable);
+}
+
 async function elementRect(locator: import("@playwright/test").Locator) {
   return locator.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -534,19 +551,23 @@ test.describe("page template lifecycle", () => {
     );
     await page.keyboard.press("Escape");
 
-    const templateManagedContent = page.locator(
-      '[data-type="templateManagedBlock"] [data-node-view-content]',
+    const templateManagedBlock = page.locator(
+      '[data-type="templateManagedBlock"]',
     );
-    const templateFieldContent = page.locator(
-      '[data-type="templateField"] [data-node-view-content]',
+    const templateField = page.locator('[data-type="templateField"]');
+    const templateManagedContent = templateManagedBlock.locator(
+      "[data-node-view-content]",
     );
-    await expect(templateManagedContent).toBeEditable();
-    await expect(templateFieldContent).toBeEditable();
+    const templateFieldContent = templateField.locator(
+      "[data-node-view-content]",
+    );
+    await expectTemplateEditability(templateManagedBlock, true);
+    await expectTemplateEditability(templateField, true);
 
     await setPageEditMode(page, "Read");
     await expect(templateToolbar).toHaveCount(0);
-    await expect(templateManagedContent).not.toBeEditable();
-    await expect(templateFieldContent).not.toBeEditable();
+    await expectTemplateEditability(templateManagedBlock, false);
+    await expectTemplateEditability(templateField, false);
     const sourceTextBeforeBlockedInput = await mainEditor(page).innerText();
     await templateManagedContent.click({ force: true });
     await page.keyboard.insertText(`Blocked managed input ${suffix}`);
@@ -565,13 +586,11 @@ test.describe("page template lifecycle", () => {
       .toBe(sourceTextBeforeBlockedInput);
 
     await setPageEditMode(page, "Edit");
-    await expect(templateManagedContent).toBeEditable();
-    await expect(templateFieldContent).toBeEditable();
+    await expectTemplateEditability(templateManagedBlock, true);
+    await expectTemplateEditability(templateField, true);
     await expect(templateToolbar).toBeVisible();
 
-    const sourceContentRect = await elementRect(
-      page.locator('[data-type="templateManagedBlock"]'),
-    );
+    const sourceContentRect = await elementRect(templateManagedBlock);
     expectHorizontallyAligned(await elementRect(statusBar), sourceContentRect);
     expectHorizontallyAligned(
       await elementRect(templateToolbar),
@@ -860,15 +879,15 @@ test.describe("page template lifecycle", () => {
       "[data-node-view-content]",
     );
     const linkedFieldContent = linkedField.locator("[data-node-view-content]");
-    await expect(linkedManagedContent).not.toBeEditable();
-    await expect(linkedFieldContent).toBeEditable();
+    await expectTemplateEditability(linkedManagedBlock, false);
+    await expectTemplateEditability(linkedField, true);
     await expect(linkedManagedBlock).toContainText("Shared content");
     await expect(linkedManagedBlock).toContainText("Managed by template");
     await expect(linkedField).toContainText("Editable field");
 
     await setPageEditMode(page, "Read");
-    await expect(linkedManagedContent).not.toBeEditable();
-    await expect(linkedFieldContent).not.toBeEditable();
+    await expectTemplateEditability(linkedManagedBlock, false);
+    await expectTemplateEditability(linkedField, false);
     const linkedTextBeforeBlockedInput = await mainEditor(page).innerText();
     await linkedFieldContent.click({ force: true });
     await page.keyboard.insertText(`Blocked linked field input ${suffix}`);
@@ -907,8 +926,8 @@ test.describe("page template lifecycle", () => {
     }
 
     await setPageEditMode(page, "Edit");
-    await expect(linkedManagedContent).not.toBeEditable();
-    await expect(linkedFieldContent).toBeEditable();
+    await expectTemplateEditability(linkedManagedBlock, false);
+    await expectTemplateEditability(linkedField, true);
 
     const openTemplate = instanceStatus.getByRole("link", {
       name: "Open template",
