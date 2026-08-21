@@ -84,6 +84,7 @@ describe('RagSyncAdminService', () => {
       ),
     };
     const writer = options?.writer ?? {
+      preflightTarget: jest.fn().mockResolvedValue(undefined),
       testTarget: jest.fn().mockResolvedValue({ ok: true, latencyMs: 12 }),
     };
     const control = { bindingChanged: jest.fn() };
@@ -425,6 +426,15 @@ describe('RagSyncAdminService', () => {
       }),
       expect.anything(),
     );
+    expect(writer.preflightTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindingId: binding.id,
+        workspaceId: binding.workspaceId,
+        spaceId: binding.spaceId,
+        configVersion: binding.configVersion,
+      }),
+      expect.anything(),
+    );
     expect(writer.testTarget.mock.calls[0][0]).not.toHaveProperty(
       'writerApiKey',
     );
@@ -451,15 +461,79 @@ describe('RagSyncAdminService', () => {
     );
   });
 
-  it('keeps durable cleanup state when a target test fails after upload may have started', async () => {
+  it.each([
+    'rag_sync_target_unavailable',
+    'rag_sync_writer_unauthorized',
+    'rag_sync_processing_timeout',
+    'rag_sync_processing_failed',
+    'rag_sync_invalid_response',
+  ])(
+    'keeps durable cleanup state and safe error %s after upload may have started',
+    async (code) => {
+      const writer = {
+        preflightTarget: jest.fn().mockResolvedValue(undefined),
+        testTarget: jest
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error('writer failed'), { code }),
+          ),
+      };
+      const { service, repo, control } = setup({ writer });
+
+      await expect(
+        service.testTarget('space-1', user, workspace),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code }),
+      });
+
+      expect(repo.updateBinding).toHaveBeenCalledWith(
+        baseBinding.id,
+        expect.objectContaining({ cleanupRequired: true }),
+        expect.anything(),
+      );
+      expect(repo.completeTargetTest).not.toHaveBeenCalled();
+      expect(control.bindingChanged).toHaveBeenCalledWith(baseBinding.id);
+    },
+  );
+
+  it.each([
+    'rag_sync_writer_unauthorized',
+    'rag_sync_target_timeout',
+    'rag_sync_target_invalid',
+    'rag_sync_invalid_response',
+    'rag_sync_redirect_rejected',
+    'rag_sync_url_rejected',
+  ])(
+    'keeps a clean binding and preserves safe preflight error %s',
+    async (code) => {
+      const writer = {
+        preflightTarget: jest
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error('preflight failed'), { code }),
+          ),
+        testTarget: jest.fn(),
+      };
+      const { service, repo, control } = setup({ writer });
+
+      await expect(
+        service.testTarget('space-1', user, workspace),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code }),
+      });
+
+      expect(repo.updateBinding).not.toHaveBeenCalled();
+      expect(writer.testTarget).not.toHaveBeenCalled();
+      expect(control.bindingChanged).not.toHaveBeenCalled();
+    },
+  );
+
+  it('maps unknown preflight failures without arming cleanup', async () => {
     const writer = {
-      testTarget: jest.fn().mockRejectedValue(
-        Object.assign(new Error('timeout'), {
-          code: 'rag_sync_target_unavailable',
-        }),
-      ),
+      preflightTarget: jest.fn().mockRejectedValue(new Error('socket failed')),
+      testTarget: jest.fn(),
     };
-    const { service, repo, control } = setup({ writer });
+    const { service, repo } = setup({ writer });
 
     await expect(
       service.testTarget('space-1', user, workspace),
@@ -468,14 +542,7 @@ describe('RagSyncAdminService', () => {
         code: 'rag_sync_target_unavailable',
       }),
     });
-
-    expect(repo.updateBinding).toHaveBeenCalledWith(
-      baseBinding.id,
-      expect.objectContaining({ cleanupRequired: true }),
-      expect.anything(),
-    );
-    expect(repo.completeTargetTest).not.toHaveBeenCalled();
-    expect(control.bindingChanged).toHaveBeenCalledWith(baseBinding.id);
+    expect(repo.updateBinding).not.toHaveBeenCalled();
   });
 
   it('maps an occupied operation lock to a stable conflict response', async () => {

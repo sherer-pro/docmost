@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import {
+  RagSyncErrorCode,
   RagSyncSpaceConfig,
   RagSyncStatus,
   RagSyncTargetTestResult,
@@ -50,6 +51,22 @@ const DEFAULT_STATUS: RagSyncStatus = {
   lagMs: null,
   errorCode: null,
 };
+
+const SAFE_WRITER_ERROR_CODES = new Set<RagSyncErrorCode>([
+  'rag_sync_writer_unavailable',
+  'rag_sync_writer_unauthorized',
+  'rag_sync_target_unavailable',
+  'rag_sync_target_invalid',
+  'rag_sync_target_timeout',
+  'rag_sync_processing_timeout',
+  'rag_sync_processing_failed',
+  'rag_sync_invalid_response',
+  'rag_sync_redirect_rejected',
+  'rag_sync_source_too_large',
+  'rag_sync_url_rejected',
+  'rag_sync_writer_key_missing',
+  'rag_sync_aborted',
+]);
 
 @Injectable()
 export class RagSyncAdminService {
@@ -235,7 +252,7 @@ export class RagSyncAdminService {
       workspace.id,
       spaceId,
       async (signal) => {
-        const armed = await this.repo.withSpaceLock(
+        const preflight = await this.repo.withSpaceLock(
           workspace.id,
           spaceId,
           async (trx) => {
@@ -272,10 +289,49 @@ export class RagSyncAdminService {
                 message: 'Complete cleanup before testing this target',
               });
             }
+            return { binding: current, targetClaimId: targetClaim.id };
+          },
+        );
+        const preflightBinding = preflight.binding;
+        const preflightTarget = this.toWriterTarget(preflightBinding);
+        try {
+          await this.writer!.preflightTarget(preflightTarget, signal);
+        } catch (error) {
+          if (error instanceof RagSyncOperationLockError) throw error;
+          throw new ServiceUnavailableException({
+            code: this.safeWriterErrorCode(error),
+            message: 'Open WebUI target preflight failed',
+          });
+        }
+
+        const armed = await this.repo.withSpaceLock(
+          workspace.id,
+          spaceId,
+          async (trx) => {
+            const current = await this.repo.findBySpace(
+              workspace.id,
+              spaceId,
+              trx,
+            );
+            if (!current) {
+              throw new NotFoundException('RAG sync binding not found');
+            }
+            if (
+              current.configVersion !== preflightBinding.configVersion ||
+              current.targetVersion !== preflightBinding.targetVersion ||
+              current.state !== 'disabled' ||
+              current.cleanupRequired
+            ) {
+              throw new ConflictException({
+                code: 'rag_sync_config_conflict',
+                message:
+                  'RAG sync configuration changed during target preflight',
+              });
+            }
             return this.repo.updateBinding(
               current.id,
               {
-                targetClaimId: targetClaim.id,
+                targetClaimId: preflight.targetClaimId,
                 cleanupRequired: true,
                 lastTestedAt: null,
                 configVersion: current.configVersion + 1,
@@ -898,13 +954,13 @@ export class RagSyncAdminService {
     );
   }
 
-  private safeWriterErrorCode(error: unknown) {
+  private safeWriterErrorCode(error: unknown): RagSyncErrorCode {
     const code =
       error && typeof error === 'object' && 'code' in error
         ? String((error as { code?: unknown }).code)
         : '';
-    return code === 'rag_sync_writer_unauthorized'
-      ? code
+    return SAFE_WRITER_ERROR_CODES.has(code as RagSyncErrorCode)
+      ? (code as RagSyncErrorCode)
       : 'rag_sync_target_unavailable';
   }
 }

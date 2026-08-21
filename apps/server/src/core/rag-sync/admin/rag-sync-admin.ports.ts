@@ -33,6 +33,10 @@ export interface RagSyncWriterTarget {
 }
 
 export interface RagSyncWriter {
+  preflightTarget(
+    target: RagSyncWriterTarget,
+    signal?: AbortSignal,
+  ): Promise<void>;
   testTarget(
     target: RagSyncWriterTarget,
     signal?: AbortSignal,

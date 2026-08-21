@@ -68,6 +68,43 @@ export class OpenWebUiWriterService {
     @Optional() private readonly environment?: EnvironmentService,
   ) {}
 
+  async preflightTarget(
+    target: {
+      bindingId: string;
+      workspaceId: string;
+      spaceId: string;
+      adapter: 'open-webui-knowledge-v1';
+      baseUrl: string;
+      knowledgeId: string;
+      configVersion: number;
+      targetVersion: number;
+    },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const timeoutSignal = AbortSignal.timeout(
+      Math.min(this.config.processingTimeoutMs, TARGET_TEST_TIMEOUT_MS),
+    );
+    const preflightSignal = signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal;
+    await this.listKnowledgeFilesPage(
+      {
+        id: target.bindingId,
+        workspaceId: target.workspaceId,
+        spaceId: target.spaceId,
+        state: 'enabled',
+        adapter: target.adapter,
+        baseUrl: target.baseUrl,
+        knowledgeId: target.knowledgeId,
+        configVersion: target.configVersion,
+        targetVersion: target.targetVersion,
+        updatedAtMs: Date.now(),
+      },
+      1,
+      preflightSignal,
+    );
+  }
+
   async testTarget(
     target: {
       bindingId: string;
