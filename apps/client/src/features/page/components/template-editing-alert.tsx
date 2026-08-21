@@ -578,11 +578,11 @@ export function TemplateEditingAlert({
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <Paper withBorder p="sm" radius="md">
                 <Text fw={600} size="sm" mb={4}>
-                  {t("Template blocks")}
+                  {t("Shared content")}
                 </Text>
                 <Text size="sm">
                   {t(
-                    "{{added}} blocks added, {{changed}} changed, {{moved}} moved, {{removed}} removed.",
+                    "{{added}} shared sections added, {{changed}} changed, {{moved}} moved, {{removed}} removed.",
                     {
                       added: preflight.diff.addedBlockIds.length,
                       changed: preflight.diff.changedBlockIds.length,
@@ -594,7 +594,7 @@ export function TemplateEditingAlert({
               </Paper>
               <Paper withBorder p="sm" radius="md">
                 <Text fw={600} size="sm" mb={4}>
-                  {t("Fields to fill")}
+                  {t("Editable fields")}
                 </Text>
                 <Text size="sm">
                   {t(

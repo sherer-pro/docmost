@@ -17,6 +17,18 @@
     }
 }
 
+.editorContentInset {
+    margin-inline: 3rem;
+
+    @media (max-width: 48em) {
+        margin-inline: 1rem;
+    }
+
+    @media print {
+        margin-inline: 0;
+    }
+}
+
 .readingTime {
     background-color: light-dark(
         var(--mantine-color-white),
