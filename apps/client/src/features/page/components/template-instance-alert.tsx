@@ -228,10 +228,14 @@ export function TemplateInstanceAlert({
                 {t("Retry")}
               </Button>
             )}
-            {data.sourceTemplate && data.canReadTemplate && (
+            {data.sourceTemplate?.spaceSlug && data.canReadTemplate && (
               <Button
                 component={Link}
-                to={`/p/${data.sourceTemplate.slugId}`}
+                to={buildPageUrl(
+                  data.sourceTemplate.spaceSlug,
+                  data.sourceTemplate.slugId,
+                  data.sourceTemplate.title ?? undefined,
+                )}
                 size="compact-sm"
                 variant="subtle"
                 leftSection={<IconExternalLink size={15} />}

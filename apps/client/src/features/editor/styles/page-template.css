@@ -5,28 +5,29 @@
   padding: 1rem;
   border: 1px solid var(--mantine-color-default-border);
   border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-.ProseMirror [data-type="templateManagedBlock"] {
-  background: color-mix(in srgb, var(--mantine-color-blue-1) 45%, transparent);
-  border-inline-start: 3px solid var(--mantine-color-blue-6);
-}
-
-.ProseMirror [data-type="templateManagedBlock"][data-template-locked="true"] {
+.ProseMirror [data-template-editable="false"] {
   cursor: default;
-  background: var(--mantine-color-default-hover);
 }
 
 .ProseMirror [data-type="templateField"] {
-  background: color-mix(in srgb, var(--mantine-color-teal-1) 45%, transparent);
   border-style: dashed;
-  border-inline-start: 3px solid var(--mantine-color-teal-6);
+}
+
+.ProseMirror [data-type="templateManagedBlock"]:focus-within,
+.ProseMirror [data-type="templateField"]:focus-within {
+  border-color: var(--mantine-primary-color-filled);
+  box-shadow: 0 0 0 1px var(--mantine-primary-color-filled);
 }
 
 @media (max-width: 48em) {
   .ProseMirror [data-type="templateManagedBlock"],
   .ProseMirror [data-type="templateField"] {
-    margin-inline: -0.25rem;
     padding: 0.75rem;
   }
 }

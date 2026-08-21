@@ -95,7 +95,7 @@ export function FullEditor({
         spaceSlug={spaceSlug}
         editable={editable}
       />
-      {notice}
+      {notice && <div className={classes.editorContentInset}>{notice}</div>}
       <PageReadingTime
         editor={pageEditor}
         enabled={readingTimeEnabled}

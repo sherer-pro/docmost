@@ -94,6 +94,7 @@ import {
   resolveLiveEditorOptions,
   shouldActivateLiveEditor,
 } from "./page-editor-lifecycle";
+import editorLayoutClasses from "@/features/editor/styles/editor.module.css";
 
 interface PageEditorProps {
   pageId: string;
@@ -775,7 +776,10 @@ export default function PageEditor({
           <div className="editor-container" style={{ position: "relative" }}>
             <div ref={menuContainerRef}>
               {editor && editorIsEditable && templateKind === "synced" && (
-                <TemplateBlockToolbar editor={editor} />
+                <TemplateBlockToolbar
+                  editor={editor}
+                  className={editorLayoutClasses.editorContentInset}
+                />
               )}
               {editor && editorIsEditable && fixedToolbarEnabled && (
                 <>

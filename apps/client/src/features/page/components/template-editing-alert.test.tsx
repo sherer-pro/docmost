@@ -436,8 +436,8 @@ describe("TemplateEditingAlert", () => {
     await flush();
     await act(async () => findButton("Review and publish")?.click());
 
-    expect(container?.textContent).toContain("Template blocks");
-    expect(container?.textContent).toContain("Fields to fill");
+    expect(container?.textContent).toContain("Shared content");
+    expect(container?.textContent).toContain("Editable fields");
     expect(container?.textContent).toContain("Owner");
   });
 
@@ -481,7 +481,7 @@ describe("TemplateEditingAlert", () => {
     await act(async () => findButton("Retry")?.click());
 
     expect(mocks.preflight).toHaveBeenCalledTimes(2);
-    expect(container?.textContent).toContain("Template blocks");
+    expect(container?.textContent).toContain("Shared content");
   });
 
   it("labels a bounded destructive scan as an upper bound", async () => {
@@ -534,7 +534,7 @@ describe("TemplateEditingAlert", () => {
     });
 
     expect(mocks.preflight).toHaveBeenCalledTimes(2);
-    expect(container?.textContent).toContain("Template blocks");
+    expect(container?.textContent).toContain("Shared content");
   });
 
   it("replaces history content with comparison instead of nesting a modal", async () => {

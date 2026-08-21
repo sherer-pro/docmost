@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   hash: vi.fn(),
   invalidateQueries: vi.fn(),
   invalidateSidebarTree: vi.fn(),
+  buildPageUrl: vi.fn(),
   notify: vi.fn(),
   query: {} as Record<string, unknown>,
   editor: { getJSON: vi.fn(() => ({ type: "doc", content: [] })) },
@@ -180,7 +181,7 @@ vi.mock("@/features/page/queries/cache-invalidation", () => ({
 }));
 
 vi.mock("@/features/page/page.utils", () => ({
-  buildPageUrl: (_space: string, slug: string) => `/pages/${slug}`,
+  buildPageUrl: mocks.buildPageUrl,
 }));
 
 vi.mock("@/lib/query-client", () => ({
@@ -199,6 +200,9 @@ describe("TemplateInstanceAlert", () => {
     vi.clearAllMocks();
     mocks.hash.mockResolvedValue("content-hash");
     mocks.refetch.mockResolvedValue(undefined);
+    mocks.buildPageUrl.mockImplementation(
+      (_space: string, slug: string) => `/pages/${slug}`,
+    );
     mocks.query = {
       data: undefined,
       isLoading: false,
@@ -297,6 +301,21 @@ describe("TemplateInstanceAlert", () => {
       expect(container?.textContent).toContain("Detach");
     },
   );
+
+  it("builds the source template link with its canonical space route", () => {
+    mocks.query = linkedQuery("active");
+    render();
+
+    const link = Array.from(container?.querySelectorAll("a") ?? []).find(
+      (candidate) => candidate.textContent?.includes("Open template"),
+    );
+    expect(link?.getAttribute("href")).toBe("/pages/template-slug");
+    expect(mocks.buildPageUrl).toHaveBeenCalledWith(
+      "space",
+      "template-slug",
+      "Project template",
+    );
+  });
 
   it("creates and opens an independent copy without detaching the source page", async () => {
     mocks.query = linkedQuery("active");
