@@ -112,7 +112,17 @@ class MicrosecondAttachmentDriver extends DummyDriver {
   }
 }
 
-const createService = (db: Kysely<any>) =>
+const defaultDocumentFields = {
+  status: false,
+  assignee: false,
+  stakeholders: false,
+  aiRole: false,
+};
+
+const createService = (
+  db: Kysely<any>,
+  documentFields = defaultDocumentFields,
+) =>
   new RagService(
     db as any,
     {} as any,
@@ -141,20 +151,10 @@ const createService = (db: Kysely<any>) =>
       version: 1,
       fingerprintInput: () => ({
         projectionVersion: 1,
-        documentFields: {
-          status: false,
-          assignee: false,
-          stakeholders: false,
-          aiRole: false,
-        },
+        documentFields,
         dictionaryEnabled: false,
       }),
-      getDocumentFieldsConfig: () => ({
-        status: false,
-        assignee: false,
-        stakeholders: false,
-        aiRole: false,
-      }),
+      getDocumentFieldsConfig: () => documentFields,
       buildCustomFields: () => undefined,
       resolveMembers: async () => new Map(),
       memberNames: () => new Map(),
@@ -258,6 +258,29 @@ describe('RagService getUpdates SQL generation', () => {
       "order by date_trunc('milliseconds', GREATEST(",
     );
     expect(databaseQuery).toContain('limit $');
+  });
+
+  it('casts UUID member ids to text in document projection filters', async () => {
+    const memberProjectionService = createService(db, {
+      ...defaultDocumentFields,
+      assignee: true,
+      stakeholders: true,
+    });
+
+    await memberProjectionService.getUpdates(scope, 0);
+
+    const pageQuery = queries.find(
+      (query) =>
+        query.includes('from "pages"') &&
+        query.includes('projection_users.id::text'),
+    );
+
+    expect(pageQuery).toContain(
+      `projection_users.id::text = "pages"."settings" ->> 'assigneeId'`,
+    );
+    expect(pageQuery).toContain(
+      `COALESCE("pages"."settings" -> 'stakeholderIds', '[]'::jsonb) ? projection_users.id::text`,
+    );
   });
 
   it('pushes pagination into deleted and attachment SQL streams', async () => {
