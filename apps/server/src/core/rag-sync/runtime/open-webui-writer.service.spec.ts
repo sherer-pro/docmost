@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { encryptProtectedValue } from '../../../common/security/credential-protection.util';
 import { OpenWebUiWriterService } from './open-webui-writer.service';
 import type { RagSyncRuntimeBinding } from './rag-sync-runtime.types';
 
@@ -30,12 +31,18 @@ function createWriter() {
     processingTimeoutMs: 10_000,
     maxAttachmentBytes: 1024 * 1024,
   };
+  const repo = {
+    findById: jest.fn().mockResolvedValue({
+      ...binding,
+      writerApiKeyEncrypted: encryptProtectedValue('writer-secret', appSecret),
+    }),
+  };
   return {
     outboundPolicy,
     writer: new OpenWebUiWriterService(
       outboundPolicy as any,
       config as any,
-      undefined,
+      repo as any,
       { getAppSecret: () => appSecret } as any,
     ),
   };
@@ -43,6 +50,35 @@ function createWriter() {
 
 describe('OpenWebUiWriterService', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  it('preflights the saved target with a read-only knowledge listing', async () => {
+    const { writer } = createWriter();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await writer.preflightTarget({
+      bindingId: binding.id,
+      workspaceId: binding.workspaceId,
+      spaceId: binding.spaceId,
+      adapter: binding.adapter,
+      baseUrl: binding.baseUrl,
+      knowledgeId: binding.knowledgeId,
+      configVersion: binding.configVersion,
+      targetVersion: binding.targetVersion,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0].toString()).toContain(
+      `/api/v1/knowledge/${binding.knowledgeId}/files`,
+    );
+    expect(fetchMock.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ method: 'GET', body: undefined }),
+    );
+  });
 
   it('does not resolve or send a remote request after abort', async () => {
     const { writer, outboundPolicy } = createWriter();
