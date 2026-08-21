@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 11 -->
+<!-- ai-admin-guide-contract-version: 12 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -910,6 +910,8 @@ Markdown attachments. When Docmost has already indexed text from a PDF or DOCX,
 the embedded synchronizer uploads a Markdown text projection instead of asking
 the target to parse the binary again; ownership metadata still identifies the
 original attachment. TXT and Markdown keep their original portable content.
+Remote attachment file names include the Docmost attachment ID, preventing
+same-named attachments from colliding inside one Knowledge Base.
 JPEG, PNG, and WebP remain available in Docmost but are not synchronized because
 their processing depends on target-specific OCR or vision configuration and can
 otherwise poison an incremental document queue.

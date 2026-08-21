@@ -983,7 +983,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           sourceId: item.id,
           pageId: item.pageId,
           updatedAtMs: item.updatedAtMs,
-          fileName: safeFileName(item.fileName, item.id, '.md'),
+          fileName: safeFileName(item.fileName, item.id, '.md', item.id),
           mimeType: 'text/markdown',
           content: encodeMarkdown(
             [`# ${item.fileName}`, extractedText].join('\n\n'),
@@ -1019,7 +1019,12 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             sourceId: item.id,
             pageId: item.pageId,
             updatedAtMs: item.updatedAtMs,
-            fileName: safeFileName(item.fileName, item.id, extension),
+            fileName: safeFileName(
+              item.fileName,
+              item.id,
+              extension,
+              item.id,
+            ),
             mimeType: item.mimeType || 'application/octet-stream',
             content,
           },
@@ -2990,15 +2995,26 @@ function safeFileName(
   title: string,
   fallback: string,
   extension: string,
+  uniqueSuffix?: string,
 ): string {
-  const base = title
+  const sanitize = (value: string) =>
+    value
     .normalize('NFKC')
     .split('')
     .map((character) => (character.charCodeAt(0) <= 0x1f ? '-' : character))
     .join('')
     .replace(/[<>:"/\\|?*]/g, '-')
-    .trim()
-    .slice(0, 120);
+    .trim();
+  const fallbackBase = sanitize(fallback).slice(0, 120) || 'document';
+  const titleBase = sanitize(title) || fallbackBase;
+  const suffix = uniqueSuffix
+    ? sanitize(uniqueSuffix).slice(-64) || fallbackBase
+    : '';
+  const base = suffix
+    ? titleBase === suffix
+      ? suffix.slice(0, 120)
+      : `${titleBase.slice(0, Math.max(1, 119 - suffix.length))}-${suffix}`
+    : titleBase.slice(0, 120);
   const normalizedExtension = extension.startsWith('.')
     ? extension
     : `.${extension}`;

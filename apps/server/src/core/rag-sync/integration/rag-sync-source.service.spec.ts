@@ -921,7 +921,7 @@ describe('RagSyncSourceService', () => {
     expect(writer.upload).toHaveBeenCalledWith(
       binding,
       expect.objectContaining({
-        fileName: 'guide.pdf.md',
+        fileName: 'guide.pdf-attachment-1.md',
         mimeType: 'text/markdown',
         content: expect.any(Uint8Array),
         metadata: expect.objectContaining({
@@ -946,6 +946,61 @@ describe('RagSyncSourceService', () => {
         fileId: 'attachment-file',
       }),
     );
+  });
+
+  it('uses distinct remote names for attachments with the same source name', async () => {
+    const { service, rag, writer } = setup(
+      {},
+      [],
+      [],
+      [],
+      [],
+      {
+        'attachment-1': {
+          textContent: 'First extracted content',
+          contentIndexStatus: 'ready',
+        },
+        'attachment-2': {
+          textContent: 'Second extracted content',
+          contentIndexStatus: 'ready',
+        },
+      },
+    );
+    rag.getAttachmentUpdates.mockResolvedValue({
+      items: [
+        {
+          id: 'attachment-1',
+          fileName: 'guide.pdf',
+          fileExt: '.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 100,
+          pageId: 'page-1',
+          updatedAtMs: 200,
+        },
+        {
+          id: 'attachment-2',
+          fileName: 'guide.pdf',
+          fileExt: '.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 100,
+          pageId: 'page-2',
+          updatedAtMs: 201,
+        },
+      ],
+      maxUpdatedAtMs: 201,
+      hasMore: false,
+      nextCursor: null,
+    });
+    writer.upload
+      .mockResolvedValueOnce({ id: 'attachment-file-1' })
+      .mockResolvedValueOnce({ id: 'attachment-file-2' });
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.upload).toHaveBeenCalledTimes(2);
+    expect(
+      writer.upload.mock.calls.map((call) => call[1].fileName).sort(),
+    ).toEqual(['guide.pdf-attachment-1.md', 'guide.pdf-attachment-2.md']);
   });
 
   it('adds only safe feed stage and source-kind diagnostics to unknown errors', async () => {
