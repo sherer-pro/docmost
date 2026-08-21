@@ -276,7 +276,14 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     }
 
     const reconcileAt = await this.state.getReconcileAt(context.lease);
-    if (scopeChanged || reconcileAt === null || reconcileAt <= Date.now()) {
+    const hasPendingUploadIntents =
+      await this.state.hasUploadIntents(context.lease);
+    if (
+      scopeChanged ||
+      reconcileAt === null ||
+      reconcileAt <= Date.now() ||
+      hasPendingUploadIntents
+    ) {
       diagnostic.stage = 'reconcile';
       const reconciliationChanged = await this.reconcile(
         session,
@@ -2345,8 +2352,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       'reconcile',
     );
     for (const intent of scan.items) {
-      if (!intent.cleanupRequested) continue;
-      if (!(await this.cleanupRequestedUploadIntent(session, intent))) {
+      if (!(await this.reconcileUploadIntent(session, intent))) {
         await this.state.setRemoteScanProgress(
           session.context.lease,
           'reconcile',
@@ -2384,7 +2390,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     return false;
   }
 
-  private async cleanupRequestedUploadIntent(
+  private async reconcileUploadIntent(
     session: QuantumSession,
     intent: RagSyncUploadIntent,
   ): Promise<boolean> {
@@ -2436,7 +2442,16 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         remote.id,
         session.context.signal,
       );
-      await this.state.deleteMapping(session.context.lease, intent.identity);
+      const mapping = await this.state.getMapping(
+        session.context.lease,
+        intent.identity,
+      );
+      if (mapping?.operationId === intent.operationId) {
+        await this.state.deleteMapping(
+          session.context.lease,
+          intent.identity,
+        );
+      }
       await this.state.deleteUploadIntent(
         session.context.lease,
         intent.operationId,

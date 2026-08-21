@@ -234,6 +234,7 @@ describe('RagSyncSourceService', () => {
       setMapping: jest.fn(),
       deleteMapping: jest.fn(),
       getUploadIntent: jest.fn().mockResolvedValue(null),
+      hasUploadIntents: jest.fn().mockResolvedValue(false),
       setUploadIntent: jest.fn(),
       deleteUploadIntent: jest.fn(),
       getRemoteScanProgress: jest.fn().mockResolvedValue(null),
@@ -582,6 +583,94 @@ describe('RagSyncSourceService', () => {
         sourceId: 'page-1',
       }),
     );
+  });
+
+  it('reconciles pending upload intents before the periodic deadline', async () => {
+    const { service, rag, state, writer } = setup();
+    const operationId = hex(124);
+    const failed = {
+      ...remoteFile('failed-file', {
+        sourceId: 'page-1',
+        pageId: 'page-1',
+        operationId,
+      }),
+      data: { status: 'failed' },
+    };
+    state.hasUploadIntents.mockResolvedValue(true);
+    writer.listKnowledgeFilesPage.mockResolvedValue(listing([failed]));
+    writer.readOwnership.mockImplementation((file: any) => file.ownership);
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.deleteFile).toHaveBeenCalledWith(
+      binding,
+      failed.id,
+      context.signal,
+    );
+    expect(state.deleteUploadIntent).toHaveBeenCalledWith(lease, operationId);
+    expect(rag.getUpdates).not.toHaveBeenCalled();
+  });
+
+  it('cleans a superseded upload intent without deleting the current mapping', async () => {
+    const { service, state, writer } = setup();
+    const staleOperationId = hex(125);
+    const currentOperationId = hex(126);
+    const intent = {
+      operationId: staleOperationId,
+      identity: 'attachment:attachment-1',
+      sourceType: 'attachment' as const,
+      sourceId: 'attachment-1',
+      pageId: 'page-1',
+      configVersion: binding.configVersion,
+      createdAt: 1,
+      notBefore: 2,
+    };
+    const stale = remoteFile('stale-file', {
+      sourceType: 'attachment',
+      sourceId: 'attachment-1',
+      pageId: 'page-1',
+      operationId: staleOperationId,
+    });
+    state.hasUploadIntents.mockResolvedValue(true);
+    state.getRemoteScanProgress.mockResolvedValue({
+      configVersion: binding.configVersion,
+      phase: 'intents',
+      page: 1,
+      mappingCursor: '0',
+      expectedTotal: 1,
+      scopeFingerprint: effectiveFingerprint(),
+    });
+    state.scanUploadIntents.mockResolvedValue({
+      cursor: '0',
+      items: [intent],
+      hasMore: false,
+      ackToken: null,
+    });
+    state.getMapping.mockResolvedValue({
+      identity: intent.identity,
+      fileId: 'current-file',
+      operationId: currentOperationId,
+      contentHash: hex(127),
+      sourceType: intent.sourceType,
+      sourceId: intent.sourceId,
+      pageId: intent.pageId,
+      updatedAtMs: 3,
+    });
+    writer.listKnowledgeFilesPage.mockResolvedValue(listing([stale]));
+    writer.findOwnedFileByOperationId.mockReturnValue(stale);
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.deleteFile).toHaveBeenCalledWith(
+      binding,
+      stale.id,
+      context.signal,
+    );
+    expect(state.deleteUploadIntent).toHaveBeenCalledWith(
+      lease,
+      staleOperationId,
+    );
+    expect(state.deleteMapping).not.toHaveBeenCalled();
   });
 
   it('isolates concurrent ambiguous upload scans by operation id', async () => {
@@ -2151,6 +2240,7 @@ function effectiveFingerprint(): string {
 function remoteFile(
   id: string,
   metadata: Partial<{
+    sourceType: 'page' | 'attachment';
     sourceId: string;
     pageId: string;
     databaseId: string;
@@ -2170,7 +2260,7 @@ function remoteFile(
         targetVersion: 1,
         workspaceId: 'workspace-1',
         spaceId: 'space-1',
-        sourceType: 'page',
+        sourceType: metadata.sourceType ?? 'page',
         sourceId: metadata.sourceId ?? 'page-1',
         pageId: metadata.pageId ?? 'page-1',
         ...(metadata.databaseId ? { databaseId: metadata.databaseId } : {}),
