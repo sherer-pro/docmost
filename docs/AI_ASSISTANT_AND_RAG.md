@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 10 -->
+<!-- ai-admin-guide-contract-version: 11 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -906,9 +906,13 @@ disappear after a feed snapshot; the embedded synchronizer treats that race as
 a deletion, schedules cleanup of its managed remote files, and advances the
 feed instead of retrying an internal not-found error indefinitely.
 The portable Open WebUI document contract sends only PDF, DOCX, TXT, and
-Markdown attachments. JPEG, PNG, and WebP remain available in Docmost but are
-not synchronized because their processing depends on target-specific OCR or
-vision configuration and can otherwise poison an incremental document queue.
+Markdown attachments. When Docmost has already indexed text from a PDF or DOCX,
+the embedded synchronizer uploads a Markdown text projection instead of asking
+the target to parse the binary again; ownership metadata still identifies the
+original attachment. TXT and Markdown keep their original portable content.
+JPEG, PNG, and WebP remain available in Docmost but are not synchronized because
+their processing depends on target-specific OCR or vision configuration and can
+otherwise poison an incremental document queue.
 
 Retryable upstream and infrastructure errors keep bounded exponential backoff.
 A non-retryable runtime error stops an enabled binding with the stable error

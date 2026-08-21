@@ -1487,7 +1487,7 @@
         "targetInvalid": "De opgeslagen Knowledge-ID is ongeldig. Corrigeer het doel en sla opnieuw op.",
         "targetTimeout": "Het lezen van de Knowledge Base duurde te lang. Controleer Open WebUI en het netwerk.",
         "processingTimeout": "Open WebUI verwerkte de testmarkering niet op tijd. Controleer de verwerkingswachtrij.",
-        "processingFailed": "Open WebUI kon de testmarkering niet verwerken. Controleer de workers.",
+        "processingFailed": "Open WebUI kon een geüpload bestand niet verwerken. Controleer de verwerkingsworkers en probeer opnieuw.",
         "invalidResponse": "Open WebUI gaf een niet-ondersteund antwoord. Controleer versie en compatibiliteit.",
         "redirectRejected": "Open WebUI stuurde het verzoek door. Gebruik de exacte toegestane origin zonder redirects.",
         "sourceTooLarge": "De testbron overschreed de limiet. Controleer de writer-limieten.",
@@ -1588,7 +1588,7 @@
           },
           "success": "Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan",
           "rollback": "Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op",
-          "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, databaserijen en actieve woordenboektermen worden afzonderlijk beheerd; woordenboektermen gebruiken het brontype `dictionary_term`. Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid."
+          "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, databaserijen en actieve woordenboektermen worden afzonderlijk beheerd; woordenboektermen gebruiken het brontype `dictionary_term`. Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid. Voor PDF en DOCX gebruikt Docmost een Markdown-projectie van de geëxtraheerde tekst zodra de lokale indexering gereed is."
         },
         "inboundMcp": {
           "description": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel.",

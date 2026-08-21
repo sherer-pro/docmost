@@ -1487,7 +1487,7 @@
         "targetInvalid": "Die gespeicherte Knowledge-ID ist ungültig. Korrigieren und speichern Sie das Ziel erneut.",
         "targetTimeout": "Beim Lesen der Knowledge Base trat eine Zeitüberschreitung auf. Prüfen Sie Open WebUI und das Netzwerk.",
         "processingTimeout": "Open WebUI hat den Testmarker nicht rechtzeitig verarbeitet. Prüfen Sie die Verarbeitungswarteschlange.",
-        "processingFailed": "Open WebUI konnte den Testmarker nicht verarbeiten. Prüfen Sie die Worker.",
+        "processingFailed": "Open WebUI konnte eine hochgeladene Datei nicht verarbeiten. Prüfen Sie die Verarbeitungs-Worker und versuchen Sie es erneut.",
         "invalidResponse": "Open WebUI lieferte eine nicht unterstützte Antwort. Prüfen Sie Version und Kompatibilität.",
         "redirectRejected": "Open WebUI leitete die Anfrage um. Verwenden Sie den exakten erlaubten Ursprung ohne Weiterleitungen.",
         "sourceTooLarge": "Die Testquelle überschritt das konfigurierte Limit. Prüfen Sie die Writer-Limits.",
@@ -1588,7 +1588,7 @@
           },
           "success": "Der letzte Erfolg schreitet voran und es bleibt kein Bereinigungs- oder Zielinkongruenzstatus bestehen",
           "rollback": "Deaktivieren Sie die Bindung und schließen Sie die Bereinigung ab. Für ein Notfall-Rollback deaktivieren Sie RAG_SYNC_ENABLED und starten Sie neu",
-          "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft niemals /api/rag/* auf. Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe werden getrennt verwaltet; Wörterbuchbegriffe verwenden den Quelltyp `dictionary_term`. Jeder Feed verwendet einen opaken Cursor für einen festen Datenbank-Snapshot. Der Start-Watermark bleibt bis hasMore=false unverändert; erst die letzte Seite schreibt den Checkpoint fort, und Wiederholungen müssen idempotent bleiben. Feeds werden mindestens einmal zugestellt. Der Verlust von Lease oder Slot bricht die aktuelle entfernte Anfrage ab und verhindert neue Arbeit; die Abstimmung behandelt Seiteneffekte, die vor der Abbruchübermittlung abgeschlossen wurden."
+          "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft niemals /api/rag/* auf. Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe werden getrennt verwaltet; Wörterbuchbegriffe verwenden den Quelltyp `dictionary_term`. Jeder Feed verwendet einen opaken Cursor für einen festen Datenbank-Snapshot. Der Start-Watermark bleibt bis hasMore=false unverändert; erst die letzte Seite schreibt den Checkpoint fort, und Wiederholungen müssen idempotent bleiben. Feeds werden mindestens einmal zugestellt. Der Verlust von Lease oder Slot bricht die aktuelle entfernte Anfrage ab und verhindert neue Arbeit; die Abstimmung behandelt Seiteneffekte, die vor der Abbruchübermittlung abgeschlossen wurden. Für PDF und DOCX verwendet Docmost bei fertiger lokaler Indizierung eine Markdown-Projektion des extrahierten Textes."
         },
         "inboundMcp": {
           "description": "Externe Assistenten stellen mit einem bereichsbezogenen MCP-Schlüssel eine Verbindung zum Root-Endpunkt /mcp her.",

@@ -1487,7 +1487,7 @@
         "targetInvalid": "已保存的 Knowledge ID 无效。请修正目标并重新保存。",
         "targetTimeout": "读取 Knowledge Base 超时。请检查 Open WebUI 和网络路由。",
         "processingTimeout": "Open WebUI 未及时处理测试标记。请检查处理队列。",
-        "processingFailed": "Open WebUI 处理测试标记失败。请检查处理 worker。",
+        "processingFailed": "Open WebUI 无法处理上传的文件。请检查处理 worker 后重试。",
         "invalidResponse": "Open WebUI 返回了不支持的响应。请检查版本和兼容性。",
         "redirectRejected": "Open WebUI 重定向了请求。请使用无重定向的准确允许 Origin。",
         "sourceTooLarge": "测试源超过配置限制。请检查 writer 限制。",
@@ -1588,7 +1588,7 @@
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
-          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、数据库行和已启用的词典术语分别管理；词典术语使用 `dictionary_term` 来源类型。每个流都使用绑定到固定数据库快照的不透明游标。保持起始 watermark 不变直到 hasMore=false；只有终止页才推进 checkpoint，重试必须保持幂等。 流至少投递一次。lease 或 slot 丢失会中止当前外部请求并禁止新工作；取消到达远端前已经完成的副作用由 reconciliation 处理。"
+          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、数据库行和已启用的词典术语分别管理；词典术语使用 `dictionary_term` 来源类型。每个流都使用绑定到固定数据库快照的不透明游标。保持起始 watermark 不变直到 hasMore=false；只有终止页才推进 checkpoint，重试必须保持幂等。 流至少投递一次。lease 或 slot 丢失会中止当前外部请求并禁止新工作；取消到达远端前已经完成的副作用由 reconciliation 处理。对于本地索引已就绪的 PDF 和 DOCX，Docmost 使用提取文本的 Markdown 投影。"
         },
         "inboundMcp": {
           "description": "外部助手使用作用域 MCP 密钥连接到根 /mcp 端点。它是无状态的，仅公开允许的读取工具，并返回附件元数据而不是二进制附件内容。",

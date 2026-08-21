@@ -1487,7 +1487,7 @@
         "targetInvalid": "O ID salvo é inválido. Corrija o destino e salve novamente.",
         "targetTimeout": "A leitura da Knowledge Base excedeu o tempo. Verifique Open WebUI e a rede.",
         "processingTimeout": "Open WebUI não processou o marcador a tempo. Verifique a fila de processamento.",
-        "processingFailed": "Open WebUI não processou o marcador. Verifique os workers.",
+        "processingFailed": "O Open WebUI não processou um arquivo enviado. Verifique os workers de processamento e tente novamente.",
         "invalidResponse": "Open WebUI retornou uma resposta incompatível. Verifique versão e compatibilidade.",
         "redirectRejected": "Open WebUI redirecionou a solicitação. Use a origem permitida exata sem redirecionamentos.",
         "sourceTooLarge": "A fonte de teste excedeu o limite. Verifique os limites do writer.",
@@ -1588,7 +1588,7 @@
           },
           "success": "O último sucesso avança e nenhum estado de limpeza ou incompatibilidade de destino permanece",
           "rollback": "Desative a ligação e finalize a limpeza; para reversão de emergência, desative RAG_SYNC_ENABLED e reinicie",
-          "technical": "A sincronização integrada lê pelos serviços internos do Docmost e nunca chama /api/rag/*. Páginas, linhas de banco e termos do dicionário habilitado são gerenciados separadamente; os termos usam o tipo de origem `dictionary_term`. Cada feed usa um cursor opaco vinculado a um snapshot fixo do banco. Mantenha o watermark inicial até hasMore=false; somente a página terminal avança o checkpoint e as repetições devem permanecer idempotentes. Os feeds são entregues pelo menos uma vez. A perda do lease ou slot cancela a solicitação externa atual e impede novo trabalho; a reconciliação trata um efeito concluído antes de o cancelamento chegar ao serviço remoto."
+          "technical": "A sincronização integrada lê pelos serviços internos do Docmost e nunca chama /api/rag/*. Páginas, linhas de banco e termos do dicionário habilitado são gerenciados separadamente; os termos usam o tipo de origem `dictionary_term`. Cada feed usa um cursor opaco vinculado a um snapshot fixo do banco. Mantenha o watermark inicial até hasMore=false; somente a página terminal avança o checkpoint e as repetições devem permanecer idempotentes. Os feeds são entregues pelo menos uma vez. A perda do lease ou slot cancela a solicitação externa atual e impede novo trabalho; a reconciliação trata um efeito concluído antes de o cancelamento chegar ao serviço remoto. Para PDF e DOCX, o Docmost usa uma projeção Markdown do texto extraído quando a indexação local está pronta."
         },
         "inboundMcp": {
           "description": "Assistentes externos se conectam ao endpoint raiz /mcp com uma chave MCP com escopo definido.",

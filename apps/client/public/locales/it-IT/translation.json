@@ -1487,7 +1487,7 @@
         "targetInvalid": "L’ID salvato non è valido. Correggi la destinazione e salvala di nuovo.",
         "targetTimeout": "Docmost ha esaurito il tempo di lettura. Controlla Open WebUI e il percorso di rete.",
         "processingTimeout": "Open WebUI non ha elaborato il marcatore in tempo. Controlla la coda.",
-        "processingFailed": "Open WebUI non ha elaborato il marcatore. Controlla i worker.",
+        "processingFailed": "Open WebUI non ha elaborato un file caricato. Controlla i worker di elaborazione e riprova.",
         "invalidResponse": "Open WebUI ha restituito una risposta non supportata. Controlla versione e compatibilità.",
         "redirectRejected": "Open WebUI ha reindirizzato la richiesta. Usa l’origine consentita esatta senza redirect.",
         "sourceTooLarge": "La sorgente di test supera il limite configurato. Controlla i limiti writer.",
@@ -1588,7 +1588,7 @@
           },
           "success": "L'ultimo successo avanza e non rimane alcuno stato di pulizia o mancata corrispondenza del target",
           "rollback": "Disabilitare l'associazione e completare la pulizia; per il rollback di emergenza disabilitare RAG_SYNC_ENABLED e riavviare",
-          "technical": "La sincronizzazione integrata legge tramite i servizi interni di Docmost e non chiama mai /api/rag/*. Pagine, righe di database e termini del dizionario abilitato sono gestiti separatamente; i termini usano il tipo di origine `dictionary_term`. Ogni feed usa un cursore opaco legato a uno snapshot fisso del database. Mantieni il watermark iniziale fino a hasMore=false; solo la pagina terminale avanza il checkpoint e i tentativi devono restare idempotenti. I feed vengono elaborati almeno una volta. La perdita del lease o dello slot interrompe la richiesta remota corrente e impedisce nuovo lavoro; la riconciliazione gestisce un effetto completato prima dell’arrivo dell’annullamento."
+          "technical": "La sincronizzazione integrata legge tramite i servizi interni di Docmost e non chiama mai /api/rag/*. Pagine, righe di database e termini del dizionario abilitato sono gestiti separatamente; i termini usano il tipo di origine `dictionary_term`. Ogni feed usa un cursore opaco legato a uno snapshot fisso del database. Mantieni il watermark iniziale fino a hasMore=false; solo la pagina terminale avanza il checkpoint e i tentativi devono restare idempotenti. I feed vengono elaborati almeno una volta. La perdita del lease o dello slot interrompe la richiesta remota corrente e impedisce nuovo lavoro; la riconciliazione gestisce un effetto completato prima dell’arrivo dell’annullamento. Per PDF e DOCX, Docmost usa una proiezione Markdown del testo estratto quando l’indicizzazione locale è pronta."
         },
         "inboundMcp": {
           "description": "Gli assistenti esterni si connettono all'endpoint root /mcp con una chiave MCP con ambito.",
