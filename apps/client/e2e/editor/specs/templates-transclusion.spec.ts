@@ -60,6 +60,57 @@ async function responseStatus(
   return response.status();
 }
 
+async function setPageEditMode(
+  page: import("@playwright/test").Page,
+  mode: "Edit" | "Read",
+) {
+  await page.getByText(mode, { exact: true }).click();
+  await expect(mainEditor(page)).toHaveAttribute(
+    "contenteditable",
+    mode === "Edit" ? "true" : "false",
+  );
+}
+
+async function elementRect(locator: import("@playwright/test").Locator) {
+  return locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x, width: rect.width };
+  });
+}
+
+function expectHorizontallyAligned(
+  actual: { x: number; width: number },
+  expected: { x: number; width: number },
+) {
+  expect(Math.abs(actual.x - expected.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(actual.width - expected.width)).toBeLessThanOrEqual(1);
+}
+
+async function dispatchPasteAndDrop(
+  target: import("@playwright/test").Locator,
+  marker: string,
+) {
+  await target.evaluate((element, value) => {
+    const pasteData = new DataTransfer();
+    pasteData.setData("text/plain", `${value} paste`);
+    const pasteEvent = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(pasteEvent, "clipboardData", { value: pasteData });
+    element.dispatchEvent(pasteEvent);
+
+    const dropData = new DataTransfer();
+    dropData.setData("text/plain", `${value} drop`);
+    const dropEvent = new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(dropEvent, "dataTransfer", { value: dropData });
+    element.dispatchEvent(dropEvent);
+  }, marker);
+}
+
 test.describe("page template lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -462,6 +513,70 @@ test.describe("page template lifecycle", () => {
     await page.goto(`/s/${state.spaceSlug}/p/${syncedTemplate.page.slugId}`);
     const statusBar = page.locator('section[aria-label="Template editor"]');
     await expect(statusBar).toContainText("Linked page");
+    const templateToolbar = page.getByRole("toolbar", {
+      name: "Template content",
+    });
+    await expect(templateToolbar).toContainText("Template content");
+    await expect(templateToolbar).toContainText(
+      "Shared content updates every linked page. Editable fields keep each page's own value.",
+    );
+    await templateToolbar
+      .getByRole("button", { name: "Add to template" })
+      .click();
+    const addMenu = page.getByRole("menu");
+    await expect(addMenu).toContainText("Shared content");
+    await expect(addMenu).toContainText("Editable field");
+    await expect(addMenu).toContainText(
+      "Edit this content only in the template. It is read-only on linked pages.",
+    );
+    await expect(addMenu).toContainText(
+      "Each linked page keeps its own value in this field.",
+    );
+    await page.keyboard.press("Escape");
+
+    const templateManagedContent = page.locator(
+      '[data-type="templateManagedBlock"] [data-node-view-content]',
+    );
+    const templateFieldContent = page.locator(
+      '[data-type="templateField"] [data-node-view-content]',
+    );
+    await expect(templateManagedContent).toBeEditable();
+    await expect(templateFieldContent).toBeEditable();
+
+    await setPageEditMode(page, "Read");
+    await expect(templateToolbar).toHaveCount(0);
+    await expect(templateManagedContent).not.toBeEditable();
+    await expect(templateFieldContent).not.toBeEditable();
+    const sourceTextBeforeBlockedInput = await mainEditor(page).innerText();
+    await templateManagedContent.click({ force: true });
+    await page.keyboard.insertText(`Blocked managed input ${suffix}`);
+    await dispatchPasteAndDrop(
+      templateManagedContent,
+      `Blocked managed transfer ${suffix}`,
+    );
+    await templateFieldContent.click({ force: true });
+    await page.keyboard.insertText(`Blocked field input ${suffix}`);
+    await dispatchPasteAndDrop(
+      templateFieldContent,
+      `Blocked field transfer ${suffix}`,
+    );
+    await expect
+      .poll(() => mainEditor(page).innerText())
+      .toBe(sourceTextBeforeBlockedInput);
+
+    await setPageEditMode(page, "Edit");
+    await expect(templateManagedContent).toBeEditable();
+    await expect(templateFieldContent).toBeEditable();
+    await expect(templateToolbar).toBeVisible();
+
+    const sourceContentRect = await elementRect(
+      page.locator('[data-type="templateManagedBlock"]'),
+    );
+    expectHorizontallyAligned(await elementRect(statusBar), sourceContentRect);
+    expectHorizontallyAligned(
+      await elementRect(templateToolbar),
+      sourceContentRect,
+    );
     const reviewButton = statusBar.getByRole("button", {
       name: "Review and publish",
     });
@@ -478,7 +593,8 @@ test.describe("page template lifecycle", () => {
         { timeout: 15_000 },
       )
       .toBe(true);
-    await expect(publishDialog).toContainText("Template blocks");
+    await expect(publishDialog).toContainText("Shared content");
+    await expect(publishDialog).toContainText("Editable fields");
     await publishDialog
       .getByRole("button", { name: "Publish version 1" })
       .click();
@@ -736,6 +852,78 @@ test.describe("page template lifecycle", () => {
     await expect(
       instanceStatus.getByRole("button", { name: "Create independent copy" }),
     ).toBeVisible();
+    const linkedManagedBlock = page.locator(
+      '[data-type="templateManagedBlock"]',
+    );
+    const linkedField = page.locator('[data-type="templateField"]');
+    const linkedManagedContent = linkedManagedBlock.locator(
+      "[data-node-view-content]",
+    );
+    const linkedFieldContent = linkedField.locator("[data-node-view-content]");
+    await expect(linkedManagedContent).not.toBeEditable();
+    await expect(linkedFieldContent).toBeEditable();
+    await expect(linkedManagedBlock).toContainText("Shared content");
+    await expect(linkedManagedBlock).toContainText("Managed by template");
+    await expect(linkedField).toContainText("Editable field");
+
+    await setPageEditMode(page, "Read");
+    await expect(linkedManagedContent).not.toBeEditable();
+    await expect(linkedFieldContent).not.toBeEditable();
+    const linkedTextBeforeBlockedInput = await mainEditor(page).innerText();
+    await linkedFieldContent.click({ force: true });
+    await page.keyboard.insertText(`Blocked linked field input ${suffix}`);
+    await dispatchPasteAndDrop(
+      linkedFieldContent,
+      `Blocked linked field transfer ${suffix}`,
+    );
+    await expect
+      .poll(() => mainEditor(page).innerText())
+      .toBe(linkedTextBeforeBlockedInput);
+
+    expectHorizontallyAligned(
+      await elementRect(instanceStatus),
+      await elementRect(linkedManagedBlock),
+    );
+    const neutralStyles = await Promise.all(
+      [linkedManagedBlock, linkedField].map((locator) =>
+        locator.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            backgroundColor: style.backgroundColor,
+            borderLeftColor: style.borderLeftColor,
+            borderRightColor: style.borderRightColor,
+            borderLeftWidth: style.borderLeftWidth,
+            borderRightWidth: style.borderRightWidth,
+          };
+        }),
+      ),
+    );
+    expect(neutralStyles[0].backgroundColor).toBe(
+      neutralStyles[1].backgroundColor,
+    );
+    for (const style of neutralStyles) {
+      expect(style.borderLeftColor).toBe(style.borderRightColor);
+      expect(style.borderLeftWidth).toBe(style.borderRightWidth);
+    }
+
+    await setPageEditMode(page, "Edit");
+    await expect(linkedManagedContent).not.toBeEditable();
+    await expect(linkedFieldContent).toBeEditable();
+
+    const openTemplate = instanceStatus.getByRole("link", {
+      name: "Open template",
+    });
+    const sourceHref = await openTemplate.getAttribute("href");
+    expect(sourceHref).toMatch(
+      new RegExp(`^/s/${state.spaceSlug}/p/.+-${syncedTemplate.page.slugId}$`),
+    );
+    await openTemplate.click();
+    await expect(
+      page.locator('section[aria-label="Template editor"]'),
+    ).toBeVisible();
+    await expect(page.getByText("404 page not found")).toHaveCount(0);
+    await page.goto(`/s/${state.spaceSlug}/p/${syncedInstance.page.slugId}`);
+    await expect(instanceStatus).toBeVisible();
     expect(
       (
         await runAxe(
