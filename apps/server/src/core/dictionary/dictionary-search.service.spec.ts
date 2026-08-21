@@ -1,4 +1,5 @@
 import {
+  buildDictionaryDefinitionSnippet,
   buildDictionarySearchSnippet,
   rankDictionaryCandidate,
 } from './dictionary-search.service';
@@ -64,6 +65,15 @@ describe('Dictionary search ranking', () => {
     expect(buildDictionarySearchSnippet('Определение Café', 'cafe')).toEqual({
       text: 'Определение Café',
       matches: [{ start: 12, end: 16, value: 'Café' }],
+    });
+  });
+
+  it('returns a plain-text definition preview with match positions', () => {
+    expect(
+      buildDictionaryDefinitionSnippet('**Protocol** definition', 'protocol'),
+    ).toEqual({
+      text: 'Protocol definition',
+      matches: [{ start: 0, end: 8, value: 'Protocol' }],
     });
   });
 });

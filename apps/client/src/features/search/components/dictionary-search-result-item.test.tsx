@@ -5,69 +5,39 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DictionarySearchResultItem } from "./dictionary-search-result-item";
 
-const termQuery = vi.hoisted(() =>
-  vi.fn((_termId: string, enabled: boolean) => ({
-    isLoading: false,
-    isError: false,
-    data: enabled
-      ? {
-          id: "term-1",
-          term: "Protocol",
-          forms: ["Protocols"],
-          definitionMarkdown: "Safe definition",
-        }
-      : undefined,
-  })),
-);
+const closeSpotlight = vi.hoisted(() => vi.fn());
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (value: string) => value }),
 }));
 
-vi.mock("@/features/dictionary/queries/dictionary-query", () => ({
-  useDictionaryTermQuery: termQuery,
-}));
-
-vi.mock("@/features/dictionary/components/dictionary-markdown", () => ({
-  DictionaryMarkdown: ({ markdown }: { markdown: string }) => (
-    <div data-testid="definition">{markdown}</div>
+vi.mock("react-router-dom", () => ({
+  Link: ({ to, ...props }: React.ComponentProps<"a"> & { to: string }) => (
+    <a href={to} {...props} />
   ),
 }));
 
 vi.mock("../constants", () => ({
-  searchSpotlight: { close: vi.fn() },
+  searchSpotlight: { close: closeSpotlight },
 }));
 
 vi.mock("@mantine/spotlight", () => ({
   Spotlight: {
-    Action: ({ children, ...props }: React.ComponentProps<"button">) => (
-      <button type="button" {...props}>
-        {children}
-      </button>
+    Action: ({ component: Component = "button", ...props }: any) => (
+      <Component {...props} />
     ),
   },
 }));
 
 vi.mock("@mantine/core", () => ({
-  ActionIcon: ({ children, to, ...props }: any) => (
-    <a href={to} {...props}>
-      {children}
-    </a>
-  ),
   Badge: ({ children }: any) => <span>{children}</span>,
   Box: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  Collapse: ({ children, in: opened }: any) =>
-    opened ? <div>{children}</div> : null,
   Group: ({ children }: any) => <div>{children}</div>,
-  Loader: () => <span>Loading</span>,
   Text: ({ children }: any) => <span>{children}</span>,
-  Tooltip: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock("@tabler/icons-react", () => ({
   IconBook2: () => null,
-  IconChevronDown: () => null,
-  IconExternalLink: () => null,
 }));
 
 (
@@ -85,10 +55,10 @@ describe("DictionarySearchResultItem", () => {
     }
     root = null;
     container = null;
-    termQuery.mockClear();
+    closeSpotlight.mockClear();
   });
 
-  it("uses a keyboard-native disclosure and lazily loads the full term", () => {
+  it("shows the definition and links the result directly to the term", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -105,6 +75,10 @@ describe("DictionarySearchResultItem", () => {
               text: "Protocols",
               matches: [{ start: 0, end: 9, value: "Protocols" }],
             },
+            definitionSnippet: {
+              text: "Safe definition",
+              matches: [],
+            },
             rank: 900,
             space: {
               id: "space-1",
@@ -117,21 +91,19 @@ describe("DictionarySearchResultItem", () => {
       );
     });
 
-    const disclosure = container.querySelector<HTMLButtonElement>(
-      "button[aria-expanded]",
+    expect(container.textContent).toContain("Safe definition");
+    expect(container.querySelector("button")).toBeNull();
+    const links = container.querySelectorAll<HTMLAnchorElement>("a");
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe(
+      "/s/engineering/dictionary?term=term-1",
     );
-    expect(disclosure?.getAttribute("aria-expanded")).toBe("false");
-    expect(termQuery).toHaveBeenLastCalledWith("term-1", false);
+    links[0]?.addEventListener("click", (event) => event.preventDefault(), {
+      once: true,
+    });
 
-    act(() => disclosure?.click());
+    act(() => links[0]?.click());
 
-    expect(disclosure?.getAttribute("aria-expanded")).toBe("true");
-    expect(termQuery).toHaveBeenLastCalledWith("term-1", true);
-    expect(
-      container.querySelector("[data-testid='definition']")?.textContent,
-    ).toBe("Safe definition");
-    expect(
-      container.querySelector<HTMLAnchorElement>("a")?.getAttribute("href"),
-    ).toBe("/s/engineering/dictionary?term=term-1");
+    expect(closeSpotlight).toHaveBeenCalledOnce();
   });
 });

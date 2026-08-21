@@ -100,6 +100,7 @@ export interface IDictionarySearch {
   matchedField: "term" | "form" | "definition";
   matchedForm?: string;
   snippet: ITagSearchSnippet;
+  definitionSnippet: ITagSearchSnippet;
   rank: number;
   space: {
     id: string;
