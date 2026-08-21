@@ -3,6 +3,7 @@ import { CamelCasePlugin, Kysely } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { envPath, normalizePostgresUrl } from '../common/helpers';
 import { postgres } from '../database/postgres-client';
+import { resolveEnvironmentFileSecrets } from '../integrations/environment/environment-file-secrets';
 
 export type CliArgs = Record<string, string | boolean>;
 
@@ -12,6 +13,12 @@ export type CliArgs = Record<string, string | boolean>;
  */
 export function loadCliEnv(): void {
   dotenv.config({ path: envPath });
+  const fileSecretErrors = resolveEnvironmentFileSecrets(process.env);
+  if (fileSecretErrors.length > 0) {
+    throw new Error(
+      `Invalid environment file secrets: ${fileSecretErrors.join('; ')}`,
+    );
+  }
 }
 
 export function parseCliArgs(argv: string[]): CliArgs {
