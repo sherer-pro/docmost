@@ -1809,6 +1809,10 @@
             "signal": "source supprimée",
             "action": "Une page, une base de données, une ligne, une pièce jointe ou un terme du dictionnaire a disparu après l’instantané du flux. RAG Sync retire aussi les sources gérées `database_row` et `dictionary_term`, puis continue sans réessayer une erreur interne not found."
           },
+          "sourceRestored": {
+            "signal": "source restaurée non réindexée",
+            "action": "Lors d’une restauration, Docmost actualise l’horodatage de tout le sous-arbre restauré et de ses pièces jointes actives, puis réveille RAG Sync. Les flux de mises à jour et de pièces jointes les rechargent sans attendre l’intervalle d’interrogation normal. S’ils restent absents, vérifiez l’état et le code d’erreur du binding."
+          },
           "runtimeStopped": {
             "signal": "synchronisation arrêtée",
             "action": "Une erreur d'exécution non réessayable a désactivé la liaison. Corrigez la cause signalée ; si la cible est indisponible, testez à nouveau la Knowledge Base avant d'activer la synchronisation."

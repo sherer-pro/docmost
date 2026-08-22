@@ -1809,6 +1809,10 @@
             "signal": "fonte rimossa",
             "action": "Una pagina, un database, una riga, un allegato o un termine del dizionario è scomparso dopo lo snapshot del feed. RAG Sync rimuove anche le origini gestite `database_row` e `dictionary_term` e continua senza ripetere un errore interno not found."
           },
+          "sourceRestored": {
+            "signal": "origine ripristinata non reindicizzata",
+            "action": "Durante il ripristino, Docmost aggiorna il timestamp dell’intero sottoalbero ripristinato e dei relativi allegati attivi, quindi riattiva RAG Sync. I feed di aggiornamenti e allegati li caricano di nuovo senza attendere il normale intervallo di polling. Se restano assenti, controlla lo stato e il codice errore del binding."
+          },
           "runtimeStopped": {
             "signal": "sincronizzazione arrestata",
             "action": "Un errore di runtime non ripetibile ha disabilitato il collegamento. Correggi la causa segnalata; se il target non è disponibile, testa nuovamente la Knowledge Base prima di abilitare la sincronizzazione."

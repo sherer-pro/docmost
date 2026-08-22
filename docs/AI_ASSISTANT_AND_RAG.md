@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 14 -->
+<!-- ai-admin-guide-contract-version: 15 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -908,6 +908,15 @@ documents without relying on an event being delivered. Entity changes,
 referenced member display-name changes, database schema/cell/row changes, and
 dictionary mutations wake the supervisor only after commit; business writes do
 not wait for Open WebUI and delivery remains at least once.
+
+Moving a page across an excluded subtree boundary and moving a page tree to the
+trash wake the matching space binding immediately after commit. Restoring a
+page tree also refreshes the projection timestamps of every restored page and
+its live attachments before waking the binding. The update and attachment
+feeds can therefore upload a restored source even when its earlier deletion
+tombstone already advanced the checkpoints. Query-time retrieval applies the
+new exclusion and deletion state immediately; remote Open WebUI convergence
+remains asynchronous and does not extend the page-mutation transaction.
 
 Attachment update feeds include only attachments whose parent page is still
 live in the same workspace and space. A page, database, or attachment can still

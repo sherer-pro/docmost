@@ -207,6 +207,7 @@ export const AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS = [
       "targetMismatch",
       "writerVerification",
       "sourceRemoved",
+      "sourceRestored",
       "runtimeStopped",
       "cleanupRequired",
     ],

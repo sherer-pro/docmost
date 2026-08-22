@@ -1809,6 +1809,10 @@
             "signal": "fonte removida",
             "action": "Uma página, banco, linha de banco, anexo ou termo do dicionário desapareceu após o snapshot do feed. O RAG Sync remove também as origens gerenciadas `database_row` e `dictionary_term` e continua sem repetir um erro interno not found."
           },
+          "sourceRestored": {
+            "signal": "origem restaurada não reindexada",
+            "action": "Ao restaurar, o Docmost atualiza o horário de toda a subárvore restaurada e de seus anexos ativos e então desperta o RAG Sync. Os feeds de atualizações e anexos fazem novo upload sem esperar o intervalo normal de consulta. Se continuarem ausentes, verifique a integridade e o código de erro do binding."
+          },
           "runtimeStopped": {
             "signal": "sincronização interrompida",
             "action": "Um erro de runtime não repetível desativou a vinculação. Corrija a causa informada; se o destino estiver indisponível, teste a Knowledge Base novamente antes de ativar a sincronização."
