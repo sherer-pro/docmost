@@ -320,7 +320,10 @@ export default function GlobalAppShell({
                 whiteSpace: "nowrap",
               },
               body: {
-                height: "100dvh",
+                height: "100%",
+                minHeight: 0,
+                maxHeight: "100%",
+                overflow: "hidden",
                 paddingTop: "env(safe-area-inset-top)",
                 paddingBottom: "env(safe-area-inset-bottom)",
               },

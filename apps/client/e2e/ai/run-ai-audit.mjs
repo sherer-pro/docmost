@@ -370,6 +370,16 @@ try {
       },
     }),
   );
+  await responseJson(
+    await api.post(`/api/spaces/${spaceId}/ai/config/actions/test-agent`, {
+      data: {},
+    }),
+  );
+  await responseJson(
+    await api.patch(`/api/spaces/${spaceId}/ai/config`, {
+      data: { agentEnabled: true },
+    }),
+  );
   const members = [];
   for (let index = 1; index <= 6; index += 1) {
     members.push(await provisionAuditMember(api, spaceId, index));

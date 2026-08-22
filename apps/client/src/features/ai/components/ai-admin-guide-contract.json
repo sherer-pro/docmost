@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "anchors": [
     "assistant",
     "retrieval",
@@ -96,6 +96,7 @@
     "scenario.assistant.steps.step1",
     "scenario.assistant.steps.step2",
     "scenario.assistant.steps.step3",
+    "scenario.assistant.steps.step4",
     "scenario.assistant.success",
     "scenario.assistant.technical",
     "scenario.inboundMcp.description",

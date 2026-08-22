@@ -42,6 +42,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     const viewportContent = await page
       .locator('meta[name="viewport"]')
       .getAttribute("content");
+    expect(viewportContent).toContain("interactive-widget=resizes-content");
     expect(viewportContent).not.toMatch(/user-scalable\s*=\s*no/i);
     expect(viewportContent).not.toMatch(
       /maximum-scale\s*=\s*1(?:\.0)?(?:\D|$)/i,
@@ -55,6 +56,41 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     expect(overflow.documentWidth).toBeLessThanOrEqual(
       overflow.viewportWidth + 2,
     );
+
+    const readMode = page.getByRole("radio", { name: "Read", exact: true });
+    const editMode = page.getByRole("radio", { name: "Edit", exact: true });
+    await expect(readMode).toBeAttached();
+    await expect(editMode).toBeAttached();
+    await expect(readMode).toBeChecked();
+
+    for (const width of [320, 360, 412]) {
+      await page.setViewportSize({ width, height: 820 });
+      const headerFits = await page
+        .getByTestId("page-header-actions")
+        .evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            noInternalOverflow: element.scrollWidth <= element.clientWidth + 1,
+            insideViewport:
+              rect.left >= -1 && rect.right <= window.innerWidth + 1,
+          };
+        });
+      expect(headerFits.noInternalOverflow).toBe(true);
+      expect(headerFits.insideViewport).toBe(true);
+    }
+
+    await page.getByRole("button", { name: "Open menu", exact: true }).click();
+    await expect(
+      page.getByRole("menuitem", { name: "Page details" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: "Comments" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: "Table of contents" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+
     await expect(page.locator(".tableWrapper")).toBeVisible();
     await page.getByAltText("Editor audit image alt text").tap();
     await expect(
@@ -67,7 +103,6 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     await captureStep(page, testInfo, "05-mobile-touch-reflow", {
       fullPage: true,
     });
-
   } finally {
     await apiPost(api, "/api/users/update", {
       aiPanelOpen: original.aiPanelOpen ?? false,

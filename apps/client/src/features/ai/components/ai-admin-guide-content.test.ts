@@ -13,7 +13,7 @@ import {
 
 describe("AI administrator guide contract", () => {
   it("keeps stable anchors and context-sensitive routes", () => {
-    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(13);
+    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(14);
     expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(guideContract.version);
     expect(AI_ADMIN_GUIDE_ANCHORS).toEqual(guideContract.anchors);
     expect(getAiAdminGuideAnchorFromHash("#rag-api")).toBe("rag-api");
@@ -27,6 +27,12 @@ describe("AI administrator guide contract", () => {
       "/settings/ai/spaces",
       "/settings/keys/mcp",
       "/settings/ai/external-tools",
+    ]);
+    expect(AI_ADMIN_GUIDE_SCENARIOS[0].stepKeys).toEqual([
+      "step1",
+      "step2",
+      "step3",
+      "step4",
     ]);
   });
 

@@ -17,6 +17,7 @@ import {
   Text,
   TextInput,
   Tooltip,
+  VisuallyHidden,
 } from "@mantine/core";
 import {
   IconAlertTriangle,
@@ -1557,6 +1558,7 @@ export function AiPanel() {
       ref={drop}
       gap="sm"
       h="100%"
+      data-testid="ai-panel"
       className={clsx(classes.panel, {
         [classes.panelDropActive]: isContextDropOver && isContextDropAllowed,
         [classes.panelDropRejected]: isContextDropOver && !isContextDropAllowed,
@@ -2507,7 +2509,27 @@ export function AiPanel() {
                 </Menu>
 
                 <Box className={classes.composerStatus}>
-                  {draftStatus === "error" ? (
+                  {isCompactMobile && draftStatus === "error" ? (
+                    <AccessibleActionIcon
+                      label={t("ai.ux.draftSaveFailed")}
+                      color="red"
+                      variant="subtle"
+                      size={44}
+                      minTargetSize={44}
+                      onClick={() => void retryDraftSave()}
+                    >
+                      <IconAlertTriangle size={18} />
+                    </AccessibleActionIcon>
+                  ) : isCompactMobile &&
+                    (draftStatus === "saving" || draftStatus === "saved") ? (
+                    <VisuallyHidden>
+                      <span role="status" aria-live="polite">
+                        {draftStatus === "saving"
+                          ? t("ai.ux.draftSaving")
+                          : t("ai.ux.draftSaved")}
+                      </span>
+                    </VisuallyHidden>
+                  ) : isCompactMobile ? null : draftStatus === "error" ? (
                     <Button
                       variant="subtle"
                       color="red"

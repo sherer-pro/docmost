@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 13 -->
+<!-- ai-admin-guide-contract-version: 14 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -500,6 +500,15 @@ bold/italic/strike, and sanitized links can be entered through Markdown input
 rules or pasted as Markdown; the composer serializes them back to Markdown for
 the existing API. Active inline formatting shows its Markdown delimiters, and
 `Ctrl+Enter`/`Cmd+Enter` keeps the existing send shortcut.
+
+On narrow mobile composers, Chat and Agent are equal-width 44 px segments in
+a dedicated row. Space search is a labeled, controlled switch rather than a
+pressed button. Draft saving and saved states remain available to assistive
+technology without consuming the footer; a failed save stays visible as a
+44 px retry action. The application viewport declares
+`interactive-widget=resizes-content`, and the full-screen assistant flexes to
+the resized layout viewport so the composer remains above the virtual
+keyboard.
 
 Private multipart uploads require an `Idempotency-Key` header. Supported types
 are PDF, DOCX, TXT, Markdown, JPEG, PNG, and WebP. Limits are ten files,

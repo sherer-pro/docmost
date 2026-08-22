@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Save provider, model, profile, and policy settings",
             "step2": "Test Chat and Agent",
-            "step3": "Enable the space model and intended profiles"
+            "step3": "Enable the space model and intended profiles",
+            "step4": "On a phone, verify Chat and Agent, the space search switch, the footer, and the message field while the keyboard is open"
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",

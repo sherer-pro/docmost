@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Paramètres du fournisseur, du modèle, du profil et de la stratégie Save",
             "step2": "Test Chat et Agent",
-            "step3": "Enable le modèle spatial et les profils prévus"
+            "step3": "Enable le modèle spatial et les profils prévus",
+            "step4": "Sur un téléphone, vérifiez Chat et Agent, le commutateur de recherche de l’espace, le pied et le champ de message avec le clavier ouvert"
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",

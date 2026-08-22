@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Provedor Save, modelo, perfil e configurações de política",
             "step2": "Test Chat e Agent",
-            "step3": "Enable o modelo espacial e perfis pretendidos"
+            "step3": "Enable o modelo espacial e perfis pretendidos",
+            "step4": "Em um telefone, verifique Chat e Agent, o seletor de busca do espaço, o rodapé e o campo de mensagem com o teclado aberto"
           },
           "success": "Uma resposta de teste é concluída; Agent lista apenas ferramentas permitidas e pergunta antes de gravar",
           "rollback": "Desative Agent ou o modelo espacial e, em seguida, restaure as últimas configurações válidas",

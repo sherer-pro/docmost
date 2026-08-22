@@ -1,5 +1,4 @@
-import { Box, Button, Group, SegmentedControl, Tooltip } from "@mantine/core";
-import { IconSearch } from "@tabler/icons-react";
+import { Box, Group, SegmentedControl, Switch, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import classes from "./ai-panel.module.css";
@@ -44,31 +43,33 @@ export function AiComposerShell({
         gap="xs"
         wrap="nowrap"
         className={classes.composerToolbar}
+        data-testid="ai-composer-toolbar"
       >
         <Group gap={6} wrap="nowrap" className={classes.composerToolbarStart}>
           {contextControl}
           {spaceSearchAvailable && (
             <Tooltip label={t("ai.spaceSearchToggle")} withArrow>
-              <Button
-                variant={spaceSearchEnabled ? "light" : "subtle"}
-                size="compact-sm"
-                leftSection={<IconSearch size={15} />}
+              <Switch
+                size="sm"
+                label={t("ai.composer.spaceSearchShort")}
                 disabled={settingsDisabled}
-                className={classes.composerSearchButton}
+                checked={spaceSearchEnabled}
+                className={classes.composerSearchSwitch}
                 aria-label={t("ai.spaceSearchToggle")}
-                aria-pressed={spaceSearchEnabled}
-                onClick={() => onSpaceSearchChange(!spaceSearchEnabled)}
-              >
-                <span className={classes.composerResponsiveLabel}>
-                  {t("ai.composer.spaceSearchShort")}
-                </span>
-              </Button>
+                onChange={(event) =>
+                  onSpaceSearchChange(event.currentTarget.checked)
+                }
+              />
             </Tooltip>
           )}
         </Group>
 
-        <Group gap="xs" wrap="nowrap">
-          {externalToolsControl}
+        <Group gap="xs" wrap="nowrap" className={classes.composerToolbarEnd}>
+          {externalToolsControl && (
+            <Box className={classes.composerExternalTools}>
+              {externalToolsControl}
+            </Box>
+          )}
           {agentAvailable && (
             <Tooltip label={t("ai.agent.modeDescription")} withArrow>
               <SegmentedControl
@@ -76,6 +77,7 @@ export function AiComposerShell({
                 value={agentMode ? "agent" : "chat"}
                 disabled={settingsDisabled}
                 className={classes.composerModeControl}
+                data-testid="ai-composer-mode"
                 aria-label={t("ai.composer.mode")}
                 data={[
                   { label: t("ai.composer.chat"), value: "chat" },

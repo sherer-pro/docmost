@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Save 提供商、模型、配置文件和策略设置",
             "step2": "Test Chat 和 Agent",
-            "step3": "Enable 空间模型和预期轮廓"
+            "step3": "Enable 空间模型和预期轮廓",
+            "step4": "在手机上打开键盘，检查 Chat 和 Agent、空间搜索开关、页脚和消息输入框"
           },
           "success": "测试答案完成； Agent 仅列出允许的工具并在写入之前询问",
           "rollback": "禁用 Agent 或空间模型，然后恢复最后一次已知的良好设置",

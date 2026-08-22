@@ -195,7 +195,7 @@ function ScenarioPanel({
             {t("ai.adminGuide.labels.steps")}
           </Title>
           <List type="ordered" spacing="sm" withPadding>
-            {["step1", "step2", "step3"].map((step) => (
+            {(scenario.stepKeys ?? ["step1", "step2", "step3"]).map((step) => (
               <List.Item key={step}>{t(`${key}.steps.${step}`)}</List.Item>
             ))}
           </List>

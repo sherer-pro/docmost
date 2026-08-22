@@ -6,6 +6,7 @@ const auditRoot = path.resolve(
     path.resolve(process.cwd(), "../../output/audit/ai-assistant-2026-08-07"),
 );
 const baseURL = process.env.DOCMOST_BASE_URL ?? "http://localhost:3000";
+const webkitBaseURL = process.env.DOCMOST_WEBKIT_BASE_URL ?? baseURL;
 
 export default defineConfig({
   testDir: "./e2e/ai/specs",
@@ -61,6 +62,15 @@ export default defineConfig({
       name: "pixel-7",
       testMatch: /localization-responsive\.spec\.ts/,
       use: { ...devices["Pixel 7"], locale: "ru-RU" },
+    },
+    {
+      name: "mobile-webkit",
+      testMatch: /localization-responsive\.spec\.ts/,
+      use: {
+        ...devices["iPhone 15"],
+        baseURL: webkitBaseURL,
+        locale: "ru-RU",
+      },
     },
     {
       name: "narrow-ai-panel",
