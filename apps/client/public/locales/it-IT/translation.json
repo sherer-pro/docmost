@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Impostazioni di provider, modello, profilo e criteri Save",
             "step2": "Test Chat e Agent",
-            "step3": "Enable il modello spaziale e i profili previsti"
+            "step3": "Enable il modello spaziale e i profili previsti",
+            "step4": "Su un telefono, verifica Chat e Agent, l’interruttore di ricerca dello spazio, il piè di pagina e il campo del messaggio con la tastiera aperta"
           },
           "success": "Viene completata una risposta di prova; Agent elenca solo gli strumenti consentiti e chiede prima della scrittura",
           "rollback": "Disattiva Agent o il modello spaziale, quindi ripristina le ultime impostazioni funzionanti",

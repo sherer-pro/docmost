@@ -9,18 +9,15 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
-        "ai.spaceSearchToggle": "Search the space",
+        "ai.spaceSearchToggle": "Use space search",
         "ai.composer.spaceSearchShort": "Search",
         "ai.composer.mode": "Assistant mode",
         "ai.composer.chat": "Chat",
         "ai.agent.mode": "Agent",
-        "ai.agent.modeDescription": "Chat answers questions. Agent searches and suggests edits.",
+        "ai.agent.modeDescription":
+          "Chat answers questions. Agent searches and suggests edits.",
       })[key] ?? key,
   }),
-}));
-
-vi.mock("@tabler/icons-react", () => ({
-  IconSearch: () => <span aria-hidden="true">search</span>,
 }));
 
 vi.mock("@mantine/core", () => ({
@@ -30,17 +27,33 @@ vi.mock("@mantine/core", () => ({
   Group: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
     <div {...props}>{children}</div>
   ),
-  Button: ({
-    children,
-    leftSection,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    leftSection?: React.ReactNode;
+  Switch: ({
+    label,
+    checked,
+    onChange,
+    disabled,
+    className,
+    "aria-label": ariaLabel,
+  }: {
+    label: React.ReactNode;
+    checked: boolean;
+    onChange: React.ChangeEventHandler<HTMLInputElement>;
+    disabled?: boolean;
+    className?: string;
+    "aria-label"?: string;
   }) => (
-    <button type="button" {...props}>
-      {leftSection}
-      {children}
-    </button>
+    <label className={className}>
+      <input
+        type="checkbox"
+        role="switch"
+        aria-label={ariaLabel}
+        aria-checked={checked}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+      />
+      {label}
+    </label>
   ),
   SegmentedControl: ({
     value,
@@ -129,22 +142,24 @@ describe("AiComposerShell", () => {
     expect(container.textContent).toContain("Editor");
     expect(container.textContent).toContain("Footer");
     expect(
-      container.querySelector('button[aria-label="Search the space"]'),
+      container.querySelector('[role="switch"][aria-label="Use space search"]'),
     ).not.toBeNull();
     expect(
       container.querySelector('[aria-label="Assistant mode"]'),
     ).not.toBeNull();
   });
 
-  it("exposes search as a pressed toggle and switches assistant mode", () => {
+  it("exposes search as a controlled switch and switches assistant mode", () => {
     const rendered = renderComposer({ spaceSearchEnabled: true });
     root = rendered.root;
     container = rendered.container;
 
-    const search = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Search the space"]',
+    const search = container.querySelector<HTMLInputElement>(
+      '[role="switch"][aria-label="Use space search"]',
     );
-    expect(search?.getAttribute("aria-pressed")).toBe("true");
+    expect(search?.checked).toBe(true);
+    expect(search?.getAttribute("aria-checked")).toBe("true");
+    expect(search?.getAttribute("aria-pressed")).toBeNull();
     act(() => search?.click());
     expect(rendered.onSpaceSearchChange).toHaveBeenCalledWith(false);
 
@@ -166,8 +181,8 @@ describe("AiComposerShell", () => {
 
     expect(container.textContent).not.toContain("Agent");
     expect(
-      container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Search the space"]',
+      container.querySelector<HTMLInputElement>(
+        '[role="switch"][aria-label="Use space search"]',
       )?.disabled,
     ).toBe(true);
   });

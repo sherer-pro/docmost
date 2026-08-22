@@ -166,14 +166,25 @@
   display: none;
 }
 
-.composerSearchButton {
+.composerSearchSwitch {
   min-height: 32px;
   flex: 0 0 auto;
-  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+  display: flex;
+  align-items: center;
+  padding-inline: 4px;
 }
 
-.composerSearchButton[aria-pressed="true"] {
-  color: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-2));
+.composerSearchSwitch :global(.mantine-Switch-body) {
+  align-items: center;
+}
+
+.composerToolbarEnd:empty {
+  display: none;
+}
+
+.composerExternalTools {
+  display: flex;
+  flex: 0 0 auto;
 }
 
 .composerModeControl {
@@ -228,6 +239,18 @@
   font-size: var(--mantine-font-size-sm);
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+@media (max-height: 520px) and (pointer: coarse) {
+  .conversationBar {
+    display: none;
+  }
+
+  .markdownComposer :global(.ProseMirror) {
+    min-height: 44px;
+    max-height: 120px;
+    padding-block: 8px;
+  }
 }
 
 .markdownComposer :global(.ProseMirror-focused) {
@@ -866,7 +889,16 @@
   }
 
   .composerToolbarStart {
+    flex: 1 1 auto;
     gap: 4px;
+  }
+
+  .composerToolbar {
+    flex-wrap: wrap !important;
+  }
+
+  .composerToolbarEnd {
+    display: contents;
   }
 
   .contextButton {
@@ -883,22 +915,17 @@
     display: inline;
   }
 
-  .composerSearchButton .composerResponsiveLabel,
   .sendShortcutFull,
   .sendShortcutShort {
     display: none;
   }
 
-  .composerSearchButton,
+  .composerSearchSwitch,
   .composerInlineAction,
   .composerFooterButton,
   .sendButton {
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .composerSearchButton {
-    padding-inline: 0;
   }
 
   .composerProfileButton {
@@ -917,7 +944,14 @@
     display: none;
   }
 
+  .composerModeControl {
+    order: -1;
+    flex: 1 0 100%;
+    width: 100%;
+  }
+
   .composerModeControl :global(.mantine-SegmentedControl-control) {
+    flex: 1 1 50%;
     min-height: 44px;
   }
 
@@ -950,7 +984,7 @@
 }
 
 @media (pointer: coarse) {
-  .composerSearchButton,
+  .composerSearchSwitch,
   .composerInlineAction,
   .composerProfileButton,
   .composerFooterButton,
@@ -967,7 +1001,7 @@
   }
 
   .conversationBar > button,
-  .composerSearchButton,
+  .composerSearchSwitch,
   .composerFooterButton,
   .composerStopButton,
   .sendButton {

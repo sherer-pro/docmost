@@ -1599,7 +1599,8 @@
           "steps": {
             "step1": "Save Anbieter-, Modell-, Profil- und Richtlinieneinstellungen",
             "step2": "Test Chat und Agent",
-            "step3": "Enable das Weltraummodell und die vorgesehenen Profile"
+            "step3": "Enable das Weltraummodell und die vorgesehenen Profile",
+            "step4": "Prüfen Sie auf einem Telefon bei geöffneter Tastatur Chat und Agent, den Schalter für die Bereichssuche, die Fußleiste und das Nachrichtenfeld"
           },
           "success": "Eine Testantwort wird abgeschlossen; Agent listet nur zulässige Tools auf und fragt vor dem Schreiben",
           "rollback": "Deaktivieren Sie Agent oder das Weltraummodell und stellen Sie dann die letzten als funktionierend bekannten Einstellungen wieder her",

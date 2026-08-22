@@ -84,6 +84,7 @@ export type AiAdminGuideScenario = {
   settingsPath: string;
   diagram: "rag" | "mcp" | null;
   controls: readonly AiAdminGuideCopyValue[];
+  stepKeys?: readonly string[];
 };
 
 export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
@@ -94,6 +95,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     settingsPath: "/settings/ai/spaces",
     diagram: null,
     controls: [{ kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" }],
+    stepKeys: ["step1", "step2", "step3", "step4"],
   },
   {
     anchor: "retrieval",
