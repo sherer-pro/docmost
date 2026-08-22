@@ -10,7 +10,13 @@ interface Props {
 export default function PageHeader({ readOnly, canMoveDeleteShare }: Props) {
   return (
     <div className={classes.header}>
-      <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
+      <Group
+        justify="space-between"
+        h="100%"
+        px="md"
+        wrap="nowrap"
+        className={classes.group}
+      >
         <Breadcrumb />
 
         <Group
@@ -20,6 +26,7 @@ export default function PageHeader({ readOnly, canMoveDeleteShare }: Props) {
           wrap="nowrap"
           gap="var(--mantine-spacing-xs)"
           className={classes.actions}
+          data-testid="page-header-actions"
         >
           <PageHeaderMenu
             readOnly={readOnly}

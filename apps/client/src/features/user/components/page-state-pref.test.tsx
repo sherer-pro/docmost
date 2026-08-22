@@ -29,13 +29,16 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("@mantine/core", () => ({
+  VisuallyHidden: ({ children }: { children: React.ReactNode }) => (
+    <span data-visually-hidden="true">{children}</span>
+  ),
   SegmentedControl: ({
     data,
     disabled,
     onChange,
     value,
   }: {
-    data: Array<{ label: string; value: string }>;
+    data: Array<{ label: React.ReactNode; value: string }>;
     disabled?: boolean;
     onChange: (value: string) => void;
     value: string;
@@ -53,6 +56,11 @@ vi.mock("@mantine/core", () => ({
       ))}
     </div>
   ),
+}));
+
+vi.mock("@tabler/icons-react", () => ({
+  IconBook: () => <span data-testid="read-icon" aria-hidden="true" />,
+  IconPencil: () => <span data-testid="edit-icon" aria-hidden="true" />,
 }));
 
 function createCurrentUser(
@@ -78,7 +86,10 @@ function createCurrentUser(
   };
 }
 
-function renderControl(pageEditModeByPageId?: Record<string, PageEditMode>) {
+function renderControl(
+  pageEditModeByPageId?: Record<string, PageEditMode>,
+  compact = false,
+) {
   const store = createStore();
   store.set(currentUserAtom, createCurrentUser(pageEditModeByPageId));
 
@@ -89,7 +100,7 @@ function renderControl(pageEditModeByPageId?: Record<string, PageEditMode>) {
   act(() => {
     root.render(
       <Provider store={store}>
-        <PageStateSegmentedControl pageId={PAGE_ID} />
+        <PageStateSegmentedControl pageId={PAGE_ID} compact={compact} />
       </Provider>,
     );
   });
@@ -148,7 +159,8 @@ describe("PageStateSegmentedControl", () => {
       },
     });
     expect(
-      store.get(currentUserAtom)?.user.settings.preferences.pageEditModeByPageId,
+      store.get(currentUserAtom)?.user.settings.preferences
+        .pageEditModeByPageId,
     ).toEqual({
       [PAGE_ID]: PageEditMode.Edit,
     });
@@ -166,9 +178,21 @@ describe("PageStateSegmentedControl", () => {
     await clickButton(container, "Edit");
 
     expect(
-      store.get(currentUserAtom)?.user.settings.preferences.pageEditModeByPageId,
+      store.get(currentUserAtom)?.user.settings.preferences
+        .pageEditModeByPageId,
     ).toEqual({
       [PAGE_ID]: PageEditMode.Read,
     });
+  });
+
+  it("renders compact icon segments with accessible labels", () => {
+    const { container, root } = renderControl(undefined, true);
+    mountedRoot = root;
+    mountedContainer = container;
+
+    expect(container.querySelector('[data-testid="edit-icon"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="read-icon"]')).not.toBeNull();
+    expect(container.textContent).toContain("Edit");
+    expect(container.textContent).toContain("Read");
   });
 });

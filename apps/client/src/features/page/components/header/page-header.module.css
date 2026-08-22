@@ -29,16 +29,9 @@
 
 .actions {
   @media (max-width: 48em) {
-    flex: 1 1 auto;
-    justify-content: flex-start !important;
-    min-width: 0;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
+    flex: 0 0 auto;
+    justify-content: flex-end !important;
+    gap: 4px !important;
     padding-inline: 0 !important;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
   }
 }

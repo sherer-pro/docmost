@@ -1,7 +1,7 @@
-import { Group } from '@mantine/core';
-import classes from '@/features/page/components/header/page-header.module.css';
-import DatabaseHeaderMenu from '@/features/database/components/header/database-header-menu.tsx';
-import Breadcrumb from '@/features/page/components/breadcrumbs/breadcrumb.tsx';
+import { Group } from "@mantine/core";
+import classes from "@/features/page/components/header/page-header.module.css";
+import DatabaseHeaderMenu from "@/features/database/components/header/database-header-menu.tsx";
+import Breadcrumb from "@/features/page/components/breadcrumbs/breadcrumb.tsx";
 
 interface DatabaseHeaderProps {
   databaseId: string;
@@ -18,7 +18,13 @@ export default function DatabaseHeader({
 }: DatabaseHeaderProps) {
   return (
     <div className={classes.header}>
-      <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
+      <Group
+        justify="space-between"
+        h="100%"
+        px="md"
+        wrap="nowrap"
+        className={classes.group}
+      >
         <Breadcrumb />
 
         <Group
@@ -28,6 +34,7 @@ export default function DatabaseHeader({
           wrap="nowrap"
           gap="var(--mantine-spacing-xs)"
           className={classes.actions}
+          data-testid="page-header-actions"
         >
           <DatabaseHeaderMenu
             databaseId={databaseId}
