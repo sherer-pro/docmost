@@ -202,7 +202,7 @@ describe("AI localization contract", () => {
       "integrations.section.profiles",
       ...PROFILE_ERROR_REASON_KEYS,
     ];
-    expect(profileKeys).toHaveLength(73);
+    expect(profileKeys).toHaveLength(122);
 
     for (const locale of LOCALES.filter((value) => value !== "en-US")) {
       const localized = flatten(readAiLocale(locale));
