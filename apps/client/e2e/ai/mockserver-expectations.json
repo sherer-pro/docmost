@@ -22,6 +22,35 @@
     }
   },
   {
+    "priority": 115,
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": {
+        "type": "JSON",
+        "json": {
+          "stream": false,
+          "tools": [
+            {
+              "type": "function",
+              "function": { "name": "capabilityProbe" }
+            }
+          ],
+          "tool_choice": {
+            "type": "function",
+            "function": { "name": "capabilityProbe" }
+          }
+        },
+        "matchType": "ONLY_MATCHING_FIELDS"
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "body": "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"audit-capability-probe\",\"type\":\"function\",\"function\":{\"name\":\"capabilityProbe\",\"arguments\":\"{\\\"value\\\":\\\"ok\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}"
+    }
+  },
+  {
     "priority": 110,
     "httpRequest": {
       "method": "POST",

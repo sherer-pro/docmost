@@ -21,6 +21,7 @@ const [
   ragSyncComposeSource,
   e2eRequirementsSource,
   syncedBlocksSpecSource,
+  aiMockExpectationsSource,
 ] = await Promise.all([
   readFile(".github/workflows/ci.yml", "utf8"),
   readFile(".github/workflows/docker.yml", "utf8"),
@@ -39,8 +40,10 @@ const [
   readFile("tests/rag-sync/compose.yml", "utf8"),
   readFile("apps/client/e2e/requirements.txt", "utf8"),
   readFile("apps/client/e2e/editor/specs/synced-blocks.spec.ts", "utf8"),
+  readFile("apps/client/e2e/ai/mockserver-expectations.json", "utf8"),
 ]);
 const packageJson = JSON.parse(packageSource);
+const aiMockExpectations = JSON.parse(aiMockExpectationsSource);
 
 function inputs(overrides = {}) {
   const workflows = {
@@ -295,6 +298,39 @@ test("AI provider acceptance follows the configured mock origin", () => {
     aiProviderSettingsSource,
     /toHaveValue\(\/host\\\.docker\\\.internal:1080\//u,
   );
+});
+
+test("AI provider mock completes the required tool-call capability probe", () => {
+  const probe = aiMockExpectations.find(
+    (expectation) =>
+      expectation.httpRequest?.body?.json?.tool_choice?.function?.name ===
+      "capabilityProbe",
+  );
+  const genericNonStreaming = aiMockExpectations.find((expectation) =>
+    expectation.httpRequest?.body?.regex?.includes("stream"),
+  );
+
+  assert.ok(probe, "missing capabilityProbe expectation");
+  assert.ok(genericNonStreaming, "missing generic non-streaming expectation");
+  assert.equal(probe.httpRequest.method, "POST");
+  assert.equal(probe.httpRequest.path, "/v1/chat/completions");
+  assert.equal(probe.httpRequest.body.type, "JSON");
+  assert.equal(probe.httpRequest.body.matchType, "ONLY_MATCHING_FIELDS");
+  assert.equal(probe.httpRequest.body.json.stream, false);
+  assert.equal(
+    probe.httpRequest.body.json.tools?.[0]?.function?.name,
+    "capabilityProbe",
+  );
+  assert.ok(
+    probe.priority > genericNonStreaming.priority,
+    "capabilityProbe must win over the generic non-streaming response",
+  );
+
+  const response = JSON.parse(probe.httpResponse.body);
+  const call = response.choices?.[0]?.message?.tool_calls?.[0];
+  assert.equal(response.choices?.[0]?.finish_reason, "tool_calls");
+  assert.equal(call?.function?.name, "capabilityProbe");
+  assert.deepEqual(JSON.parse(call.function.arguments), { value: "ok" });
 });
 
 test("AI context acceptance finds its member beyond the first page", () => {
