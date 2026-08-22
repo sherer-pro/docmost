@@ -1980,6 +1980,9 @@ export class PageService {
       pageIds: [dto.pageId],
       workspaceId: movedPage.workspaceId,
     });
+    this.eventEmitter.emit(EventName.RAG_SYNC_SCOPE_CHANGED, {
+      spaceId: movedPage.spaceId,
+    });
   }
 
   async getPageBreadCrumbs(childPageId: string) {
@@ -2079,7 +2082,7 @@ export class PageService {
   }
 
   async forceDelete(pageId: string, workspaceId: string): Promise<void> {
-    const pageIds = await this.deletePageTreeAtomically({
+    const { pageIds } = await this.deletePageTreeAtomically({
       pageId,
       workspaceId,
       hardDelete: true,
@@ -2116,7 +2119,7 @@ export class PageService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    const pageIds = await this.deletePageTreeAtomically({
+    const { pageIds, spaceIds } = await this.deletePageTreeAtomically({
       pageId,
       workspaceId,
       deletedById: userId,
@@ -2127,6 +2130,9 @@ export class PageService {
         pageIds,
         workspaceId,
       });
+      for (const spaceId of spaceIds) {
+        this.eventEmitter.emit(EventName.RAG_SYNC_SCOPE_CHANGED, { spaceId });
+      }
     }
   }
 
@@ -2135,7 +2141,7 @@ export class PageService {
     workspaceId: string;
     hardDelete: boolean;
     deletedById?: string;
-  }): Promise<string[]> {
+  }): Promise<{ pageIds: string[]; spaceIds: string[] }> {
     return executeTx(this.db, async (trx) => {
       const descendants = await trx
         .withRecursive('page_descendants', (db) =>
@@ -2168,14 +2174,14 @@ export class PageService {
         .select('id')
         .execute();
       const pageIds = descendants.map(({ id }) => id);
-      if (pageIds.length === 0) return [];
+      if (pageIds.length === 0) return { pageIds: [], spaceIds: [] };
 
       // Lock template source rows before checking linkage. createFromTemplate
       // takes the same source-page lock before inserting an instance, so either
       // the create commits first and is observed here or it sees the deletion.
       const lockedPages = await trx
         .selectFrom('pages')
-        .select(['id', 'templateKind'])
+        .select(['id', 'spaceId', 'templateKind'])
         .where('workspaceId', '=', params.workspaceId)
         .where(sql<boolean>`${sql.ref('id')} = any(${pageIds}::uuid[])`)
         .orderBy('id')
@@ -2225,7 +2231,10 @@ export class PageService {
           .execute();
       }
 
-      return lockedPageIds;
+      return {
+        pageIds: lockedPageIds,
+        spaceIds: [...new Set(lockedPages.map(({ spaceId }) => spaceId))],
+      };
     });
   }
 
