@@ -82,7 +82,6 @@ const ID_NODE_TYPES = new Set([
   'paragraph',
   'heading',
   'transclusionSource',
-  'pageEmbed',
 ]);
 const MAX_NODE_JSON_BYTES = 32 * 1024;
 const MAX_OPERATION_TEXT_LENGTH = 16 * 1024;

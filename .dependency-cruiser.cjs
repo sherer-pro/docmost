@@ -33,6 +33,18 @@ module.exports = {
       },
     },
     {
+      name: "no-client-foundation-to-features",
+      severity: "error",
+      comment:
+        "Frontend foundation modules must stay reusable and cannot depend on product feature implementations.",
+      from: {
+        path: "(^|/)apps/client/src/(?:lib|types|components/ui)(?:/|$)",
+      },
+      to: {
+        path: "(^|/)apps/client/src/features(?:/|$)",
+      },
+    },
+    {
       name: "no-unresolved-internal-imports",
       severity: "error",
       comment:

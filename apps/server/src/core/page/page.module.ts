@@ -24,8 +24,6 @@ import { PageTemplateOperationService } from './services/page-template-operation
 import { PageTemplatePublicationService } from './services/page-template-publication.service';
 import { PageTemplateInstanceService } from './services/page-template-instance.service';
 import { PageTemplateSyncService } from './services/page-template-sync.service';
-import { PageEmbedCommandService } from './services/page-embed-command.service';
-import { LegacyPageEmbedMigrationService } from './services/legacy-page-embed-migration.service';
 
 @Module({
   controllers: [PageController, PageTemplateController],
@@ -42,8 +40,6 @@ import { LegacyPageEmbedMigrationService } from './services/legacy-page-embed-mi
     PageTemplatePublicationService,
     PageTemplateInstanceService,
     PageTemplateSyncService,
-    PageEmbedCommandService,
-    LegacyPageEmbedMigrationService,
     PageTemplateService,
     PageTemplateRuntimeService,
     {

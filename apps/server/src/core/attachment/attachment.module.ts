@@ -10,6 +10,8 @@ import { TokenModule } from '../auth/token.module';
 import { AttachmentFileAccessService } from './services/attachment-file-access.service';
 import { AttachmentContentService } from './services/attachment-content.service';
 import { ShareModule } from '../share/share.module';
+import { AttachmentCleanupService } from './services/attachment-cleanup.service';
+import { ATTACHMENT_CLEANUP_HANDLER } from '../../integrations/queue/outbox/queue-outbox.types';
 
 @Module({
   imports: [
@@ -25,6 +27,12 @@ import { ShareModule } from '../share/share.module';
     AttachmentContentService,
     AttachmentProcessor,
     AttachmentFileAccessService,
+    AttachmentCleanupService,
+    {
+      provide: ATTACHMENT_CLEANUP_HANDLER,
+      useExisting: AttachmentCleanupService,
+    },
   ],
+  exports: [ATTACHMENT_CLEANUP_HANDLER],
 })
 export class AttachmentModule {}

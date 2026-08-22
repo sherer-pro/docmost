@@ -10,7 +10,6 @@ import type { User } from '@docmost/db/types/entity.types';
 import type { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import type { PageTemplateSyncOutboxHandler } from '../../../integrations/queue/outbox/queue-outbox.types';
-import { LegacyPageEmbedMigrationService } from './legacy-page-embed-migration.service';
 import { PageTemplateOperationService } from './page-template-operation.service';
 import { PageTemplateSyncService } from './page-template-sync.service';
 
@@ -29,13 +28,11 @@ export class PageTemplateRuntimeService
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageRepo: PageRepo,
-    private readonly legacyMigration: LegacyPageEmbedMigrationService,
     private readonly templateSync: PageTemplateSyncService,
     private readonly operations: PageTemplateOperationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.migrateLegacyPageEmbeds();
     void this.resumePendingSyncRuns();
     this.syncResumeTimer = setInterval(
       () => void this.resumePendingSyncRuns(),
@@ -50,49 +47,6 @@ export class PageTemplateRuntimeService
 
   async processSyncRunFromOutbox(runId: string): Promise<void> {
     await this.processSyncRun(runId);
-  }
-
-  private async migrateLegacyPageEmbeds(): Promise<void> {
-    const candidates =
-      await this.legacyMigration.findLegacyPageEmbedCandidates();
-    if (candidates.length === 0) return;
-
-    let migrated = 0;
-    let failed = 0;
-    for (const candidate of candidates) {
-      try {
-        if (
-          await this.legacyMigration.migrateLegacyPageEmbedsForPage(
-            candidate.referencePageId,
-          )
-        ) {
-          migrated += 1;
-        }
-      } catch (error) {
-        failed += 1;
-        await this.legacyMigration
-          .recordLegacyMigrationFailure(candidate.referencePageId, error)
-          .catch((journalError) => {
-            this.logger.error(
-              `Legacy page embed failure journal write failed; pageId=${candidate.referencePageId}; code=${this.operations.errorCode(journalError)}`,
-            );
-          });
-        this.logger.error(
-          `Legacy page embed migration failed; pageId=${candidate.referencePageId}; code=${this.operations.errorCode(error)}`,
-        );
-      }
-    }
-
-    const remaining = (
-      await this.legacyMigration.findLegacyPageEmbedCandidates()
-    ).length;
-    if (remaining > 0 || failed > 0) {
-      this.logger.error(
-        `Legacy page embed migration incomplete; migrated=${migrated}; failed=${failed}; remaining=${remaining}`,
-      );
-      throw new Error('legacy_page_embed_migration_incomplete');
-    }
-    this.logger.log(`Legacy page embed migration completed; pages=${migrated}`);
   }
 
   private async resumePendingSyncRuns(): Promise<void> {
@@ -173,7 +127,23 @@ export class PageTemplateRuntimeService
       if (!actor && revision) {
         const template = await this.pageRepo.findById(claimed.templatePageId);
         if (template) {
-          actor = await this.legacyMigration.findLegacyMigrationActor(template);
+          actor =
+            (await this.db
+              .selectFrom('users')
+              .selectAll()
+              .where('id', '=', template.creatorId)
+              .where('workspaceId', '=', template.workspaceId)
+              .where('deletedAt', 'is', null)
+              .where('deactivatedAt', 'is', null)
+              .executeTakeFirst()) ??
+            (await this.db
+              .selectFrom('users')
+              .selectAll()
+              .where('workspaceId', '=', template.workspaceId)
+              .where('deletedAt', 'is', null)
+              .where('deactivatedAt', 'is', null)
+              .orderBy('createdAt', 'asc')
+              .executeTakeFirst());
         }
       }
       if (!revision || !actor) {

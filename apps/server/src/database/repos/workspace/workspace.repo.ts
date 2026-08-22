@@ -28,6 +28,7 @@ export class WorkspaceRepo {
   public baseFields: Array<keyof Workspaces> = [
     'id',
     'name',
+    'pageHistoryRetentionDays',
     'description',
     'logo',
     'hostname',

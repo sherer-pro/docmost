@@ -25,9 +25,13 @@ import {
   hashTemplateInstanceContent,
 } from "./page-template-draft-hash";
 
-vi.mock("@/lib/api-client", () => ({
-  default: { post: vi.fn(), get: vi.fn(), put: vi.fn(), patch: vi.fn() },
-}));
+vi.mock("@/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    default: { post: vi.fn(), get: vi.fn(), put: vi.fn(), patch: vi.fn() },
+  };
+});
 
 const post = vi.mocked(api.post);
 const get = vi.mocked(api.get);

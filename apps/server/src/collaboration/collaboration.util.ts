@@ -41,7 +41,6 @@ import {
   Tag,
   TransclusionSource,
   TransclusionReference,
-  PageEmbed,
   TemplateField,
   TemplateManagedBlock,
   addUniqueIdsToDoc,
@@ -66,7 +65,7 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph', 'transclusionSource', 'pageEmbed'],
+    types: ['heading', 'paragraph', 'transclusionSource'],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -110,7 +109,6 @@ export const tiptapExtensions = [
   Subpages,
   TransclusionSource,
   TransclusionReference,
-  PageEmbed,
   TemplateManagedBlock,
   TemplateField,
 ] as any;

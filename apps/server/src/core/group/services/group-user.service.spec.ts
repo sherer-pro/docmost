@@ -14,7 +14,9 @@ describe('GroupUserService', () => {
       delete: jest.fn().mockResolvedValue(undefined),
     };
     const spaceMemberRepo = {
-      getSpaceIdsByGroupId: jest.fn().mockResolvedValue(['space-id']),
+      getSpaceIdsByGroupId: jest
+        .fn()
+        .mockResolvedValue(['space-id', 'second-space-id']),
     };
     const userRepo = {
       findById: jest.fn().mockResolvedValue({ id: 'user-id' }),
@@ -26,7 +28,9 @@ describe('GroupUserService', () => {
       }),
     };
     const watcherRepo = {
-      deleteByUsersWithoutSpaceAccess: jest.fn().mockResolvedValue(undefined),
+      deleteByUsersWithoutSpacesAccess: jest
+        .fn()
+        .mockResolvedValue(undefined),
     };
     const eventEmitter = {
       emit: jest.fn(),
@@ -52,14 +56,10 @@ describe('GroupUserService', () => {
     expect(groupUserRepo.delete).toHaveBeenCalledWith('user-id', 'group-id', {
       trx,
     });
-    expect(watcherRepo.deleteByUsersWithoutSpaceAccess).toHaveBeenCalledWith(
+    expect(watcherRepo.deleteByUsersWithoutSpacesAccess).toHaveBeenCalledWith(
       ['user-id'],
-      'space-id',
+      ['space-id', 'second-space-id'],
       { trx },
-    );
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      EventName.PAGE_EMBED_VISIBILITY_CHANGED,
-      { workspaceId: 'workspace-id', accessUserIds: ['user-id'] },
     );
     expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
       EventName.AUTHORIZATION_CHANGED,

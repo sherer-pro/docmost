@@ -136,8 +136,6 @@ export class TransclusionService {
         referencePageId,
         sourcePageId: d.sourcePageId,
         transclusionId: d.transclusionId,
-        referenceKind: 'block' as const,
-        referenceNodeId: null,
       }));
 
     const toDelete = existingBlockReferences
@@ -204,8 +202,6 @@ export class TransclusionService {
       referencePageId: string;
       sourcePageId: string;
       transclusionId: string;
-      referenceKind: 'block';
-      referenceNodeId: null;
     }> = [];
     for (const page of pages) {
       const refs = collectReferencesFromPmJson(page.content);
@@ -215,8 +211,6 @@ export class TransclusionService {
           referencePageId: page.id,
           sourcePageId: r.sourcePageId,
           transclusionId: r.transclusionId,
-          referenceKind: 'block',
-          referenceNodeId: null,
         });
       }
     }
@@ -478,7 +472,7 @@ export class TransclusionService {
     const copiedPaths: string[] = [];
 
     try {
-      await this.pageTransclusionReferencesRepo.withWorkspaceGraphLock(
+      await this.pageTransclusionReferencesRepo.withWorkspaceMutationLock(
         referencePage.workspaceId,
         async (trx) => {
           const attachmentIds = Array.from(

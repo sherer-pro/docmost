@@ -292,4 +292,178 @@ function redirectToLogin() {
   }
 }
 
+const IDEMPOTENCY_STORAGE_PREFIX = "docmost:idempotency:v1:";
+
+type StoredIdempotencyLease = {
+  idempotencyKey: string;
+};
+
+export type IdempotencyLease = {
+  idempotencyKey: string;
+  fingerprint: string;
+  complete: () => void;
+  cancel: () => void;
+};
+
+const idempotencyLeases = new Map<string, StoredIdempotencyLease>();
+const idempotencyOperations = new Map<string, Promise<unknown>>();
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  return `{${Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => item !== undefined)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+    .join(",")}}`;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function idempotencyStorage(): Storage | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredIdempotencyLease(
+  storageKey: string,
+): StoredIdempotencyLease | null {
+  const session = idempotencyStorage();
+  if (!session) {
+    return null;
+  }
+
+  try {
+    const raw = session.getItem(storageKey);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<StoredIdempotencyLease>;
+    if (typeof parsed.idempotencyKey !== "string") {
+      session.removeItem(storageKey);
+      return null;
+    }
+    return parsed as StoredIdempotencyLease;
+  } catch {
+    try {
+      session.removeItem(storageKey);
+    } catch {
+      // The in-memory lease remains available when browser storage is blocked.
+    }
+    return null;
+  }
+}
+
+function persistIdempotencyLease(
+  storageKey: string,
+  lease: StoredIdempotencyLease,
+): void {
+  try {
+    idempotencyStorage()?.setItem(storageKey, JSON.stringify(lease));
+  } catch {
+    // Storage is an optional cross-reload durability layer.
+  }
+}
+
+function releaseIdempotencyLease(
+  fingerprint: string,
+  storageKey: string,
+  idempotencyKey: string,
+): void {
+  if (idempotencyLeases.get(fingerprint)?.idempotencyKey === idempotencyKey) {
+    idempotencyLeases.delete(fingerprint);
+  }
+
+  try {
+    const session = idempotencyStorage();
+    const current = session?.getItem(storageKey);
+    if (
+      current &&
+      (JSON.parse(current) as Partial<StoredIdempotencyLease>)
+        .idempotencyKey === idempotencyKey
+    ) {
+      session?.removeItem(storageKey);
+    }
+  } catch {
+    // An inaccessible storage layer must not block the completed operation.
+  }
+}
+
+export async function acquireIdempotencyLease(
+  scope: string,
+  payload: unknown,
+): Promise<IdempotencyLease> {
+  const fingerprint = await sha256Hex(`${scope}\n${canonicalJson(payload)}`);
+  const storageKey = `${IDEMPOTENCY_STORAGE_PREFIX}${fingerprint}`;
+
+  let lease = idempotencyLeases.get(fingerprint);
+  lease ??= readStoredIdempotencyLease(storageKey) ?? undefined;
+  lease ??= {
+    idempotencyKey: crypto.randomUUID(),
+  };
+
+  idempotencyLeases.set(fingerprint, lease);
+  persistIdempotencyLease(storageKey, lease);
+
+  return {
+    idempotencyKey: lease.idempotencyKey,
+    fingerprint,
+    complete: () =>
+      releaseIdempotencyLease(fingerprint, storageKey, lease.idempotencyKey),
+    cancel: () =>
+      releaseIdempotencyLease(fingerprint, storageKey, lease.idempotencyKey),
+  };
+}
+
+export async function runWithIdempotencyLease<T>(input: {
+  scope: string;
+  payload: unknown;
+  operation: (idempotencyKey: string) => Promise<T>;
+}): Promise<T> {
+  const lease = await acquireIdempotencyLease(input.scope, input.payload);
+  const existing = idempotencyOperations.get(lease.fingerprint);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+
+  const operation = (async () => {
+    try {
+      const result = await input.operation(lease.idempotencyKey);
+      lease.complete();
+      return result;
+    } catch (error) {
+      if (
+        (error as { response?: { data?: { code?: unknown } } })?.response?.data
+          ?.code === "idempotency_key_reused"
+      ) {
+        lease.cancel();
+      }
+      throw error;
+    }
+  })();
+  idempotencyOperations.set(lease.fingerprint, operation);
+  try {
+    return await operation;
+  } finally {
+    if (idempotencyOperations.get(lease.fingerprint) === operation) {
+      idempotencyOperations.delete(lease.fingerprint);
+    }
+  }
+}
+
 export default api;

@@ -67,10 +67,6 @@ describe('SpaceMemberService', () => {
       'space-id',
       { trx: fakeTrx },
     );
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      EventName.PAGE_EMBED_VISIBILITY_CHANGED,
-      { workspaceId: 'workspace-id', accessUserIds: ['user-id'] },
-    );
     expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
       EventName.AUTHORIZATION_CHANGED,
       { workspaceId: 'workspace-id', userId: 'user-id' },

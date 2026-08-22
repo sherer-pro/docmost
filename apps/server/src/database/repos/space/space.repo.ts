@@ -87,6 +87,53 @@ export class SpaceRepo {
       .executeTakeFirst();
   }
 
+  async hasImportCleanupBlockers(
+    spaceId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    const activeTask = await trx
+      .selectFrom('fileTasks')
+      .select('id')
+      .where('spaceId', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .where('type', '=', 'import')
+      .where('status', 'in', ['uploading', 'pending', 'processing'])
+      .forUpdate()
+      .limit(1)
+      .executeTakeFirst();
+    if (activeTask) return true;
+
+    const uncompensatedArtifact = await trx
+      .selectFrom('fileTasks as task')
+      .innerJoin(
+        'fileTaskImportArtifacts as artifact',
+        'artifact.fileTaskId',
+        'task.id',
+      )
+      .select('artifact.id')
+      .where('task.spaceId', '=', spaceId)
+      .where('task.workspaceId', '=', workspaceId)
+      .where('task.type', '=', 'import')
+      .where('task.status', 'in', ['success', 'failed'])
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb('artifact.artifactType', '=', 'archive'),
+            eb('artifact.status', '!=', 'cleaned'),
+          ]),
+          eb.and([
+            eb('artifact.artifactType', '=', 'attachment'),
+            eb('artifact.status', 'in', ['pending', 'uploaded']),
+          ]),
+        ]),
+      )
+      .forUpdate()
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(uncompensatedArtifact);
+  }
+
   async slugExists(
     slug: string,
     workspaceId: string,
@@ -359,8 +406,12 @@ export class SpaceRepo {
       .as('memberCount');
   }
 
-  async deleteSpace(spaceId: string, workspaceId: string): Promise<void> {
-    await this.db
+  async deleteSpace(
+    spaceId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<void> {
+    await dbOrTx(this.db, trx)
       .deleteFrom('spaces')
       .where('id', '=', spaceId)
       .where('workspaceId', '=', workspaceId)

@@ -1,6 +1,6 @@
 import bytes from "bytes";
 import { castToBoolean } from "@/lib/utils.tsx";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { AvatarIconType } from "@/types/avatar.types.ts";
 
 declare global {
   interface Window {

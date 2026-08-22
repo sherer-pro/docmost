@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   NoSuchKey,
+  NotFound,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -90,7 +91,7 @@ export class S3Driver implements StorageDriver {
         await this.s3Client.send(
           new CopyObjectCommand({
             Bucket: this.config.bucket,
-            CopySource: `${this.config.bucket}/${fromFilePath}`,
+            CopySource: encodeS3CopySource(this.config.bucket, fromFilePath),
             Key: toFilePath,
           }),
         );
@@ -162,7 +163,7 @@ export class S3Driver implements StorageDriver {
       await this.s3Client.send(command);
       return true;
     } catch (err) {
-      if (err instanceof NoSuchKey) {
+      if (isMissingS3ObjectError(err)) {
         return false;
       }
       throw err;
@@ -206,4 +207,35 @@ export class S3Driver implements StorageDriver {
   getConfig(): Record<string, any> {
     return this.config;
   }
+}
+
+function isMissingS3ObjectError(error: unknown): boolean {
+  if (error instanceof NoSuchKey || error instanceof NotFound) return true;
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  return (
+    candidate.name === 'NoSuchKey' ||
+    candidate.name === 'NotFound' ||
+    candidate.$metadata?.httpStatusCode === 404
+  );
+}
+
+function encodeS3CopySource(bucket: string, key: string): string {
+  return [bucket, ...key.split('/')].map(encodeS3CopySourceSegment).join('/');
+}
+
+function encodeS3CopySourceSegment(segment: string): string {
+  // CopySource is decoded by S3 exactly once. Encode each path segment from
+  // its raw value so a literal percent sequence cannot become a second path
+  // separator, while retaining the separators between object-key segments.
+  if (segment === '.') return '%2E';
+  if (segment === '..') return '%2E%2E';
+  return encodeURIComponent(segment).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }

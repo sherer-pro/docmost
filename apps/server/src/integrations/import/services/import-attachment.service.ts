@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import {
+  KyselyDB,
+  KyselyTransaction,
+} from '@docmost/db/types/kysely.types';
 import { cleanUrlString } from '../utils/file.utils';
 import { StorageService } from '../../storage/storage.service';
 import { createReadStream } from 'node:fs';
 import { promises as fs } from 'fs';
 import { getMimeType, sanitizeFileName } from '../../../common/helpers';
-import { v7 } from 'uuid';
+import { v5 as uuid5 } from 'uuid';
 import { FileTask } from '@docmost/db/types/entity.types';
 import { getAttachmentFolderPath } from '../../../core/attachment/attachment.utils';
 import {
@@ -26,6 +29,7 @@ import {
   resolveTrustedMimeType,
   validateFileExtensionAndSignature,
 } from '../../../common/helpers/file-validation';
+import { dbOrTx } from '@docmost/db/utils';
 
 interface AttachmentInfo {
   href: string;
@@ -54,6 +58,7 @@ export class ImportAttachmentService {
     fileTask: FileTask;
     attachmentCandidates: Map<string, string>;
     pageAttachments?: AttachmentInfo[];
+    trx?: KyselyTransaction;
   }): Promise<string> {
     const {
       html,
@@ -62,6 +67,7 @@ export class ImportAttachmentService {
       fileTask,
       attachmentCandidates,
       pageAttachments = [],
+      trx,
     } = opts;
 
     const attachmentTasks: (() => Promise<void>)[] = [];
@@ -91,7 +97,7 @@ export class ImportAttachmentService {
 
     const uploadOnce = (relPath: string) => {
       const abs = attachmentCandidates.get(relPath)!;
-      const attachmentId = v7();
+      const attachmentId = uuid5(`${pageId}:${relPath}`, fileTask.id);
       const ext = path.extname(abs);
 
       const fileNameWithExt =
@@ -113,6 +119,8 @@ export class ImportAttachmentService {
           ext,
           pageId,
           fileTask,
+          sourcePath: relPath,
+          trx,
           uploadStats,
         }),
       );
@@ -388,6 +396,8 @@ export class ImportAttachmentService {
     ext: string;
     pageId: string;
     fileTask: FileTask;
+    sourcePath: string;
+    trx?: KyselyTransaction;
     uploadStats: {
       total: number;
       completed: number;
@@ -403,6 +413,8 @@ export class ImportAttachmentService {
       ext,
       pageId,
       fileTask,
+      sourcePath,
+      trx,
       uploadStats,
     } = opts;
 
@@ -410,6 +422,21 @@ export class ImportAttachmentService {
     const isContentIndexable = CONTENT_INDEXABLE_EXTENSIONS.includes(
       ext?.toLowerCase() as (typeof CONTENT_INDEXABLE_EXTENSIONS)[number],
     );
+
+    await this.db
+      .insertInto('fileTaskImportArtifacts')
+      .values({
+        fileTaskId: fileTask.id,
+        attachmentId,
+        pageId,
+        sourcePath,
+        filePath: storageFilePath,
+        status: 'pending',
+      })
+      .onConflict((oc) =>
+        oc.columns(['fileTaskId', 'pageId', 'sourcePath']).doNothing(),
+      )
+      .execute();
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       try {
@@ -430,10 +457,16 @@ export class ImportAttachmentService {
         await this.storageService.uploadStream(storageFilePath, fileStream, {
           recreateClient: true,
         });
+        await this.db
+          .updateTable('fileTaskImportArtifacts')
+          .set({ status: 'uploaded', updatedAt: new Date() })
+          .where('attachmentId', '=', attachmentId)
+          .execute();
 
         const stat = await fs.stat(abs);
 
-        await this.db
+        const queryDb = dbOrTx(this.db, trx);
+        await queryDb
           .insertInto('attachments')
           .values({
             id: attachmentId,
@@ -449,33 +482,17 @@ export class ImportAttachmentService {
             spaceId: fileTask.spaceId,
             contentIndexStatus: isContentIndexable ? 'pending' : null,
           })
+          .onConflict((oc) => oc.column('id').doNothing())
           .execute();
-
-        // Queue PDF and DOCX files for indexing
-        if (isContentIndexable) {
-          try {
-            await this.attachmentQueue.add(
-              QueueJob.ATTACHMENT_INDEX_CONTENT,
-              { attachmentId },
-              {
-                attempts: 3,
-                backoff: {
-                  type: 'exponential',
-                  delay: 10_000,
-                },
-                removeOnComplete: true,
-                removeOnFail: true,
-              },
-            );
-            this.logger.debug(
-              `Queued ${fileNameWithExt} for indexing (attachment ID: ${attachmentId})`,
-            );
-          } catch (err) {
-            this.logger.error(
-              `Failed to queue indexing for imported attachment ${attachmentId}: ${err}`,
-            );
-          }
-        }
+        await queryDb
+          .updateTable('fileTaskImportArtifacts')
+          .set({
+            status: 'attached',
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where('attachmentId', '=', attachmentId)
+          .execute();
 
         uploadStats.completed++;
 

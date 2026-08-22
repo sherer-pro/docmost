@@ -798,10 +798,7 @@ export class PageTemplateSyncService {
           await this.markSyncItemCompleted(item.id);
           return;
         }
-        if (
-          errorCode !== 'page_template_stale' &&
-          errorCode !== 'page_embed_stale'
-        ) {
+        if (errorCode !== 'page_template_stale') {
           break;
         }
       }

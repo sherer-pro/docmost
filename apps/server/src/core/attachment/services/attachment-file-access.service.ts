@@ -249,11 +249,6 @@ export class AttachmentFileAccessService {
         jwtPayload.shareId,
       );
       if (!inheritedShare) throw new NotFoundException('File not found');
-      if (jwtPayload.pageEmbedSource) {
-        // Public page embeds are retired. Reject legacy embed-source cookies
-        // instead of letting them fall back to ordinary inherited-share access.
-        throw new NotFoundException('File not found');
-      }
     }
 
     if (accessTokenDetails.source === 'query') {

@@ -15,11 +15,14 @@ const defaultManifestPath = join(
 
 export const CLIENT_BUNDLE_BUDGET = Object.freeze({
   generalMaxRawBytes: 1_500_000,
+  generalMaxCssRawBytes: 300_000,
   initialClosureMaxGzipBytes: 260_000,
-  pageRouteClosureMaxGzipBytes: 900_000,
+  initialClosureMaxCssGzipBytes: 40_000,
+  pageRouteIncrementalMaxGzipBytes: 900_000,
+  pageRouteIncrementalMaxCssGzipBytes: 30_000,
   excalidrawSubset: Object.freeze({
     maxRawBytes: 1_821_659,
-    maxGzipBytes: 736_669,
+    maxGzipBytes: 737_280,
   }),
 });
 
@@ -27,6 +30,7 @@ const excalidrawEditorSource =
   "src/features/editor/components/excalidraw/excalidraw-editor.tsx";
 const excalidrawViewSource =
   "src/features/editor/components/excalidraw/excalidraw-view.tsx";
+const globalLayoutSource = "src/components/layouts/global/layout.tsx";
 const pageRouteSource = "src/pages/page/page.tsx";
 const requiredDynamicSources = [
   "src/features/comment/components/page-comment-section.tsx",
@@ -70,23 +74,78 @@ function staticImportClosure(manifest, entryKey) {
   return visited;
 }
 
-function getClosureMetrics(manifest, assetMetrics, entryKey) {
-  const closure = staticImportClosure(manifest, entryKey);
+function getMetricsForClosure(manifest, assetMetrics, closure) {
   const files = new Set(
     [...closure]
       .map((key) => normalizePath(manifest[key]?.file ?? ""))
       .filter((file) => file.endsWith(".js")),
   );
+  const cssFiles = new Set(
+    [...closure].flatMap((key) =>
+      (manifest[key]?.css ?? [])
+        .map((file) => normalizePath(file))
+        .filter((file) => file.endsWith(".css")),
+    ),
+  );
   let rawBytes = 0;
   let gzipBytes = 0;
+  let cssRawBytes = 0;
+  let cssGzipBytes = 0;
   for (const file of files) {
     const metrics = assetMetrics.get(file);
     if (!metrics) continue;
     rawBytes += metrics.rawBytes;
     gzipBytes += metrics.gzipBytes;
   }
+  for (const file of cssFiles) {
+    const metrics = assetMetrics.get(file);
+    if (!metrics) continue;
+    cssRawBytes += metrics.rawBytes;
+    cssGzipBytes += metrics.gzipBytes;
+  }
 
-  return { closure, files, rawBytes, gzipBytes };
+  return {
+    closure,
+    files,
+    cssFiles,
+    rawBytes,
+    gzipBytes,
+    cssRawBytes,
+    cssGzipBytes,
+  };
+}
+
+function getClosureMetrics(manifest, assetMetrics, entryKey) {
+  return getMetricsForClosure(
+    manifest,
+    assetMetrics,
+    staticImportClosure(manifest, entryKey),
+  );
+}
+
+function getMatchedRouteMetrics(
+  manifest,
+  assetMetrics,
+  entryKeys,
+  initialClosure,
+) {
+  const closure = new Set();
+  for (const entryKey of entryKeys) {
+    for (const key of staticImportClosure(manifest, entryKey)) {
+      closure.add(key);
+    }
+  }
+  const incrementalClosure = new Set(
+    [...closure].filter((key) => !initialClosure.has(key)),
+  );
+  return {
+    matched: getMetricsForClosure(manifest, assetMetrics, closure),
+    incremental: getMetricsForClosure(
+      manifest,
+      assetMetrics,
+      incrementalClosure,
+    ),
+  };
 }
 
 function reverseImporters(manifest, targetKey) {
@@ -126,10 +185,8 @@ function findManifestEntry(manifest, source) {
     return { key: source, entry: manifest[source] };
   }
 
-  const expectedName = source.split("/").at(-1)?.replace(/\.tsx?$/u, "");
   const matches = Object.entries(manifest).filter(
-    ([, entry]) =>
-      normalizePath(entry.src ?? "") === source || entry.name === expectedName,
+    ([, entry]) => normalizePath(entry.src ?? "") === source,
   );
   return matches.length === 1
     ? { key: matches[0][0], entry: matches[0][1] }
@@ -180,18 +237,54 @@ export function validateClientBundleBudget({
       `Initial static closure gzip cap exceeded: ${initialMetrics.gzipBytes} > ${budget.initialClosureMaxGzipBytes}.`,
     );
   }
-
-  const pageRouteEntry = manifest[pageRouteSource];
-  const pageRouteMetrics = pageRouteEntry
-    ? getClosureMetrics(manifest, assetMetrics, pageRouteSource)
-    : null;
-  if (!pageRouteMetrics) {
-    errors.push(`Missing page route manifest entry: ${pageRouteSource}.`);
-  } else if (
-    pageRouteMetrics.gzipBytes > budget.pageRouteClosureMaxGzipBytes
+  if (
+    initialMetrics.cssGzipBytes > budget.initialClosureMaxCssGzipBytes
   ) {
     errors.push(
-      `Page route static closure gzip cap exceeded: ${pageRouteMetrics.gzipBytes} > ${budget.pageRouteClosureMaxGzipBytes}.`,
+      `Initial static closure CSS gzip cap exceeded: ${initialMetrics.cssGzipBytes} > ${budget.initialClosureMaxCssGzipBytes}.`,
+    );
+  }
+
+  const layoutRouteMatch = findManifestEntry(manifest, globalLayoutSource);
+  const pageRouteMatch = findManifestEntry(manifest, pageRouteSource);
+  if (!layoutRouteMatch) {
+    errors.push(`Missing global layout manifest entry: ${globalLayoutSource}.`);
+  }
+  if (!pageRouteMatch) {
+    errors.push(`Missing page route manifest entry: ${pageRouteSource}.`);
+  }
+
+  const layoutRouteMetrics = layoutRouteMatch
+    ? getClosureMetrics(manifest, assetMetrics, layoutRouteMatch.key)
+    : null;
+  const pageRouteLeafMetrics = pageRouteMatch
+    ? getClosureMetrics(manifest, assetMetrics, pageRouteMatch.key)
+    : null;
+  const matchedPageRouteMetrics =
+    layoutRouteMatch && pageRouteMatch
+      ? getMatchedRouteMetrics(
+          manifest,
+          assetMetrics,
+          [layoutRouteMatch.key, pageRouteMatch.key],
+          initialClosure,
+        )
+      : null;
+  if (
+    matchedPageRouteMetrics &&
+    matchedPageRouteMetrics.incremental.gzipBytes >
+      budget.pageRouteIncrementalMaxGzipBytes
+  ) {
+    errors.push(
+      `Matched page route incremental gzip cap exceeded: ${matchedPageRouteMetrics.incremental.gzipBytes} > ${budget.pageRouteIncrementalMaxGzipBytes}.`,
+    );
+  }
+  if (
+    matchedPageRouteMetrics &&
+    matchedPageRouteMetrics.incremental.cssGzipBytes >
+      budget.pageRouteIncrementalMaxCssGzipBytes
+  ) {
+    errors.push(
+      `Matched page route incremental CSS gzip cap exceeded: ${matchedPageRouteMetrics.incremental.cssGzipBytes} > ${budget.pageRouteIncrementalMaxCssGzipBytes}.`,
     );
   }
 
@@ -205,7 +298,7 @@ export function validateClientBundleBudget({
     if (entry.isDynamicEntry !== true) {
       errors.push(`Required lazy component became eager: ${source}.`);
     }
-    if (pageRouteMetrics?.closure.has(key)) {
+    if (matchedPageRouteMetrics?.matched.closure.has(key)) {
       errors.push(
         `Required lazy component entered the page route static closure: ${source}.`,
       );
@@ -214,7 +307,9 @@ export function validateClientBundleBudget({
   const [subsetEntry] = subsetEntries;
   const [editorEntry] = editorEntries;
   if (subsetEntry && initialClosure.has(subsetEntry[0])) {
-    errors.push("Excalidraw subset-shared must not be reachable from initial static imports.");
+    errors.push(
+      "Excalidraw subset-shared must not be reachable from initial static imports.",
+    );
   }
   let editorImporters = [];
   if (editorEntry) {
@@ -222,7 +317,9 @@ export function validateClientBundleBudget({
       errors.push("Excalidraw editor must remain a dynamic entry.");
     }
     if (initialClosure.has(editorEntry[0])) {
-      errors.push("Excalidraw editor must not be reachable from initial static imports.");
+      errors.push(
+        "Excalidraw editor must not be reachable from initial static imports.",
+      );
     }
     editorImporters = reverseImporters(manifest, editorEntry[0]);
     if (
@@ -254,6 +351,13 @@ export function validateClientBundleBudget({
       .map(([, entry]) => normalizePath(entry.file))
       .filter((file) => file.endsWith(".js")),
   );
+  const uniqueCssFiles = new Set(
+    entries.flatMap(([, entry]) =>
+      (entry.css ?? [])
+        .map((file) => normalizePath(file))
+        .filter((file) => file.endsWith(".css")),
+    ),
+  );
   const subsetFile = subsetEntry
     ? normalizePath(subsetEntry[1].file)
     : undefined;
@@ -266,6 +370,18 @@ export function validateClientBundleBudget({
     if (file !== subsetFile && metrics.rawBytes > budget.generalMaxRawBytes) {
       errors.push(
         `General bundle cap exceeded by ${file}: ${metrics.rawBytes} > ${budget.generalMaxRawBytes} raw bytes.`,
+      );
+    }
+  }
+  for (const file of uniqueCssFiles) {
+    const metrics = assetMetrics.get(file);
+    if (!metrics) {
+      errors.push(`Missing bundle metrics for ${file}.`);
+      continue;
+    }
+    if (metrics.rawBytes > budget.generalMaxCssRawBytes) {
+      errors.push(
+        `General CSS bundle cap exceeded by ${file}: ${metrics.rawBytes} > ${budget.generalMaxCssRawBytes} raw bytes.`,
       );
     }
   }
@@ -322,16 +438,50 @@ export function validateClientBundleBudget({
     errors,
     report: {
       javascriptChunks: uniqueJavaScriptFiles.size,
+      cssAssets: uniqueCssFiles.size,
       initialClosure: {
         files: initialMetrics.files.size,
+        cssFiles: initialMetrics.cssFiles.size,
         rawBytes: initialMetrics.rawBytes,
         gzipBytes: initialMetrics.gzipBytes,
+        cssRawBytes: initialMetrics.cssRawBytes,
+        cssGzipBytes: initialMetrics.cssGzipBytes,
       },
-      pageRouteClosure: pageRouteMetrics
+      pageRoute: matchedPageRouteMetrics
         ? {
-            files: pageRouteMetrics.files.size,
-            rawBytes: pageRouteMetrics.rawBytes,
-            gzipBytes: pageRouteMetrics.gzipBytes,
+            matchedSources: [globalLayoutSource, pageRouteSource],
+            layoutClosure: {
+              files: layoutRouteMetrics.files.size,
+              cssFiles: layoutRouteMetrics.cssFiles.size,
+              rawBytes: layoutRouteMetrics.rawBytes,
+              gzipBytes: layoutRouteMetrics.gzipBytes,
+              cssRawBytes: layoutRouteMetrics.cssRawBytes,
+              cssGzipBytes: layoutRouteMetrics.cssGzipBytes,
+            },
+            leafClosure: {
+              files: pageRouteLeafMetrics.files.size,
+              cssFiles: pageRouteLeafMetrics.cssFiles.size,
+              rawBytes: pageRouteLeafMetrics.rawBytes,
+              gzipBytes: pageRouteLeafMetrics.gzipBytes,
+              cssRawBytes: pageRouteLeafMetrics.cssRawBytes,
+              cssGzipBytes: pageRouteLeafMetrics.cssGzipBytes,
+            },
+            matchedClosure: {
+              files: matchedPageRouteMetrics.matched.files.size,
+              cssFiles: matchedPageRouteMetrics.matched.cssFiles.size,
+              rawBytes: matchedPageRouteMetrics.matched.rawBytes,
+              gzipBytes: matchedPageRouteMetrics.matched.gzipBytes,
+              cssRawBytes: matchedPageRouteMetrics.matched.cssRawBytes,
+              cssGzipBytes: matchedPageRouteMetrics.matched.cssGzipBytes,
+            },
+            incrementalOverInitial: {
+              files: matchedPageRouteMetrics.incremental.files.size,
+              cssFiles: matchedPageRouteMetrics.incremental.cssFiles.size,
+              rawBytes: matchedPageRouteMetrics.incremental.rawBytes,
+              gzipBytes: matchedPageRouteMetrics.incremental.gzipBytes,
+              cssRawBytes: matchedPageRouteMetrics.incremental.cssRawBytes,
+              cssGzipBytes: matchedPageRouteMetrics.incremental.cssGzipBytes,
+            },
           }
         : undefined,
       subsetFile,
@@ -353,9 +503,12 @@ export function validateClientBundleBudget({
 async function collectAssetMetrics(manifest, manifestPath) {
   const distDirectory = resolve(dirname(manifestPath), "..");
   const files = new Set(
-    Object.values(manifest)
-      .map((entry) => normalizePath(entry.file))
-      .filter((file) => file.endsWith(".js")),
+    Object.values(manifest).flatMap((entry) => [
+      ...[normalizePath(entry.file)].filter((file) => file.endsWith(".js")),
+      ...(entry.css ?? [])
+        .map((file) => normalizePath(file))
+        .filter((file) => file.endsWith(".css")),
+    ]),
   );
   const metrics = new Map();
   await Promise.all(
@@ -387,9 +540,10 @@ async function main() {
     throw new Error(`Client bundle budget failed:\n${errors.join("\n")}`);
   }
   console.log(
-    `Client bundle budget passed: ${report.javascriptChunks} JavaScript chunks; ` +
-      `initial closure ${report.initialClosure.gzipBytes} gzip bytes; ` +
-      `page route closure ${report.pageRouteClosure.gzipBytes} gzip bytes; ` +
+    `Client bundle budget passed: ${report.javascriptChunks} JavaScript chunks and ${report.cssAssets} CSS assets; ` +
+      `initial closure ${report.initialClosure.gzipBytes} JS / ${report.initialClosure.cssGzipBytes} CSS gzip bytes; ` +
+      `matched page route ${report.pageRoute.matchedClosure.gzipBytes} JS / ${report.pageRoute.matchedClosure.cssGzipBytes} CSS gzip bytes ` +
+      `(${report.pageRoute.incrementalOverInitial.gzipBytes} JS / ${report.pageRoute.incrementalOverInitial.cssGzipBytes} CSS incremental over initial); ` +
       `general raw cap ${CLIENT_BUNDLE_BUDGET.generalMaxRawBytes}; ` +
       `Excalidraw subset ${report.subsetMetrics.rawBytes} raw / ` +
       `${report.subsetMetrics.gzipBytes} gzip bytes.`,

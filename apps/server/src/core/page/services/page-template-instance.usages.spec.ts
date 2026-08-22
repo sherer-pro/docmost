@@ -54,7 +54,6 @@ function buildService(db: any, pageAccessService: any) {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
   );
 }
 

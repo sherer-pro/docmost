@@ -36,6 +36,10 @@ import { getRecentChanges } from "@/features/page/services/page-service.ts";
 import { useEffect } from "react";
 import { validate as isValidUuid } from "uuid";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
+import {
+  safeQueryRetryDelay,
+  shouldRetrySafeQuery,
+} from "@/lib/safe-query-retry";
 
 function syncArchivedSpaceQueries(queryClient: QueryClient, space: ISpace) {
   queryClient.setQueryData(["space", space.id], (cachedSpace: ISpace) =>
@@ -65,11 +69,13 @@ function syncArchivedSpaceQueries(queryClient: QueryClient, space: ISpace) {
 export function useGetSpacesQuery(
   params?: QueryParams,
 ): UseQueryResult<IPagination<ISpace>, Error> {
-  return useQuery({
+  return useQuery<IPagination<ISpace>, Error>({
     queryKey: ["spaces", params],
     queryFn: () => getSpaces(params),
     placeholderData: keepPreviousData,
     refetchOnMount: true,
+    retry: shouldRetrySafeQuery,
+    retryDelay: safeQueryRetryDelay,
   });
 }
 

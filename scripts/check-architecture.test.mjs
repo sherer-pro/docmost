@@ -39,6 +39,15 @@ test("rejects a server import of client implementation code", () => {
   assert.match(result.stdout, /no-server-to-client/);
 });
 
+test("rejects a frontend foundation import of a feature implementation", () => {
+  const result = cruise([
+    "scripts/fixtures/architecture/client-foundation-to-feature/apps/client/src",
+  ]);
+
+  assert.notEqual(result.status, 0, result.stdout || result.stderr);
+  assert.match(result.stdout, /no-client-foundation-to-features/);
+});
+
 test("rejects a persistence import of core feature implementation", () => {
   const result = cruise([
     "scripts/fixtures/architecture/database-to-core/apps/server/src",

@@ -56,33 +56,23 @@ export class WsGateway
   ) {}
 
   @OnEvent(EventName.PAGE_UPDATED)
-  async handlePageEmbedSourceUpdated(event: {
+  async handleTransclusionSourceUpdated(event: {
     pageIds: string[];
     workspaceId?: string;
   }): Promise<void> {
     try {
-      const spaceIds = new Set<string>();
-      for (const pageIdentifier of event.pageIds) {
-        const sourcePage = await this.pageRepo.findById(pageIdentifier);
-        const sourcePageId = sourcePage?.id ?? pageIdentifier;
-        const workspaceId = event.workspaceId ?? sourcePage?.workspaceId;
-        if (!workspaceId) continue;
-
-        const usages =
-          await this.pageTransclusionReferencesRepo.findUsagesBySource(
-            sourcePageId,
-            workspaceId,
-          );
-        for (const consumerPageId of new Set(
-          usages.map((usage) => usage.referencePageId),
-        )) {
-          const consumer = await this.pageRepo.findById(consumerPageId);
-          if (consumer && !consumer.deletedAt) spaceIds.add(consumer.spaceId);
-        }
-      }
-      this.emitPageEmbedInvalidation(spaceIds);
+      const workspaceId =
+        event.workspaceId ??
+        (await this.pageRepo.findById(event.pageIds[0]))?.workspaceId;
+      if (!workspaceId) return;
+      const spaceIds =
+        await this.pageTransclusionReferencesRepo.findConsumerSpaceIdsBySourcePageIds(
+          event.pageIds,
+          workspaceId,
+        );
+      this.emitTransclusionInvalidation(spaceIds);
     } catch (error) {
-      this.logger.warn('Failed to invalidate page embed consumers', error);
+      this.logger.warn('Failed to invalidate transclusion consumers', error);
     }
   }
 
@@ -119,51 +109,27 @@ export class WsGateway
   }
 
   @OnEvent(EventName.PAGE_SOFT_DELETED)
-  async handlePageEmbedSourceTrashed(event: {
+  async handleTransclusionSourceTrashed(event: {
     pageIds: string[];
     workspaceId: string;
   }): Promise<void> {
-    await this.handlePageEmbedSourceUpdated(event);
+    await this.handleTransclusionSourceUpdated(event);
   }
 
   @OnEvent(EventName.PAGE_RESTORED)
-  async handlePageEmbedSourceRestored(event: {
+  async handleTransclusionSourceRestored(event: {
     pageIds: string[];
     workspaceId: string;
   }): Promise<void> {
-    await this.handlePageEmbedSourceUpdated(event);
+    await this.handleTransclusionSourceUpdated(event);
   }
 
   @OnEvent(EventName.PAGE_DELETED)
-  async handlePageEmbedSourceDeleted(event: {
+  async handleTransclusionSourceDeleted(event: {
     pageIds: string[];
     workspaceId: string;
   }): Promise<void> {
-    await this.handlePageEmbedSourceUpdated(event);
-  }
-
-  @OnEvent(EventName.PAGE_EMBED_VISIBILITY_CHANGED)
-  handlePageEmbedVisibilityChanged(event: {
-    workspaceId: string;
-    accessUserIds?: string[];
-  }): void {
-    if (!this.server) return;
-    for (const socket of this.server.sockets.sockets.values()) {
-      const user = socket.data.user as User | undefined;
-      if (user?.workspaceId === event.workspaceId) {
-        socket.emit('page-embed:invalidate', {
-          operation: 'page_embed_invalidate',
-        });
-        if (
-          !event.accessUserIds ||
-          event.accessUserIds.includes(user.id)
-        ) {
-          socket.emit('access:invalidate', {
-            operation: 'access_invalidate',
-          });
-        }
-      }
-    }
+    await this.handleTransclusionSourceUpdated(event);
   }
 
   /**
@@ -442,12 +408,14 @@ export class WsGateway
     return `space-${spaceId}`;
   }
 
-  emitPageEmbedInvalidation(spaceIds: Iterable<string>): void {
+  emitTransclusionInvalidation(spaceIds: Iterable<string>): void {
     if (!this.server) return;
     for (const spaceId of new Set(spaceIds)) {
       this.server
         .to(this.getSpaceRoomName(spaceId))
-        .emit('page-embed:invalidate', { operation: 'page_embed_invalidate' });
+        .emit('transclusion:invalidate', {
+          operation: 'transclusion_invalidate',
+        });
     }
   }
 

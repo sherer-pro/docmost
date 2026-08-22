@@ -10,6 +10,7 @@ import { PageModule } from '../../core/page/page.module';
 import { FileTaskQueryService } from './services/file-task-query.service';
 import { DocmostArchiveImportService } from './services/docmost-archive-import.service';
 import { TransclusionModule } from '../../core/page/transclusion/transclusion.module';
+import { FILE_IMPORT_OUTBOX_HANDLER } from '../queue/outbox/queue-outbox.types';
 
 @Module({
   providers: [
@@ -19,8 +20,16 @@ import { TransclusionModule } from '../../core/page/transclusion/transclusion.mo
     ImportAttachmentService,
     FileTaskQueryService,
     DocmostArchiveImportService,
+    {
+      provide: FILE_IMPORT_OUTBOX_HANDLER,
+      useExisting: FileImportTaskService,
+    },
   ],
-  exports: [ImportService, ImportAttachmentService],
+  exports: [
+    ImportService,
+    ImportAttachmentService,
+    FILE_IMPORT_OUTBOX_HANDLER,
+  ],
   controllers: [ImportController, FileTaskController],
   imports: [StorageModule, PageModule, TransclusionModule],
 })

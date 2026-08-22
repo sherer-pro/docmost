@@ -179,40 +179,6 @@ export class DetachSyncedTemplateDto {
   baseContentHash!: string;
 }
 
-export class InsertPageEmbedDto {
-  @IsUUID()
-  consumerPageId!: string;
-
-  @IsUUID()
-  sourcePageId!: string;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  from!: number;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  to!: number;
-
-  @IsString()
-  @Length(64, 64)
-  baseContentHash!: string;
-}
-
-export class DetachPageEmbedDto {
-  @IsUUID()
-  consumerPageId!: string;
-
-  @IsUUID()
-  referenceNodeId!: string;
-
-  @IsString()
-  @Length(64, 64)
-  baseContentHash!: string;
-}
-
 export class PageTemplateWorkspacePolicyDto {
   @IsBoolean()
   enabled!: boolean;

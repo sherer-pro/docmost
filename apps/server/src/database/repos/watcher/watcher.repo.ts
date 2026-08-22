@@ -4,7 +4,7 @@ import { KyselyDB, KyselyTransaction } from '../../types/kysely.types';
 import { InsertableWatcher, Watcher } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
-import { ExpressionBuilder } from 'kysely';
+import { ExpressionBuilder, sql } from 'kysely';
 import type { DB } from '@docmost/db/types/db';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { dbOrTx } from '@docmost/db/utils';
@@ -153,30 +153,35 @@ export class WatcherRepo {
     spaceId: string,
     opts?: { trx?: KyselyTransaction },
   ): Promise<void> {
-    if (userIds.length === 0) return;
+    return this.deleteByUsersWithoutSpacesAccess(userIds, [spaceId], opts);
+  }
+
+  async deleteByUsersWithoutSpacesAccess(
+    userIds: string[],
+    spaceIds: string[],
+    opts?: { trx?: KyselyTransaction },
+  ): Promise<void> {
+    if (userIds.length === 0 || spaceIds.length === 0) return;
 
     const { trx } = opts;
     const db = dbOrTx(this.db, trx);
 
-    const usersWithAccess = db
-      .selectFrom('spaceMembers')
-      .select('userId')
-      .where('spaceId', '=', spaceId)
-      .where('userId', 'is not', null)
-      .union(
-        db
-          .selectFrom('spaceMembers')
-          .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
-          .select('groupUsers.userId')
-          .where('spaceMembers.spaceId', '=', spaceId),
-      );
-
-    await db
-      .deleteFrom('watchers')
-      .where('userId', 'in', userIds)
-      .where('spaceId', '=', spaceId)
-      .where('userId', 'not in', usersWithAccess)
-      .execute();
+    await sql`
+      delete from watchers as watcher
+      where watcher.user_id = any(${userIds}::uuid[])
+        and watcher.space_id = any(${spaceIds}::uuid[])
+        and not exists (
+          select 1
+          from space_members as membership
+          left join group_users as group_user
+            on group_user.group_id = membership.group_id
+          where membership.space_id = watcher.space_id
+            and (
+              membership.user_id = watcher.user_id
+              or group_user.user_id = watcher.user_id
+            )
+        )
+    `.execute(db);
   }
 
   async updateSpaceIdByPageIds(

@@ -1,8 +1,8 @@
 import { Center, Loader } from "@mantine/core";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import useCurrentUser from "@/features/user/hooks/use-current-user.ts";
-import { Error404 } from "./error-404.tsx";
+import { Error404 } from "@/components/ui/error-404";
+import useCurrentUser from "@/features/user/hooks/use-current-user";
 
 export function AuthenticatedError404() {
   const currentUser = useCurrentUser({ skipAuthRedirect: true });

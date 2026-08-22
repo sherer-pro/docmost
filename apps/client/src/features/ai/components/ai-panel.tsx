@@ -894,7 +894,6 @@ export function AiPanel() {
       const batch = await uploadFilesMutation.mutateAsync({
         conversationId: conversation.id,
         files,
-        idempotencyKey: crypto.randomUUID(),
       });
       const uploadedIds = batch.files.map((file) => file.id);
       await saveContext((current) => ({

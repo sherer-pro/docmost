@@ -37,7 +37,6 @@ export type JwtAttachmentPayload = {
   pageId: string;
   pageIds?: string[];
   shareId?: string;
-  pageEmbedSource?: boolean;
   workspaceId: string;
   type: 'attachment';
 };

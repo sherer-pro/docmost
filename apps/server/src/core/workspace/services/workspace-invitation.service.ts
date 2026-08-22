@@ -346,8 +346,9 @@ export class WorkspaceInvitationService {
           .where('id', '=', invitation.id)
           .execute();
       });
-      this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+      await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
         workspaceId: workspace.id,
+        userId: newUser!.id,
       });
       this.queueOutbox.kick();
     } catch (err: any) {

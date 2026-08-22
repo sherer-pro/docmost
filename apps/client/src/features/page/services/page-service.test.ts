@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   copyPageMarkdownWithComments,
+  duplicatePage,
   getAllSidebarPages,
   getSidebarPages,
   uploadFile,
@@ -11,29 +12,34 @@ const { getMock, postMock } = vi.hoisted(() => ({
   postMock: vi.fn(),
 }));
 
-vi.mock("@/lib/api-client", () => ({
-  default: {
-    get: getMock,
-    post: postMock,
-  },
-  unwrapApiResponse: (value: unknown) => {
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "data" in value &&
-      "success" in value &&
-      "status" in value
-    ) {
-      return (value as { data: unknown }).data;
-    }
+vi.mock("@/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    default: {
+      get: getMock,
+      post: postMock,
+    },
+    unwrapApiResponse: (value: unknown) => {
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        "data" in value &&
+        "success" in value &&
+        "status" in value
+      ) {
+        return (value as { data: unknown }).data;
+      }
 
-    return value;
-  },
-}));
+      return value;
+    },
+  };
+});
 
 describe("page-service sidebar reads", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    getMock.mockReset();
+    postMock.mockReset();
   });
 
   it("uses the canonical GET sidebar route", async () => {
@@ -106,9 +112,11 @@ describe("page-service sidebar reads", () => {
       }),
     );
 
-    expect(getMock.mock.calls[0][1].paramsSerializer.serialize({ spaceId: "space-id" })).toBe(
-      "spaceId=space-id",
-    );
+    expect(
+      getMock.mock.calls[0][1].paramsSerializer.serialize({
+        spaceId: "space-id",
+      }),
+    ).toBe("spaceId=space-id");
     expect(
       getMock.mock.calls[1][1].paramsSerializer.serialize({
         spaceId: "space-id",
@@ -120,7 +128,8 @@ describe("page-service sidebar reads", () => {
 
 describe("page-service copyPageMarkdownWithComments", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    getMock.mockReset();
+    postMock.mockReset();
   });
 
   it("requests markdown with comments for a page", async () => {
@@ -136,6 +145,30 @@ describe("page-service copyPageMarkdownWithComments", () => {
     expect(postMock).toHaveBeenCalledWith(
       "/pages/actions/copy-markdown-with-comments",
       { pageId: "page-1" },
+    );
+  });
+});
+
+describe("page-service duplicatePage", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+  });
+
+  it("reuses a hashed idempotency lease after an ambiguous failure", async () => {
+    postMock
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ data: { id: "copy-1" } });
+    const request = { pageId: "page-1", spaceId: "space-1" };
+
+    await expect(duplicatePage(request)).rejects.toThrow("network");
+    await expect(duplicatePage(request)).resolves.toEqual({ id: "copy-1" });
+
+    expect(postMock).toHaveBeenNthCalledWith(1, "/pages/duplicate", request, {
+      headers: { "Idempotency-Key": expect.any(String) },
+    });
+    expect(postMock.mock.calls[1][2].headers["Idempotency-Key"]).toBe(
+      postMock.mock.calls[0][2].headers["Idempotency-Key"],
     );
   });
 });
@@ -159,7 +192,8 @@ describe("page-service uploadFile", () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    getMock.mockReset();
+    postMock.mockReset();
   });
 
   it("returns raw attachment responses from multipart upload endpoints", async () => {

@@ -1,6 +1,6 @@
 import { Modal, Button, Group, Text } from "@mantine/core";
 import { duplicatePage } from "@/features/page/services/page-service.ts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { ISpace } from "@/features/space/types/space.types.ts";
@@ -26,10 +26,15 @@ export default function CopyPageModal({
 }: CopyPageModalProps) {
   const { t } = useTranslation();
   const [targetSpace, setTargetSpace] = useState<ISpace>(null);
+  const [isCopying, setIsCopying] = useState(false);
+  const copyInFlightRef = useRef(false);
   const navigate = useNavigate();
 
   const handleCopy = async () => {
-    if (!targetSpace) return;
+    if (!targetSpace || copyInFlightRef.current) return;
+
+    copyInFlightRef.current = true;
+    setIsCopying(true);
 
     try {
       const copiedPage = await duplicatePage({
@@ -67,6 +72,9 @@ export default function CopyPageModal({
         color: "red",
       });
       console.log(err);
+    } finally {
+      copyInFlightRef.current = false;
+      setIsCopying(false);
     }
   };
 
@@ -77,7 +85,9 @@ export default function CopyPageModal({
   return (
     <Modal.Root
       opened={open}
-      onClose={onClose}
+      onClose={() => {
+        if (!copyInFlightRef.current) onClose();
+      }}
       size={500}
       padding="xl"
       yOffset="10vh"
@@ -89,7 +99,7 @@ export default function CopyPageModal({
       <Modal.Content style={{ overflow: "hidden" }}>
         <Modal.Header py={0}>
           <Modal.Title fw={500}>{t("Copy page")}</Modal.Title>
-          <Modal.CloseButton aria-label={t("Close")} />
+          <Modal.CloseButton aria-label={t("Close")} disabled={isCopying} />
         </Modal.Header>
         <Modal.Body>
           <Text mb="xs" c="dimmed" size="sm">
@@ -102,10 +112,12 @@ export default function CopyPageModal({
             onChange={handleChange}
           />
           <Group justify="end" mt="md">
-            <Button onClick={onClose} variant="default">
+            <Button onClick={onClose} variant="default" disabled={isCopying}>
               {t("Cancel")}
             </Button>
-            <Button onClick={handleCopy}>{t("Copy")}</Button>
+            <Button onClick={handleCopy} loading={isCopying}>
+              {t("Copy")}
+            </Button>
           </Group>
         </Modal.Body>
       </Modal.Content>

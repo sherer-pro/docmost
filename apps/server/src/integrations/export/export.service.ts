@@ -43,9 +43,7 @@ import {
   TRANSCLUSION_LABEL_STYLE,
   type TransclusionPresentationStrings,
   htmlToMarkdown,
-  collectPageEmbedPresentationReferences,
   detachTemplateContent,
-  materializePageEmbedsForPresentation,
   normalizeBuiltInTagValues,
 } from '@docmost/editor-ext/server';
 import { getAppVersion } from '../../common/helpers/get-app-version';
@@ -66,7 +64,7 @@ import { resolveHeadingNumberingEnabled } from '../../core/page/utils/heading-nu
 import {
   DOCMOST_ARCHIVE_SCHEMA_VERSION,
   type DocmostArchiveAttachment,
-  type DocmostArchiveDataV4,
+  type DocmostArchiveDataV5,
   type DocmostArchiveDatabase,
   type DocmostArchiveDatabaseCell,
   type DocmostArchiveDatabaseProperty,
@@ -74,7 +72,7 @@ import {
   type DocmostArchiveDatabaseView,
   type DocmostArchiveDictionaryTerm,
   type DocmostArchiveLabel,
-  type DocmostArchiveManifestV4,
+  type DocmostArchiveManifestV5,
   type DocmostArchivePage,
   type DocmostArchiveScope,
   type DocmostArchiveTransclusionSnapshot,
@@ -83,11 +81,11 @@ import {
   PAGE_AI_ROLE,
   type PageAiRole,
 } from '@docmost/api-contract';
+import { containsPageEmbedNode } from '../docmost-archive.utils';
 import { sanitize } from 'sanitize-filename-ts';
 import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { createHash } from 'node:crypto';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
-import { PageEmbedService } from '../../core/page/transclusion/page-embed.service';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -208,7 +206,6 @@ export class ExportService {
     private readonly tokenService: TokenService,
     private readonly pageAccessService: PageAccessService,
     private readonly transclusionService: TransclusionService,
-    private readonly pageEmbedService: PageEmbedService,
   ) {}
 
   async exportPage(
@@ -435,55 +432,14 @@ export class ExportService {
     referencePageId?: string,
   ): Promise<{ content: unknown; attachmentPageIds: Set<string> }> {
     const materializedTemplateContent = detachTemplateContent(prosemirrorJson);
+    if (containsPageEmbedNode(materializedTemplateContent)) {
+      throw new BadRequestException(
+        'Legacy pageEmbed content must be retired before export',
+      );
+    }
     const attachmentPageIds = new Set<string>();
     if (referencePageId) attachmentPageIds.add(referencePageId);
-    const pageResolutions = new Map<
-      string,
-      { content?: unknown; status?: string }
-    >();
-    if (authorizedUser) {
-      let frontier = collectPageEmbedPresentationReferences(
-        materializedTemplateContent,
-      );
-      for (
-        let depth = 0;
-        depth < this.environmentService.getMaxPageEmbedDepth();
-        depth += 1
-      ) {
-        frontier = frontier.filter(
-          (sourcePageId) => !pageResolutions.has(sourcePageId),
-        );
-        if (frontier.length === 0) break;
-        const result = await this.pageEmbedService.lookup(
-          frontier,
-          authorizedUser,
-          referencePageId,
-        );
-        const next = new Set<string>();
-        for (const item of result.items) {
-          const resolution =
-            'content' in item
-              ? { content: item.content }
-              : { status: item.status };
-          pageResolutions.set(item.sourcePageId, resolution);
-          if ('content' in item) {
-            attachmentPageIds.add(item.sourcePageId);
-            collectPageEmbedPresentationReferences(item.content).forEach((id) =>
-              next.add(id),
-            );
-          }
-        }
-        frontier = Array.from(next);
-      }
-    }
-
-    const pageMaterialized = materializePageEmbedsForPresentation(
-      materializedTemplateContent,
-      pageResolutions,
-      this.resolveTransclusionPresentationStrings(locale).unavailable,
-      this.environmentService.getMaxPageEmbedDepth(),
-    );
-    const references = collectReferencesFromPmJson(pageMaterialized);
+    const references = collectReferencesFromPmJson(materializedTemplateContent);
     const resolutions = new Map<
       string,
       { content?: unknown; status?: string }
@@ -507,7 +463,7 @@ export class ExportService {
 
     return {
       content: materializeTransclusionsForPresentation(
-        pageMaterialized,
+        materializedTemplateContent,
         resolutions,
         this.resolveTransclusionPresentationStrings(locale),
       ),
@@ -2487,7 +2443,7 @@ export class ExportService {
           id: attachment.id,
           pageId: attachment.pageId,
           fileName: attachment.fileName,
-          fileSize: attachment.fileSize,
+          fileSize: fileBuffer.byteLength,
           fileExt: attachment.fileExt,
           mimeType: attachment.mimeType,
           type: attachment.type,
@@ -2559,7 +2515,7 @@ export class ExportService {
       : ({ pages: {} } as ExportMetadata);
 
     const portableSpaceSettings = this.getPortableSpaceSettings(space.settings);
-    const data: DocmostArchiveDataV4 = {
+    const data: DocmostArchiveDataV5 = {
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       scope: params.scope,
       sourceSpace: {
@@ -2579,7 +2535,12 @@ export class ExportService {
       labels: Array.from(labelsById.values()),
       dictionary,
     };
-    const manifest: DocmostArchiveManifestV4 = {
+    if (containsPageEmbedNode(data)) {
+      throw new BadRequestException(
+        'Cannot export Docmost archive schema 5 with pageEmbed nodes',
+      );
+    }
+    const manifest: DocmostArchiveManifestV5 = {
       source: 'docmost',
       schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
       version: this.appVersion,

@@ -252,7 +252,7 @@ export class SsoService {
       return this.sanitizeProvider(provider);
     });
     if (dto.isEnabled === false || dto.groupSync === false) {
-      this.emitPageEmbedVisibilityChanged(workspaceId);
+      await this.emitAuthorizationChanged(workspaceId);
     }
     return result;
   }
@@ -277,7 +277,7 @@ export class SsoService {
 
       await this.removeProviderGroupMemberships(provider.id, trx);
     });
-    this.emitPageEmbedVisibilityChanged(workspaceId);
+    await this.emitAuthorizationChanged(workspaceId);
   }
 
   async listGroupMappings(providerId: string, workspaceId: string) {
@@ -384,7 +384,7 @@ export class SsoService {
         .returningAll()
         .executeTakeFirstOrThrow();
     });
-    this.emitPageEmbedVisibilityChanged(workspaceId);
+    await this.emitAuthorizationChanged(workspaceId);
     return result;
   }
 
@@ -402,7 +402,7 @@ export class SsoService {
         .where('id', '=', mapping.id)
         .execute();
     });
-    this.emitPageEmbedVisibilityChanged(workspaceId);
+    await this.emitAuthorizationChanged(workspaceId);
   }
 
   private async requireGroupMapping(
@@ -1430,11 +1430,11 @@ export class SsoService {
         );
       }
     });
-    this.emitPageEmbedVisibilityChanged(provider.workspaceId);
+    await this.emitAuthorizationChanged(provider.workspaceId);
   }
 
-  private emitPageEmbedVisibilityChanged(workspaceId: string): void {
-    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+  private async emitAuthorizationChanged(workspaceId: string): Promise<void> {
+    await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
       workspaceId,
     });
   }

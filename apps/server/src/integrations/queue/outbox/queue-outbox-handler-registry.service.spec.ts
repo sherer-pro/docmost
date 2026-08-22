@@ -20,6 +20,12 @@ describe('QueueOutboxHandlerRegistryService', () => {
     registry.registerNotificationEmailDelivery({
       isNotificationEmailStillDeliverable: jest.fn(),
     });
+    registry.registerAttachmentCleanup({
+      processCleanupBatchFromOutbox: jest.fn(),
+    });
+    registry.registerFileImport({
+      processImportFromOutbox: jest.fn(),
+    });
 
     expect(() => registry.onApplicationBootstrap()).not.toThrow();
   });

@@ -67,6 +67,11 @@ export class GeneralQueueProcessor
       case QueueJob.PROCESS_QUEUE_OUTBOX:
         await this.queueOutbox.processAvailable();
         return;
+      case QueueJob.PURGE_QUEUE_OUTBOX:
+        await this.queueOutbox.purgeExpiredTerminalEntries();
+        return;
+      default:
+        throw new Error(`Unsupported general queue job: ${job.name}`);
     }
   }
 

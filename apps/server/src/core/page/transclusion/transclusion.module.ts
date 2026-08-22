@@ -1,15 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TransclusionController } from './transclusion.controller';
 import { TransclusionService } from './transclusion.service';
-import { PageEmbedService } from './page-embed.service';
 import { PageTemplatePolicyService } from './page-template-policy.service';
-import { PageEmbedGraphLockService } from './page-embed-graph-lock.service';
 
 const transclusionProviders = [
   TransclusionService,
-  PageEmbedService,
   PageTemplatePolicyService,
-  PageEmbedGraphLockService,
 ];
 
 @Module({

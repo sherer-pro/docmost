@@ -11,11 +11,10 @@ const subsetWorkerKey =
   "../../node_modules/@excalidraw/excalidraw/dist/dev/subset-worker.chunk.js";
 const editorKey =
   "src/features/editor/components/excalidraw/excalidraw-editor.tsx";
+const layoutKey = "src/components/layouts/global/layout.tsx";
 const pageRouteKey = "src/pages/page/page.tsx";
-const commentsKey =
-  "src/features/comment/components/page-comment-section.tsx";
-const aiContextKey =
-  "src/features/ai/components/ai-document-context-sync.tsx";
+const commentsKey = "src/features/comment/components/page-comment-section.tsx";
+const aiContextKey = "src/features/ai/components/ai-document-context-sync.tsx";
 const optionalNodeViewKeys = [
   "src/features/editor/components/math/math-inline.tsx",
   "src/features/editor/components/math/math-block.tsx",
@@ -39,9 +38,15 @@ function fixture() {
       file: "assets/index.js",
       isEntry: true,
       imports: ["_initial.js"],
-      dynamicImports: ["_page-reading-time-ABC.js"],
+      dynamicImports: [layoutKey, pageRouteKey, "_page-reading-time-ABC.js"],
     },
     "_initial.js": { file: "assets/initial.js" },
+    [layoutKey]: {
+      file: "assets/layout.js",
+      isDynamicEntry: true,
+      imports: ["index.html", "_layout-only.js"],
+    },
+    "_layout-only.js": { file: "assets/layout-only.js" },
     [pageRouteKey]: {
       file: "assets/page.js",
       isDynamicEntry: true,
@@ -115,9 +120,12 @@ function fixture() {
 test("accepts the bounded lazy Excalidraw graph", () => {
   const result = validateClientBundleBudget(fixture());
   assert.deepEqual(result.errors, []);
-  assert.equal(result.report.javascriptChunks, 25);
+  assert.equal(result.report.javascriptChunks, 27);
   assert.equal(result.report.initialClosure.gzipBytes, 160);
-  assert.equal(result.report.pageRouteClosure.gzipBytes, 400);
+  assert.equal(result.report.pageRoute.layoutClosure.gzipBytes, 320);
+  assert.equal(result.report.pageRoute.leafClosure.gzipBytes, 400);
+  assert.equal(result.report.pageRoute.matchedClosure.gzipBytes, 560);
+  assert.equal(result.report.pageRoute.incrementalOverInitial.gzipBytes, 400);
 });
 
 test("rejects general and Excalidraw budget growth", () => {
@@ -155,11 +163,70 @@ test("rejects initial and page route closure growth", () => {
   const pageGrowth = fixture();
   pageGrowth.assetMetrics.set("assets/page.js", {
     rawBytes: 100,
-    gzipBytes: CLIENT_BUNDLE_BUDGET.pageRouteClosureMaxGzipBytes,
+    gzipBytes: CLIENT_BUNDLE_BUDGET.pageRouteIncrementalMaxGzipBytes,
   });
   assert.match(
     validateClientBundleBudget(pageGrowth).errors.join("\n"),
-    /Page route static closure gzip cap exceeded/u,
+    /Matched page route incremental gzip cap exceeded/u,
+  );
+
+  const layoutGrowth = fixture();
+  layoutGrowth.assetMetrics.set("assets/layout-only.js", {
+    rawBytes: 100,
+    gzipBytes: CLIENT_BUNDLE_BUDGET.pageRouteIncrementalMaxGzipBytes,
+  });
+  assert.match(
+    validateClientBundleBudget(layoutGrowth).errors.join("\n"),
+    /Matched page route incremental gzip cap exceeded/u,
+  );
+
+  const initialCssGrowth = fixture();
+  initialCssGrowth.manifest["index.html"].css = ["assets/index.css"];
+  initialCssGrowth.assetMetrics.set("assets/index.css", {
+    rawBytes: 100,
+    gzipBytes: CLIENT_BUNDLE_BUDGET.initialClosureMaxCssGzipBytes + 1,
+  });
+  assert.match(
+    validateClientBundleBudget(initialCssGrowth).errors.join("\n"),
+    /Initial static closure CSS gzip cap exceeded/u,
+  );
+
+  const pageCssGrowth = fixture();
+  pageCssGrowth.manifest[layoutKey].css = ["assets/layout.css"];
+  pageCssGrowth.assetMetrics.set("assets/layout.css", {
+    rawBytes: 100,
+    gzipBytes: CLIENT_BUNDLE_BUDGET.pageRouteIncrementalMaxCssGzipBytes + 1,
+  });
+  assert.match(
+    validateClientBundleBudget(pageCssGrowth).errors.join("\n"),
+    /Matched page route incremental CSS gzip cap exceeded/u,
+  );
+
+  const generalCssGrowth = fixture();
+  generalCssGrowth.manifest[layoutKey].css = ["assets/layout.css"];
+  generalCssGrowth.assetMetrics.set("assets/layout.css", {
+    rawBytes: CLIENT_BUNDLE_BUDGET.generalMaxCssRawBytes + 1,
+    gzipBytes: 100,
+  });
+  assert.match(
+    validateClientBundleBudget(generalCssGrowth).errors.join("\n"),
+    /General CSS bundle cap exceeded/u,
+  );
+});
+
+test("does not resolve required sources by basename alone", () => {
+  const renamed = fixture();
+  const layout = renamed.manifest[layoutKey];
+  delete renamed.manifest[layoutKey];
+  renamed.manifest["_unrelated-layout.js"] = {
+    ...layout,
+    name: "layout",
+    src: "src/unrelated/layout.tsx",
+  };
+
+  assert.match(
+    validateClientBundleBudget(renamed).errors.join("\n"),
+    /Missing global layout manifest entry/u,
   );
 });
 
@@ -238,5 +305,8 @@ test("rejects Excalidraw payloads that become initial or eager", () => {
   eagerEditor.manifest[editorKey].isDynamicEntry = false;
   const errors = validateClientBundleBudget(eagerEditor).errors.join("\n");
   assert.match(errors, /editor must remain a dynamic entry/u);
-  assert.match(errors, /editor must not be reachable from initial static imports/u);
+  assert.match(
+    errors,
+    /editor must not be reachable from initial static imports/u,
+  );
 });

@@ -329,10 +329,6 @@ export class SpaceMemberService {
     userIds: string[],
   ): Promise<void> {
     const accessUserIds = [...new Set(userIds)];
-    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId,
-      accessUserIds,
-    });
     await Promise.all(
       accessUserIds.map((userId) =>
         this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {

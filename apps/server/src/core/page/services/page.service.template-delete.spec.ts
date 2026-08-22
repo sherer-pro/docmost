@@ -26,6 +26,10 @@ function chain(execute: () => unknown, executeTakeFirst?: () => unknown) {
 describe('PageService template subtree deletion guard', () => {
   const pageRepo = { removePage: jest.fn() };
   const attachmentQueue = { add: jest.fn() };
+  const queueOutbox = {
+    enqueuePageAttachmentCleanup: jest.fn(),
+    kick: jest.fn(),
+  };
   const eventEmitter = { emit: jest.fn() };
   let activeInstance: { id: string } | undefined;
   let sequence: string[];
@@ -114,6 +118,13 @@ describe('PageService template subtree deletion guard', () => {
     attachmentQueue.add.mockImplementation(async () => {
       sequence.push('attachment-job');
     });
+    queueOutbox.enqueuePageAttachmentCleanup.mockImplementation(async () => {
+      sequence.push('attachment-cleanup-intent');
+      return true;
+    });
+    queueOutbox.kick.mockImplementation(() => {
+      sequence.push('outbox-kick');
+    });
     service = new PageService(
       pageRepo as any,
       {} as any,
@@ -137,6 +148,7 @@ describe('PageService template subtree deletion guard', () => {
       {} as any,
       {} as any,
       {} as any,
+      queueOutbox as any,
     );
   });
 
@@ -172,6 +184,7 @@ describe('PageService template subtree deletion guard', () => {
       expect(pageUpdateQuery.execute).not.toHaveBeenCalled();
       expect(pageDeleteQuery.execute).not.toHaveBeenCalled();
       expect(attachmentQueue.add).not.toHaveBeenCalled();
+      expect(queueOutbox.enqueuePageAttachmentCleanup).not.toHaveBeenCalled();
     },
   );
 
@@ -200,7 +213,7 @@ describe('PageService template subtree deletion guard', () => {
     ]);
   });
 
-  it('commits a hard delete before scheduling attachment removal', async () => {
+  it('commits a hard delete with its durable cleanup intent', async () => {
     activeInstance = undefined;
 
     await service.forceDelete(ROOT_PAGE_ID, 'workspace-1');
@@ -209,11 +222,17 @@ describe('PageService template subtree deletion guard', () => {
       'transaction-start',
       'page-lock',
       'active-instance-check',
+      'attachment-cleanup-intent',
       'hard-delete',
       'transaction-commit',
-      'attachment-job',
-      'attachment-job',
+      'outbox-kick',
     ]);
+    expect(queueOutbox.enqueuePageAttachmentCleanup).toHaveBeenCalledWith(
+      [ROOT_PAGE_ID, TEMPLATE_PAGE_ID],
+      ROOT_PAGE_ID,
+      'workspace-1',
+      trx,
+    );
     expect(eventEmitter.emit).toHaveBeenCalledWith('page.deleted', {
       pageIds: [ROOT_PAGE_ID, TEMPLATE_PAGE_ID],
       workspaceId: 'workspace-1',

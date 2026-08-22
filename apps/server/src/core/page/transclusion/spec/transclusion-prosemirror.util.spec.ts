@@ -236,7 +236,7 @@ describe('collectReferencesFromPmJson', () => {
       ],
     };
     expect(() => collectReferencesFromPmJson(doc)).toThrow(
-      'page_embed_malformed_mixed_content',
+      'transclusion_reference_inside_source',
     );
   });
 

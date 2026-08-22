@@ -32,6 +32,7 @@ import type {
 } from '@docmost/db/types/entity.types';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 
 @Injectable()
 export class SpaceService {
@@ -45,6 +46,7 @@ export class SpaceService {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @Optional() private readonly eventEmitter?: EventEmitter2,
+    @Optional() private readonly queueOutboxService?: QueueOutboxService,
   ) {}
 
   async createSpace(
@@ -360,8 +362,40 @@ export class SpaceService {
       });
     }
 
-    await this.spaceRepo.deleteSpace(spaceId, workspaceId);
-    await this.attachmentQueue.add(QueueJob.DELETE_SPACE_ATTACHMENTS, space);
+    if (!this.queueOutboxService) {
+      throw new Error('queue_outbox_unavailable');
+    }
+    const cleanupEnqueued = await executeTx(this.db, async (trx) => {
+      const lockedSpace = await this.spaceRepo.findById(spaceId, workspaceId, {
+        withLock: true,
+        trx,
+      });
+      if (!lockedSpace) {
+        throw new NotFoundException('Space not found');
+      }
+      if (
+        await this.spaceRepo.hasImportCleanupBlockers(
+          spaceId,
+          workspaceId,
+          trx,
+        )
+      ) {
+        throw new ConflictException({
+          code: 'space_import_cleanup_required',
+          message:
+            'Wait for active imports and import artifact cleanup to finish first',
+        });
+      }
+      const enqueued =
+        await this.queueOutboxService!.enqueueSpaceAttachmentCleanup(
+          spaceId,
+          workspaceId,
+          trx,
+        );
+      await this.spaceRepo.deleteSpace(spaceId, workspaceId, trx);
+      return enqueued;
+    });
+    if (cleanupEnqueued) this.queueOutboxService.kick();
   }
 
   private applyPolicyUpdates(

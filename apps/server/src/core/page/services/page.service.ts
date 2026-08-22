@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -85,8 +86,6 @@ import { PageHistoryRecorderService } from './page-history-recorder.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { PageAccessMutationService } from './page-access-mutation.service';
 import { TransclusionService } from '../transclusion/transclusion.service';
-import { PageEmbedService } from '../transclusion/page-embed.service';
-import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
 import {
   remapDatabasePageReference,
   remapDatabaseViewConfig,
@@ -107,6 +106,14 @@ type CustomFieldHistoryChange = {
 };
 
 type CopiedPageByOriginalId = Map<string, InsertablePage>;
+
+interface DuplicatePageOptions {
+  rootPageId?: string;
+  beforeCommit?: (
+    trx: KyselyTransaction,
+    duplicatedRootPageId: string,
+  ) => Promise<void>;
+}
 
 // Keep page-tree mutations for a space in a single, short critical section.
 // The namespace avoids colliding with unrelated two-key advisory locks.
@@ -140,7 +147,6 @@ export class PageService {
     private readonly pageAccessService: PageAccessService,
     private readonly pageAccessMutationService: PageAccessMutationService,
     private readonly transclusionService?: TransclusionService,
-    private readonly pageEmbedService?: PageEmbedService,
     @Optional() private readonly queueOutboxService?: QueueOutboxService,
     @Optional()
     private readonly pageTemplatePolicy?: PageTemplatePolicyService,
@@ -1056,18 +1062,10 @@ export class PageService {
     page: Page,
     actorId: string,
   ): Promise<{ databaseId: string; pageId: string }> {
-    if (
-      page.templateKind !== null ||
-      (await this.pageEmbedService?.hasIncomingUsages(
-        page.id,
-        page.workspaceId,
-      )) ||
-      (await this.pageEmbedService?.hasOutgoingUsages(page.id))
-    ) {
+    if (page.templateKind !== null) {
       throw new ConflictException({
-        code: 'page_embed_source_in_use',
-        message:
-          'A template or embedded source cannot be converted to a database',
+        code: 'page_template_source_convert_forbidden',
+        message: 'A template source cannot be converted to a database',
       });
     }
     const database = await executeTx(this.db, async (trx) => {
@@ -1598,6 +1596,7 @@ export class PageService {
     rootPage: Page,
     targetSpaceId: string | undefined,
     authUser: User,
+    options?: DuplicatePageOptions,
   ) {
     const spaceId = targetSpaceId || rootPage.spaceId;
     const isDuplicateInSameSpace =
@@ -1611,6 +1610,21 @@ export class PageService {
     } else {
       // For copy to different space, position at the end
       nextPosition = await this.nextPagePosition(spaceId);
+    }
+
+    const pages = await this.pageRepo.getPageAndDescendants(rootPage.id, {
+      includeContent: true,
+    });
+    const sourceAccessByPageId =
+      await this.pageAccessService.getEffectiveAccessForPages(pages, authUser);
+    if (
+      pages.length === 0 ||
+      pages.some(
+        (page) =>
+          sourceAccessByPageId.get(page.id)?.capabilities.canRead !== true,
+      )
+    ) {
+      throw new ForbiddenException();
     }
 
     if (
@@ -1627,9 +1641,6 @@ export class PageService {
           'Use a template action instead of duplicating a template source page or its parent tree',
       });
     }
-    const pages = await this.pageRepo.getPageAndDescendants(rootPage.id, {
-      includeContent: true,
-    });
     if (await this.hasLinkedTemplateInstance(pages.map((page) => page.id))) {
       throw new ConflictException({
         code: 'page_template_linked_page_duplicate_forbidden',
@@ -1638,66 +1649,120 @@ export class PageService {
       });
     }
 
+    const referencingPageIdsByAttachmentId = new Map<string, Set<string>>();
+    for (const page of pages) {
+      const attachmentIds = getAttachmentIds(
+        getProsemirrorContent(page.content),
+      );
+      for (const attachmentId of attachmentIds) {
+        const referencingPageIds =
+          referencingPageIdsByAttachmentId.get(attachmentId) ?? new Set();
+        referencingPageIds.add(page.id);
+        referencingPageIdsByAttachmentId.set(
+          attachmentId,
+          referencingPageIds,
+        );
+      }
+    }
+
+    const referencedAttachmentIds = [
+      ...referencingPageIdsByAttachmentId.keys(),
+    ];
+    const sourceAttachmentPageIdById = new Map<string, string>();
+    if (referencedAttachmentIds.length > 0) {
+      const sourceAttachments = await this.attachmentRepo.findActiveByIds(
+        referencedAttachmentIds,
+        rootPage.workspaceId,
+      );
+      const sourceAttachmentById = new Map(
+        sourceAttachments.map((attachment) => [attachment.id, attachment]),
+      );
+
+      for (const attachmentId of referencedAttachmentIds) {
+        const sourceAttachment = sourceAttachmentById.get(attachmentId);
+        const referencingPageIds =
+          referencingPageIdsByAttachmentId.get(attachmentId);
+        const referencingPageId =
+          referencingPageIds?.size === 1
+            ? referencingPageIds.values().next().value
+            : undefined;
+        if (
+          !sourceAttachment ||
+          !sourceAttachment.pageId ||
+          !referencingPageId ||
+          sourceAttachment.pageId !== referencingPageId
+        ) {
+          throw new ConflictException({
+            code: 'page_attachment_source_invalid',
+            message:
+              'The page tree contains an attachment that cannot be duplicated safely',
+          });
+        }
+        sourceAttachmentPageIdById.set(attachmentId, sourceAttachment.pageId);
+      }
+    }
+
     const pageMap = new Map<string, CopyPageMapEntry>();
     pages.forEach((page) => {
       pageMap.set(page.id, {
-        newPageId: uuid7(),
+        newPageId:
+          page.id === rootPage.id && options?.rootPageId
+            ? options.rootPageId
+            : uuid7(),
         newSlugId: generateSlugId(),
         oldSlugId: page.slugId,
       });
     });
 
     const attachmentMap = new Map<string, IDuplicatePageAttachmentMapping>();
+    for (const [attachmentId, sourcePageId] of sourceAttachmentPageIdById) {
+      attachmentMap.set(attachmentId, {
+        newPageId: pageMap.get(sourcePageId).newPageId,
+        oldPageId: sourcePageId,
+        oldAttachmentId: attachmentId,
+        newAttachmentId: uuid7(),
+      });
+    }
+
+    const preparedPages = pages.map((page) => {
+      const pageContent = getProsemirrorContent(page.content);
+      const doc = jsonToNode(pageContent);
+      return {
+        page,
+        prosemirrorDoc: removeMarkTypeFromDoc(doc, 'comment'),
+      };
+    });
 
     const insertablePages: InsertablePage[] = await Promise.all(
-      pages.map(async (page) => {
-        const pageContent = getProsemirrorContent(page.content);
+      preparedPages.map(async ({ page, prosemirrorDoc }) => {
         const pageFromMap = pageMap.get(page.id);
-
-        const doc = jsonToNode(pageContent);
-        const prosemirrorDoc = removeMarkTypeFromDoc(doc, 'comment');
-
-        const attachmentIds = getAttachmentIds(prosemirrorDoc.toJSON());
-
-        if (attachmentIds.length > 0) {
-          attachmentIds.forEach((attachmentId: string) => {
-            const newPageId = pageFromMap.newPageId;
-            const newAttachmentId = uuid7();
-            attachmentMap.set(attachmentId, {
-              newPageId: newPageId,
-              oldPageId: page.id,
-              oldAttachmentId: attachmentId,
-              newAttachmentId: newAttachmentId,
-            });
-
-            prosemirrorDoc.descendants((node: PMNode) => {
-              if (isAttachmentNode(node.type.name)) {
-                if (node.attrs.attachmentId === attachmentId) {
-                  //@ts-ignore
-                  node.attrs.attachmentId = newAttachmentId;
-
-                  if (node.attrs.url) {
-                    //@ts-ignore
-                    node.attrs.url = node.attrs.url.replace(
-                      attachmentId,
-                      newAttachmentId,
-                    );
-                  }
-                  if (node.attrs.src) {
-                    //@ts-ignore
-                    node.attrs.src = node.attrs.src.replace(
-                      attachmentId,
-                      newAttachmentId,
-                    );
-                  }
-                }
-              }
-            });
-          });
-        }
 
         // Update internal page links in mention nodes
         prosemirrorDoc.descendants((node: PMNode) => {
+          if (isAttachmentNode(node.type.name)) {
+            const attachmentId = node.attrs.attachmentId;
+            const attachmentMapping = attachmentMap.get(attachmentId);
+            if (attachmentMapping) {
+              //@ts-ignore
+              node.attrs.attachmentId = attachmentMapping.newAttachmentId;
+
+              if (node.attrs.url) {
+                //@ts-ignore
+                node.attrs.url = node.attrs.url.replace(
+                  attachmentId,
+                  attachmentMapping.newAttachmentId,
+                );
+              }
+              if (node.attrs.src) {
+                //@ts-ignore
+                node.attrs.src = node.attrs.src.replace(
+                  attachmentId,
+                  attachmentMapping.newAttachmentId,
+                );
+              }
+            }
+          }
+
           if (
             node.type.name === 'mention' &&
             node.attrs.entityType === 'page'
@@ -1723,15 +1788,6 @@ export class PageService {
             }
           }
 
-          if (node.type.name === 'pageEmbed') {
-            //@ts-ignore
-            node.attrs.id = uuid7();
-            const sourcePageId = node.attrs.sourcePageId;
-            if (sourcePageId && pageMap.has(sourcePageId)) {
-              //@ts-ignore
-              node.attrs.sourcePageId = pageMap.get(sourcePageId).newPageId;
-            }
-          }
         });
 
         const prosemirrorJson = prosemirrorDoc.toJSON();
@@ -1778,66 +1834,42 @@ export class PageService {
     );
     const newPageId = pageMap.get(rootPage.id).newPageId;
 
-    let graphLease: PageEmbedGraphLease | undefined;
-    try {
-      graphLease = await this.pageEmbedService?.prepareBulkPageReferences(
-        insertablePages.map((page) => ({
-          id: page.id as string,
-          workspaceId: page.workspaceId,
-          spaceId: page.spaceId,
-          content: page.content,
-        })),
-        authUser,
-        'duplication',
-      );
-      await executeTx(this.db, async (trx) => {
-        await trx.insertInto('pages').values(insertablePages).execute();
-        await this.duplicateLinkedDatabases({
+    await executeTx(this.db, async (trx) => {
+      await trx.insertInto('pages').values(insertablePages).execute();
+      await this.duplicateLinkedDatabases({
           pageMap,
           copiedPageByOriginalId,
           spaceId,
           authUser,
           trx,
-        });
-        if (isDuplicateInSameSpace) {
-          await this.duplicateRowsInExistingDatabases({
+      });
+      if (isDuplicateInSameSpace) {
+        await this.duplicateRowsInExistingDatabases({
             pageMap,
             authUser,
             trx,
-          });
-        }
-        const transclusionPages = insertablePages.map((page) => ({
+        });
+      }
+      const transclusionPages = insertablePages.map((page) => ({
           id: page.id as string,
           workspaceId: page.workspaceId,
           content: page.content,
-        }));
-        if (this.transclusionService) {
-          await this.transclusionService.insertTransclusionsForPages(
+      }));
+      if (this.transclusionService) {
+        await this.transclusionService.insertTransclusionsForPages(
             transclusionPages,
             trx,
-          );
-          await this.transclusionService.insertReferencesForPages(
+        );
+        await this.transclusionService.insertReferencesForPages(
             transclusionPages,
             trx,
-          );
+        );
+      }
+      if (attachmentMappings.length > 0) {
+        if (!this.queueOutboxService) {
+          throw new Error('Queue outbox service is unavailable');
         }
-        if (this.pageEmbedService) {
-          await this.pageEmbedService.insertPageReferencesForPages(
-            insertablePages.map((page) => ({
-              id: page.id as string,
-              workspaceId: page.workspaceId,
-              spaceId: page.spaceId,
-              content: page.content,
-            })),
-            trx,
-            graphLease,
-          );
-        }
-        if (attachmentMappings.length > 0) {
-          if (!this.queueOutboxService) {
-            throw new Error('Queue outbox service is unavailable');
-          }
-          await this.queueOutboxService.enqueueDuplicatePageAttachments(
+        await this.queueOutboxService.enqueueDuplicatePageAttachments(
             {
               workspaceId: rootPage.workspaceId,
               rootPageId: rootPage.id,
@@ -1846,18 +1878,10 @@ export class PageService {
               attachmentMappings,
             },
             trx,
-          );
-        }
-      });
-    } finally {
-      if (graphLease) {
-        try {
-          await graphLease.release();
-        } catch (error) {
-          this.logger.error('Failed to release page embed graph lease', error);
-        }
+        );
       }
-    }
+      await options?.beforeCommit?.(trx, newPageId);
+    });
 
     const insertedPageIds = insertablePages.map((page) => page.id);
     this.eventEmitter.emit(EventName.PAGE_CREATED, {
@@ -2082,29 +2106,12 @@ export class PageService {
   }
 
   async forceDelete(pageId: string, workspaceId: string): Promise<void> {
-    const { pageIds } = await this.deletePageTreeAtomically({
+    const { pageIds, cleanupEnqueued } = await this.deletePageTreeAtomically({
       pageId,
       workspaceId,
       hardDelete: true,
     });
-
-    // Queue irreversible side effects only after the database transaction commits.
-    for (const id of pageIds) {
-      await this.attachmentQueue.add(
-        QueueJob.DELETE_PAGE_ATTACHMENTS,
-        {
-          pageId: id,
-        },
-        {
-          jobId: `delete-page-attachments-${id}`,
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000,
-          },
-        },
-      );
-    }
+    if (cleanupEnqueued) this.queueOutboxService!.kick();
 
     if (pageIds.length > 0) {
       this.eventEmitter.emit(EventName.PAGE_DELETED, {
@@ -2141,7 +2148,11 @@ export class PageService {
     workspaceId: string;
     hardDelete: boolean;
     deletedById?: string;
-  }): Promise<{ pageIds: string[]; spaceIds: string[] }> {
+  }): Promise<{
+    pageIds: string[];
+    spaceIds: string[];
+    cleanupEnqueued: boolean;
+  }> {
     return executeTx(this.db, async (trx) => {
       const descendants = await trx
         .withRecursive('page_descendants', (db) =>
@@ -2174,7 +2185,9 @@ export class PageService {
         .select('id')
         .execute();
       const pageIds = descendants.map(({ id }) => id);
-      if (pageIds.length === 0) return { pageIds: [], spaceIds: [] };
+      if (pageIds.length === 0) {
+        return { pageIds: [], spaceIds: [], cleanupEnqueued: false };
+      }
 
       // Lock template source rows before checking linkage. createFromTemplate
       // takes the same source-page lock before inserting an instance, so either
@@ -2212,10 +2225,25 @@ export class PageService {
       }
 
       if (params.hardDelete) {
+        if (!this.queueOutboxService) {
+          throw new Error('queue_outbox_unavailable');
+        }
+        const cleanupEnqueued =
+          await this.queueOutboxService.enqueuePageAttachmentCleanup(
+            lockedPageIds,
+            params.pageId,
+            params.workspaceId,
+            trx,
+          );
         await trx
           .deleteFrom('pages')
           .where(sql<boolean>`${sql.ref('id')} = any(${lockedPageIds}::uuid[])`)
           .execute();
+        return {
+          pageIds: lockedPageIds,
+          spaceIds: [...new Set(lockedPages.map(({ spaceId }) => spaceId))],
+          cleanupEnqueued,
+        };
       } else {
         const deletedAt = new Date();
         await trx
@@ -2234,6 +2262,7 @@ export class PageService {
       return {
         pageIds: lockedPageIds,
         spaceIds: [...new Set(lockedPages.map(({ spaceId }) => spaceId))],
+        cleanupEnqueued: false,
       };
     });
   }

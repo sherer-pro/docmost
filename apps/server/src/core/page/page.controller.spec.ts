@@ -115,6 +115,12 @@ describe('PageController guardrails and mixed-id contract', () => {
   const pageTemplateSyncService = {
     catchUpRestoredInstances: jest.fn(),
   };
+  const pageTemplateOperations = {
+    beginOperation: jest.fn(),
+    completeOperationInTransaction: jest.fn(),
+    failOperation: jest.fn(),
+    errorCode: jest.fn(() => 'page_duplicate_failed'),
+  };
 
   const controller = new PageController(
     pageService as any,
@@ -128,6 +134,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     backlinkService as any,
     linkPreviewService as any,
     pageTemplateSyncService as any,
+    pageTemplateOperations as any,
   );
 
   beforeEach(() => {
@@ -138,6 +145,10 @@ describe('PageController guardrails and mixed-id contract', () => {
     pageTemplateSyncService.catchUpRestoredInstances.mockResolvedValue(
       undefined,
     );
+    pageTemplateOperations.completeOperationInTransaction.mockResolvedValue(
+      undefined,
+    );
+    pageTemplateOperations.failOperation.mockResolvedValue(undefined);
     pageHistoryService.findMetadataById.mockResolvedValue({
       id: 'history-1',
       workspaceId: 'workspace-1',
@@ -400,6 +411,225 @@ describe('PageController guardrails and mixed-id contract', () => {
       aiRole: 'COAUTHOR_PLUS',
     });
     expect(result.databaseId).toBe('database-1');
+  });
+
+  it('completes an idempotent duplicate operation inside the page transaction', async () => {
+    const operation = {
+      id: 'operation-1',
+      leaseToken: 'lease-1',
+      resultPageId: 'duplicated-page',
+      status: 'pending',
+    };
+    pageTemplateOperations.beginOperation.mockResolvedValue(operation);
+    pageService.duplicatePage.mockImplementation(
+      async (_page, _spaceId, _user, options) => {
+        await options.beforeCommit({ transaction: true }, 'duplicated-page');
+        return {
+          id: 'duplicated-page',
+          slugId: 'duplicated-page-slug',
+          spaceId: 'space-a',
+          workspaceId: 'workspace-1',
+          settings: null,
+        };
+      },
+    );
+    pageService.resolvePageDatabaseId.mockResolvedValue(null);
+
+    const result = await controller.duplicatePage(
+      { pageId: 'uuid-page' } as any,
+      { id: 'user-1', workspaceId: 'workspace-1' } as any,
+      'duplicate-request-1',
+    );
+
+    expect(pageTemplateOperations.beginOperation).toHaveBeenCalledWith(
+      'page_duplicate',
+      'duplicate-request-1',
+      expect.objectContaining({ id: 'user-1' }),
+      { pageId: 'uuid-page', spaceId: null },
+      expect.objectContaining({
+        sourcePageId: 'uuid-page',
+        resultPageId: expect.any(String),
+      }),
+    );
+    expect(pageService.duplicatePage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'uuid-page' }),
+      undefined,
+      expect.objectContaining({ id: 'user-1' }),
+      expect.objectContaining({ rootPageId: 'duplicated-page' }),
+    );
+    expect(
+      pageTemplateOperations.completeOperationInTransaction,
+    ).toHaveBeenCalledWith(
+      { transaction: true },
+      'operation-1',
+      'lease-1',
+      { resultPageId: 'duplicated-page' },
+    );
+    expect(result.id).toBe('duplicated-page');
+  });
+
+  it('replays a completed duplicate without creating a second page tree', async () => {
+    pageTemplateOperations.beginOperation.mockResolvedValue({
+      id: 'operation-1',
+      leaseToken: null,
+      resultPageId: 'duplicated-page',
+      status: 'completed',
+    });
+    pageRepo.findById
+      .mockResolvedValueOnce({
+        id: 'uuid-page',
+        slugId: 'source',
+        spaceId: 'space-a',
+        workspaceId: 'workspace-1',
+      })
+      .mockResolvedValueOnce({
+        id: 'duplicated-page',
+        slugId: 'duplicated-page-slug',
+        spaceId: 'space-a',
+        workspaceId: 'workspace-1',
+        settings: null,
+      });
+    pageService.resolvePageDatabaseId.mockResolvedValue(null);
+
+    const result = await controller.duplicatePage(
+      { pageId: 'uuid-page' } as any,
+      { id: 'user-1', workspaceId: 'workspace-1' } as any,
+      'duplicate-request-1',
+    );
+
+    expect(pageService.duplicatePage).not.toHaveBeenCalled();
+    expect(result.id).toBe('duplicated-page');
+  });
+
+  it('keeps legacy duplicate calls working and marks the response deprecated', async () => {
+    const response = { header: jest.fn() };
+    pageService.duplicatePage.mockResolvedValue({
+      id: 'duplicated-page',
+      slugId: 'duplicated-page-slug',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+      settings: null,
+    });
+    pageService.resolvePageDatabaseId.mockResolvedValue(null);
+
+    await controller.duplicatePage(
+      { pageId: 'uuid-page' } as any,
+      { id: 'user-1', workspaceId: 'workspace-1' } as any,
+      undefined,
+      response as any,
+    );
+
+    expect(pageTemplateOperations.beginOperation).not.toHaveBeenCalled();
+    expect(response.header).toHaveBeenCalledWith('Deprecation', 'true');
+    expect(response.header).toHaveBeenCalledWith(
+      'X-Docmost-Required-Header',
+      'Idempotency-Key',
+    );
+  });
+
+  it('rejects unsafe idempotency keys before reserving an operation', async () => {
+    await expect(
+      controller.duplicatePage(
+        { pageId: 'uuid-page' } as any,
+        { id: 'user-1', workspaceId: 'workspace-1' } as any,
+        'unsafe:key',
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'idempotency_key_invalid' }),
+    });
+
+    expect(pageTemplateOperations.beginOperation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a same-space sibling duplicate when the parent denies child creation', async () => {
+    const sourcePage = {
+      id: 'uuid-page',
+      slugId: 'source',
+      parentPageId: 'parent-page',
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+    };
+    const parentPage = {
+      id: 'parent-page',
+      slugId: 'parent',
+      parentPageId: null,
+      spaceId: 'space-a',
+      workspaceId: 'workspace-1',
+      deletedAt: null,
+    };
+    pageRepo.findById
+      .mockResolvedValueOnce(sourcePage)
+      .mockResolvedValueOnce(parentPage);
+    pageAccessService.assertCanCreateChild.mockRejectedValueOnce(
+      new ForbiddenException(),
+    );
+
+    await expect(
+      controller.duplicatePage(
+        { pageId: 'uuid-page', spaceId: 'space-a' } as any,
+        { id: 'user-1', workspaceId: 'workspace-1' } as any,
+        'duplicate-request-parent-denied',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageAccessService.assertCanWritePage).toHaveBeenCalledWith(
+      sourcePage,
+      expect.objectContaining({ id: 'user-1' }),
+    );
+    expect(pageAccessService.assertCanReadPage).not.toHaveBeenCalled();
+    expect(pageAccessService.assertCanCreateChild).toHaveBeenCalledWith(
+      parentPage,
+      expect.objectContaining({ id: 'user-1' }),
+    );
+    expect(pageTemplateOperations.beginOperation).not.toHaveBeenCalled();
+    expect(
+      pageTemplateOperations.completeOperationInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(pageService.duplicatePage).not.toHaveBeenCalled();
+  });
+
+  it('rejects a root sibling duplicate when the space denies page creation', async () => {
+    (spaceAbility.createForUser as jest.Mock).mockResolvedValueOnce({
+      cannot: jest.fn(() => true),
+    });
+
+    await expect(
+      controller.duplicatePage(
+        { pageId: 'uuid-page' } as any,
+        { id: 'user-1', workspaceId: 'workspace-1' } as any,
+        'duplicate-request-root-denied',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageAccessService.assertCanWritePage).toHaveBeenCalled();
+    expect(spaceAbility.createForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'user-1' }),
+      'space-a',
+    );
+    expect(pageTemplateOperations.beginOperation).not.toHaveBeenCalled();
+    expect(
+      pageTemplateOperations.completeOperationInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(pageService.duplicatePage).not.toHaveBeenCalled();
+  });
+
+  it('requires page creation permission when copying to another space', async () => {
+    const cannot = jest.fn((action: string) => action === 'create');
+    (spaceAbility.createForUser as jest.Mock).mockResolvedValueOnce({ cannot });
+
+    await expect(
+      controller.duplicatePage(
+        { pageId: 'uuid-page', spaceId: 'space-b' } as any,
+        { id: 'user-1', workspaceId: 'workspace-1' } as any,
+        'duplicate-request-target-denied',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(pageAccessService.assertCanReadPage).toHaveBeenCalled();
+    expect(pageAccessService.assertCanWritePage).not.toHaveBeenCalled();
+    expect(cannot).toHaveBeenCalledWith('create', 'page');
+    expect(pageTemplateOperations.beginOperation).not.toHaveBeenCalled();
+    expect(pageService.duplicatePage).not.toHaveBeenCalled();
   });
 
   it('uses resolved UUID for permanent delete even when slug is provided', async () => {

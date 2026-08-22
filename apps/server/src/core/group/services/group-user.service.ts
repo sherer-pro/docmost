@@ -95,7 +95,7 @@ export class GroupUserService {
       .values(groupUsersToInsert)
       .onConflict((oc) => oc.columns(['userId', 'groupId']).doNothing())
       .execute();
-    await this.emitPageEmbedVisibilityChanged(
+    await this.emitAuthorizationChanged(
       workspaceId,
       validUsers.map((user) => user.id),
     );
@@ -138,25 +138,19 @@ export class GroupUserService {
     await executeTx(this.db, async (trx) => {
       await this.groupUserRepo.delete(userId, groupId, { trx });
 
-      for (const spaceId of spaceIds) {
-        await this.watcherRepo.deleteByUsersWithoutSpaceAccess(
-          [userId],
-          spaceId,
-          { trx },
-        );
-      }
+      await this.watcherRepo.deleteByUsersWithoutSpacesAccess(
+        [userId],
+        spaceIds,
+        { trx },
+      );
     });
-    await this.emitPageEmbedVisibilityChanged(workspaceId, [userId]);
+    await this.emitAuthorizationChanged(workspaceId, [userId]);
   }
 
-  private async emitPageEmbedVisibilityChanged(
+  private async emitAuthorizationChanged(
     workspaceId: string,
     accessUserIds: string[],
   ): Promise<void> {
-    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId,
-      accessUserIds,
-    });
     await Promise.all(
       accessUserIds.map((userId) =>
         this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {

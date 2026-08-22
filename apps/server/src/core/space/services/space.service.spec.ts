@@ -9,6 +9,7 @@ import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 import { QueueName } from '../../../integrations/queue/constants';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
 import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 
 describe('SpaceService', () => {
   let service: SpaceService;
@@ -21,6 +22,7 @@ describe('SpaceService', () => {
     archiveSpace: jest.Mock;
     unarchiveSpace: jest.Mock;
     findById: jest.Mock;
+    hasImportCleanupBlockers: jest.Mock;
     deleteSpace: jest.Mock;
   };
   let workspaceRepo: { findById: jest.Mock };
@@ -31,6 +33,10 @@ describe('SpaceService', () => {
     executeTakeFirst: jest.Mock;
   };
   let attachmentQueue: { add: jest.Mock };
+  let queueOutbox: {
+    enqueueSpaceAttachmentCleanup: jest.Mock;
+    kick: jest.Mock;
+  };
 
   beforeEach(async () => {
     spaceRepo = {
@@ -42,6 +48,7 @@ describe('SpaceService', () => {
       archiveSpace: jest.fn(),
       unarchiveSpace: jest.fn(),
       findById: jest.fn(),
+      hasImportCleanupBlockers: jest.fn().mockResolvedValue(false),
       deleteSpace: jest.fn(),
     };
     workspaceRepo = { findById: jest.fn() };
@@ -54,6 +61,10 @@ describe('SpaceService', () => {
     ragBindingQuery.select.mockReturnValue(ragBindingQuery);
     ragBindingQuery.where.mockReturnValue(ragBindingQuery);
     attachmentQueue = { add: jest.fn() };
+    queueOutbox = {
+      enqueueSpaceAttachmentCleanup: jest.fn().mockResolvedValue(true),
+      kick: jest.fn(),
+    };
     const db = {
       transaction: jest.fn(() => ({
         execute: (callback: (trx: unknown) => unknown) => callback({}),
@@ -75,6 +86,7 @@ describe('SpaceService', () => {
           provide: getQueueToken(QueueName.ATTACHMENT_QUEUE),
           useValue: attachmentQueue,
         },
+        { provide: QueueOutboxService, useValue: queueOutbox },
       ],
     }).compile();
 
@@ -218,9 +230,66 @@ describe('SpaceService', () => {
     expect(spaceRepo.deleteSpace).toHaveBeenCalledWith(
       'space-1',
       'workspace-1',
+      expect.anything(),
     );
-    expect(attachmentQueue.add).toHaveBeenCalledWith(expect.anything(), space);
+    expect(queueOutbox.enqueueSpaceAttachmentCleanup).toHaveBeenCalledWith(
+      'space-1',
+      'workspace-1',
+      expect.anything(),
+    );
+    expect(queueOutbox.kick).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['uploading', 'pending', 'processing'])(
+    'blocks space deletion while a %s import owns archive artifacts',
+    async () => {
+      const space = { id: 'space-1', workspaceId: 'workspace-1' };
+      spaceRepo.findById.mockResolvedValue(space);
+      spaceRepo.hasImportCleanupBlockers.mockResolvedValue(true);
+
+      await expect(
+        service.deleteSpace('space-1', 'workspace-1'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'space_import_cleanup_required',
+        }),
+      });
+      expect(spaceRepo.deleteSpace).not.toHaveBeenCalled();
+      expect(queueOutbox.enqueueSpaceAttachmentCleanup).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['success', 'failed'])(
+    'blocks space deletion for a terminal import with uncompensated artifacts (%s)',
+    async () => {
+      const space = { id: 'space-1', workspaceId: 'workspace-1' };
+      spaceRepo.findById.mockResolvedValue(space);
+      spaceRepo.hasImportCleanupBlockers.mockResolvedValue(true);
+
+      await expect(
+        service.deleteSpace('space-1', 'workspace-1'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'space_import_cleanup_required',
+        }),
+      });
+      expect(spaceRepo.deleteSpace).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['success', 'failed'])(
+    'allows space deletion after a terminal import is fully compensated (%s)',
+    async () => {
+      const space = { id: 'space-1', workspaceId: 'workspace-1' };
+      spaceRepo.findById.mockResolvedValue(space);
+      spaceRepo.hasImportCleanupBlockers.mockResolvedValue(false);
+
+      await expect(
+        service.deleteSpace('space-1', 'workspace-1'),
+      ).resolves.toBeUndefined();
+      expect(spaceRepo.deleteSpace).toHaveBeenCalled();
+    },
+  );
 
   it('rejects a space administrator transition that weakens MFA', async () => {
     workspaceRepo.findById.mockResolvedValue({

@@ -102,7 +102,7 @@ describe('RedisSyncExtension custom event errors', () => {
   it('preserves a structured HTTP 409 across the Redis envelope', () => {
     const serialized = serializeCustomEventError(
       new ConflictException({
-        code: 'page_embed_stale',
+        code: 'page_template_stale',
         message: 'The document changed',
       }),
     );
@@ -110,7 +110,7 @@ describe('RedisSyncExtension custom event errors', () => {
 
     expect(restored.getStatus()).toBe(409);
     expect(restored.getResponse()).toEqual({
-      code: 'page_embed_stale',
+      code: 'page_template_stale',
       message: 'The document changed',
     });
   });

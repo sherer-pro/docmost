@@ -22,6 +22,7 @@ export enum FileImportSource {
 }
 
 export enum FileTaskStatus {
+  Uploading = 'uploading',
   Pending = 'pending',
   Processing = 'processing',
   Success = 'success',

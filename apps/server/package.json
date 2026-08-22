@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "",
   "author": "",
   "private": true,
@@ -23,6 +23,8 @@
     "migration:reset": "tsx src/database/migrate.ts down-to NO_MIGRATIONS",
     "search:reindex": "tsx src/cli/search-reindex.ts",
     "sso:disable-enforcement": "tsx src/cli/sso-disable-enforcement.ts",
+    "archive:convert-v5": "tsx src/cli/docmost-archive-convert-v5.ts",
+    "page-embed:prepare-removal": "tsx src/cli/page-embed-prepare-removal.ts",
     "migration:codegen": "kysely-codegen --dialect=postgres --camel-case --env-file=../../.env --out-file=./src/database/types/db.d.ts",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix",
     "test": "jest --config jest.config.cjs",

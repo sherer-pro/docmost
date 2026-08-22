@@ -39,8 +39,6 @@ export function getTemplateSyncErrorLabel(
       return t("A template attachment could not be copied.");
     case "page_template_revision_stale":
       return t("A newer template version is already available.");
-    case "page_embed_stale":
-      return t("A linked page changed before the update completed.");
     case "page_template_sync_partial_failure":
       return t("Some linked pages could not be updated.");
     case "page_template_operation_failed":

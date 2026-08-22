@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -12,6 +13,7 @@ import {
   Post,
   ParseUUIDPipe,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { PageService } from './services/page.service';
@@ -32,7 +34,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { User, Workspace } from '@docmost/db/types/entity.types';
+import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { SidebarPageDto, SidebarPagesQueryDto } from './dto/sidebar-page.dto';
 import {
   SpaceCaslAction,
@@ -71,6 +73,9 @@ import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decor
 import { PageAccessMutationService } from './services/page-access-mutation.service';
 import { PageTemplateSyncService } from './services/page-template-sync.service';
 import type { PageReference } from '@docmost/api-contract';
+import type { FastifyReply } from 'fastify';
+import { v7 as uuid7 } from 'uuid';
+import { PageTemplateOperationService } from './services/page-template-operation.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -87,6 +92,7 @@ export class PageController {
     private readonly backlinkService: BacklinkService,
     private readonly linkPreviewService: LinkPreviewService,
     private readonly pageTemplateSyncService: PageTemplateSyncService,
+    private readonly pageTemplateOperations: PageTemplateOperationService,
   ) {}
 
   private toAccessResponse(access: {
@@ -106,6 +112,20 @@ export class PageController {
       sources: access.sources,
       capabilities: access.capabilities,
       isSystemAccess: access.isSystemAccess,
+    };
+  }
+
+  private async mapDuplicatedPageResponse(page: Page, user: User) {
+    await this.pageAccessService.assertCanReadPage(page, user);
+    const access = await this.pageAccessService.getEffectiveAccess(page, user);
+    const databaseId = await this.pageService.resolvePageDatabaseId(
+      page.id,
+      page.workspaceId,
+    );
+    return {
+      ...mapPageResponse(page, { includeCustomFields: true }),
+      databaseId,
+      access: this.toAccessResponse(access),
     };
   }
 
@@ -613,66 +633,139 @@ export class PageController {
     ],
   })
   @Post('duplicate')
-  async duplicatePage(@Body() dto: DuplicatePageDto, @AuthUser() user: User) {
+  async duplicatePage(
+    @Body() dto: DuplicatePageDto,
+    @AuthUser() user: User,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Res({ passthrough: true }) response?: FastifyReply,
+  ) {
     const copiedPage = await this.pageRepo.findById(dto.pageId);
     if (!copiedPage) {
       throw new NotFoundException('Page to copy not found');
     }
 
-    // If spaceId is provided, it's a copy to different space
-    if (dto.spaceId) {
+    // Authorize both the source and the effective destination before reserving
+    // an operation. A same-space duplicate is a sibling creation, including
+    // when the caller explicitly supplies the source space id.
+    const targetSpaceId = dto.spaceId ?? copiedPage.spaceId;
+    const isSameSpace = targetSpaceId === copiedPage.spaceId;
+    if (!isSameSpace) {
       await this.pageAccessService.assertCanReadPage(copiedPage, user);
 
       const targetAbility = await this.spaceAbility.createForUser(
         user,
-        dto.spaceId,
+        targetSpaceId,
       );
-      if (targetAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+      if (targetAbility.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)) {
         throw new ForbiddenException();
       }
+    } else {
+      await this.pageAccessService.assertCanWritePage(copiedPage, user);
+      if (copiedPage.parentPageId) {
+        const parentPage = await this.pageRepo.findById(
+          copiedPage.parentPageId,
+        );
+        if (
+          !parentPage ||
+          parentPage.deletedAt ||
+          parentPage.spaceId !== copiedPage.spaceId ||
+          parentPage.workspaceId !== copiedPage.workspaceId
+        ) {
+          throw new ForbiddenException();
+        }
+        await this.pageAccessService.assertCanCreateChild(parentPage, user);
+      } else {
+        const targetAbility = await this.spaceAbility.createForUser(
+          user,
+          targetSpaceId,
+        );
+        if (
+          targetAbility.cannot(
+            SpaceCaslAction.Create,
+            SpaceCaslSubject.Page,
+          )
+        ) {
+          throw new ForbiddenException();
+        }
+      }
+    }
 
+    if (!idempotencyKey) {
+      response?.header('Deprecation', 'true');
+      response?.header('X-Docmost-Required-Header', 'Idempotency-Key');
       const duplicatedPage = await this.pageService.duplicatePage(
         copiedPage,
         dto.spaceId,
         user,
       );
+      return this.mapDuplicatedPageResponse(duplicatedPage, user);
+    }
 
-      const access = await this.pageAccessService.getEffectiveAccess(
-        duplicatedPage,
-        user,
-      );
-      const databaseId = await this.pageService.resolvePageDatabaseId(
-        duplicatedPage.id,
-        duplicatedPage.workspaceId,
-      );
-      return {
-        ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
-        databaseId,
-        access: this.toAccessResponse(access),
-      };
-    } else {
-      // If no spaceId, it's a duplicate in same space
-      await this.pageAccessService.assertCanWritePage(copiedPage, user);
+    if (
+      idempotencyKey.length > 128 ||
+      !/^[A-Za-z0-9._-]+$/.test(idempotencyKey)
+    ) {
+      throw new BadRequestException({
+        code: 'idempotency_key_invalid',
+        message: 'Idempotency-Key must contain 1-128 safe ASCII characters',
+      });
+    }
 
+    const operation = await this.pageTemplateOperations.beginOperation(
+      'page_duplicate',
+      idempotencyKey,
+      user,
+      {
+        pageId: copiedPage.id,
+        spaceId: dto.spaceId ?? null,
+      },
+      {
+        sourcePageId: copiedPage.id,
+        resultPageId: uuid7(),
+      },
+    );
+
+    if (operation.status === 'completed') {
+      const replayedPage = operation.resultPageId
+        ? await this.pageRepo.findById(operation.resultPageId, {
+            includeSpace: true,
+            includeHasChildren: true,
+          })
+        : null;
+      if (!replayedPage || replayedPage.deletedAt) {
+        throw new NotFoundException({
+          code: 'idempotency_result_unavailable',
+          message: 'The duplicated page is no longer available',
+        });
+      }
+      return this.mapDuplicatedPageResponse(replayedPage, user);
+    }
+
+    try {
       const duplicatedPage = await this.pageService.duplicatePage(
         copiedPage,
-        undefined,
+        dto.spaceId,
         user,
+        {
+          rootPageId: operation.resultPageId,
+          beforeCommit: async (trx, duplicatedRootPageId) => {
+            await this.pageTemplateOperations.completeOperationInTransaction(
+              trx,
+              operation.id,
+              operation.leaseToken,
+              { resultPageId: duplicatedRootPageId },
+            );
+          },
+        },
       );
-
-      const access = await this.pageAccessService.getEffectiveAccess(
-        duplicatedPage,
-        user,
+      return this.mapDuplicatedPageResponse(duplicatedPage, user);
+    } catch (error) {
+      await this.pageTemplateOperations.failOperation(
+        operation.id,
+        this.pageTemplateOperations.errorCode(error),
+        operation.leaseToken,
       );
-      const databaseId = await this.pageService.resolvePageDatabaseId(
-        duplicatedPage.id,
-        duplicatedPage.workspaceId,
-      );
-      return {
-        ...mapPageResponse(duplicatedPage, { includeCustomFields: true }),
-        databaseId,
-        access: this.toAccessResponse(access),
-      };
+      throw error;
     }
   }
 

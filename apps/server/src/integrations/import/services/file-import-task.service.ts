@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import * as path from 'path';
 import { jsonToText } from '../../../collaboration/collaboration.util';
 import { InjectKysely } from 'nestjs-kysely';
@@ -41,9 +42,18 @@ import { EventName } from '../../../common/events/event.contants';
 import { DocmostArchiveImportService } from './docmost-archive-import.service';
 import type { ImportReport } from '@docmost/api-contract';
 import type { ExportMetadata } from '../../../common/helpers/types/export-metadata.types';
+import type { FileImportOutboxHandler } from '../../queue/outbox/queue-outbox.types';
+import { sql } from 'kysely';
+
+const IMPORT_LEASE_MS = 5 * 60 * 1000;
+const IMPORT_LEASE_RENEW_MS = 30 * 1000;
+const IMPORT_MAX_ATTEMPTS = 3;
+const STALE_UPLOAD_MS = 15 * 60 * 1000;
+const DOCMOST_PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;
+const DOCMOST_PREVIEW_EXPIRY_BATCH_SIZE = 25;
 
 @Injectable()
-export class FileImportTaskService {
+export class FileImportTaskService implements FileImportOutboxHandler {
   private readonly logger = new Logger(FileImportTaskService.name);
 
   constructor(
@@ -57,7 +67,84 @@ export class FileImportTaskService {
     private readonly docmostArchiveImportService: DocmostArchiveImportService,
   ) {}
 
-  async processZIpImport(fileTaskId: string): Promise<void> {
+  async processImportFromOutbox(fileTaskId: string): Promise<void> {
+    const existing = await this.getFileTask(fileTaskId);
+    if (!existing) {
+      // A missing task also means its cascading artifact locator is gone. Do
+      // not acknowledge the durable intent as cleanup-safe; retain the failed
+      // outbox entry for operator recovery.
+      throw new Error('file_import_task_missing');
+    }
+    if (existing.status === FileTaskStatus.Success) {
+      await this.cleanupStoredImportArchive(existing.id, existing.filePath);
+      return;
+    }
+    if (existing.status === FileTaskStatus.Failed) {
+      await this.cleanupOrphanImportArtifacts(fileTaskId);
+      return;
+    }
+
+    const leaseToken = v7();
+    const claimed = await this.claimImportTask(fileTaskId, leaseToken);
+    if (!claimed) throw new Error('file_import_claim_unavailable');
+    const lease = this.startImportLeaseRenewal(fileTaskId, leaseToken);
+
+    try {
+      await this.processZIpImport(fileTaskId, leaseToken);
+      await lease.stop();
+      if (lease.isLost()) throw new Error('file_import_lease_lost');
+      await this.cleanupStoredImportArchive(claimed.id, claimed.filePath);
+    } catch (error) {
+      await lease.stop();
+      if (lease.isLost()) throw error;
+
+      const current = await this.getFileTask(fileTaskId);
+      if (current?.status === FileTaskStatus.Success) throw error;
+
+      if (claimed.attemptCount >= IMPORT_MAX_ATTEMPTS) {
+        const failed = await this.db
+          .updateTable('fileTasks')
+          .set({
+            status: FileTaskStatus.Failed,
+            errorMessage: 'file_task_processing_failed',
+            leaseToken: null,
+            leaseExpiresAt: null,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', fileTaskId)
+          .where('status', '=', FileTaskStatus.Processing)
+          .where('leaseToken', '=', leaseToken)
+          .executeTakeFirst();
+        if (Number(failed.numUpdatedRows) !== 1) throw error;
+
+        try {
+          await this.cleanupOrphanImportArtifacts(fileTaskId);
+        } catch {
+          // Failed is persisted first. The periodic failed-artifact
+          // reconciler owns any storage compensation that could not finish.
+          this.logger.warn({ event: 'file_import_terminal_cleanup_deferred' });
+        }
+        return;
+      }
+
+      await this.db
+        .updateTable('fileTasks')
+        .set({
+          status: FileTaskStatus.Pending,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          errorMessage: 'file_task_processing_retry',
+          updatedAt: new Date(),
+        })
+        .where('id', '=', fileTaskId)
+        .where('status', '=', FileTaskStatus.Processing)
+        .where('leaseToken', '=', leaseToken)
+        .execute();
+      throw error;
+    }
+  }
+
+  async processZIpImport(fileTaskId: string, leaseToken: string): Promise<void> {
     const fileTask = await this.db
       .selectFrom('fileTasks')
       .selectAll()
@@ -108,6 +195,7 @@ export class FileImportTaskService {
         importReport = await this.docmostArchiveImportService.process({
           extractDir: tmpExtractDir,
           fileTask,
+          leaseToken,
         });
       } else if (
         fileTask.source === FileImportSource.Generic ||
@@ -116,25 +204,17 @@ export class FileImportTaskService {
         importReport = await this.processGenericImport({
           extractDir: tmpExtractDir,
           fileTask,
+          leaseToken,
         });
       } else {
         throw new BadRequestException('Unsupported import source');
       }
-
-      await this.updateTaskStatus(
-        fileTaskId,
-        FileTaskStatus.Success,
-        null,
-        importReport,
-      );
       try {
         await cleanupTmpFile();
         await cleanupTmpDir();
-        // delete stored file on success
-        await this.storageService.delete(fileTask.filePath);
       } catch (err) {
         this.logger.error(
-          `Failed to delete import file from storage. Task ID: ${fileTaskId}`,
+          `Failed to clean temporary import files. Task ID: ${fileTaskId}`,
           err,
         );
       }
@@ -149,8 +229,9 @@ export class FileImportTaskService {
   async processGenericImport(opts: {
     extractDir: string;
     fileTask: FileTask;
+    leaseToken?: string;
   }): Promise<ImportReport | undefined> {
-    const { extractDir, fileTask } = opts;
+    const { extractDir, fileTask, leaseToken } = opts;
     const allFiles = await collectMarkdownAndHtmlFiles(extractDir);
     const attachmentCandidates = await buildAttachmentCandidates(extractDir);
     const docmostMetadata = await readDocmostMetadata(extractDir);
@@ -241,6 +322,17 @@ export class FileImportTaskService {
           icon: placeholderMetadata?.icon ?? null,
         });
       }
+    });
+
+    const pageMappings = await this.ensureImportPageMappings(
+      fileTask.id,
+      Array.from(pagesMap.keys()),
+    );
+    pagesMap.forEach((page, filePath) => {
+      const mapping = pageMappings.get(filePath);
+      if (!mapping) throw new Error('file_import_page_mapping_missing');
+      page.id = mapping.pageId;
+      page.slugId = mapping.slugId;
     });
 
     // parent/child linking
@@ -394,8 +486,6 @@ export class FileImportTaskService {
 
     calculateLevels();
 
-    if (pagesMap.size < 1) return;
-
     // Process pages level by level sequentially to respect foreign key constraints
     const allBacklinks: any[] = [];
     const validPageIds = new Set<string>();
@@ -405,6 +495,7 @@ export class FileImportTaskService {
     // Sort levels to process in order
     const sortedLevels = Array.from(pagesByLevel.keys()).sort((a, b) => a - b);
 
+    let importReport: ImportReport | undefined;
     try {
       await executeTx(this.db, async (trx) => {
         // Process pages level by level sequentially within the transaction
@@ -440,6 +531,7 @@ export class FileImportTaskService {
                 pageId: page.id,
                 fileTask,
                 attachmentCandidates,
+                trx,
               });
 
             const { html, backlinks, pageIcon } = await formatImportHtml({
@@ -536,48 +628,76 @@ export class FileImportTaskService {
           }
         }
 
-        if (validPageIds.size > 0) {
-          this.eventEmitter.emit(EventName.PAGE_CREATED, {
-            pageIds: Array.from(validPageIds),
-            workspaceId: fileTask.workspaceId,
-          });
-        }
-
         this.logger.log(
           `Successfully imported ${totalPagesProcessed} pages with ${filteredBacklinks.length} backlinks`,
         );
+
+        if (docmostMetadata) {
+          const warnings =
+            ambiguousNumberingPages.length > 0
+              ? [
+                  `Heading numbering was left unchanged on ${ambiguousNumberingPages.length} page(s) because it could not be safely identified as Docmost-generated.`,
+                ]
+              : [];
+          importReport = {
+            created: {
+              pages: totalPagesProcessed,
+              databases: 0,
+              rows: 0,
+              attachments: 0,
+              labels: 0,
+              dictionaryTerms: 0,
+            },
+            updated: { dictionaryTerms: 0 },
+            skipped: {
+              dictionaryTerms: 0,
+              userReferences: 0,
+              pageReferences: 0,
+            },
+            warnings,
+          };
+        }
+
+        await trx
+          .updateTable('fileTaskImportPages')
+          .set({ status: 'completed', updatedAt: new Date() })
+          .where('fileTaskId', '=', fileTask.id)
+          .execute();
+        let finalize = trx
+          .updateTable('fileTasks')
+          .set({
+            status: FileTaskStatus.Success,
+            errorMessage: null,
+            result: importReport
+              ? ({
+                  ...((fileTask.result as Record<string, unknown> | null) ?? {}),
+                  report: importReport,
+                } as any)
+              : fileTask.result,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', fileTask.id)
+          .where('status', '=', FileTaskStatus.Processing);
+        if (leaseToken) finalize = finalize.where('leaseToken', '=', leaseToken);
+        const finalized = await finalize.executeTakeFirst();
+        if (Number(finalized.numUpdatedRows) !== 1) {
+          throw new Error('file_import_lease_lost');
+        }
       });
+      if (validPageIds.size > 0) {
+        this.eventEmitter.emit(EventName.PAGE_CREATED, {
+          pageIds: Array.from(validPageIds),
+          workspaceId: fileTask.workspaceId,
+        });
+      }
     } catch (error) {
       this.logger.error('Failed to import files:', error);
       throw new Error(`File import failed: ${error?.['message']}`);
     }
 
-    if (!docmostMetadata) {
-      return undefined;
-    }
-    const warnings =
-      ambiguousNumberingPages.length > 0
-        ? [
-            `Heading numbering was left unchanged on ${ambiguousNumberingPages.length} page(s) because it could not be safely identified as Docmost-generated.`,
-          ]
-        : [];
-    return {
-      created: {
-        pages: totalPagesProcessed,
-        databases: 0,
-        rows: 0,
-        attachments: 0,
-        labels: 0,
-        dictionaryTerms: 0,
-      },
-      updated: { dictionaryTerms: 0 },
-      skipped: {
-        dictionaryTerms: 0,
-        userReferences: 0,
-        pageReferences: 0,
-      },
-      warnings,
-    };
+    return importReport;
   }
 
   private hasNumberedHeadingCandidate(content: unknown): boolean {
@@ -601,6 +721,304 @@ export class FileImportTaskService {
       return Array.isArray(node.content) && node.content.some(visit);
     };
     return visit(content);
+  }
+
+  private async ensureImportPageMappings(
+    fileTaskId: string,
+    sourcePaths: string[],
+  ): Promise<Map<string, { pageId: string; slugId: string }>> {
+    const uniquePaths = [...new Set(sourcePaths)].sort();
+    if (uniquePaths.length > 0) {
+      await this.db
+        .insertInto('fileTaskImportPages')
+        .values(
+          uniquePaths.map((sourcePath) => ({
+            fileTaskId,
+            sourcePath,
+            pageId: v7(),
+            slugId: generateSlugId(),
+            status: 'pending',
+          })),
+        )
+        .onConflict((oc) =>
+          oc.columns(['fileTaskId', 'sourcePath']).doNothing(),
+        )
+        .execute();
+    }
+
+    const rows = await this.db
+      .selectFrom('fileTaskImportPages')
+      .select(['sourcePath', 'pageId', 'slugId'])
+      .where('fileTaskId', '=', fileTaskId)
+      .execute();
+    const mappings = new Map(
+      rows.map((row) => [
+        row.sourcePath,
+        { pageId: row.pageId, slugId: row.slugId },
+      ]),
+    );
+    if (uniquePaths.some((sourcePath) => !mappings.has(sourcePath))) {
+      throw new Error('file_import_page_mapping_incomplete');
+    }
+    return mappings;
+  }
+
+  private async claimImportTask(fileTaskId: string, leaseToken: string) {
+    return this.db
+      .updateTable('fileTasks')
+      .set({
+        status: FileTaskStatus.Processing,
+        attemptCount: sql`attempt_count + 1`,
+        leaseToken,
+        leaseExpiresAt: new Date(Date.now() + IMPORT_LEASE_MS),
+        errorMessage: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', fileTaskId)
+      .where('type', '=', 'import')
+      .where((eb) =>
+        eb.or([
+          eb('status', '=', FileTaskStatus.Pending),
+          eb.and([
+            eb('status', '=', FileTaskStatus.Processing),
+            eb('leaseExpiresAt', '<=', new Date()),
+          ]),
+        ]),
+      )
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  private startImportLeaseRenewal(
+    fileTaskId: string,
+    leaseToken: string,
+  ): { isLost: () => boolean; stop: () => Promise<void> } {
+    let stopped = false;
+    let lost = false;
+    let timer: NodeJS.Timeout | undefined;
+    let renewal = Promise.resolve();
+
+    const schedule = () => {
+      if (stopped || lost) return;
+      timer = setTimeout(() => {
+        renewal = (async () => {
+          const renewed = await this.db
+            .updateTable('fileTasks')
+            .set({
+              leaseExpiresAt: new Date(Date.now() + IMPORT_LEASE_MS),
+              updatedAt: new Date(),
+            })
+            .where('id', '=', fileTaskId)
+            .where('status', '=', FileTaskStatus.Processing)
+            .where('leaseToken', '=', leaseToken)
+            .where('leaseExpiresAt', '>', new Date())
+            .executeTakeFirst();
+          if (Number(renewed.numUpdatedRows) !== 1) {
+            const terminal = await this.db
+              .selectFrom('fileTasks')
+              .select('status')
+              .where('id', '=', fileTaskId)
+              .executeTakeFirst();
+            if (terminal?.status === FileTaskStatus.Success) {
+              stopped = true;
+              return;
+            }
+            lost = true;
+            return;
+          }
+          schedule();
+        })().catch(() => {
+          lost = true;
+        });
+      }, IMPORT_LEASE_RENEW_MS);
+      timer.unref();
+    };
+
+    schedule();
+    return {
+      isLost: () => lost,
+      stop: async () => {
+        stopped = true;
+        if (timer) clearTimeout(timer);
+        await renewal;
+      },
+    };
+  }
+
+  private async cleanupOrphanImportArtifacts(
+    fileTaskId: string,
+  ): Promise<void> {
+    const artifacts = await this.db
+      .selectFrom('fileTaskImportArtifacts')
+      .select(['id', 'attachmentId', 'filePath'])
+      .where('fileTaskId', '=', fileTaskId)
+      .where('status', '!=', 'cleaned')
+      .orderBy('id')
+      .execute();
+
+    for (const artifact of artifacts) {
+      const attachment = artifact.attachmentId
+        ? await this.db
+            .selectFrom('attachments')
+            .select('id')
+            .where('id', '=', artifact.attachmentId)
+            .executeTakeFirst()
+        : undefined;
+      if (attachment) continue;
+      await this.storageService.delete(artifact.filePath);
+      await this.db
+        .updateTable('fileTaskImportArtifacts')
+        .set({
+          status: 'cleaned',
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where('id', '=', artifact.id)
+        .execute();
+    }
+  }
+
+  private async cleanupStoredImportArchive(
+    fileTaskId: string,
+    filePath: string,
+  ): Promise<void> {
+    await this.storageService.delete(filePath);
+    await this.db
+      .updateTable('fileTaskImportArtifacts')
+      .set({
+        status: 'cleaned',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where('fileTaskId', '=', fileTaskId)
+      .where('artifactType', '=', 'archive')
+      .execute();
+  }
+
+  @Interval('file-import-upload-reconciler', 60 * 1000)
+  async reconcileStaleUploads(): Promise<void> {
+    const stale = await this.claimStaleUploads(
+      new Date(Date.now() - STALE_UPLOAD_MS),
+    );
+
+    for (const task of stale) {
+      try {
+        await this.cleanupOrphanImportArtifacts(task.id);
+      } catch {
+        this.logger.warn({ event: 'file_import_upload_cleanup_failed' });
+      }
+    }
+  }
+
+  private async claimStaleUploads(cutoff: Date) {
+    const result = await sql<{ id: string; filePath: string }>`
+      with stale as (
+        select id
+        from file_tasks
+        where type = 'import'
+          and status = ${FileTaskStatus.Uploading}
+          and (lease_expires_at is null or lease_expires_at <= now())
+          and updated_at < ${cutoff}
+        order by updated_at, id
+        limit 25
+        for update skip locked
+      )
+      update file_tasks as task
+      set
+        status = ${FileTaskStatus.Failed},
+        error_message = 'file_task_upload_abandoned',
+        lease_token = null,
+        lease_expires_at = null,
+        updated_at = now()
+      from stale
+      where task.id = stale.id
+        and task.status = ${FileTaskStatus.Uploading}
+      returning task.id, task.file_path as "filePath"
+    `.execute(this.db);
+    return result.rows;
+  }
+
+  @Interval('docmost-import-preview-expirer', 5 * 60 * 1000)
+  async expireStaleDocmostPreviews(): Promise<void> {
+    const expired = await this.claimStaleDocmostPreviews(
+      new Date(Date.now() - DOCMOST_PREVIEW_TTL_MS),
+    );
+
+    for (const task of expired) {
+      try {
+        await this.cleanupOrphanImportArtifacts(task.id);
+      } catch {
+        // The task is already terminal. Its artifact locator remains visible
+        // to reconcileFailedImportArtifacts for a later storage retry.
+        this.logger.warn({ event: 'docmost_preview_expiry_cleanup_deferred' });
+      }
+    }
+  }
+
+  private async claimStaleDocmostPreviews(cutoff: Date) {
+    const result = await sql<{ id: string; filePath: string }>`
+      with stale as (
+        select id
+        from file_tasks
+        where type = 'import'
+          and source = ${FileImportSource.Docmost}
+          and status = ${FileTaskStatus.Pending}
+          and options is null
+          and updated_at < ${cutoff}
+        order by updated_at, id
+        limit ${DOCMOST_PREVIEW_EXPIRY_BATCH_SIZE}
+        for update skip locked
+      )
+      update file_tasks as task
+      set
+        status = ${FileTaskStatus.Failed},
+        error_message = 'file_task_preview_expired',
+        lease_token = null,
+        lease_expires_at = null,
+        updated_at = now()
+      from stale
+      where task.id = stale.id
+        and task.type = 'import'
+        and task.source = ${FileImportSource.Docmost}
+        and task.status = ${FileTaskStatus.Pending}
+        and task.options is null
+        and task.updated_at < ${cutoff}
+      returning task.id, task.file_path as "filePath"
+    `.execute(this.db);
+    return result.rows;
+  }
+
+  @Interval('file-import-artifact-reconciler', 5 * 60 * 1000)
+  async reconcileFailedImportArtifacts(): Promise<void> {
+    const tasks = await this.db
+      .selectFrom('fileTaskImportArtifacts as artifact')
+      .innerJoin('fileTasks as task', 'task.id', 'artifact.fileTaskId')
+      .select('artifact.fileTaskId')
+      .distinct()
+      .where('task.status', '=', FileTaskStatus.Failed)
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb('artifact.artifactType', '=', 'archive'),
+            eb('artifact.status', '!=', 'cleaned'),
+          ]),
+          eb.and([
+            eb('artifact.artifactType', '=', 'attachment'),
+            eb('artifact.status', 'in', ['pending', 'uploaded']),
+          ]),
+        ]),
+      )
+      .orderBy('artifact.fileTaskId')
+      .limit(25)
+      .execute();
+
+    for (const task of tasks) {
+      try {
+        await this.cleanupOrphanImportArtifacts(task.fileTaskId);
+      } catch {
+        this.logger.warn({ event: 'file_import_artifact_cleanup_failed' });
+      }
+    }
   }
 
   async getFileTask(fileTaskId: string) {

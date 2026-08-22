@@ -17,8 +17,6 @@ import { PageTemplateOperationService } from './page-template-operation.service'
 import { PageTemplatePublicationService } from './page-template-publication.service';
 import { PageTemplateInstanceService } from './page-template-instance.service';
 import { PageTemplateSyncService } from './page-template-sync.service';
-import { PageEmbedCommandService } from './page-embed-command.service';
-import { LegacyPageEmbedMigrationService } from './legacy-page-embed-migration.service';
 
 const user = {
   id: '019fdaa0-0000-7000-8000-000000000010',
@@ -70,7 +68,6 @@ function buildService(options?: {
   const db = options?.db ?? ({} as any);
   const attachmentRepo = options?.attachmentRepo ?? ({} as any);
   const storageService = options?.storageService ?? ({} as any);
-  const pageEmbedService = { getMaxDepth: () => 5 } as any;
   const pageHistoryRecorder = {} as any;
   const content = new PageTemplateContentService(
     pageRepo,
@@ -98,7 +95,6 @@ function buildService(options?: {
     attachmentRepo,
     storageService,
     policy,
-    pageEmbedService,
     options?.transclusion ?? ({} as any),
     pageHistoryRecorder,
     content,
@@ -117,32 +113,11 @@ function buildService(options?: {
     publication,
     options?.queueOutbox,
   );
-  const pageEmbeds = new PageEmbedCommandService(
-    pageAccessService,
-    policy,
-    pageEmbedService,
-    attachmentRepo,
-    storageService,
-    content,
-    operations,
-  );
-  const legacy = new LegacyPageEmbedMigrationService(
-    db,
-    pageRepo,
-    pageAccessService,
-    pageEmbedService,
-    pageHistoryRecorder,
-    attachmentRepo,
-    storageService,
-    content,
-    operations,
-  );
-  const service = new PageTemplateService(instance, sync, pageEmbeds);
+  const service = new PageTemplateService(instance, sync);
   return {
     service,
     instance,
     sync,
-    legacy,
     operations,
     publication,
     content,
@@ -703,6 +678,91 @@ describe('PageTemplateService space boundaries', () => {
       'operation-from-template',
       'finalization-lease',
       completedPage.content,
+    );
+  });
+
+  it('fences a recovered created page before running shared finalization', async () => {
+    const recoveredPage = {
+      id: consumerPageId,
+      workspaceId: user.workspaceId,
+      spaceId: sourceSpaceId,
+      deletedAt: null,
+    } as any;
+    const events: string[] = [];
+    const { instance, operations } = buildService({
+      pageRepo: { findById: jest.fn().mockResolvedValue(recoveredPage) },
+    });
+    jest.spyOn(operations, 'completeOperation').mockImplementation(async () => {
+      events.push('operation-completed');
+      return true;
+    });
+    jest
+      .spyOn(instance as any, 'finalizeCreatedPageOperation')
+      .mockImplementation(async () => {
+        events.push('page-finalized');
+      });
+
+    await expect(
+      (instance as any).resolveCreatedPageOperation(
+        {
+          id: 'operation-recovered',
+          status: 'pending',
+          resultPageId: consumerPageId,
+          leaseToken: 'operation-lease',
+        },
+        user,
+        'missing result',
+      ),
+    ).resolves.toEqual({ page: recoveredPage, idempotent: true });
+    expect(events).toEqual(['operation-completed', 'page-finalized']);
+  });
+
+  it('persists shared attachment and transclusion side effects in order', async () => {
+    const events: string[] = [];
+    const trx = {} as any;
+    const attachment = { id: 'attachment-1' };
+    const attachmentRepo = {
+      insertAttachment: jest.fn(async () => events.push('attachment')),
+    };
+    const transclusion = {
+      insertTransclusionsForPages: jest.fn(async () =>
+        events.push('transclusions'),
+      ),
+      insertReferencesForPages: jest.fn(async () =>
+        events.push('references'),
+      ),
+    };
+    const { instance } = buildService({ attachmentRepo, transclusion });
+    const createdPage = {
+      id: consumerPageId,
+      workspaceId: user.workspaceId,
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    } as any;
+
+    await (instance as any).persistCreatedPageSideEffects(
+      createdPage,
+      [attachment],
+      trx,
+    );
+
+    expect(events).toEqual(['attachment', 'transclusions', 'references']);
+    expect(attachmentRepo.insertAttachment).toHaveBeenCalledWith(
+      attachment,
+      trx,
+    );
+    expect(transclusion.insertTransclusionsForPages).toHaveBeenCalledWith(
+      [
+        {
+          id: consumerPageId,
+          workspaceId: user.workspaceId,
+          content: createdPage.content,
+        },
+      ],
+      trx,
+    );
+    expect(transclusion.insertReferencesForPages).toHaveBeenCalledWith(
+      expect.any(Array),
+      trx,
     );
   });
 
@@ -1369,7 +1429,7 @@ describe('PageTemplateService space boundaries', () => {
       attachmentMapping: null,
     });
     const stage = jest
-      .spyOn(operations, 'stageMaterializedContent')
+      .spyOn(operations, 'stageAttachmentRewrittenContent')
       .mockImplementation(async (_id, _lease, liveSource) => ({
         content: liveSource,
         copies: [],
@@ -1388,12 +1448,6 @@ describe('PageTemplateService space boundaries', () => {
       .spyOn(operations, 'releaseCreatedPageFinalization')
       .mockResolvedValue(undefined);
     jest.spyOn(operations, 'ownsOperationLease').mockResolvedValue(false);
-    jest.spyOn(operations, 'releaseGraphLease').mockResolvedValue(undefined);
-    const pageEmbedService = {
-      prepareBulkPageReferences: jest.fn().mockResolvedValue(undefined),
-      insertPageReferencesForPages: jest.fn().mockResolvedValue(undefined),
-    };
-    (instance as any).pageEmbedService = pageEmbedService;
 
     await expect(
       instance.createIndependentCopy(
@@ -1544,12 +1598,6 @@ describe('PageTemplateService space boundaries', () => {
     jest
       .spyOn(snapshot.operations, 'ownsOperationLease')
       .mockResolvedValue(false);
-    jest
-      .spyOn(snapshot.operations, 'releaseGraphLease')
-      .mockResolvedValue(undefined);
-    (snapshot.instance as any).pageEmbedService = {
-      prepareBulkPageReferences: jest.fn().mockResolvedValue(undefined),
-    };
 
     await expect(
       snapshot.instance.createFromTemplate(
@@ -1631,12 +1679,6 @@ describe('PageTemplateService space boundaries', () => {
     jest
       .spyOn(independent.operations, 'ownsOperationLease')
       .mockResolvedValue(false);
-    jest
-      .spyOn(independent.operations, 'releaseGraphLease')
-      .mockResolvedValue(undefined);
-    (independent.instance as any).pageEmbedService = {
-      prepareBulkPageReferences: jest.fn().mockResolvedValue(undefined),
-    };
 
     await expect(
       independent.instance.createIndependentCopy(
@@ -3420,9 +3462,6 @@ describe('PageTemplateService space boundaries', () => {
         .spyOn(operations, 'assertOperationLease')
         .mockResolvedValue(undefined);
       jest.spyOn(operations, 'ownsOperationLease').mockResolvedValue(false);
-      (instance as any).pageEmbedService.prepareBulkPageReferences = jest
-        .fn()
-        .mockResolvedValue(undefined);
 
       await expect(
         instance.createFromTemplate(
@@ -3512,9 +3551,6 @@ describe('PageTemplateService space boundaries', () => {
     } as any);
     jest.spyOn(operations, 'assertOperationLease').mockResolvedValue(undefined);
     jest.spyOn(operations, 'ownsOperationLease').mockResolvedValue(false);
-    (instance as any).pageEmbedService.prepareBulkPageReferences = jest
-      .fn()
-      .mockResolvedValue(undefined);
 
     await expect(
       instance.createFromTemplate(
@@ -3528,289 +3564,6 @@ describe('PageTemplateService space boundaries', () => {
     });
     expect(trx.selectFrom).toHaveBeenCalledWith('pageTemplateRevisions');
     expect(pageService.create).not.toHaveBeenCalled();
-  });
-
-  it('materializes legacy page embeds and plans attachment copies', async () => {
-    const source = {
-      id: sourcePageId,
-      workspaceId: user.workspaceId,
-      spaceId: sourceSpaceId,
-      deletedAt: null,
-      content: null,
-    };
-    const pageRepo = { findById: jest.fn(async () => source) };
-    const { legacy, content } = buildService({ pageRepo });
-    jest
-      .spyOn(legacy as any, 'canMaterializeLegacySource')
-      .mockResolvedValue(true);
-    jest.spyOn(content, 'getLiveContent').mockResolvedValue({
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [{ type: 'text', text: 'Materialized' }],
-        },
-        {
-          type: 'image',
-          attrs: {
-            attachmentId: '019fdaa0-0000-7000-8000-000000000070',
-            src: '/api/files/019fdaa0-0000-7000-8000-000000000070/image.png',
-          },
-        },
-      ],
-    });
-
-    const result = await (legacy as any).resolveLegacyPageEmbeds(
-      {
-        type: 'doc',
-        content: [
-          {
-            type: 'pageEmbed',
-            attrs: {
-              id: '019fdaa0-0000-7000-8000-000000000080',
-              sourcePageId,
-            },
-          },
-        ],
-      },
-      {
-        id: consumerPageId,
-        workspaceId: user.workspaceId,
-        spaceId: sourceSpaceId,
-      },
-      user,
-      new Set([consumerPageId]),
-      [],
-    );
-
-    expect(JSON.stringify(result.content)).not.toContain('pageEmbed');
-    expect(JSON.stringify(result.content)).toContain('Materialized');
-    expect(result.attachmentPlans).toHaveLength(1);
-    expect(result.attachmentPlans[0].source.id).toBe(sourcePageId);
-    expect(result.issues).toEqual([]);
-  });
-
-  it('replaces an unavailable legacy source with an informational block', async () => {
-    const { legacy, content } = buildService({
-      pageRepo: { findById: jest.fn(async () => null) },
-    });
-    const result = await (legacy as any).resolveLegacyPageEmbeds(
-      {
-        type: 'doc',
-        content: [
-          {
-            type: 'pageEmbed',
-            attrs: {
-              id: 'legacy-node',
-              sourcePageId,
-            },
-          },
-        ],
-      },
-      {
-        id: consumerPageId,
-        workspaceId: user.workspaceId,
-        spaceId: sourceSpaceId,
-      },
-      user,
-      new Set([consumerPageId]),
-      [],
-    );
-
-    expect(result.content.content[0].type).toBe('callout');
-    expect(result.issues).toEqual([
-      {
-        referenceNodeId: 'legacy-node',
-        sourcePageId,
-        errorCode: 'page_embed_source_unavailable',
-      },
-    ]);
-  });
-
-  it('replaces legacy embeds beyond the configured depth without loading the source', async () => {
-    const pageRepo = { findById: jest.fn() };
-    const { legacy } = buildService({ pageRepo });
-
-    const result = await (legacy as any).resolveLegacyPageEmbeds(
-      {
-        type: 'doc',
-        content: [
-          {
-            type: 'pageEmbed',
-            attrs: { id: 'too-deep', sourcePageId },
-          },
-        ],
-      },
-      {
-        id: consumerPageId,
-        workspaceId: user.workspaceId,
-        spaceId: sourceSpaceId,
-      },
-      user,
-      new Set([
-        consumerPageId,
-        'depth-1',
-        'depth-2',
-        'depth-3',
-        'depth-4',
-        'depth-5',
-      ]),
-      [],
-    );
-
-    expect(result.content.content[0].type).toBe('callout');
-    expect(result.issues).toEqual([
-      {
-        referenceNodeId: 'too-deep',
-        sourcePageId,
-        errorCode: 'page_embed_depth_exceeded',
-      },
-    ]);
-    expect(pageRepo.findById).not.toHaveBeenCalled();
-  });
-
-  it('does not materialize a legacy source the migration actor cannot read', async () => {
-    const source = {
-      id: sourcePageId,
-      workspaceId: user.workspaceId,
-      spaceId: sourceSpaceId,
-      deletedAt: null,
-      content: {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: 'Restricted content' }],
-          },
-        ],
-      },
-    };
-    const pageAccessService = {
-      getEffectiveAccess: jest.fn(async () => ({
-        capabilities: { canRead: false },
-      })),
-    };
-    const { legacy, content } = buildService({
-      pageRepo: { findById: jest.fn(async () => source) },
-      pageAccessService,
-    });
-    const getLiveContent = jest.spyOn(content, 'getLiveContent');
-
-    const result = await (legacy as any).resolveLegacyPageEmbeds(
-      {
-        type: 'doc',
-        content: [
-          {
-            type: 'pageEmbed',
-            attrs: { id: 'legacy-node', sourcePageId },
-          },
-        ],
-      },
-      {
-        id: consumerPageId,
-        workspaceId: user.workspaceId,
-        spaceId: sourceSpaceId,
-      },
-      user,
-      new Set([consumerPageId]),
-      [],
-    );
-
-    expect(JSON.stringify(result.content)).not.toContain('Restricted content');
-    expect(result.content.content[0].type).toBe('callout');
-    expect(result.issues).toEqual([
-      {
-        referenceNodeId: 'legacy-node',
-        sourcePageId,
-        errorCode: 'page_embed_source_no_access',
-      },
-    ]);
-    expect(pageAccessService.getEffectiveAccess).toHaveBeenCalledWith(
-      source,
-      user,
-    );
-    expect(getLiveContent).not.toHaveBeenCalled();
-  });
-
-  it('does not materialize legacy content for a broader consumer audience', async () => {
-    const restrictedContent = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [{ type: 'text', text: 'Restricted content' }],
-        },
-      ],
-    };
-    const source = {
-      id: sourcePageId,
-      workspaceId: user.workspaceId,
-      spaceId: sourceSpaceId,
-      deletedAt: null,
-      content: restrictedContent,
-    };
-    const { legacy, content } = buildService({
-      pageRepo: { findById: jest.fn(async () => source) },
-    });
-    jest
-      .spyOn(legacy as any, 'canMaterializeLegacySource')
-      .mockResolvedValue(false);
-    const getLiveContent = jest
-      .spyOn(content, 'getLiveContent')
-      .mockResolvedValue(restrictedContent);
-
-    const result = await (legacy as any).resolveLegacyPageEmbeds(
-      {
-        type: 'doc',
-        content: [
-          {
-            type: 'pageEmbed',
-            attrs: { id: 'legacy-node', sourcePageId },
-          },
-        ],
-      },
-      {
-        id: consumerPageId,
-        workspaceId: user.workspaceId,
-        spaceId: sourceSpaceId,
-      },
-      user,
-      new Set([consumerPageId]),
-      [],
-    );
-
-    expect(JSON.stringify(result.content)).not.toContain('Restricted content');
-    expect(result.content.content[0].type).toBe('callout');
-    expect(result.issues).toEqual([
-      {
-        referenceNodeId: 'legacy-node',
-        sourcePageId,
-        errorCode: 'page_embed_source_audience_mismatch',
-      },
-    ]);
-    expect(getLiveContent).not.toHaveBeenCalled();
-  });
-
-  it('fails startup when legacy page embeds remain after migration', async () => {
-    const { legacy, sync, operations, pageRepo } = buildService();
-    jest
-      .spyOn(legacy as any, 'findLegacyPageEmbedCandidates')
-      .mockResolvedValueOnce([{ referencePageId: consumerPageId }])
-      .mockResolvedValueOnce([{ referencePageId: consumerPageId }]);
-    jest
-      .spyOn(legacy as any, 'migrateLegacyPageEmbedsForPage')
-      .mockResolvedValue(false);
-
-    const runtime = new PageTemplateRuntimeService(
-      {} as any,
-      pageRepo,
-      legacy,
-      sync,
-      operations,
-    );
-    await expect((runtime as any).migrateLegacyPageEmbeds()).rejects.toThrow(
-      'legacy_page_embed_migration_incomplete',
-    );
   });
 
   it('updates sync-run progress after every processed item', async () => {
@@ -3872,7 +3625,6 @@ describe('PageTemplateService space boundaries', () => {
     };
     const runtime = new PageTemplateRuntimeService(
       db as any,
-      {} as any,
       {} as any,
       templateSync as any,
       {} as any,
@@ -3961,7 +3713,6 @@ describe('PageTemplateService space boundaries', () => {
     };
     const runtime = new PageTemplateRuntimeService(
       db as any,
-      {} as any,
       {} as any,
       templateSync as any,
       {} as any,
@@ -4905,7 +4656,6 @@ describe('PageTemplateService facade', () => {
     };
     const service = new PageTemplateService(
       instances as any,
-      {} as any,
       {} as any,
     );
     const copyDto = { title: 'Independent' };

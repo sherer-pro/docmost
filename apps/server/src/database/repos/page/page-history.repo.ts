@@ -64,6 +64,34 @@ export class PageHistoryRepo {
       .executeTakeFirst();
   }
 
+  async insertPageHistoryIdempotent(
+    insertablePageHistory: InsertablePageHistory & { sourceBatchId: string },
+    trx?: KyselyTransaction,
+  ): Promise<{ history: PageHistory; inserted: boolean }> {
+    const db = dbOrTx(this.db, trx);
+    const inserted = await db
+      .insertInto('pageHistory')
+      .values(insertablePageHistory)
+      .onConflict((oc) =>
+        oc.columns(['pageId', 'sourceBatchId']).doNothing(),
+      )
+      .returningAll()
+      .executeTakeFirst();
+
+    if (inserted) {
+      return { history: inserted, inserted: true };
+    }
+
+    const existing = await db
+      .selectFrom('pageHistory')
+      .selectAll()
+      .where('pageId', '=', insertablePageHistory.pageId)
+      .where('sourceBatchId', '=', insertablePageHistory.sourceBatchId)
+      .executeTakeFirstOrThrow();
+
+    return { history: existing, inserted: false };
+  }
+
   async findMetadataById(
     pageHistoryId: string,
   ): Promise<Pick<PageHistory, 'id' | 'workspaceId'> | undefined> {
@@ -136,6 +164,40 @@ export class PageHistoryRepo {
       .limit(1)
       .orderBy('createdAt', 'desc')
       .executeTakeFirst();
+  }
+
+  async deleteExpiredHistoryBatch(limit = 500): Promise<number> {
+    const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+    const result = await sql<{ id: string }>`
+      with expired as (
+        select history.id
+        from page_history as history
+        inner join workspaces as workspace
+          on workspace.id = history.workspace_id
+        where workspace.page_history_retention_days is not null
+          and history.created_at < now()
+            - (workspace.page_history_retention_days * interval '1 day')
+          and exists (
+            select 1
+            from page_history as newer
+            where newer.page_id = history.page_id
+              and (newer.created_at, newer.id)
+                > (history.created_at, history.id)
+            order by newer.created_at desc, newer.id desc
+            offset 9
+            limit 1
+          )
+        order by history.created_at asc, history.id asc
+        limit ${safeLimit}
+        for update of history skip locked
+      )
+      delete from page_history as history
+      using expired
+      where history.id = expired.id
+      returning history.id
+    `.execute(this.db);
+
+    return result.rows.length;
   }
 
   withLastUpdatedBy(eb: ExpressionBuilder<DB, 'pageHistory'>) {

@@ -230,16 +230,12 @@ describe('TransclusionService.syncPageReferences', () => {
           referencePageId,
           sourcePageId: 'p1',
           transclusionId: 'e1',
-          referenceKind: 'block',
-          referenceNodeId: null,
         },
         {
           workspaceId,
           referencePageId,
           sourcePageId: 'p2',
           transclusionId: 'e2',
-          referenceKind: 'block',
-          referenceNodeId: null,
         },
       ],
       undefined,
@@ -267,7 +263,7 @@ describe('TransclusionService.syncPageReferences', () => {
 
     await expect(
       service.syncPageReferences(referencePageId, workspaceId, pm),
-    ).rejects.toThrow('page_embed_malformed_mixed_content');
+    ).rejects.toThrow('transclusion_reference_inside_source');
     expect(refRepo.insertMany).not.toHaveBeenCalled();
     expect(refRepo.deleteByReferenceAndKeys).not.toHaveBeenCalled();
   });
@@ -674,7 +670,7 @@ describe('TransclusionService lookup and unsync access boundaries', () => {
     } as any;
     const references = {
       deleteOne: jest.fn(),
-      withWorkspaceGraphLock: jest.fn(
+      withWorkspaceMutationLock: jest.fn(
         async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
           callback({}),
       ),
@@ -767,7 +763,7 @@ describe('TransclusionService lookup and unsync access boundaries', () => {
     } as any;
     const references = {
       deleteOne: jest.fn(),
-      withWorkspaceGraphLock: jest.fn(
+      withWorkspaceMutationLock: jest.fn(
         async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
           callback({}),
       ),
@@ -840,7 +836,7 @@ describe('TransclusionService lookup and unsync access boundaries', () => {
     }));
     const references = {
       deleteOne: jest.fn(),
-      withWorkspaceGraphLock: jest.fn(
+      withWorkspaceMutationLock: jest.fn(
         async (_workspaceId: string, callback: (trx: any) => Promise<void>) =>
           callback({}),
       ),

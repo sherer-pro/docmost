@@ -22,16 +22,13 @@ function fluent(executeTakeFirst: () => Promise<unknown>) {
 describe('PageTemplatePolicyService optimistic revisions', () => {
   const environment = {
     isPageTemplatesEnabled: () => true,
-    getMaxPageEmbedDepth: () => 5,
   };
-  const eventEmitter = { emit: jest.fn() };
 
   it('returns HTTP 409 when a concurrent update wins the expected revision', async () => {
     const update = fluent(async () => undefined);
     const service = new PageTemplatePolicyService(
       { updateTable: jest.fn(() => update) } as any,
       environment as any,
-      eventEmitter as any,
     );
 
     await expect(
@@ -55,7 +52,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { insertInto: jest.fn(() => insert) } as any,
       environment as any,
-      eventEmitter as any,
     );
 
     await expect(
@@ -88,7 +84,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
     jest.spyOn(service, 'getWorkspacePolicy').mockResolvedValue({
       enabled: false,
@@ -141,7 +136,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
 
     const result = await service.listPolicyGroups('workspace', 'space', {
@@ -188,7 +182,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       db as any,
       environment as any,
-      eventEmitter as any,
     );
 
     await expect(
@@ -215,7 +208,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
 
     await expect(
@@ -251,7 +243,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { transaction: jest.fn(() => transactionBuilder) } as any,
       environment as any,
-      eventEmitter as any,
     );
 
     await expect(
@@ -272,7 +263,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     expect(activeGroupQuery.forUpdate).toHaveBeenCalledTimes(1);
     expect(trx.insertInto).not.toHaveBeenCalled();
     expect(trx.updateTable).not.toHaveBeenCalled();
-    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 
   it('intersects every explicit group action allowlist', async () => {
@@ -294,7 +284,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
     jest.spyOn(service as any, 'readBasePolicy').mockResolvedValue({
       systemEnabled: true,
@@ -334,7 +323,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
     jest.spyOn(service as any, 'readBasePolicy').mockResolvedValue({
       systemEnabled: true,
@@ -375,7 +363,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     const service = new PageTemplatePolicyService(
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
-      eventEmitter as any,
     );
     jest.spyOn(service as any, 'readBasePolicy').mockResolvedValue({
       systemEnabled: true,
@@ -408,7 +395,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
         selectFrom: jest.fn(() => Promise.reject(new Error('unexpected'))),
       } as any,
       environment as any,
-      eventEmitter as any,
     );
     jest.spyOn(service as any, 'readBasePolicy').mockResolvedValue({
       systemEnabled: true,
@@ -468,7 +454,6 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
       const service = new PageTemplatePolicyService(
         db as any,
         environment as any,
-        eventEmitter as any,
       );
 
       await expect(

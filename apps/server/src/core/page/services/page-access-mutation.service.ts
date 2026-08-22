@@ -332,9 +332,13 @@ export class PageAccessMutationService {
               .execute()
           ).map((membership) => membership.userId);
 
-    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId: input.page.workspaceId,
-      accessUserIds,
-    });
+    await Promise.all(
+      accessUserIds.map((userId) =>
+        this.eventEmitter.emitAsync(EventName.AUTHORIZATION_CHANGED, {
+          workspaceId: input.page.workspaceId,
+          userId,
+        }),
+      ),
+    );
   }
 }

@@ -70,7 +70,6 @@ describe('PageService synchronized template content guard', () => {
     {} as any,
     undefined,
     undefined,
-    undefined,
     pageTemplatePolicy as any,
   );
 

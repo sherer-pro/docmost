@@ -39,18 +39,10 @@
       "duplicates|apps/server/src/integrations/transactional/emails/page-recipient-email.tsx|:PageRecipientEmail+:default",
       "duplicates|packages/editor-ext/src/lib/search-and-replace/search-and-replace.ts|:SearchAndReplace+:default",
       "duplicates|packages/editor-ext/src/lib/selection.ts|:Selection+:default",
-      "enumMembers|apps/server/src/common/domain/group.constants.ts|DESCRIPTION",
-      "enumMembers|apps/server/src/common/events/event.contants.ts|COLLAB_PAGE_UPDATED",
-      "enumMembers|apps/server/src/common/events/event.contants.ts|SPACE_CREATED",
-      "enumMembers|apps/server/src/common/events/event.contants.ts|WORKSPACE_CREATED",
-      "enumMembers|apps/server/src/common/events/event.contants.ts|WORKSPACE_UPDATED",
       "enumMembers|apps/server/src/common/helpers/types/permission.ts|OPEN",
       "enumMembers|apps/server/src/core/casl/interfaces/space-ability.type.ts|Delete",
       "enumMembers|apps/server/src/core/casl/interfaces/workspace-ability.type.ts|Delete",
       "enumMembers|apps/server/src/core/casl/interfaces/workspace-ability.type.ts|Edit",
-      "enumMembers|apps/server/src/integrations/queue/constants/queue.constants.ts|SPACE_CREATED",
-      "enumMembers|apps/server/src/integrations/queue/constants/queue.constants.ts|WORKSPACE_CREATED",
-      "enumMembers|apps/server/src/integrations/queue/constants/queue.constants.ts|WORKSPACE_SPACE_UPDATED",
       "exports|apps/client/src/components/layouts/global/hooks/atoms/sidebar-atom.ts|desktopAsideAtom",
       "exports|apps/client/src/components/ui/responsive-table.ts|getResponsiveTableCellProps",
       "exports|apps/client/src/features/ai-external-mcp/components/external-mcp-tool-approval-list.tsx|AI_EXTERNAL_MCP_MODEL_DESCRIPTION_MAX_LENGTH",
@@ -180,7 +172,6 @@
       "exports|apps/server/src/core/space/dto/update-space.dto.ts|SPACE_CUSTOM_LINK_ICONS",
       "exports|apps/server/src/core/user/utils/user-preferences.util.ts|normalizePreferenceString",
       "exports|apps/server/src/database/postgres-preflight.ts|collectPostgresPreflightSnapshot",
-      "exports|apps/server/src/database/repos/queue-outbox/queue-outbox.repo.ts|QUEUE_OUTBOX_STATUS",
       "exports|apps/server/src/integrations/environment/environment.validation.ts|EnvironmentVariables",
       "exports|apps/server/src/integrations/export/utils.ts|INTERNAL_LINK_REGEX",
       "exports|apps/server/src/integrations/export/utils.ts|extractPageSlugId",
@@ -363,7 +354,6 @@
       "types|apps/server/src/database/types/entity.types.ts|PageTemplateAttachmentMapping",
       "types|apps/server/src/database/types/entity.types.ts|PageTemplateGroupPolicy",
       "types|apps/server/src/database/types/entity.types.ts|PageTemplateInstance",
-      "types|apps/server/src/database/types/entity.types.ts|PageTemplateLegacyMigrationError",
       "types|apps/server/src/database/types/entity.types.ts|PageTemplateOperation",
       "types|apps/server/src/database/types/entity.types.ts|PageTemplatePublishConfirmation",
       "types|apps/server/src/database/types/entity.types.ts|PageTemplateRevision",
@@ -416,7 +406,6 @@
       "types|apps/server/src/integrations/mail/interfaces/mail.interface.ts|MailOptions",
       "types|apps/server/src/integrations/mail/interfaces/mail.interface.ts|MailOptionsFactory",
       "types|apps/server/src/integrations/queue/constants/queue.interface.ts|INotificationCreateJob",
-      "types|apps/server/src/integrations/queue/constants/queue.interface.ts|PageRecipientNotificationReason",
       "types|apps/server/src/integrations/storage/interfaces/storage.interface.ts|StorageOptions",
       "types|apps/server/src/integrations/storage/interfaces/storage.interface.ts|StorageOptionsFactory",
       "types|packages/editor-ext/src/lib/callout/callout.ts|CalloutAttributes",
@@ -502,11 +491,6 @@
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {
-        "fingerprint": "tsx|features/page/components/copy-page-modal.tsx|features/page/components/move-page-modal.tsx|32|169",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
         "fingerprint": "tsx|integrations/transactional/emails/comment-created-email.tsx|integrations/transactional/emails/page-recipient-email.tsx|29|158",
         "classification": "delivery-variant",
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
@@ -524,31 +508,6 @@
       {
         "fingerprint": "typescript|core/notification/services/comment.notification.ts|core/notification/services/page.notification.ts|27|148",
         "classification": "delivery-variant",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|26|146",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|28|146",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|31|163",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|35|179",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
-        "fingerprint": "typescript|core/page/services/page-template-instance.service.ts|core/page/services/page-template-instance.service.ts|46|170",
-        "classification": "parallel-product-flow",
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {

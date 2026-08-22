@@ -41,10 +41,7 @@ jest.mock('../../../collaboration/collaboration.util', () => ({
 import * as JSZip from 'jszip';
 import { createHash } from 'node:crypto';
 import { ImportService } from './import.service';
-import {
-  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
-  DOCMOST_ARCHIVE_SCHEMA_VERSION,
-} from '@docmost/api-contract';
+import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
 
 function duplicateCentralDirectoryEntry(
   archive: Buffer,
@@ -86,14 +83,19 @@ describe('ImportService Docmost archive preview', () => {
   const service = new ImportService({} as any, {} as any, {} as any, {} as any);
 
   const buildArchive = async (overrides?: {
-    schemaVersion?: number;
+    schemaVersion?: number | string;
     includeAttachmentFile?: boolean;
     unknownNode?: boolean;
+    nestedPageEmbed?: boolean;
     corruptAttachmentChecksum?: boolean;
+    attachmentConsumers?: number;
+    corruptRepeatedAttachmentChecksum?: boolean;
+    attachmentFileSize?: number | string | null;
+    attachmentPayload?: string;
   }) => {
     const schemaVersion =
       overrides?.schemaVersion ?? DOCMOST_ARCHIVE_SCHEMA_VERSION;
-    const attachmentPayload = '<svg/>';
+    const attachmentPayload = overrides?.attachmentPayload ?? '<svg/>';
     const zip = new JSZip();
     zip.file(
       'docmost-metadata.json',
@@ -121,6 +123,13 @@ describe('ImportService Docmost archive preview', () => {
             dictionary: { enabled: true },
             headingNumbering: { enabled: true },
             tags: { disabled: ['future'] },
+            ...(overrides?.nestedPageEmbed
+              ? {
+                  maliciousPayload: {
+                    nested: [{ type: 'pageEmbed', attrs: {} }],
+                  },
+                }
+              : {}),
           },
         },
         pages: [
@@ -145,21 +154,30 @@ describe('ImportService Docmost archive preview', () => {
             settings: {},
           },
         ],
-        attachments: [
-          {
-            id: 'attachment-source',
+        attachments: Array.from(
+          { length: overrides?.attachmentConsumers ?? 1 },
+          (_, index) => ({
+            id:
+              index === 0 ? 'attachment-source' : `attachment-source-${index}`,
             pageId: 'page-source',
-            fileName: 'diagram.svg',
-            fileSize: Buffer.byteLength(attachmentPayload),
+            fileName: `diagram-${index}.svg`,
+            fileSize: Object.prototype.hasOwnProperty.call(
+              overrides ?? {},
+              'attachmentFileSize',
+            )
+              ? overrides?.attachmentFileSize
+              : Buffer.byteLength(attachmentPayload),
             fileExt: '.svg',
             mimeType: 'image/svg+xml',
             type: 'file',
             archivePath: 'files/attachment-source/diagram.svg',
-            sha256: overrides?.corruptAttachmentChecksum
-              ? '0'.repeat(64)
-              : createHash('sha256').update(attachmentPayload).digest('hex'),
-          },
-        ],
+            sha256:
+              overrides?.corruptAttachmentChecksum ||
+              (overrides?.corruptRepeatedAttachmentChecksum && index === 1)
+                ? '0'.repeat(64)
+                : createHash('sha256').update(attachmentPayload).digest('hex'),
+          }),
+        ),
         users: [],
         transclusionSnapshots: [],
         databases: [
@@ -229,16 +247,32 @@ describe('ImportService Docmost archive preview', () => {
     ).rejects.toThrow('newer than supported');
   });
 
-  it('accepts a version 3 archive for legacy page-embed materialization', async () => {
-    const preview = await (service as any).inspectDocmostArchive(
-      await buildArchive({
-        schemaVersion: DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
-      }),
+  it.each([2, 3, 4])('rejects retired archive schema %s', async (version) => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({ schemaVersion: version }),
+      ),
+    ).rejects.toThrow(
+      `schema ${version} is not supported; only schema ${DOCMOST_ARCHIVE_SCHEMA_VERSION} is accepted`,
     );
+  });
 
-    expect(preview.schemaVersion).toBe(
-      DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
-    );
+  it('requires the schema version to be the exact numeric value', async () => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({
+          schemaVersion: String(DOCMOST_ARCHIVE_SCHEMA_VERSION),
+        }),
+      ),
+    ).rejects.toThrow('schema unknown is not supported');
+  });
+
+  it('rejects a deeply nested pageEmbed marker outside editor content', async () => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({ nestedPageEmbed: true }),
+      ),
+    ).rejects.toThrow('schema 5 cannot contain pageEmbed nodes');
   });
 
   it('rejects an archive with a missing attachment payload', async () => {
@@ -263,6 +297,79 @@ describe('ImportService Docmost archive preview', () => {
         await buildArchive({ corruptAttachmentChecksum: true }),
       ),
     ).rejects.toThrow('checksum does not match');
+  });
+
+  it('reads a shared attachment entry once for every consumer descriptor', async () => {
+    const readEntry = jest.spyOn(service as any, 'readArchiveEntry');
+    try {
+      const preview = await (service as any).inspectDocmostArchive(
+        await buildArchive({ attachmentConsumers: 32 }),
+      );
+
+      expect(preview.counts.attachments).toBe(32);
+      expect(readEntry).toHaveBeenCalledTimes(3);
+    } finally {
+      readEntry.mockRestore();
+    }
+  });
+
+  it('accepts a legacy nullable attachment size after verifying non-empty bytes', async () => {
+    const preview = await (service as any).inspectDocmostArchive(
+      await buildArchive({ attachmentFileSize: null }),
+    );
+
+    expect(preview.counts.attachments).toBe(1);
+  });
+
+  it.each([
+    'abc',
+    '01',
+    '9223372036854775808',
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('rejects non-canonical attachment size metadata %p', async (fileSize) => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({ attachmentFileSize: fileSize }),
+      ),
+    ).rejects.toThrow('invalid size metadata');
+  });
+
+  it('rejects attachment descriptor amplification above the count cap', async () => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({ attachmentConsumers: 10_001 }),
+      ),
+    ).rejects.toThrow('attachment descriptor count exceeds 10000');
+  });
+
+  it('counts shared physical bytes once per descriptor against the logical cap', async () => {
+    await expect(
+      (service as any).inspectDocmostArchive(
+        await buildArchive({
+          attachmentConsumers: 513,
+          attachmentPayload: 'x'.repeat(1024 * 1024),
+        }),
+      ),
+    ).rejects.toThrow('logical attachment size exceeds the limit');
+  });
+
+  it('checks every shared-entry descriptor against cached physical metadata', async () => {
+    const readEntry = jest.spyOn(service as any, 'readArchiveEntry');
+    try {
+      await expect(
+        (service as any).inspectDocmostArchive(
+          await buildArchive({
+            attachmentConsumers: 2,
+            corruptRepeatedAttachmentChecksum: true,
+          }),
+        ),
+      ).rejects.toThrow('checksum does not match');
+      expect(readEntry).toHaveBeenCalledTimes(3);
+    } finally {
+      readEntry.mockRestore();
+    }
   });
 
   it('rejects an unsafe ZIP entry before reading archive metadata', async () => {
@@ -300,4 +407,40 @@ describe('ImportService Docmost archive preview', () => {
       (service as any).inspectDocmostArchive(archive),
     ).rejects.toThrow('duplicate ZIP entry');
   });
+
+  it.each([2, 3, 4, 6])(
+    'rejects confirmation of a task previewed with schema %s',
+    async (schemaVersion) => {
+      const query: any = {
+        selectAll: jest.fn(() => query),
+        where: jest.fn(() => query),
+        executeTakeFirst: jest.fn(async () => ({
+          id: 'task-1',
+          source: 'docmost',
+          creatorId: 'user-1',
+          workspaceId: 'workspace-1',
+          status: 'pending',
+          result: { preview: { schemaVersion } },
+        })),
+      };
+      const confirmationService = new ImportService(
+        {} as any,
+        {} as any,
+        { selectFrom: jest.fn(() => query) } as any,
+        {} as any,
+      );
+
+      await expect(
+        (confirmationService as any).getPendingDocmostImportTask(
+          'task-1',
+          'user-1',
+          'workspace-1',
+        ),
+      ).rejects.toThrow(
+        schemaVersion > DOCMOST_ARCHIVE_SCHEMA_VERSION
+          ? 'newer than supported'
+          : `schema ${schemaVersion} is not supported`,
+      );
+    },
+  );
 });

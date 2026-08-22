@@ -125,7 +125,7 @@ export default function CodeBlockView(props: NodeViewProps) {
 
       {language === "mermaid" && (
         <Suspense fallback={null}>
-          <MermaidView props={props} />
+          <MermaidView props={props} diagramClassName={classes.mermaid} />
         </Suspense>
       )}
     </NodeViewWrapper>

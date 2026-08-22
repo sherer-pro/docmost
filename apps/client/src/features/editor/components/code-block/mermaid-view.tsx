@@ -1,13 +1,16 @@
 import { NodeViewProps } from "@tiptap/react";
-import classes from "./code-block.module.css";
 import { useTranslation } from "react-i18next";
 import { MermaidDiagram } from "@/features/editor/components/common/mermaid-diagram";
 
 interface MermaidViewProps {
   props: NodeViewProps;
+  diagramClassName?: string;
 }
 
-export default function MermaidView({ props }: MermaidViewProps) {
+export default function MermaidView({
+  props,
+  diagramClassName,
+}: MermaidViewProps) {
   const { t } = useTranslation();
   const { editor, node } = props;
 
@@ -23,7 +26,7 @@ export default function MermaidView({ props }: MermaidViewProps) {
         showErrorDetails={editor.isEditable}
         enablePreview={!editor.isEditable}
         openOnDiagramClick={!editor.isEditable}
-        diagramClassName={classes.mermaid}
+        diagramClassName={diagramClassName}
       />
     </div>
   );

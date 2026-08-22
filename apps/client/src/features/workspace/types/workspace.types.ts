@@ -17,6 +17,7 @@ export interface IWorkspace {
   memberCount?: number;
   enforceMfa?: boolean;
   disablePublicSharing?: boolean;
+  pageHistoryRetentionDays: number | null;
 }
 
 export interface IWorkspaceSettings {

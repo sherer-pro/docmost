@@ -210,6 +210,21 @@ function composeArgs(context, ...args) {
   ];
 }
 
+export function postRestoreAnalyzeArgs(context, user, database) {
+  return composeArgs(
+    context,
+    "exec",
+    "-T",
+    "db",
+    "vacuumdb",
+    "--analyze-in-stages",
+    "-U",
+    user,
+    "-d",
+    database,
+  );
+}
+
 function compose(context, args, options = {}) {
   return run("docker", composeArgs(context, ...args), options);
 }
@@ -789,6 +804,7 @@ async function restoreBackup(options) {
       ),
       { inputPath: verified.postgresDump },
     );
+    run("docker", postRestoreAnalyzeArgs(context, user, database));
     const storageVolume = run(
       "docker",
       ["volume", "inspect", volumes.storage],

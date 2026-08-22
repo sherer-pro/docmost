@@ -176,13 +176,11 @@ export class GroupService {
     await executeTx(this.db, async (trx) => {
       await this.groupRepo.delete(groupId, workspaceId, { trx });
 
-      for (const spaceId of spaceIds) {
-        await this.watcherRepo.deleteByUsersWithoutSpaceAccess(
-          userIds,
-          spaceId,
-          { trx },
-        );
-      }
+      await this.watcherRepo.deleteByUsersWithoutSpacesAccess(
+        userIds,
+        spaceIds,
+        { trx },
+      );
     });
     await this.emitAccessChanged(workspaceId, userIds);
   }
@@ -192,10 +190,6 @@ export class GroupService {
     userIds: string[],
   ): Promise<void> {
     const accessUserIds = [...new Set(userIds)];
-    this.eventEmitter?.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId,
-      accessUserIds,
-    });
     await Promise.all(
       accessUserIds.map((userId) =>
         this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {

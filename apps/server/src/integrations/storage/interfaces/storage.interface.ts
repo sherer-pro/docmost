@@ -15,7 +15,7 @@ export interface LocalStorageConfig {
 
 export interface S3StorageConfig
   extends Omit<S3ClientConfig, 'endpoint' | 'bucket'> {
-  endpoint: string; // Enforce endpoint
+  endpoint?: string;
   bucket: string; // Enforce bucket
   baseUrl?: string; // Optional CDN URL for assets
 }
