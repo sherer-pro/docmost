@@ -18,7 +18,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
-import { useDisclosure, useHotkeys } from "@mantine/hooks";
+import { useDisclosure, useHotkeys, useMediaQuery } from "@mantine/hooks";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -91,6 +91,7 @@ export default function PageHeaderMenu({
     pageId: extractPageSlugId(pageSlug),
   });
   const assistantIdentity = useAiAssistantIdentity(page?.spaceId, page?.id);
+  const isMobileViewport = Boolean(useMediaQuery("(max-width: 48em)"));
   const pageCapabilities = page?.access?.capabilities;
   const canWritePage = !readOnly && (pageCapabilities?.canWrite ?? true);
   const canMoveDeleteSharePage =
@@ -121,7 +122,13 @@ export default function PageHeaderMenu({
 
       <ActivePageUsers />
 
-      {!isReadOnly && <PageStateSegmentedControl size="xs" pageId={page?.id} />}
+      {!isReadOnly && (
+        <PageStateSegmentedControl
+          size="xs"
+          pageId={page?.id}
+          compact={isMobileViewport}
+        />
+      )}
 
       {!isReadOnly && (
         <Tooltip
@@ -145,35 +152,40 @@ export default function PageHeaderMenu({
 
       <ShareModal readOnly={!canMoveDeleteSharePage} />
 
-      <PageDetailsAction readOnly={isReadOnly} />
+      {!isMobileViewport && <PageDetailsAction readOnly={isReadOnly} />}
 
-      <Tooltip label={t("Comments")} openDelay={250} withArrow>
-        <AccessibleActionIcon
-          label={t("Comments")}
-          tooltip={false}
-          variant="subtle"
-          color="dark"
-          onClick={() => toggleAside("comments")}
-        >
-          <IconMessage size={20} stroke={2} />
-        </AccessibleActionIcon>
-      </Tooltip>
+      {!isMobileViewport && (
+        <Tooltip label={t("Comments")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Comments")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={() => toggleAside("comments")}
+          >
+            <IconMessage size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
 
-      <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-        <AccessibleActionIcon
-          label={t("Table of contents")}
-          tooltip={false}
-          variant="subtle"
-          color="dark"
-          onClick={() => toggleAside("toc")}
-        >
-          <IconList size={20} stroke={2} />
-        </AccessibleActionIcon>
-      </Tooltip>
+      {!isMobileViewport && (
+        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Table of contents")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={() => toggleAside("toc")}
+          >
+            <IconList size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
 
       <PageActionMenu
         readOnly={isReadOnly}
         canMoveDeleteShare={canMoveDeleteSharePage}
+        mobile={isMobileViewport}
       />
     </>
   );
@@ -259,9 +271,15 @@ export function ActivePageUsers() {
 interface PageActionMenuProps {
   readOnly?: boolean;
   canMoveDeleteShare?: boolean;
+  mobile?: boolean;
 }
-function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
+function PageActionMenu({
+  readOnly,
+  canMoveDeleteShare,
+  mobile = false,
+}: PageActionMenuProps) {
   const { t } = useTranslation();
+  const toggleAside = useToggleAside();
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const clipboard = useClipboard({ timeout: 500 });
   const { pageSlug, spaceSlug } = useParams();
@@ -279,6 +297,8 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
   const { openDeleteModal } = useDeletePageModal();
   const [tree] = useAtom(treeApiAtom);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
+    useDisclosure(false);
+  const [detailsOpened, { open: openDetails, close: closeDetails }] =
     useDisclosure(false);
   const [
     movePageModalOpened,
@@ -565,6 +585,30 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
         </Menu.Target>
 
         <Menu.Dropdown>
+          {mobile && page?.id && (
+            <>
+              <Menu.Item
+                leftSection={<IconInfoCircle size={16} />}
+                onClick={openDetails}
+              >
+                {t("Page details")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconMessage size={16} />}
+                onClick={() => toggleAside("comments")}
+              >
+                {t("Comments")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconList size={16} />}
+                onClick={() => toggleAside("toc")}
+              >
+                {t("Table of contents")}
+              </Menu.Item>
+              <Menu.Divider />
+            </>
+          )}
+
           <DocumentCommonActionItems
             onCopyLink={handleCopyLink}
             onCopyAsMarkdown={handleCopyAsMarkdown}
@@ -728,6 +772,16 @@ function PageActionMenu({ readOnly, canMoveDeleteShare }: PageActionMenuProps) {
           pageId={page.id}
           open={accessModalOpened}
           onClose={closeAccessModal}
+        />
+      )}
+
+      {mobile && page?.id && (
+        <PageDetailsModal
+          pageId={page.id}
+          page={page}
+          open={detailsOpened}
+          onClose={closeDetails}
+          readOnly={readOnly}
         />
       )}
     </>

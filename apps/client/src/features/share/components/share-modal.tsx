@@ -8,7 +8,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
-import { IconExternalLink, IconWorld, IconLock } from "@tabler/icons-react";
+import { IconExternalLink, IconWorld } from "@tabler/icons-react";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   useCreateShareMutation,
@@ -22,7 +22,10 @@ import { useTranslation } from "react-i18next";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import CopyTextButton from "@/components/common/copy.tsx";
 import { getAppUrl } from "@/lib/config.ts";
-import { buildPageUrl, buildSharedPageUrl } from "@/features/page/page.utils.ts";
+import {
+  buildPageUrl,
+  buildSharedPageUrl,
+} from "@/features/page/page.utils.ts";
 import classes from "@/features/share/components/share.module.css";
 import { useAtom } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
@@ -50,19 +53,20 @@ export default function ShareModal({
   const { data: page } = usePageQuery({ pageId: pageQueryId });
   const hasValidSharePageContext =
     !!page?.id && !!page?.slugId && (!pageIdProp || page.id === pageIdProp);
+  const { spaceSlug } = useParams();
+  const [workspace] = useAtom(workspaceAtom);
+  const { data: space } = useSpaceQuery(page?.spaceId ?? spaceSlug ?? "");
+  const workspaceDisabled = workspace?.settings?.sharing?.disabled === true;
+  const spaceDisabled =
+    (space?.settings ?? page?.space?.settings)?.sharing?.disabled === true;
+  const sharingDisabled = workspaceDisabled || spaceDisabled;
   const shareLookupPageId = hasValidSharePageContext ? page.slugId : undefined;
   const pageId = pageIdProp ?? page?.id;
   const { data: share } = useShareForPageQuery({
     pageId: shareLookupPageId,
     queryKeyId: page?.id,
-    enabled: hasValidSharePageContext,
+    enabled: hasValidSharePageContext && !sharingDisabled,
   });
-  const { spaceSlug } = useParams();
-  const [workspace] = useAtom(workspaceAtom);
-  const { data: space } = useSpaceQuery(spaceSlug);
-  const workspaceDisabled = workspace?.settings?.sharing?.disabled === true;
-  const spaceDisabled = space?.settings?.sharing?.disabled === true;
-  const sharingDisabled = workspaceDisabled || spaceDisabled;
   const createShareMutation = useCreateShareMutation();
   const updateShareMutation = useUpdateShareMutation();
   const deleteShareMutation = useDeleteShareMutation();
@@ -154,6 +158,10 @@ export default function ShareModal({
     [publicLink, t],
   );
 
+  if (sharingDisabled) {
+    return null;
+  }
+
   return (
     <Popover width={350} position="bottom" withArrow shadow="md">
       <Popover.Target>
@@ -174,21 +182,7 @@ export default function ShareModal({
         </AccessibleActionIcon>
       </Popover.Target>
       <Popover.Dropdown style={{ userSelect: "none" }}>
-        {sharingDisabled ? (
-          <>
-            <Group justify="center" mb="sm">
-              <IconLock size={20} stroke={1.5} />
-            </Group>
-            <Text size="sm" ta="center" fw={500} mb="xs">
-              {t("Public sharing is disabled")}
-            </Text>
-            <Text size="sm" c="dimmed" ta="center">
-              {workspaceDisabled
-                ? t("Public sharing has been disabled at the workspace level.")
-                : t("Public sharing has been disabled for this space.")}
-            </Text>
-          </>
-        ) : isDescendantShared ? (
+        {isDescendantShared ? (
           <>
             <Text size="sm">{t("Inherits public sharing from")}</Text>
             <Anchor
@@ -233,7 +227,7 @@ export default function ShareModal({
               <Switch
                 aria-label={t("Share page to web")}
                 onChange={handleChange}
-                defaultChecked={isPagePublic}
+                checked={isPagePublic}
                 disabled={readOnly}
                 size="xs"
               />

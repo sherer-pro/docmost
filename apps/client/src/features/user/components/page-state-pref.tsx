@@ -1,4 +1,5 @@
-import { MantineSize, SegmentedControl } from "@mantine/core";
+import { MantineSize, SegmentedControl, VisuallyHidden } from "@mantine/core";
+import { IconBook, IconPencil } from "@tabler/icons-react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
@@ -11,17 +12,20 @@ import {
   normalizePageEditModeByPageId,
   resolvePageEditMode,
 } from "@/features/user/utils/page-edit-mode.ts";
+import classes from "./page-state-pref.module.css";
 
 interface PageStateSegmentedControlProps {
   size?: MantineSize;
   pageId?: string | null;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 export function PageStateSegmentedControl({
   size,
   pageId,
   disabled = false,
+  compact = false,
 }: PageStateSegmentedControlProps) {
   const { t } = useTranslation();
   const [user, setUser] = useAtom(userAtom);
@@ -112,13 +116,34 @@ export function PageStateSegmentedControl({
   return (
     <SegmentedControl
       size={size}
+      className={compact ? classes.compactControl : undefined}
       value={value}
       onChange={handleChange}
       aria-busy={isSaving}
       disabled={disabled || !pageId || isSaving}
       data={[
-        { label: t("Edit"), value: PageEditMode.Edit },
-        { label: t("Read"), value: PageEditMode.Read },
+        {
+          label: compact ? (
+            <span className={classes.compactLabel}>
+              <IconPencil size={17} aria-hidden="true" />
+              <VisuallyHidden>{t("Edit")}</VisuallyHidden>
+            </span>
+          ) : (
+            t("Edit")
+          ),
+          value: PageEditMode.Edit,
+        },
+        {
+          label: compact ? (
+            <span className={classes.compactLabel}>
+              <IconBook size={17} aria-hidden="true" />
+              <VisuallyHidden>{t("Read")}</VisuallyHidden>
+            </span>
+          ) : (
+            t("Read")
+          ),
+          value: PageEditMode.Read,
+        },
       ]}
     />
   );

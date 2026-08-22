@@ -1,0 +1,21 @@
+.compactControl {
+  flex: 0 0 auto;
+}
+
+.compactControl :global(.mantine-SegmentedControl-control) {
+  min-width: 32px;
+}
+
+.compactControl :global(.mantine-SegmentedControl-label) {
+  min-height: 32px;
+  padding-inline: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compactLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

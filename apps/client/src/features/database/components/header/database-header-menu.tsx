@@ -9,7 +9,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
@@ -110,6 +110,7 @@ export default function DatabaseHeaderMenu({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toggleAside = useToggleAside();
+  const isMobileViewport = Boolean(useMediaQuery("(max-width: 48em)"));
   const clipboard = useClipboard({ timeout: 500 });
   const [user] = useAtom(userAtom);
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
@@ -392,45 +393,14 @@ export default function DatabaseHeaderMenu({
       <ActivePageUsers />
 
       {!readOnly && (
-        <PageStateSegmentedControl size="xs" pageId={resolvedDatabasePageId} />
-      )}
-
-      {hasDatabasePage && (
-        <ShareModal
+        <PageStateSegmentedControl
+          size="xs"
           pageId={resolvedDatabasePageId}
-          readOnly={Boolean(readOnly)}
+          compact={isMobileViewport}
         />
       )}
 
-      {hasDatabasePage && (
-        <Tooltip label={t("Page details")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Page details")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={openDetailsModal}
-          >
-            <IconInfoCircle size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {hasDatabasePage && (
-        <Tooltip label={t("Comments")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Comments")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={handleOpenCommentsAside}
-          >
-            <IconMessage size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {!readOnly && hasDatabasePage && (
+      {isMobileViewport && !readOnly && hasDatabasePage && (
         <Tooltip
           label={assistantIdentity.text("openPanel")}
           openDelay={250}
@@ -448,17 +418,72 @@ export default function DatabaseHeaderMenu({
         </Tooltip>
       )}
 
-      <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-        <AccessibleActionIcon
-          label={t("Table of contents")}
-          tooltip={false}
-          variant="subtle"
-          color="dark"
-          onClick={handleOpenTableOfContents}
+      {hasDatabasePage && (
+        <ShareModal
+          pageId={resolvedDatabasePageId}
+          readOnly={Boolean(readOnly)}
+        />
+      )}
+
+      {!isMobileViewport && hasDatabasePage && (
+        <Tooltip label={t("Page details")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Page details")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={openDetailsModal}
+          >
+            <IconInfoCircle size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {!isMobileViewport && hasDatabasePage && (
+        <Tooltip label={t("Comments")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Comments")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={handleOpenCommentsAside}
+          >
+            <IconMessage size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {!isMobileViewport && !readOnly && hasDatabasePage && (
+        <Tooltip
+          label={assistantIdentity.text("openPanel")}
+          openDelay={250}
+          withArrow
         >
-          <IconList size={20} stroke={2} />
-        </AccessibleActionIcon>
-      </Tooltip>
+          <AccessibleActionIcon
+            label={assistantIdentity.text("openPanel")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={() => toggleAside("ai")}
+          >
+            <IconSparkles size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {!isMobileViewport && (
+        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Table of contents")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            onClick={handleOpenTableOfContents}
+          >
+            <IconList size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
 
       <Menu
         shadow="xl"
@@ -479,6 +504,30 @@ export default function DatabaseHeaderMenu({
         </Menu.Target>
 
         <Menu.Dropdown>
+          {isMobileViewport && hasDatabasePage && (
+            <>
+              <Menu.Item
+                leftSection={<IconInfoCircle size={16} />}
+                onClick={openDetailsModal}
+              >
+                {t("Page details")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconMessage size={16} />}
+                onClick={handleOpenCommentsAside}
+              >
+                {t("Comments")}
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconList size={16} />}
+                onClick={handleOpenTableOfContents}
+              >
+                {t("Table of contents")}
+              </Menu.Item>
+              <Menu.Divider />
+            </>
+          )}
+
           <DocumentCommonActionItems
             onCopyLink={handleCopyLink}
             copyLinkLabel={t("Copy database link")}
