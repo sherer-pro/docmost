@@ -479,6 +479,11 @@ const workflowMutations = [
     "ciSource",
     "cache-dependency-path: apps/client/e2e/requirements.txt",
   ],
+  [
+    "Docmost export artifact verifier unit tests",
+    "ciSource",
+    "python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py",
+  ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
   [
     "production Draw.io runtime",

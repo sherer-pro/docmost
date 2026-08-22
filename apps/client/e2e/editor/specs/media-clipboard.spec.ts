@@ -5,7 +5,7 @@ import {
   loadAuditState,
 } from "../support/api";
 import { pageUrl, seedComplexDocument } from "../support/complex-document";
-import { captureStep, expect, mainEditor, test } from "../support/audit-test";
+import { captureStep, expect, test } from "../support/audit-test";
 
 test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive reload", async ({
   page,
@@ -29,7 +29,12 @@ test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive 
       },
     });
     await page.goto(pageUrl(state, seeded.page));
-    await expect(mainEditor(page)).toContainText("Editor regression audit");
+    const readDocument = page
+      .locator("main .ProseMirror")
+      .filter({ hasText: "Editor regression audit" })
+      .first();
+    await expect(readDocument).toContainText("Editor regression audit");
+    await expect(readDocument).toHaveAttribute("contenteditable", "false");
     // The container only replaces the static view once the collaborative
     // document reports a completed sync, so this waits for a websocket round
     // trip against a separate process. Use the same budget the other
@@ -156,7 +161,8 @@ test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive 
     }
 
     await page.reload();
-    await expect(mainEditor(page)).toContainText("Editor regression audit");
+    await expect(readDocument).toContainText("Editor regression audit");
+    await expect(readDocument).toHaveAttribute("contenteditable", "false");
     await expect(
       page.getByAltText("Editor audit image alt text"),
     ).toBeVisible();

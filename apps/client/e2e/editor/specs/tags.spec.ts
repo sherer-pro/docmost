@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from "../../../../../packages/api-contract/src/docmost-archive";
 import {
   apiDelete,
   apiGet,
@@ -304,12 +305,14 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     expect(copiedCore.html).toContain('data-type="tag"');
     expect(copiedCore.html).toContain('data-tag-value="core"');
     expect(copiedCore.text).toBe("::tag[Core]");
-    const supportsNativeClipboard = testInfo.project.name.startsWith("chromium");
+    const supportsNativeClipboard =
+      testInfo.project.name.startsWith("chromium");
     if (supportsNativeClipboard) {
-      await page.context().grantPermissions(
-        ["clipboard-read", "clipboard-write"],
-        { origin: new URL(page.url()).origin },
-      );
+      await page
+        .context()
+        .grantPermissions(["clipboard-read", "clipboard-write"], {
+          origin: new URL(page.url()).origin,
+        });
       await page.evaluate(async (clipboard) => {
         await navigator.clipboard.write([
           new ClipboardItem({
@@ -360,9 +363,10 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
       text: "Plain ::tag[Pilot] then ::tag[Future] clipboard",
     };
     if (supportsNativeClipboard) {
-      await page.evaluate((clipboard) =>
-        navigator.clipboard.writeText(clipboard.text),
-      plainClipboard);
+      await page.evaluate(
+        (clipboard) => navigator.clipboard.writeText(clipboard.text),
+        plainClipboard,
+      );
       await page.keyboard.press("Control+v");
     } else {
       await dispatchPaste(page, plainClipboard);
@@ -406,7 +410,7 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     const archiveData = JSON.parse(
       await archive.file("docmost-data.json")!.async("string"),
     );
-    expect(archiveData.schemaVersion).toBe(4);
+    expect(archiveData.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
     expect(archiveData.sourceSpace.settings.tags).toEqual({
       disabled: ["pilot"],
     });
@@ -432,7 +436,7 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
         },
       ),
     );
-    expect(preview.schemaVersion).toBe(4);
+    expect(preview.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
     expect(preview.availableSettings.tags).toBe(true);
     await apiPost(api, "/api/pages/actions/import-zip/confirm", {
       fileTaskId: preview.fileTaskId,

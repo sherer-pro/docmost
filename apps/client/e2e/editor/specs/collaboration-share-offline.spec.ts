@@ -132,6 +132,7 @@ test("collaborative editing, public readonly share and offline interruption", as
     await captureStep(publicPage, testInfo, "07-public-readonly-share");
     await publicContext.close();
 
+    const authenticatedPageUrl = page.url();
     await context.setOffline(true);
     const offlineRequestFailed = await page.evaluate(async () => {
       try {
@@ -167,7 +168,10 @@ test("collaborative editing, public readonly share and offline interruption", as
     await runAxe(page, testInfo, "body", "offline-interruption");
     await captureStep(page, testInfo, "08-offline-interruption");
     await context.setOffline(false);
-    await page.reload();
+    // Firefox can keep an offline reload in its native about:neterror
+    // document. Navigate to the last authenticated product URL explicitly
+    // after connectivity returns instead of reloading browser chrome.
+    await page.goto(authenticatedPageUrl);
     await expect(mainEditor(page)).toContainText("Collaboration anchor");
   } finally {
     await context.setOffline(false).catch(() => undefined);

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { generateJitteredKeyBetween } from "fractional-indexing-jittered";
+import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from "../../../../../packages/api-contract/src/docmost-archive";
 import {
   apiGet,
   apiPost,
@@ -398,8 +399,8 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         const data = JSON.parse(
           await exportZip.file("docmost-data.json")!.async("string"),
         );
-        expect(metadata.schemaVersion).toBe(4);
-        expect(data.schemaVersion).toBe(4);
+        expect(metadata.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
+        expect(data.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
         const archivedPageIds = new Set<string>(
           data.pages.map((archivedPage: { id: string }) => archivedPage.id),
         );
@@ -444,7 +445,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         },
       ),
     );
-    expect(preview.schemaVersion).toBe(4);
+    expect(preview.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
     expect(preview.counts.pages).toBeGreaterThanOrEqual(2);
     await apiPost(api, "/api/pages/actions/import-zip/confirm", {
       fileTaskId: preview.fileTaskId,
