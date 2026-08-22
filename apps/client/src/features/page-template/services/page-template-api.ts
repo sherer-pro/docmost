@@ -1,4 +1,4 @@
-import api from "@/lib/api-client";
+import api, { runWithIdempotencyLease } from "@/lib/api-client";
 import type {
   PageTemplateAction,
   PageTemplateGroupPolicy,
@@ -289,22 +289,6 @@ export async function updatePageTemplateGroupPolicy(
   return response.data as PageTemplateGroupPolicy;
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value) ?? "null";
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  return `{${Object.entries(value as Record<string, unknown>)
-    .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-    .join(",")}}`;
-}
-
-const inFlightIdempotencyKeys = new Map<string, string>();
-
 function normalizeCapabilities(
   value: Partial<PageTemplateCapabilities> | undefined,
 ): PageTemplateCapabilities {
@@ -318,23 +302,14 @@ function normalizeCapabilities(
 }
 
 async function postIdempotent(endpoint: string, body: unknown) {
-  const fingerprint = `${endpoint}:${canonicalJson(body)}`;
-  const storageKey = `docmost:idempotency:${fingerprint}`;
-  let idempotencyKey = inFlightIdempotencyKeys.get(fingerprint);
-  if (!idempotencyKey && typeof sessionStorage !== "undefined") {
-    idempotencyKey = sessionStorage.getItem(storageKey) ?? undefined;
-  }
-  idempotencyKey ??= crypto.randomUUID();
-  inFlightIdempotencyKeys.set(fingerprint, idempotencyKey);
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.setItem(storageKey, idempotencyKey);
-  }
-  const response = await api.post(endpoint, body, {
-    headers: { "Idempotency-Key": idempotencyKey },
+  return runWithIdempotencyLease({
+    scope: endpoint,
+    payload: body,
+    operation: async (idempotencyKey) => {
+      const response = await api.post(endpoint, body, {
+        headers: { "Idempotency-Key": idempotencyKey },
+      });
+      return response.data;
+    },
   });
-  inFlightIdempotencyKeys.delete(fingerprint);
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(storageKey);
-  }
-  return response.data;
 }

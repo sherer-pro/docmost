@@ -66,10 +66,6 @@ export class EnvironmentVariables {
   PAGE_TEMPLATES_ENABLED: string;
 
   @IsOptional()
-  @Matches(/^([1-9]|10)$/)
-  MAX_PAGE_EMBED_DEPTH: string;
-
-  @IsOptional()
   @IsString()
   AI_MCP_ALLOWED_ORIGINS: string;
 

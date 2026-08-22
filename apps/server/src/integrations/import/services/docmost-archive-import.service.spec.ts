@@ -8,10 +8,100 @@ import {
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
+
+describe('DocmostArchiveImportService V5 admission', () => {
+  const service = new DocmostArchiveImportService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+
+  it.each([2, 3, 4, 6])(
+    'rejects schema %s again in the worker',
+    async (schemaVersion) => {
+      const extractDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'docmost-v5-worker-'),
+      );
+      await fs.writeFile(
+        path.join(extractDir, 'docmost-metadata.json'),
+        JSON.stringify({
+          source: 'docmost',
+          schemaVersion,
+          scope: 'page',
+          dataFile: 'docmost-data.json',
+        }),
+      );
+
+      try {
+        await expect(
+          service.process({
+            extractDir,
+            leaseToken: 'lease-1',
+            fileTask: {
+              spaceId: 'space-1',
+              workspaceId: 'workspace-1',
+              creatorId: 'user-1',
+            } as any,
+          }),
+        ).rejects.toThrow(
+          schemaVersion > DOCMOST_ARCHIVE_SCHEMA_VERSION
+            ? 'newer than supported'
+            : `schema ${schemaVersion} is not supported`,
+        );
+      } finally {
+        await fs.rm(extractDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('rejects nested pageEmbed payloads before materialization', async () => {
+    const extractDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'docmost-v5-page-embed-'),
+    );
+    await fs.writeFile(
+      path.join(extractDir, 'docmost-metadata.json'),
+      JSON.stringify({
+        source: 'docmost',
+        schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
+        scope: 'page',
+        dataFile: 'docmost-data.json',
+      }),
+    );
+    await fs.writeFile(
+      path.join(extractDir, 'docmost-data.json'),
+      JSON.stringify({
+        schemaVersion: DOCMOST_ARCHIVE_SCHEMA_VERSION,
+        scope: 'page',
+        malicious: { nested: [{ type: 'pageEmbed' }] },
+      }),
+    );
+
+    try {
+      await expect(
+        service.process({
+          extractDir,
+          leaseToken: 'lease-1',
+          fileTask: {
+            spaceId: 'space-1',
+            workspaceId: 'workspace-1',
+            creatorId: 'user-1',
+          } as any,
+        }),
+      ).rejects.toThrow('schema 5 cannot contain pageEmbed nodes');
+    } finally {
+      await fs.rm(extractDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('DocmostArchiveImportService reference rewriting', () => {
   const service = new DocmostArchiveImportService(
-    {} as any,
     {} as any,
     {} as any,
     {} as any,
@@ -201,124 +291,25 @@ describe('DocmostArchiveImportService reference rewriting', () => {
     ]);
   });
 
-  it('resolves external page snapshots by consumer and occurrence', () => {
-    const snapshots = new Map([
-      [
-        'consumer-a::occurrence::external-page',
-        {
-          content: {
-            type: 'doc',
-            content: [
-              {
-                type: 'image',
-                attrs: {
-                  attachmentId: 'attachment-old',
-                  src: '/api/files/attachment-old/image.png',
-                },
-              },
-            ],
-          },
-          attachmentIdMap: new Map(),
-        },
-      ],
-      [
-        'consumer-b::occurrence::external-page',
-        {
-          content: {
-            type: 'doc',
-            content: [
-              { type: 'paragraph', content: [{ type: 'text', text: 'B' }] },
-            ],
-          },
-          attachmentIdMap: new Map(),
-        },
-      ],
-    ]);
-    const rewrite = (
-      consumerId: string,
-      attachmentIdMap: Map<string, string>,
-    ) =>
+  it('fails closed when rewrite receives a pageEmbed node', () => {
+    expect(() =>
       (service as any).rewritePmNode(
         {
           type: 'pageEmbed',
-          attrs: { id: 'occurrence', sourcePageId: 'external-page' },
+          attrs: { id: 'occurrence', sourcePageId: 'source-page' },
         },
         {
           pageIdMap: new Map(),
           slugIdMap: new Map(),
           databaseIdMap: new Map(),
           attachmentIdMap: new Map(),
-          externalSnapshotAttachmentIdMap: attachmentIdMap,
-          sourceArchivePageId: consumerId,
           userIdMap: new Map(),
           transclusionSnapshots: new Map(),
-          pageEmbedSnapshots: snapshots,
-          allowPageEmbeds: true,
           fallbackUserId: 'importer',
           report: report(),
         },
-      );
-
-    const consumerA = rewrite(
-      'consumer-a',
-      new Map([['attachment-old', 'attachment-consumer-a']]),
-    );
-    const consumerB = rewrite('consumer-b', new Map());
-
-    expect(consumerA[0].attrs).toMatchObject({
-      attachmentId: 'attachment-consumer-a',
-      src: '/api/files/attachment-consumer-a/image.png',
-    });
-    expect(consumerB[0].content[0].text).toBe('B');
-  });
-
-  it('uses the consumer attachment mapping when disabled internal embeds materialize', () => {
-    const rewritten = (service as any).rewritePmNode(
-      {
-        type: 'pageEmbed',
-        attrs: { id: 'occurrence', sourcePageId: 'source-page' },
-      },
-      {
-        pageIdMap: new Map([['source-page', 'source-page-new']]),
-        slugIdMap: new Map(),
-        databaseIdMap: new Map(),
-        attachmentIdMap: new Map([
-          ['attachment-old', 'attachment-source-page'],
-        ]),
-        externalSnapshotAttachmentIdMap: new Map([
-          ['attachment-old', 'attachment-consumer-page'],
-        ]),
-        sourceArchivePageId: 'consumer-page',
-        userIdMap: new Map(),
-        transclusionSnapshots: new Map(),
-        pageEmbedSnapshots: new Map(),
-        archivePageContentById: new Map([
-          [
-            'source-page',
-            {
-              type: 'doc',
-              content: [
-                {
-                  type: 'image',
-                  attrs: {
-                    attachmentId: 'attachment-old',
-                    src: '/api/files/attachment-old/image.png',
-                  },
-                },
-              ],
-            },
-          ],
-        ]),
-        allowPageEmbeds: false,
-        fallbackUserId: 'importer',
-        report: report(),
-      },
-    );
-
-    expect(rewritten[0].attrs).toMatchObject({
-      attachmentId: 'attachment-consumer-page',
-      src: '/api/files/attachment-consumer-page/image.png',
-    });
+      ),
+    ).toThrow('schema 5 cannot contain pageEmbed nodes');
   });
 
   it('restores external references without snapshots as placeholders', () => {
@@ -463,7 +454,6 @@ describe('DocmostArchiveImportService label import', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
     );
 
     await (service as any).insertLabels({
@@ -520,7 +510,6 @@ describe('DocmostArchiveImportService dictionary import', () => {
       updateTable: jest.fn(() => updateQuery),
     };
     const service = new DocmostArchiveImportService(
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -601,7 +590,6 @@ describe('DocmostArchiveImportService dictionary import', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
     );
 
     await (service as any).applySettingsAndDictionary({
@@ -644,13 +632,29 @@ describe('DocmostArchiveImportService dictionary import', () => {
 });
 
 describe('DocmostArchiveImportService import durability', () => {
+  const createArtifactDb = () => {
+    const insert: any = {};
+    insert.values = jest.fn(() => insert);
+    insert.onConflict = jest.fn(() => insert);
+    insert.execute = jest.fn(async () => undefined);
+    const update: any = {};
+    update.set = jest.fn(() => update);
+    update.where = jest.fn(() => update);
+    update.execute = jest.fn(async () => undefined);
+    return {
+      insertInto: jest.fn(() => insert),
+      updateTable: jest.fn(() => update),
+      insert,
+      update,
+    };
+  };
+
   const createService = (db: any, storageService: any) =>
     new DocmostArchiveImportService(
       db,
       {} as any,
       {} as any,
       storageService,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -695,7 +699,8 @@ describe('DocmostArchiveImportService import durability', () => {
       }),
       delete: jest.fn(async () => undefined),
     };
-    const service = createService({}, storageService);
+    const artifactDb = createArtifactDb();
+    const service = createService(artifactDb, storageService);
     jest
       .spyOn(service as any, 'waitForAttachmentRetry')
       .mockResolvedValue(undefined);
@@ -704,6 +709,7 @@ describe('DocmostArchiveImportService import durability', () => {
       const staged = await (service as any).stageAttachments({
         extractDir,
         fileTask: {
+          id: '10000000-0000-4000-8000-000000000001',
           workspaceId: 'workspace-1',
           spaceId: 'space-1',
           creatorId: 'user-1',
@@ -731,12 +737,22 @@ describe('DocmostArchiveImportService import durability', () => {
       expect(streams.size).toBe(3);
       expect(staged).toHaveLength(1);
       expect(storageService.delete).not.toHaveBeenCalled();
+      expect(artifactDb.insert.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          artifactType: 'attachment',
+          attachmentId: 'attachment-target',
+          status: 'pending',
+        }),
+      );
+      expect(artifactDb.update.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'uploaded' }),
+      );
     } finally {
       await fs.rm(extractDir, { recursive: true, force: true });
     }
   });
 
-  it('removes a partial storage object after retries are exhausted', async () => {
+  it('retains a durable locator after attachment retries are exhausted', async () => {
     const extractDir = await fs.mkdtemp(
       path.join(os.tmpdir(), 'docmost-attachment-failure-'),
     );
@@ -752,7 +768,8 @@ describe('DocmostArchiveImportService import durability', () => {
       }),
       delete: jest.fn(async () => undefined),
     };
-    const service = createService({}, storageService);
+    const artifactDb = createArtifactDb();
+    const service = createService(artifactDb, storageService);
     jest
       .spyOn(service as any, 'waitForAttachmentRetry')
       .mockResolvedValue(undefined);
@@ -762,6 +779,7 @@ describe('DocmostArchiveImportService import durability', () => {
         (service as any).stageAttachments({
           extractDir,
           fileTask: {
+            id: '10000000-0000-4000-8000-000000000001',
             workspaceId: 'workspace-1',
             spaceId: 'space-1',
             creatorId: 'user-1',
@@ -788,7 +806,10 @@ describe('DocmostArchiveImportService import durability', () => {
         }),
       ).rejects.toThrow('synthetic storage failure');
       expect(storageService.uploadStream).toHaveBeenCalledTimes(3);
-      expect(storageService.delete).toHaveBeenCalledTimes(1);
+      expect(storageService.delete).not.toHaveBeenCalled();
+      expect(artifactDb.insert.values).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'pending' }),
+      );
     } finally {
       await fs.rm(extractDir, { recursive: true, force: true });
     }
@@ -796,9 +817,9 @@ describe('DocmostArchiveImportService import durability', () => {
 
   it('marks task success inside the materialization transaction', async () => {
     const executeTakeFirst = jest.fn(async () => ({ numUpdatedRows: 1n }));
-    const secondWhere = jest.fn(() => ({ executeTakeFirst }));
-    const firstWhere = jest.fn(() => ({ where: secondWhere }));
-    const set = jest.fn(() => ({ where: firstWhere }));
+    const query: any = { executeTakeFirst };
+    query.where = jest.fn(() => query);
+    const set = jest.fn(() => query);
     const trx = { updateTable: jest.fn(() => ({ set })) };
     const service = createService({}, {});
 
@@ -808,6 +829,7 @@ describe('DocmostArchiveImportService import durability', () => {
         id: 'task-1',
         result: { preview: { displayName: 'Archive' } },
       },
+      'lease-1',
       report,
     );
 
@@ -821,17 +843,16 @@ describe('DocmostArchiveImportService import durability', () => {
         },
       }),
     );
-    expect(secondWhere).toHaveBeenCalledWith('status', '=', 'processing');
+    expect(query.where).toHaveBeenCalledWith('status', '=', 'processing');
+    expect(query.where).toHaveBeenCalledWith('leaseToken', '=', 'lease-1');
   });
 
   it('aborts materialization when the task state fence is lost', async () => {
     const executeTakeFirst = jest.fn(async () => ({ numUpdatedRows: 0n }));
+    const query: any = { executeTakeFirst };
+    query.where = jest.fn(() => query);
     const trx = {
-      updateTable: jest.fn(() => ({
-        set: () => ({
-          where: () => ({ where: () => ({ executeTakeFirst }) }),
-        }),
-      })),
+      updateTable: jest.fn(() => ({ set: () => query })),
     };
     const service = createService({}, {});
 
@@ -839,8 +860,9 @@ describe('DocmostArchiveImportService import durability', () => {
       (service as any).markImportCommitted(
         trx,
         { id: 'task-1', result: null },
+        'stale-lease',
         report,
       ),
-    ).rejects.toThrow('no longer in processing state');
+    ).rejects.toThrow('file_import_lease_lost');
   });
 });

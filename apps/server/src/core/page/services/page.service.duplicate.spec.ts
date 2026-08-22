@@ -64,6 +64,7 @@ function linkedInstanceDb(result?: unknown) {
 
 function createService(params?: {
   pageRepo?: Record<string, jest.Mock>;
+  attachmentRepo?: Record<string, jest.Mock>;
   db?: unknown;
   databaseRowRepo?: Record<string, jest.Mock>;
   generalQueue?: { add: jest.Mock };
@@ -72,10 +73,23 @@ function createService(params?: {
     enqueueDuplicatePageAttachments: jest.Mock;
     kick: jest.Mock;
   };
+  pageAccessService?: {
+    getEffectiveAccessForPages: jest.Mock;
+  };
 }) {
+  const pageAccessService = params?.pageAccessService ?? {
+    getEffectiveAccessForPages: jest.fn(async (pages: Array<{ id: string }>) =>
+      new Map(
+        pages.map((page) => [
+          page.id,
+          { capabilities: { canRead: true } },
+        ]),
+      ),
+    ),
+  };
   const service = new PageService(
     (params?.pageRepo ?? {}) as any,
-    {} as any,
+    (params?.attachmentRepo ?? {}) as any,
     (params?.db ?? linkedInstanceDb()) as any,
     {} as any,
     {} as any,
@@ -93,9 +107,8 @@ function createService(params?: {
     {} as any,
     {} as any,
     {} as any,
+    pageAccessService as any,
     {} as any,
-    {} as any,
-    undefined,
     undefined,
     params?.queueOutboxService as any,
   );
@@ -263,6 +276,82 @@ describe('PageService duplicatePage properties', () => {
     });
     expect(executeTx).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { label: 'same space', targetSpaceId: undefined },
+    { label: 'another space', targetSpaceId: 'space-2' },
+  ])(
+    'rejects a $label duplicate when any source descendant is unreadable',
+    async ({ targetSpaceId }) => {
+      const pages = [
+        {
+          id: 'page-root',
+          slugId: 'root',
+          title: 'Root',
+          position: 'a0',
+          parentPageId: null,
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+          templateKind: null,
+          content: { type: 'doc', content: [] },
+        },
+        {
+          id: 'page-denied-child',
+          slugId: 'denied-child',
+          title: 'Denied child',
+          position: 'a1',
+          parentPageId: 'page-root',
+          spaceId: 'space-1',
+          workspaceId: 'workspace-1',
+          templateKind: null,
+          content: { type: 'doc', content: [] },
+        },
+      ];
+      const pageRepo = {
+        getPageAndDescendants: jest.fn().mockResolvedValue(pages),
+      };
+      const pageAccessService = {
+        getEffectiveAccessForPages: jest.fn().mockResolvedValue(
+          new Map([
+            ['page-root', { capabilities: { canRead: true } }],
+            ['page-denied-child', { capabilities: { canRead: false } }],
+          ]),
+        ),
+      };
+      const queueOutboxService = {
+        enqueueDuplicatePageAttachments: jest.fn(),
+        kick: jest.fn(),
+      };
+      const beforeCommit = jest.fn();
+      const service = createService({
+        pageRepo,
+        pageAccessService,
+        queueOutboxService,
+      });
+      jest.spyOn(service, 'nextPagePosition').mockResolvedValue('z0');
+
+      await expect(
+        service.duplicatePage(
+          pages[0] as any,
+          targetSpaceId,
+          { id: 'user-1', workspaceId: 'workspace-1' } as any,
+          { beforeCommit },
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+
+      expect(pageAccessService.getEffectiveAccessForPages).toHaveBeenCalledWith(
+        pages,
+        expect.objectContaining({ id: 'user-1' }),
+      );
+      expect((service as any).hasTemplateInPageTree).not.toHaveBeenCalled();
+      expect(executeTx).not.toHaveBeenCalled();
+      expect(
+        queueOutboxService.enqueueDuplicatePageAttachments,
+      ).not.toHaveBeenCalled();
+      expect(queueOutboxService.kick).not.toHaveBeenCalled();
+      expect(beforeCommit).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     { label: 'same space duplicate', targetSpaceId: undefined },
@@ -747,11 +836,30 @@ describe('PageService duplicatePage properties', () => {
         expect(transactionCommitted).toBe(true);
       }),
     };
+    const beforeCommit = jest.fn(async (trx, duplicatedRootPageId) => {
+      expect(transactionActive).toBe(true);
+      expect(trx).toBe(fakeTrx);
+      expect(duplicatedRootPageId).toBe('page-copy-idempotent');
+    });
     const pageRepo = {
       getPageAndDescendants: jest.fn(async () => [rootPage]),
       findById: jest.fn(async (pageId: string) => ({ id: pageId })),
     };
-    const service = createService({ pageRepo, queueOutboxService });
+    const attachmentRepo = {
+      findActiveByIds: jest.fn().mockResolvedValue([
+        {
+          id: 'attachment-old',
+          pageId: 'page-root',
+          workspaceId: 'workspace-1',
+          deletedAt: null,
+        },
+      ]),
+    };
+    const service = createService({
+      pageRepo,
+      attachmentRepo,
+      queueOutboxService,
+    });
     jest
       .spyOn(service as any, 'duplicateLinkedDatabases')
       .mockResolvedValue(undefined);
@@ -768,10 +876,18 @@ describe('PageService duplicatePage properties', () => {
     mockGetAttachmentIds.mockReturnValue(['attachment-old']);
     mockIsAttachmentNode.mockImplementation((type) => type === 'image');
 
-    await service.duplicatePage(rootPage as any, undefined, {
-      id: 'user-1',
-      workspaceId: 'workspace-1',
-    } as any);
+    await service.duplicatePage(
+      rootPage as any,
+      undefined,
+      {
+        id: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any,
+      {
+        rootPageId: 'page-copy-idempotent',
+        beforeCommit,
+      },
+    );
 
     expect(
       queueOutboxService.enqueueDuplicatePageAttachments,
@@ -779,6 +895,7 @@ describe('PageService duplicatePage properties', () => {
       expect.objectContaining({
         workspaceId: 'workspace-1',
         rootPageId: 'page-root',
+        newPageId: 'page-copy-idempotent',
         spaceId: 'space-1',
         attachmentMappings: [
           expect.objectContaining({
@@ -789,6 +906,156 @@ describe('PageService duplicatePage properties', () => {
       }),
       fakeTrx,
     );
+    expect(beforeCommit).toHaveBeenCalledWith(
+      fakeTrx,
+      'page-copy-idempotent',
+    );
     expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects an attachment referenced from multiple subtree pages before inserting pages', async () => {
+    const sharedAttachmentId = 'attachment-shared';
+    const pages = [
+      {
+        id: 'page-root',
+        slugId: 'root',
+        title: 'Root',
+        icon: null,
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                attachmentId: sharedAttachmentId,
+                src: `/api/attachments/files/${sharedAttachmentId}/image.png`,
+              },
+            },
+          ],
+        },
+        position: 'a0',
+        parentPageId: null,
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        settings: {},
+      },
+      {
+        id: 'page-child',
+        slugId: 'child',
+        title: 'Child',
+        icon: null,
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'image',
+              attrs: {
+                attachmentId: sharedAttachmentId,
+                src: `/api/attachments/files/${sharedAttachmentId}/image.png`,
+              },
+            },
+          ],
+        },
+        position: 'a1',
+        parentPageId: 'page-root',
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        settings: {},
+      },
+    ];
+    const pageRepo = {
+      getPageAndDescendants: jest.fn().mockResolvedValue(pages),
+    };
+    const attachmentRepo = {
+      findActiveByIds: jest.fn().mockResolvedValue([
+        {
+          id: sharedAttachmentId,
+          pageId: 'page-root',
+          workspaceId: 'workspace-1',
+          deletedAt: null,
+        },
+      ]),
+    };
+    const service = createService({
+      pageRepo,
+      attachmentRepo,
+    });
+    mockGetAttachmentIds.mockReturnValue([sharedAttachmentId]);
+    mockIsAttachmentNode.mockImplementation((type) => type === 'image');
+
+    await expect(
+      service.duplicatePage(
+        pages[0] as any,
+        undefined,
+        { id: 'user-1', workspaceId: 'workspace-1' } as any,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({
+        code: 'page_attachment_source_invalid',
+      }),
+    });
+
+    expect(attachmentRepo.findActiveByIds).toHaveBeenCalledWith(
+      [sharedAttachmentId],
+      'workspace-1',
+    );
+    expect(executeTx).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: 'is missing',
+      sourceAttachments: [],
+    },
+    {
+      label: 'is owned outside the copied subtree',
+      sourceAttachments: [
+        {
+          id: 'attachment-external',
+          pageId: 'page-outside-tree',
+          workspaceId: 'workspace-1',
+          deletedAt: null,
+        },
+      ],
+    },
+  ])(
+    'rejects an attachment that $label before inserting pages',
+    async ({ sourceAttachments }) => {
+      const rootPage = {
+        id: 'page-root',
+        slugId: 'root',
+        title: 'Root',
+        content: { type: 'doc', content: [] },
+        position: 'a0',
+        parentPageId: null,
+        spaceId: 'space-1',
+        workspaceId: 'workspace-1',
+        settings: {},
+      };
+      const pageRepo = {
+        getPageAndDescendants: jest.fn().mockResolvedValue([rootPage]),
+      };
+      const attachmentRepo = {
+        findActiveByIds: jest.fn().mockResolvedValue(sourceAttachments),
+      };
+      const service = createService({ pageRepo, attachmentRepo });
+      mockGetAttachmentIds.mockReturnValue(['attachment-external']);
+
+      await expect(
+        service.duplicatePage(
+          rootPage as any,
+          undefined,
+          { id: 'user-1', workspaceId: 'workspace-1' } as any,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({
+          code: 'page_attachment_source_invalid',
+        }),
+      });
+
+      expect(executeTx).not.toHaveBeenCalled();
+    },
+  );
 });

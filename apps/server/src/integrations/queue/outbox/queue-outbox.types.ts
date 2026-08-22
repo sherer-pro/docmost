@@ -2,6 +2,7 @@ import { IDuplicatePageAttachmentsJob } from '../constants/queue.interface';
 import {
   ICommentNotificationJob,
   ICommentResolvedNotificationJob,
+  IPageRecipientNotificationJob,
 } from '../constants/queue.interface';
 import { QueueJob } from '../constants';
 
@@ -12,6 +13,8 @@ export const QueueOutboxKind = {
   PAGE_TEMPLATE_SYNC: 'page_template_sync',
   NOTIFICATION_EMAIL: 'notification_email',
   NOTIFICATION_DISPATCH: 'notification_dispatch',
+  ATTACHMENT_CLEANUP: 'attachment_cleanup',
+  FILE_IMPORT: 'file_import',
 } as const;
 
 export type QueueOutboxKind =
@@ -70,8 +73,32 @@ export interface NotificationEmailDeliveryPolicyHandler {
 export interface NotificationDispatchOutboxPayload {
   jobName:
     | QueueJob.COMMENT_NOTIFICATION
-    | QueueJob.COMMENT_RESOLVED_NOTIFICATION;
-  jobData: ICommentNotificationJob | ICommentResolvedNotificationJob;
+    | QueueJob.COMMENT_RESOLVED_NOTIFICATION
+    | QueueJob.PAGE_RECIPIENT_NOTIFICATION;
+  jobData:
+    | ICommentNotificationJob
+    | ICommentResolvedNotificationJob
+    | IPageRecipientNotificationJob;
+}
+
+export interface AttachmentCleanupOutboxPayload {
+  batchId: string;
+}
+
+export interface FileImportOutboxPayload {
+  fileTaskId: string;
+}
+
+export const ATTACHMENT_CLEANUP_HANDLER = 'ATTACHMENT_CLEANUP_HANDLER';
+
+export interface AttachmentCleanupOutboxHandler {
+  processCleanupBatchFromOutbox(batchId: string): Promise<void>;
+}
+
+export const FILE_IMPORT_OUTBOX_HANDLER = 'FILE_IMPORT_OUTBOX_HANDLER';
+
+export interface FileImportOutboxHandler {
+  processImportFromOutbox(fileTaskId: string): Promise<void>;
 }
 
 export const PAGE_TEMPLATE_SYNC_HANDLER = 'PAGE_TEMPLATE_SYNC_HANDLER';

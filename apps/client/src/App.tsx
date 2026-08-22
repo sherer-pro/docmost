@@ -1,7 +1,7 @@
 import { Center, Loader } from "@mantine/core";
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthenticatedError404 } from "@/components/ui/authenticated-error-404.tsx";
+import { AuthenticatedError404 } from "@/pages/errors/authenticated-error-404";
 import { isCloud } from "@/lib/config.ts";
 import { useTranslation } from "react-i18next";
 import { useRedirectToCloudSelect } from "@/features/cloud/hooks/use-redirect-to-cloud-select.tsx";

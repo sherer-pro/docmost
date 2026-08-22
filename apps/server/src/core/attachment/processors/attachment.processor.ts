@@ -17,37 +17,47 @@ export class AttachmentProcessor extends WorkerHost implements OnModuleDestroy {
 
   async process(job: Job<any, void>): Promise<void> {
     try {
-      if (job.name === QueueJob.DELETE_SPACE_ATTACHMENTS) {
-        await this.attachmentService.handleDeleteSpaceAttachments(job.data.id);
-      }
-      if (job.name === QueueJob.DELETE_USER_AVATARS) {
-        await this.attachmentService.handleDeleteUserAvatars(job.data.id);
-      }
-      if (job.name === QueueJob.DELETE_PAGE_ATTACHMENTS) {
-        await this.attachmentService.handleDeletePageAttachments(
-          job.data.pageId,
-        );
-      }
-      if (
-        job.name === QueueJob.ATTACHMENT_INDEX_CONTENT ||
-        job.name === QueueJob.ATTACHMENT_INDEXING
-      ) {
-        const retryFailed = Boolean(job.data.retryFailed);
-        if (job.name === QueueJob.ATTACHMENT_INDEX_CONTENT) {
+      switch (job.name) {
+        case QueueJob.DELETE_SPACE_ATTACHMENTS:
+          await this.attachmentService.handleDeleteSpaceAttachments(
+            this.requireLegacyCleanupId(job.data?.id),
+          );
+          return;
+        case QueueJob.DELETE_USER_AVATARS:
+          await this.attachmentService.handleDeleteUserAvatars(
+            this.requireLegacyCleanupId(job.data?.id),
+          );
+          return;
+        case QueueJob.DELETE_PAGE_ATTACHMENTS:
+          await this.attachmentService.handleDeletePageAttachments(
+            this.requireLegacyCleanupId(job.data?.pageId),
+          );
+          return;
+        case QueueJob.ATTACHMENT_INDEX_CONTENT:
           await this.attachmentContentService.indexAttachment(
             job.data.attachmentId,
-            { retryFailed },
+            { retryFailed: Boolean(job.data.retryFailed) },
           );
-        } else if (job.name === QueueJob.ATTACHMENT_INDEXING) {
+          return;
+        case QueueJob.ATTACHMENT_INDEXING:
           await this.attachmentContentService.indexWorkspace(
             job.data.workspaceId,
-            { retryFailed },
+            { retryFailed: Boolean(job.data.retryFailed) },
           );
-        }
+          return;
+        default:
+          throw new Error('unknown_attachment_queue_job');
       }
     } catch (err) {
       throw err;
     }
+  }
+
+  private requireLegacyCleanupId(value: unknown): string {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error('invalid_attachment_cleanup_job_payload');
+    }
+    return value;
   }
 
   @OnWorkerEvent('active')

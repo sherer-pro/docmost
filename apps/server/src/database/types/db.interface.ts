@@ -25,6 +25,8 @@ import type {
   AiRunSourceDependencies,
   AiSpaceConfigs,
   ApiKeys,
+  AttachmentCleanupBatches,
+  AttachmentCleanupItems,
   Attachments,
   AuthAccounts,
   AuthProviderGroupMappings,
@@ -40,19 +42,19 @@ import type {
   DictionaryTermAliases,
   DictionaryTerms,
   Favorites,
+  FileTaskImportArtifacts,
+  FileTaskImportPages,
   FileTasks,
   Groups,
   GroupUsers,
   Labels,
   Notifications,
   PageLabels,
-  PageEmbedGraphFences,
   PageTransclusions,
   PageTransclusionReferences,
   PageTemplateGroupPolicies,
   PageTemplateAttachmentMappings,
   PageTemplateInstances,
-  PageTemplateLegacyMigrationErrors,
   PageTemplateOperations,
   PageTemplatePublishConfirmations,
   PageTemplateRevisions,
@@ -61,6 +63,7 @@ import type {
   PageTemplateSyncRuns,
   PageTemplateWorkspacePolicies,
   PageAccessRules,
+  PageDuplicateAttachmentPins,
   PushNotificationJobs,
   PageHistory,
   Pages,
@@ -107,6 +110,8 @@ export interface DbInterface {
   aiRunSteps: AiRunSteps;
   aiRunSourceDependencies: AiRunSourceDependencies;
   aiSpaceConfigs: AiSpaceConfigs;
+  attachmentCleanupBatches: AttachmentCleanupBatches;
+  attachmentCleanupItems: AttachmentCleanupItems;
   attachments: Attachments;
   authAccounts: AuthAccounts;
   authProviderGroupMappings: AuthProviderGroupMappings;
@@ -122,19 +127,21 @@ export interface DbInterface {
   dictionaryTerms: DictionaryTerms;
   dictionaryTermAliases: DictionaryTermAliases;
   favorites: Favorites;
+  fileTaskImportArtifacts: FileTaskImportArtifacts;
+  fileTaskImportPages: FileTaskImportPages;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;
   labels: Labels;
   notifications: Notifications;
   pageAccessRules: PageAccessRules;
+  pageDuplicateAttachmentPins: PageDuplicateAttachmentPins;
   pageLabels: PageLabels;
   pageTransclusions: PageTransclusions;
   pageTransclusionReferences: PageTransclusionReferences;
   pageTemplateGroupPolicies: PageTemplateGroupPolicies;
   pageTemplateAttachmentMappings: PageTemplateAttachmentMappings;
   pageTemplateInstances: PageTemplateInstances;
-  pageTemplateLegacyMigrationErrors: PageTemplateLegacyMigrationErrors;
   pageTemplateOperations: PageTemplateOperations;
   pageTemplatePublishConfirmations: PageTemplatePublishConfirmations;
   pageTemplateRevisions: PageTemplateRevisions;
@@ -145,7 +152,6 @@ export interface DbInterface {
   pushNotificationJobs: PushNotificationJobs;
   pageHistory: PageHistory;
   pages: Pages;
-  pageEmbedGraphFences: PageEmbedGraphFences;
   shares: Shares;
   pushSubscriptions: PushSubscriptions;
   queueOutbox: QueueOutbox;

@@ -1,8 +1,16 @@
-const CACHE_VERSION = "docmost-pwa-v8";
+const CACHE_VERSION = "docmost-pwa-v9";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const RUNTIME_METADATA_CACHE = `${CACHE_VERSION}-runtime-metadata`;
 const CACHE_PREFIX = "docmost-pwa-";
-const CURRENT_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);
+const CURRENT_CACHES = new Set([
+  SHELL_CACHE,
+  RUNTIME_CACHE,
+  RUNTIME_METADATA_CACHE,
+]);
+const RUNTIME_CACHE_MAX_ENTRIES = 200;
+const RUNTIME_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+let lastRuntimeExpiryCheck = 0;
 
 const APP_SHELL_ASSETS = [
   "/",
@@ -57,12 +65,19 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
+  // Cross-origin resources can carry private or opaque responses and must not
+  // become part of Docmost's offline storage.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // Always pass critical realtime/API requests directly to the network
   // to avoid breaking authentication, WebSocket upgrades, and synchronization.
   if (
     url.pathname.startsWith("/api") ||
     url.pathname.startsWith("/socket.io") ||
-    url.pathname.startsWith("/collab")
+    url.pathname.startsWith("/collab") ||
+    url.pathname === "/window-config.js"
   ) {
     return;
   }
@@ -95,7 +110,12 @@ self.addEventListener("message", (event) => {
     return;
   }
 
-  event.waitUntil(caches.delete(RUNTIME_CACHE));
+  event.waitUntil(
+    Promise.all([
+      caches.delete(RUNTIME_CACHE),
+      caches.delete(RUNTIME_METADATA_CACHE),
+    ]),
+  );
 });
 
 /**
@@ -170,17 +190,12 @@ async function handleNotificationClick(event) {
  */
 async function networkFirstForDocuments(request) {
   const cache = await caches.open(RUNTIME_CACHE);
+  let response;
 
   try {
-    const response = await fetch(request);
-
-    if (await isValidDocumentResponse(response)) {
-      await cache.put(request, response.clone());
-    }
-
-    return response;
+    response = await fetch(request);
   } catch {
-    const cachedResponse = await cache.match(request);
+    const cachedResponse = await getFreshRuntimeResponse(cache, request);
 
     if (cachedResponse && (await isValidDocumentResponse(cachedResponse))) {
       return cachedResponse;
@@ -202,6 +217,16 @@ async function networkFirstForDocuments(request) {
       headers: { "Content-Type": "text/plain; charset=UTF-8" },
     });
   }
+
+  if (await isValidDocumentResponse(response)) {
+    try {
+      await putRuntimeResponse(cache, request, response);
+    } catch {
+      // A cache quota failure must not hide a successful network response.
+    }
+  }
+
+  return response;
 }
 
 /**
@@ -239,15 +264,12 @@ async function isValidDocumentResponse(response) {
  */
 async function networkFirstForResource(request) {
   const cache = await caches.open(RUNTIME_CACHE);
+  let response;
 
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      await cache.put(request, response.clone());
-    }
-    return response;
+    response = await fetch(request);
   } catch {
-    const cachedResponse = await cache.match(request);
+    const cachedResponse = await getFreshRuntimeResponse(cache, request);
     if (cachedResponse) {
       return cachedResponse;
     }
@@ -257,6 +279,15 @@ async function networkFirstForResource(request) {
       headers: { "Content-Type": "text/plain; charset=UTF-8" },
     });
   }
+
+  if (response.ok) {
+    try {
+      await putRuntimeResponse(cache, request, response);
+    } catch {
+      // A cache quota failure must not hide a successful network response.
+    }
+  }
+  return response;
 }
 
 /**
@@ -268,7 +299,7 @@ async function networkFirstForResource(request) {
  */
 async function staleWhileRevalidate(request, networkResponsePromise) {
   const cache = await caches.open(RUNTIME_CACHE);
-  const cachedResponse = await cache.match(request);
+  const cachedResponse = await getFreshRuntimeResponse(cache, request);
 
   if (cachedResponse) {
     return cachedResponse;
@@ -296,14 +327,173 @@ async function staleWhileRevalidate(request, networkResponsePromise) {
  */
 async function updateRuntimeCache(request) {
   const cache = await caches.open(RUNTIME_CACHE);
+  let networkResponse;
 
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      await cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
+    networkResponse = await fetch(request);
   } catch {
     return null;
+  }
+
+  if (networkResponse.ok) {
+    try {
+      await putRuntimeResponse(cache, request, networkResponse);
+    } catch {
+      // The fetched response is still usable when runtime caching fails.
+    }
+  }
+  return networkResponse;
+}
+
+/**
+ * Stores the original response plus separate timestamp metadata and enforces
+ * the bounded runtime-cache policy.
+ *
+ * @param {Cache} cache - Runtime cache.
+ * @param {Request} request - Cache key.
+ * @param {Response} response - Fresh network response.
+ * @returns {Promise<void>} Promise resolved after cache maintenance.
+ */
+async function putRuntimeResponse(cache, request, response) {
+  const metadataCache = await caches.open(RUNTIME_METADATA_CACHE);
+
+  try {
+    await cache.put(request, response.clone());
+    await metadataCache.put(
+      request,
+      new Response(String(Date.now()), {
+        headers: { "Content-Type": "text/plain; charset=UTF-8" },
+      }),
+    );
+  } catch (error) {
+    await Promise.allSettled([
+      cache.delete(request),
+      metadataCache.delete(request),
+    ]);
+    throw error;
+  }
+
+  await enforceRuntimeCacheLimits(cache, metadataCache);
+}
+
+/**
+ * Returns a cache entry only while it is inside the retention window.
+ *
+ * @param {Cache} cache - Runtime cache.
+ * @param {Request} request - Cache key.
+ * @returns {Promise<Response|undefined>} Fresh cached response, if present.
+ */
+async function getFreshRuntimeResponse(cache, request) {
+  const response = await cache.match(request);
+  if (!response) {
+    const metadataCache = await caches.open(RUNTIME_METADATA_CACHE);
+    await metadataCache.delete(request);
+    return undefined;
+  }
+
+  const metadataCache = await caches.open(RUNTIME_METADATA_CACHE);
+  const cachedAt = await getRuntimeCachedAt(metadataCache, request);
+  const now = Date.now();
+  if (
+    !Number.isFinite(cachedAt) ||
+    cachedAt <= 0 ||
+    cachedAt > now + 5 * 60 * 1000 ||
+    now - cachedAt > RUNTIME_CACHE_MAX_AGE_MS
+  ) {
+    await Promise.all([cache.delete(request), metadataCache.delete(request)]);
+    return undefined;
+  }
+  return response;
+}
+
+/**
+ * Reads the timestamp associated with a runtime cache entry.
+ *
+ * @param {Cache} metadataCache - Runtime metadata cache.
+ * @param {Request} request - Cache key.
+ * @returns {Promise<number>} Cache timestamp or NaN when metadata is invalid.
+ */
+async function getRuntimeCachedAt(metadataCache, request) {
+  const metadata = await metadataCache.match(request);
+  if (!metadata) {
+    return Number.NaN;
+  }
+
+  try {
+    return Number(await metadata.text());
+  } catch {
+    return Number.NaN;
+  }
+}
+
+/**
+ * Removes expired entries and then evicts the oldest entries over the cap.
+ *
+ * @param {Cache} cache - Runtime cache.
+ * @param {Cache} metadataCache - Runtime metadata cache.
+ * @returns {Promise<void>} Promise resolved after bounded eviction.
+ */
+async function enforceRuntimeCacheLimits(cache, metadataCache) {
+  const now = Date.now();
+  const keys = await cache.keys();
+  const checkExpiry =
+    lastRuntimeExpiryCheck === 0 ||
+    now - lastRuntimeExpiryCheck >= 60 * 60 * 1000;
+  if (!checkExpiry && keys.length <= RUNTIME_CACHE_MAX_ENTRIES) {
+    return;
+  }
+  if (checkExpiry) {
+    lastRuntimeExpiryCheck = now;
+  }
+
+  const entries = await Promise.all(
+    keys.map(async (request) => {
+      return {
+        request,
+        cachedAt: await getRuntimeCachedAt(metadataCache, request),
+      };
+    }),
+  );
+  const retained = [];
+  for (const entry of entries) {
+    if (
+      !Number.isFinite(entry.cachedAt) ||
+      entry.cachedAt <= 0 ||
+      entry.cachedAt > now + 5 * 60 * 1000 ||
+      now - entry.cachedAt > RUNTIME_CACHE_MAX_AGE_MS
+    ) {
+      await Promise.all([
+        cache.delete(entry.request),
+        metadataCache.delete(entry.request),
+      ]);
+    } else {
+      retained.push(entry);
+    }
+  }
+
+  if (checkExpiry) {
+    const metadataKeys = await metadataCache.keys();
+    await Promise.all(
+      metadataKeys.map(async (request) => {
+        if (!(await cache.match(request))) {
+          await metadataCache.delete(request);
+        }
+      }),
+    );
+  }
+
+  retained.sort((left, right) => left.cachedAt - right.cachedAt);
+  const excess = retained.length - RUNTIME_CACHE_MAX_ENTRIES;
+  if (excess > 0) {
+    await Promise.all(
+      retained
+        .slice(0, excess)
+        .map((entry) =>
+          Promise.all([
+            cache.delete(entry.request),
+            metadataCache.delete(entry.request),
+          ]),
+        ),
+    );
   }
 }

@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
+import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { validate as isUuid, v7 as uuid7 } from 'uuid';
 import type { JsonValue } from '@docmost/db/types/db';
@@ -20,9 +21,12 @@ import { MailService } from '../../mail/mail.service';
 import InvitationEmail from '@docmost/transactional/emails/invitation-email';
 import InvitationAcceptedEmail from '@docmost/transactional/emails/invitation-accepted-email';
 import { QueueJob, QueueName } from '../constants';
+import type { PageRecipientNotificationReason } from '../constants/queue.interface';
 import { DuplicatePageAttachmentsService } from '../services/duplicate-page-attachments.service';
 import {
   DuplicatePageAttachmentsOutboxPayload,
+  AttachmentCleanupOutboxPayload,
+  FileImportOutboxPayload,
   NotificationEmailOutboxPayload,
   NotificationEmailSecretPayload,
   NotificationDispatchOutboxPayload,
@@ -40,7 +44,24 @@ const OUTBOX_BATCH_SIZE = 50;
 const OUTBOX_RETRY_BASE_MS = 5 * 1000;
 const OUTBOX_RETRY_MAX_MS = 15 * 60 * 1000;
 const OUTBOX_MAX_ATTEMPTS = 20;
+const ATTACHMENT_CLEANUP_INSERT_CHUNK_SIZE = 1_000;
 const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const OUTBOX_FAILED_DELIVERY_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const OUTBOX_PURGE_BATCH_SIZE = 1_000;
+const OUTBOX_PURGE_MAX_BATCHES_PER_KIND = 20;
+const OUTBOX_EXPIRABLE_FAILED_KINDS = [
+  QueueOutboxKind.WORKSPACE_INVITATION_EMAIL,
+  QueueOutboxKind.WORKSPACE_INVITATION_ACCEPTED_EMAIL,
+  QueueOutboxKind.NOTIFICATION_EMAIL,
+  QueueOutboxKind.NOTIFICATION_DISPATCH,
+] as const;
+const PAGE_RECIPIENT_NOTIFICATION_REASONS =
+  new Set<PageRecipientNotificationReason>([
+    'document-changed',
+    'page-assigned',
+    'page-stakeholder-added',
+    'database-user-assigned',
+  ]);
 
 type ProcessingOutcome = 'completed' | 'cancelled';
 
@@ -111,12 +132,20 @@ export class QueueOutboxService {
     payload: DuplicatePageAttachmentsOutboxPayload,
     trx: KyselyTransaction,
   ): Promise<void> {
-    await this.outboxRepo.enqueue(
+    const outboxId = await this.outboxRepo.enqueue(
       {
         kind: QueueOutboxKind.DUPLICATE_PAGE_ATTACHMENTS,
         payload: payload as unknown as JsonValue,
         dedupeKey: `duplicate-page-attachments:${payload.rootPageId}:${payload.newPageId}`,
       },
+      trx,
+    );
+    if (!outboxId) {
+      throw new Error('duplicate_page_attachment_outbox_not_inserted');
+    }
+    await this.outboxRepo.pinDuplicatePageAttachments(
+      outboxId,
+      payload.attachmentMappings.map((mapping) => mapping.oldAttachmentId),
       trx,
     );
   }
@@ -178,6 +207,158 @@ export class QueueOutboxService {
     );
   }
 
+  async enqueuePageAttachmentCleanup(
+    pageIds: string[],
+    rootPageId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    if (pageIds.length === 0) return false;
+    const attachments = await trx
+      .selectFrom('attachments')
+      .select(['id', 'filePath'])
+      .where('workspaceId', '=', workspaceId)
+      .where(sql<boolean>`${sql.ref('pageId')} = any(${pageIds}::uuid[])`)
+      .execute();
+    return this.stageAttachmentCleanup(
+      attachments,
+      'page',
+      rootPageId,
+      workspaceId,
+      trx,
+    );
+  }
+
+  async enqueueSpaceAttachmentCleanup(
+    spaceId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    const attachments = await trx
+      .selectFrom('attachments')
+      .select(['id', 'filePath'])
+      .where('workspaceId', '=', workspaceId)
+      .where('spaceId', '=', spaceId)
+      .execute();
+    return this.stageAttachmentCleanup(
+      attachments,
+      'space',
+      spaceId,
+      workspaceId,
+      trx,
+    );
+  }
+
+  async enqueueUserAvatarCleanup(
+    userId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    const attachments = await trx
+      .selectFrom('attachments')
+      .select(['id', 'filePath'])
+      .where('workspaceId', '=', workspaceId)
+      .where('creatorId', '=', userId)
+      .where('type', '=', 'avatar')
+      .execute();
+    return this.stageAttachmentCleanup(
+      attachments,
+      'user_avatar',
+      userId,
+      workspaceId,
+      trx,
+    );
+  }
+
+  async enqueueFileImport(
+    fileTaskId: string,
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.FILE_IMPORT,
+        payload: { fileTaskId } satisfies FileImportOutboxPayload,
+        dedupeKey: `file-import:${fileTaskId}`,
+      },
+      trx,
+    );
+  }
+
+  private async stageAttachmentCleanup(
+    attachments: Array<{ id: string; filePath: string }>,
+    scopeType: string,
+    scopeId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    if (attachments.length === 0) return false;
+    if (
+      await this.outboxRepo.hasDuplicatePageAttachmentPins(
+        attachments.map(({ id }) => id),
+        trx,
+      )
+    ) {
+      throw new ConflictException({
+        code: 'page_attachment_copy_in_progress',
+        message:
+          'Wait for page attachment duplication or operator recovery to finish first',
+      });
+    }
+
+    const batchId = uuid7();
+    const batch = await trx
+      .insertInto('attachmentCleanupBatches')
+      .values({
+        id: batchId,
+        workspaceId,
+        scopeType,
+        scopeId,
+        status: 'pending',
+        itemCount: attachments.length,
+      })
+      .onConflict((oc) => oc.columns(['scopeType', 'scopeId']).doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    if (!batch) return false;
+
+    for (
+      let offset = 0;
+      offset < attachments.length;
+      offset += ATTACHMENT_CLEANUP_INSERT_CHUNK_SIZE
+    ) {
+      const chunk = attachments.slice(
+        offset,
+        offset + ATTACHMENT_CLEANUP_INSERT_CHUNK_SIZE,
+      );
+      await trx
+        .insertInto('attachmentCleanupItems')
+        .values(
+          chunk.map((attachment) => ({
+            batchId,
+            attachmentId: attachment.id,
+            filePath: attachment.filePath,
+            status: 'pending',
+          })),
+        )
+        .execute();
+    }
+    await trx
+      .deleteFrom('attachments')
+      .where(
+        sql<boolean>`${sql.ref('id')} = any(${attachments.map(({ id }) => id)}::uuid[])`,
+      )
+      .execute();
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.ATTACHMENT_CLEANUP,
+        payload: { batchId } satisfies AttachmentCleanupOutboxPayload,
+        dedupeKey: `attachment-cleanup:${batchId}`,
+      },
+      trx,
+    );
+    return true;
+  }
+
   kick(): void {
     void this.generalQueue
       .add(
@@ -198,17 +379,69 @@ export class QueueOutboxService {
   }
 
   async ensurePeriodicSweep(): Promise<void> {
-    await this.generalQueue.add(
-      QueueJob.PROCESS_QUEUE_OUTBOX,
-      {},
-      {
-        jobId: 'queue-outbox-periodic-sweep',
-        repeat: { every: 15_000 },
-        attempts: 1,
-        removeOnComplete: true,
-        removeOnFail: 10,
-      },
+    await Promise.all([
+      this.generalQueue.add(
+        QueueJob.PROCESS_QUEUE_OUTBOX,
+        {},
+        {
+          jobId: 'queue-outbox-periodic-sweep',
+          repeat: { every: 15_000 },
+          attempts: 1,
+          removeOnComplete: true,
+          removeOnFail: 10,
+        },
+      ),
+      this.generalQueue.add(
+        QueueJob.PURGE_QUEUE_OUTBOX,
+        {},
+        {
+          jobId: 'queue-outbox-hourly-purge',
+          repeat: { every: 60 * 60 * 1000 },
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 60_000 },
+          removeOnComplete: true,
+          removeOnFail: 10,
+        },
+      ),
+    ]);
+  }
+
+  async purgeExpiredTerminalEntries(): Promise<number> {
+    const completedBefore = new Date(Date.now() - OUTBOX_RETENTION_MS);
+    const failedDeliveryBefore = new Date(
+      Date.now() - OUTBOX_FAILED_DELIVERY_RETENTION_MS,
     );
+    let total = 0;
+    let deleted = 0;
+    let batches = 0;
+
+    do {
+      deleted = await this.outboxRepo.purgeCompletedOrCancelledBefore(
+        completedBefore,
+        OUTBOX_PURGE_BATCH_SIZE,
+      );
+      total += deleted;
+      batches += 1;
+    } while (
+      deleted === OUTBOX_PURGE_BATCH_SIZE &&
+      batches < OUTBOX_PURGE_MAX_BATCHES_PER_KIND
+    );
+
+    batches = 0;
+    do {
+      deleted = await this.outboxRepo.purgeFailedKindsBefore(
+        failedDeliveryBefore,
+        OUTBOX_EXPIRABLE_FAILED_KINDS,
+        OUTBOX_PURGE_BATCH_SIZE,
+      );
+      total += deleted;
+      batches += 1;
+    } while (
+      deleted === OUTBOX_PURGE_BATCH_SIZE &&
+      batches < OUTBOX_PURGE_MAX_BATCHES_PER_KIND
+    );
+
+    return total;
   }
 
   async processAvailable(limit = OUTBOX_BATCH_SIZE): Promise<void> {
@@ -223,10 +456,6 @@ export class QueueOutboxService {
   }
 
   private async processBatch(limit: number): Promise<void> {
-    await this.outboxRepo.purgeCompletedBefore(
-      new Date(Date.now() - OUTBOX_RETENTION_MS),
-    );
-
     for (let index = 0; index < limit; index += 1) {
       const leaseToken = uuid7();
       const entry = await this.outboxRepo.claimNext(
@@ -271,7 +500,12 @@ export class QueueOutboxService {
                 leaseToken,
                 this.parseNotificationEmail(entry.payload).notificationId,
               )
-            : await this.outboxRepo.markCompleted(entry.id, leaseToken)
+            : entry.kind === QueueOutboxKind.DUPLICATE_PAGE_ATTACHMENTS
+              ? await this.outboxRepo.markDuplicatePageAttachmentsCompleted(
+                  entry.id,
+                  leaseToken,
+                )
+              : await this.outboxRepo.markCompleted(entry.id, leaseToken)
           : await this.outboxRepo.markCancelled(entry.id, leaseToken);
       if (!finalized) {
         this.logger.warn(
@@ -282,8 +516,8 @@ export class QueueOutboxService {
     }
 
     if (processingError instanceof PermanentOutboxError) {
-      const finalized = await this.outboxRepo.markFailed(
-        entry.id,
+      const finalized = await this.markEntryFailed(
+        entry,
         leaseToken,
         processingError.code,
       );
@@ -300,8 +534,8 @@ export class QueueOutboxService {
     }
 
     if (entry.attemptCount >= OUTBOX_MAX_ATTEMPTS) {
-      const finalized = await this.outboxRepo.markFailed(
-        entry.id,
+      const finalized = await this.markEntryFailed(
+        entry,
         leaseToken,
         'retry_exhausted',
       );
@@ -384,6 +618,47 @@ export class QueueOutboxService {
     };
   }
 
+  private markEntryFailed(
+    entry: QueueOutboxEntry,
+    leaseToken: string,
+    errorCode: string,
+  ): Promise<boolean> {
+    const redactedPayload = this.redactFailedDeliveryPayload(entry);
+    return redactedPayload === undefined
+      ? this.outboxRepo.markFailed(entry.id, leaseToken, errorCode)
+      : this.outboxRepo.markFailed(
+          entry.id,
+          leaseToken,
+          errorCode,
+          redactedPayload,
+        );
+  }
+
+  private redactFailedDeliveryPayload(
+    entry: QueueOutboxEntry,
+  ): JsonValue | undefined {
+    if (
+      entry.kind !== QueueOutboxKind.WORKSPACE_INVITATION_EMAIL &&
+      entry.kind !== QueueOutboxKind.WORKSPACE_INVITATION_ACCEPTED_EMAIL
+    ) {
+      return undefined;
+    }
+
+    const payload =
+      typeof entry.payload === 'object' &&
+      entry.payload !== null &&
+      !Array.isArray(entry.payload)
+        ? (entry.payload as Record<string, unknown>)
+        : {};
+    const redacted: Record<string, JsonValue> = { redacted: true };
+    for (const key of ['workspaceId', 'invitationId', 'acceptedUserId']) {
+      if (typeof payload[key] === 'string' && isUuid(payload[key])) {
+        redacted[key] = payload[key];
+      }
+    }
+    return redacted;
+  }
+
   private async dispatch(entry: QueueOutboxEntry): Promise<ProcessingOutcome> {
     switch (entry.kind) {
       case QueueOutboxKind.WORKSPACE_INVITATION_EMAIL:
@@ -408,6 +683,20 @@ export class QueueOutboxService {
         await this.notificationQueue.add(payload.jobName, payload.jobData, {
           jobId: `notification-dispatch-${payload.jobData.eventId}`,
         });
+        return 'completed';
+      }
+      case QueueOutboxKind.ATTACHMENT_CLEANUP: {
+        const payload = this.parseAttachmentCleanup(entry.payload);
+        await this.handlerRegistry
+          .getAttachmentCleanup()
+          .processCleanupBatchFromOutbox(payload.batchId);
+        return 'completed';
+      }
+      case QueueOutboxKind.FILE_IMPORT: {
+        const payload = this.parseFileImport(entry.payload);
+        await this.handlerRegistry
+          .getFileImport()
+          .processImportFromOutbox(payload.fileTaskId);
         return 'completed';
       }
       default:
@@ -664,6 +953,34 @@ export class QueueOutboxService {
     };
   }
 
+  private parseAttachmentCleanup(
+    rawPayload: unknown,
+  ): AttachmentCleanupOutboxPayload {
+    const payload = this.requireRecord(
+      rawPayload,
+      'invalid_attachment_cleanup_payload',
+    );
+    return {
+      batchId: this.requireUuid(
+        payload.batchId,
+        'invalid_attachment_cleanup_payload',
+      ),
+    };
+  }
+
+  private parseFileImport(rawPayload: unknown): FileImportOutboxPayload {
+    const payload = this.requireRecord(
+      rawPayload,
+      'invalid_file_import_payload',
+    );
+    return {
+      fileTaskId: this.requireUuid(
+        payload.fileTaskId,
+        'invalid_file_import_payload',
+      ),
+    };
+  }
+
   private parseNotificationEmail(
     rawPayload: unknown,
   ): NotificationEmailOutboxPayload {
@@ -767,10 +1084,6 @@ export class QueueOutboxService {
         jobData.eventId,
         'invalid_notification_dispatch_payload',
       ),
-      commentId: this.requireUuid(
-        jobData.commentId,
-        'invalid_notification_dispatch_payload',
-      ),
       pageId: this.requireUuid(
         jobData.pageId,
         'invalid_notification_dispatch_payload',
@@ -789,11 +1102,51 @@ export class QueueOutboxService {
       ),
     };
 
-    if (jobName === QueueJob.COMMENT_RESOLVED_NOTIFICATION) {
+    if (jobName === QueueJob.PAGE_RECIPIENT_NOTIFICATION) {
+      const rawReason = this.requireString(
+        jobData.reason,
+        'invalid_notification_dispatch_payload',
+      );
+      if (
+        !PAGE_RECIPIENT_NOTIFICATION_REASONS.has(
+          rawReason as PageRecipientNotificationReason,
+        )
+      ) {
+        throw new PermanentOutboxError('invalid_notification_dispatch_payload');
+      }
+      if (
+        jobData.candidateUserIds !== undefined &&
+        !Array.isArray(jobData.candidateUserIds)
+      ) {
+        throw new PermanentOutboxError('invalid_notification_dispatch_payload');
+      }
       return {
         jobName,
         jobData: {
           ...common,
+          reason: rawReason as PageRecipientNotificationReason,
+          candidateUserIds: Array.isArray(jobData.candidateUserIds)
+            ? jobData.candidateUserIds.map((id) =>
+                this.requireUuid(id, 'invalid_notification_dispatch_payload'),
+              )
+            : undefined,
+        },
+      };
+    }
+
+    const commentCommon = {
+      ...common,
+      commentId: this.requireUuid(
+        jobData.commentId,
+        'invalid_notification_dispatch_payload',
+      ),
+    };
+
+    if (jobName === QueueJob.COMMENT_RESOLVED_NOTIFICATION) {
+      return {
+        jobName,
+        jobData: {
+          ...commentCommon,
           commentCreatorId: this.requireUuid(
             jobData.commentCreatorId,
             'invalid_notification_dispatch_payload',
@@ -811,7 +1164,7 @@ export class QueueOutboxService {
       return {
         jobName,
         jobData: {
-          ...common,
+          ...commentCommon,
           parentCommentId:
             jobData.parentCommentId === undefined ||
             jobData.parentCommentId === null

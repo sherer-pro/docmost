@@ -19,7 +19,6 @@ import {
 } from '../common/helpers/prosemirror/ai-page-operation';
 import { hashPageTemplateInstanceContent } from '../common/helpers/prosemirror/page-template-content-hash';
 import { strictJsonToNode } from './collaboration.util';
-import { PageEmbedService } from '../core/page/transclusion/page-embed.service';
 import type {
   CollaborationActor,
   CollaborationCommandHandlers,
@@ -30,8 +29,6 @@ export type CollabEventHandlers = CollaborationCommandHandlers;
 @Injectable()
 export class CollaborationHandler {
   private readonly logger = new Logger(CollaborationHandler.name);
-
-  constructor(private readonly pageEmbeds: PageEmbedService) {}
 
   getHandlers(hocuspocus: Hocuspocus): CollaborationCommandHandlers {
     return {
@@ -179,17 +176,12 @@ export class CollaborationHandler {
           baseContentHash,
           mutationId,
           operationLeaseToken,
-          workspaceId,
           systemSyncRevision,
           user,
         } = payload;
         strictJsonToNode(nextContent as any);
         const mutationAfterHash = hashProseMirrorJson(nextContent as any);
         let mutationApplied = false;
-        const graphLease = await this.pageEmbeds.acquireGraphLeaseForContent(
-          workspaceId,
-          nextContent,
-        );
         try {
           return await this.withYdocConnection(
             hocuspocus,
@@ -199,7 +191,6 @@ export class CollaborationHandler {
               pageTemplateMutationId: mutationId,
               pageTemplateOperationLeaseToken: operationLeaseToken,
               pageTemplateSystemSyncRevision: systemSyncRevision,
-              pageEmbedGraphLease: graphLease,
             },
             (doc) => {
               const current = TiptapTransformer.fromYdoc(doc, 'default');
@@ -244,17 +235,6 @@ export class CollaborationHandler {
             );
           }
           throw error;
-        } finally {
-          if (graphLease) {
-            try {
-              await graphLease.release();
-            } catch (releaseError) {
-              this.logger.error(
-                `Failed to release page embed graph lease for ${mutationId}`,
-                releaseError as Error,
-              );
-            }
-          }
         }
       },
       getAiPageContentHash: async (

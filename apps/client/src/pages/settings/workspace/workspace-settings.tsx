@@ -7,6 +7,7 @@ import { getAppName, isCloud } from "@/lib/config.ts";
 import { Helmet } from "react-helmet-async";
 import ManageHostname from "@/features/workspace/components/manage-hostname.tsx";
 import { Divider, Stack } from "@mantine/core";
+import PageHistoryRetentionForm from "@/features/workspace/components/settings/components/page-history-retention-form";
 
 export default function WorkspaceSettings() {
   const { t } = useTranslation();
@@ -22,6 +23,8 @@ export default function WorkspaceSettings() {
         <WorkspaceIcon />
         <Divider />
         <WorkspaceNameForm />
+        <Divider />
+        <PageHistoryRetentionForm />
         <Divider />
         <PageTemplateWorkspacePolicySettings />
 

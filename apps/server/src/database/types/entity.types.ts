@@ -46,7 +46,6 @@ import {
   PageTemplateGroupPolicies,
   PageTemplateAttachmentMappings,
   PageTemplateInstances,
-  PageTemplateLegacyMigrationErrors,
   PageTemplateOperations,
   PageTemplatePublishConfirmations,
   PageTemplateRevisions,
@@ -426,8 +425,6 @@ export type PageTemplateGroupPolicy = Selectable<PageTemplateGroupPolicies>;
 export type PageTemplateOperation = Selectable<PageTemplateOperations>;
 export type PageTemplateRevision = Selectable<PageTemplateRevisions>;
 export type PageTemplateInstance = Selectable<PageTemplateInstances>;
-export type PageTemplateLegacyMigrationError =
-  Selectable<PageTemplateLegacyMigrationErrors>;
 export type PageTemplateSyncRun = Selectable<PageTemplateSyncRuns>;
 export type PageTemplateSyncItem = Selectable<PageTemplateSyncItems>;
 export type PageTemplateAttachmentMapping =

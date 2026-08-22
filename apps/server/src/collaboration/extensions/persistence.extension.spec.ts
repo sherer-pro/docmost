@@ -79,9 +79,6 @@ function createHarness() {
     syncPageTransclusions: jest.fn().mockResolvedValue(undefined),
     syncPageReferences: jest.fn().mockResolvedValue(undefined),
   };
-  const pageEmbedService = {
-    syncPageReferences: jest.fn().mockResolvedValue(undefined),
-  };
   const eventEmitter = { emitAsync: jest.fn().mockResolvedValue(undefined) };
   const collabPageUpdates = {
     publish: jest.fn().mockResolvedValue(undefined),
@@ -96,7 +93,6 @@ function createHarness() {
     notificationQueue as never,
     collabHistory as never,
     transclusionService as never,
-    pageEmbedService as never,
     eventEmitter as never,
     collabPageUpdates as never,
     pageTemplatePolicy as never,

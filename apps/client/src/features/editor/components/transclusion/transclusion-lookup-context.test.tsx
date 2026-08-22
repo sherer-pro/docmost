@@ -323,13 +323,13 @@ describe("TransclusionLookupProvider", () => {
     const content = container.querySelector('[data-testid="content-block-1"]');
     expect(content?.textContent).toContain("Before");
     expect(fakeSocket.on).toHaveBeenCalledWith(
-      "page-embed:invalidate",
+      "transclusion:invalidate",
       expect.any(Function),
     );
 
     await act(async () => {
-      emitSocketEvent("page-embed:invalidate");
-      emitSocketEvent("page-embed:invalidate");
+      emitSocketEvent("transclusion:invalidate");
+      emitSocketEvent("transclusion:invalidate");
       await vi.advanceTimersByTimeAsync(49);
     });
     expect(lookup).toHaveBeenCalledTimes(1);

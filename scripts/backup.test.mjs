@@ -11,7 +11,7 @@ import {
   storageInventoryFromTarEntries,
   validateManifest,
 } from "./backup-lib.mjs";
-import { parseArguments } from "./backup.mjs";
+import { parseArguments, postRestoreAnalyzeArgs } from "./backup.mjs";
 
 test("accepts pnpm's explicit argument separator", () => {
   assert.deepEqual(
@@ -29,6 +29,32 @@ test("accepts pnpm's explicit argument separator", () => {
       yes: false,
       json: true,
     },
+  );
+});
+
+test("analyzes restored PostgreSQL statistics in stages", () => {
+  assert.deepEqual(
+    postRestoreAnalyzeArgs(
+      { envFile: "runtime.env", composeFile: "compose.yml" },
+      "docmost",
+      "docmost",
+    ),
+    [
+      "compose",
+      "--env-file",
+      "runtime.env",
+      "-f",
+      "compose.yml",
+      "exec",
+      "-T",
+      "db",
+      "vacuumdb",
+      "--analyze-in-stages",
+      "-U",
+      "docmost",
+      "-d",
+      "docmost",
+    ],
   );
 });
 

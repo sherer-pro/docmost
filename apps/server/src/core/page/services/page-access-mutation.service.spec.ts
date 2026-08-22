@@ -25,7 +25,7 @@ describe('PageAccessMutationService', () => {
     recordPageEvent: jest.fn(),
   };
   const eventEmitter = {
-    emit: jest.fn(),
+    emitAsync: jest.fn().mockResolvedValue([]),
   };
   const page = {
     id: 'page-1',
@@ -97,9 +97,9 @@ describe('PageAccessMutationService', () => {
         changeType: 'page.access.updated',
       }),
     );
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      EventName.PAGE_EMBED_VISIBILITY_CHANGED,
-      { workspaceId: page.workspaceId, accessUserIds: ['user-1'] },
+    expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+      EventName.AUTHORIZATION_CHANGED,
+      { workspaceId: page.workspaceId, userId: 'user-1' },
     );
   });
 

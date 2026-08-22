@@ -3,10 +3,9 @@ import { Interval } from '@nestjs/schedule';
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
-import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+import { executeTx } from '@docmost/db/utils';
 
 @Injectable()
 export class TrashCleanupService {
@@ -15,7 +14,7 @@ export class TrashCleanupService {
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
-    @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
+    private readonly queueOutbox: QueueOutboxService,
   ) {}
 
   @Interval('trash-cleanup', 24 * 60 * 60 * 1000) // every 24 hours
@@ -31,6 +30,8 @@ export class TrashCleanupService {
         .selectFrom('pages')
         .select(['id', 'spaceId', 'workspaceId'])
         .where('deletedAt', '<', retentionDate)
+        .orderBy('id')
+        .limit(100)
         .execute();
 
       if (oldDeletedPages.length === 0) {
@@ -41,15 +42,21 @@ export class TrashCleanupService {
       this.logger.debug(`Found ${oldDeletedPages.length} pages to clean up`);
 
       // Process each page
+      let failedCount = 0;
       for (const page of oldDeletedPages) {
         try {
           await this.cleanupPage(page.id);
         } catch (error) {
+          failedCount += 1;
           this.logger.error(
             `Failed to cleanup page ${page.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
             error instanceof Error ? error.stack : undefined,
           );
         }
+      }
+
+      if (failedCount > 0) {
+        throw new Error(`trash_cleanup_incomplete:${failedCount}`);
       }
 
       this.logger.debug('Trash cleanup job completed');
@@ -62,58 +69,53 @@ export class TrashCleanupService {
   }
 
   private async cleanupPage(pageId: string) {
-    // Get all descendants using recursive CTE (including the page itself)
-    const descendants = await this.db
-      .withRecursive('page_descendants', (db) =>
-        db
-          .selectFrom('pages')
-          .select(['id', sql<number>`0`.as('level')])
-          .where('id', '=', pageId)
-          .unionAll((exp) =>
-            exp
-              .selectFrom('pages as p')
-              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
-              .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
-          ),
-      )
-      .selectFrom('page_descendants')
-      .select(['id'])
-      .execute();
+    const cleanupEnqueued = await executeTx(this.db, async (trx) => {
+      const descendants = await trx
+        .withRecursive('page_descendants', (db) =>
+          db
+            .selectFrom('pages')
+            .select(['id', sql<number>`0`.as('level')])
+            .where('id', '=', pageId)
+            .unionAll((exp) =>
+              exp
+                .selectFrom('pages as p')
+                .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+                .innerJoin(
+                  'page_descendants as pd',
+                  'pd.id',
+                  'p.parentPageId',
+                )
+                .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
+            ),
+        )
+        .selectFrom('page_descendants')
+        .select(['id'])
+        .execute();
+      const pageIds = descendants.map((d) => d.id);
+      if (pageIds.length === 0) return false;
 
-    const pageIds = descendants.map((d) => d.id);
+      const root = await trx
+        .selectFrom('pages')
+        .select('workspaceId')
+        .where('id', '=', pageId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!root) return false;
 
-    this.logger.debug(
-      `Cleaning up page ${pageId} with ${pageIds.length - 1} descendants`,
-    );
-
-    // Queue attachment deletion for all pages with unique job IDs to prevent duplicates
-    for (const id of pageIds) {
-      await this.attachmentQueue.add(
-        QueueJob.DELETE_PAGE_ATTACHMENTS,
-        {
-          pageId: id,
-        },
-        {
-          jobId: `delete-page-attachments-${id}`,
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000,
-          },
-        },
+      this.logger.debug(
+        `Cleaning up page ${pageId} with ${pageIds.length - 1} descendants`,
       );
-    }
-
-    try {
+      const enqueued = await this.queueOutbox.enqueuePageAttachmentCleanup(
+        pageIds,
+        pageId,
+        root.workspaceId,
+        trx,
+      );
       if (pageIds.length > 0) {
-        await this.db.deleteFrom('pages').where('id', 'in', pageIds).execute();
+        await trx.deleteFrom('pages').where('id', 'in', pageIds).execute();
       }
-    } catch (error) {
-      // Log but don't throw - pages might have been deleted by another node
-      this.logger.warn(
-        `Error deleting pages, they may have been already deleted: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-    }
+      return enqueued;
+    });
+    if (cleanupEnqueued) this.queueOutbox.kick();
   }
 }

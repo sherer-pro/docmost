@@ -4,6 +4,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { runWithIdempotencyLease } from "@/lib/api-client";
+import { buildAiUploadIdempotencyPayload } from "@/features/ai/utils/ai-upload-idempotency";
 import { useSetAtom } from "jotai";
 import {
   cancelAiRun,
@@ -637,15 +639,20 @@ export function useAiPageAttachmentsQuery(pageId?: string) {
 export function useUploadAiChatFilesMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       conversationId,
       files,
-      idempotencyKey,
     }: {
       conversationId: string;
       files: File[];
-      idempotencyKey: string;
-    }) => uploadAiChatFiles(conversationId, files, idempotencyKey),
+    }) => {
+      return runWithIdempotencyLease({
+        scope: `/ai/conversations/${conversationId}/files`,
+        payload: await buildAiUploadIdempotencyPayload(conversationId, files),
+        operation: (idempotencyKey) =>
+          uploadAiChatFiles(conversationId, files, idempotencyKey),
+      });
+    },
     onSuccess: (_, variables) =>
       queryClient.invalidateQueries({
         queryKey: AI_QUERY_KEYS.files(variables.conversationId),

@@ -97,6 +97,7 @@ database, storage, and Redis volumes may be discarded without a recovery point.
 Restore validates the source before any destructive action, stops the Compose
 project, removes only the three volume names resolved from Compose, starts a
 fresh PostgreSQL/Redis pair, restores the custom dump with `--exit-on-error`,
+rebuilds PostgreSQL planner statistics with `vacuumdb --analyze-in-stages`,
 extracts validated storage into a new volume, and starts the ordinary stack.
 Redis always starts empty. If database or storage restore fails, the CLI removes
 the partial candidate volumes instead of leaving them available for reuse.

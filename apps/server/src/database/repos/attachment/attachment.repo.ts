@@ -64,6 +64,26 @@ export class AttachmentRepo {
       .execute();
   }
 
+  async findActiveByIds(
+    attachmentIds: string[],
+    workspaceId: string,
+    opts?: {
+      trx?: KyselyTransaction;
+    },
+  ): Promise<Attachment[]> {
+    if (attachmentIds.length === 0) {
+      return [];
+    }
+
+    return dbOrTx(this.db, opts?.trx)
+      .selectFrom('attachments')
+      .select(this.baseFields)
+      .where('id', 'in', attachmentIds)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+  }
+
   async insertAttachment(
     insertableAttachment: InsertableAttachment,
     trx?: KyselyTransaction,

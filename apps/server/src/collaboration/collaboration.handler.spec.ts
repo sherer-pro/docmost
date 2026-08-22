@@ -49,7 +49,7 @@ describe('CollaborationHandler approved AI writes', () => {
     const hocuspocus = {
       openDirectConnection: jest.fn(),
     } as unknown as Hocuspocus;
-    const handler = new CollaborationHandler({} as never);
+    const handler = new CollaborationHandler();
     const handlers = handler.getHandlers(hocuspocus);
 
     const result = handlers.updatePageContent(
@@ -91,7 +91,7 @@ describe('CollaborationHandler approved AI writes', () => {
 
   it('restores live Yjs content when persistence rejects an update', async () => {
     const hocuspocus = {} as Hocuspocus;
-    const handler = new CollaborationHandler({} as never);
+    const handler = new CollaborationHandler();
     const initial = {
       type: 'doc',
       content: [
@@ -165,7 +165,7 @@ describe('CollaborationHandler approved AI writes', () => {
       quiet: true,
       unloadImmediately: false,
     });
-    const handler = new CollaborationHandler({} as never);
+    const handler = new CollaborationHandler();
     const handlers = handler.getHandlers(hocuspocus);
     const documentName = 'page.550e8400-e29b-41d4-a716-446655440000';
     const initial = {

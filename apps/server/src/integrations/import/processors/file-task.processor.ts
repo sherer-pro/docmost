@@ -21,11 +21,15 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
     try {
       switch (job.name) {
         case QueueJob.IMPORT_TASK:
-          await this.fileTaskService.processZIpImport(job.data.fileTaskId);
+          await this.fileTaskService.processImportFromOutbox(
+            job.data.fileTaskId,
+          );
           break;
         case QueueJob.EXPORT_TASK:
           // TODO: export task
-          break;
+          return;
+        default:
+          throw new Error('unknown_file_task_queue_job');
       }
     } catch (err) {
       this.logger.error({
@@ -70,6 +74,12 @@ export class FileTaskProcessor extends WorkerHost implements OnModuleDestroy {
 
   private async handleFailedJob(job: Job) {
     try {
+      if (job.name === QueueJob.IMPORT_TASK) {
+        // Import state, fencing, retries, and cleanup ownership live in the
+        // durable handler. A BullMQ compatibility wakeup must not overwrite a
+        // newer lease owner's state from an unfenced failure callback.
+        return;
+      }
       const fileTaskId = job.data.fileTaskId;
       const fileTask = await this.fileTaskService.getFileTask(fileTaskId);
       if (!fileTask) {

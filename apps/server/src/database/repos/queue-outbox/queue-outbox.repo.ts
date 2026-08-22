@@ -17,6 +17,8 @@ export const QUEUE_OUTBOX_STATUS = {
   FAILED: 'failed',
 } as const;
 
+const DUPLICATE_ATTACHMENT_PIN_INSERT_CHUNK_SIZE = 1_000;
+
 @Injectable()
 export class QueueOutboxRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -47,6 +49,49 @@ export class QueueOutboxRepo {
       .executeTakeFirst();
 
     return inserted?.id;
+  }
+
+  async pinDuplicatePageAttachments(
+    outboxId: string,
+    sourceAttachmentIds: string[],
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    const uniqueAttachmentIds = [...new Set(sourceAttachmentIds)];
+    if (uniqueAttachmentIds.length === 0) return;
+
+    for (
+      let offset = 0;
+      offset < uniqueAttachmentIds.length;
+      offset += DUPLICATE_ATTACHMENT_PIN_INSERT_CHUNK_SIZE
+    ) {
+      await trx
+        .insertInto('pageDuplicateAttachmentPins')
+        .values(
+          uniqueAttachmentIds
+            .slice(offset, offset + DUPLICATE_ATTACHMENT_PIN_INSERT_CHUNK_SIZE)
+            .map((sourceAttachmentId) => ({
+              outboxId,
+              sourceAttachmentId,
+            })),
+        )
+        .execute();
+    }
+  }
+
+  async hasDuplicatePageAttachmentPins(
+    attachmentIds: string[],
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    if (attachmentIds.length === 0) return false;
+    const pin = await trx
+      .selectFrom('pageDuplicateAttachmentPins')
+      .select('sourceAttachmentId')
+      .where(
+        sql<boolean>`${sql.ref('sourceAttachmentId')} = any(${attachmentIds}::uuid[])`,
+      )
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(pin);
   }
 
   async claimNext(
@@ -111,6 +156,36 @@ export class QueueOutboxRepo {
     });
   }
 
+  async markDuplicatePageAttachmentsCompleted(
+    id: string,
+    leaseToken: string,
+  ): Promise<boolean> {
+    return this.db.transaction().execute(async (trx) => {
+      const finalized = await trx
+        .updateTable('queueOutbox')
+        .set({
+          status: QUEUE_OUTBOX_STATUS.COMPLETED,
+          completedAt: new Date(),
+          secretPayload: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', id)
+        .where('status', '=', QUEUE_OUTBOX_STATUS.PROCESSING)
+        .where('leaseToken', '=', leaseToken)
+        .returning('id')
+        .executeTakeFirst();
+      if (!finalized) return false;
+
+      await trx
+        .deleteFrom('pageDuplicateAttachmentPins')
+        .where('outboxId', '=', id)
+        .execute();
+      return true;
+    });
+  }
+
   async markNotificationEmailCompleted(
     id: string,
     leaseToken: string,
@@ -159,13 +234,19 @@ export class QueueOutboxRepo {
     id: string,
     leaseToken: string,
     errorCode: string,
+    redactedPayload?: JsonValue,
   ): Promise<boolean> {
-    return this.finalize(id, leaseToken, {
+    const update: Partial<InsertableQueueOutboxEntry> = {
       status: QUEUE_OUTBOX_STATUS.FAILED,
       failedAt: new Date(),
       lastErrorCode: errorCode,
       secretPayload: null,
-    });
+    };
+    if (redactedPayload !== undefined) {
+      update.payload = redactedPayload;
+      update.dedupeKey = `failed:${id}`;
+    }
+    return this.finalize(id, leaseToken, update);
   }
 
   async markForRetry(
@@ -192,24 +273,60 @@ export class QueueOutboxRepo {
     return Number(result.numUpdatedRows) === 1;
   }
 
-  async purgeCompletedBefore(before: Date): Promise<number> {
-    const result = await this.db
-      .deleteFrom('queueOutbox')
-      .where((eb) =>
-        eb.or([
-          eb.and([
-            eb('status', '=', QUEUE_OUTBOX_STATUS.COMPLETED),
-            eb('completedAt', '<', before),
-          ]),
-          eb.and([
-            eb('status', '=', QUEUE_OUTBOX_STATUS.CANCELLED),
-            eb('cancelledAt', '<', before),
-          ]),
-        ]),
+  async purgeCompletedOrCancelledBefore(
+    before: Date,
+    limit = 1_000,
+  ): Promise<number> {
+    const safeLimit = Math.max(1, Math.min(1_000, Math.floor(limit)));
+    const result = await sql<{ id: string }>`
+      with expired as (
+        select id
+        from queue_outbox
+        where (
+          status = 'completed'
+          and completed_at < ${before}
+        ) or (
+          status = 'cancelled'
+          and cancelled_at < ${before}
+        )
+        order by coalesce(completed_at, cancelled_at) asc, id asc
+        limit ${safeLimit}
+        for update skip locked
       )
-      .executeTakeFirst();
+      delete from queue_outbox as entry
+      using expired
+      where entry.id = expired.id
+      returning entry.id
+    `.execute(this.db);
 
-    return Number(result.numDeletedRows);
+    return result.rows.length;
+  }
+
+  async purgeFailedKindsBefore(
+    before: Date,
+    kinds: readonly string[],
+    limit = 1_000,
+  ): Promise<number> {
+    if (kinds.length === 0) return 0;
+    const safeLimit = Math.max(1, Math.min(1_000, Math.floor(limit)));
+    const result = await sql<{ id: string }>`
+      with expired as (
+        select id
+        from queue_outbox
+        where status = 'failed'
+          and failed_at < ${before}
+          and kind::text = any(${kinds}::text[])
+        order by failed_at asc, id asc
+        limit ${safeLimit}
+        for update skip locked
+      )
+      delete from queue_outbox as entry
+      using expired
+      where entry.id = expired.id
+      returning entry.id
+    `.execute(this.db);
+
+    return result.rows.length;
   }
 
   private async finalize(

@@ -473,7 +473,6 @@ function stripTemplateInstanceHashAttributes(value: unknown): unknown {
               'paragraph',
               'heading',
               'transclusionSource',
-              'pageEmbed',
             ].includes(nodeType),
         ),
       )

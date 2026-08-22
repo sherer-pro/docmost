@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const auditCommands = {
   deps: [
@@ -16,41 +17,56 @@ const auditCommands = {
   duplicates: ["jscpd", ["--config", ".jscpd.json"]],
 };
 
-function runAudit(name) {
+export function runAudit(
+  name,
+  {
+    strict = false,
+    spawn = spawnSync,
+    platform = process.platform,
+    cwd = process.cwd(),
+    output = console,
+  } = {},
+) {
   const command = auditCommands[name];
 
   if (!command) {
-    console.error(`Unknown audit target: ${name}`);
-    process.exitCode = 1;
-    return;
+    output.error(`Unknown audit target: ${name}`);
+    return { name, status: "unknown_target", childExitCode: null, exitCode: 1 };
   }
 
   const [bin, args] = command;
   const result =
-    process.platform === "win32"
-      ? spawnSync(
+    platform === "win32"
+      ? spawn(
           "cmd.exe",
           ["/d", "/s", "/c", [bin, ...args].map(quoteCmdArg).join(" ")],
           {
-            cwd: process.cwd(),
+            cwd,
             stdio: "inherit",
           },
         )
-      : spawnSync(bin, args, {
-          cwd: process.cwd(),
+      : spawn(bin, args, {
+          cwd,
           stdio: "inherit",
         });
 
+  let status = "passed";
   if (result.error) {
-    console.warn(`Audit target "${name}" could not start: ${result.error}`);
-    return;
-  }
-
-  if (result.status && result.status !== 0) {
-    console.warn(
+    status = "unavailable";
+    output.warn(`Audit target "${name}" could not start: ${result.error}`);
+  } else if (result.status !== 0) {
+    status = "findings_or_failure";
+    output.warn(
       `Audit target "${name}" reported findings or failed with exit code ${result.status}.`,
     );
   }
+
+  const childExitCode = Number.isInteger(result.status) ? result.status : null;
+  const exitCode = strict && status !== "passed" ? 1 : 0;
+  output.log(
+    `[audit:${name}] status=${status} childExit=${childExitCode ?? "none"} strict=${strict}`,
+  );
+  return { name, status, childExitCode, exitCode };
 }
 
 function quoteCmdArg(value) {
@@ -61,16 +77,29 @@ function quoteCmdArg(value) {
   return `"${value.replace(/"/gu, '\\"')}"`;
 }
 
-function runArchitectureAudit() {
-  for (const name of Object.keys(auditCommands)) {
-    runAudit(name);
-  }
+export function runArchitectureAudit(options = {}) {
+  const results = Object.keys(auditCommands).map((name) =>
+    runAudit(name, options),
+  );
+  return {
+    results,
+    exitCode: results.some((result) => result.exitCode !== 0) ? 1 : 0,
+  };
 }
 
-const target = process.argv[2];
+function main(argv) {
+  const strict = argv.includes("--strict");
+  const target = argv.find((value) => !value.startsWith("--"));
+  const result =
+    target === "architecture"
+      ? runArchitectureAudit({ strict })
+      : runAudit(target, { strict });
+  process.exitCode = result.exitCode;
+}
 
-if (target === "architecture") {
-  runArchitectureAudit();
-} else {
-  runAudit(target);
+if (
+  process.argv[1] &&
+  pathToFileURL(process.argv[1]).href === import.meta.url
+) {
+  main(process.argv.slice(2));
 }

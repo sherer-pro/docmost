@@ -69,7 +69,7 @@ describe('DatabaseService mixed tree flows', () => {
     buildPagePdfBody: jest.fn(),
     renderPdfFromHtmlDocument: jest.fn(),
   };
-  const userRepo = { findById: jest.fn() };
+  const userRepo = { findById: jest.fn(), findByIds: jest.fn() };
   const spaceAbility = {
     createForUser: jest.fn(async () => ({ cannot: () => false })),
     assertHasFullSpaceAccess: jest.fn(async () => undefined),
@@ -228,6 +228,7 @@ describe('DatabaseService mixed tree flows', () => {
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([]);
     userRepo.findById.mockResolvedValue(null);
+    userRepo.findByIds.mockResolvedValue([]);
     spaceAbility.assertHasFullSpaceAccess.mockResolvedValue(undefined);
     databaseRepo.findById.mockResolvedValue({
       id: 'db-1',
@@ -600,6 +601,7 @@ describe('DatabaseService mixed tree flows', () => {
   });
 
   it('renders readable table values in database summary PDF html', async () => {
+    const assigneeId = '019c8501-f413-737d-8d18-536a9f78d347';
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([
       {
         id: 'prop-select',
@@ -618,16 +620,14 @@ describe('DatabaseService mixed tree flows', () => {
         pageTitle: 'Task 1',
         cells: [
           { propertyId: 'prop-select', value: 'in_progress' },
-          { propertyId: 'prop-user', value: { id: 'user-1' } },
+          { propertyId: 'prop-user', value: { id: assigneeId } },
           { propertyId: 'prop-checkbox', value: true },
         ],
       },
     ]);
-    userRepo.findById.mockResolvedValue({
-      id: 'user-1',
-      name: 'Alice',
-      workspaceId: 'ws-1',
-    });
+    userRepo.findByIds.mockResolvedValue([
+      { id: assigneeId, name: 'Alice', workspaceId: 'ws-1' },
+    ]);
 
     await service.exportDatabase(
       'db-1',
@@ -1044,6 +1044,7 @@ describe('DatabaseService mixed tree flows', () => {
   });
 
   it('enriches user cells in listRows with user display names', async () => {
+    const userId = '019c8501-f413-737d-8d18-536a9f78d347';
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([
       { id: 'prop-user', type: 'user' },
     ]);
@@ -1054,23 +1055,55 @@ describe('DatabaseService mixed tree flows', () => {
         cells: [
           {
             propertyId: 'prop-user',
-            value: { id: 'user-42' },
+            value: { id: userId },
           },
         ],
       },
     ]);
-    userRepo.findById.mockResolvedValue({
-      id: 'user-42',
-      name: 'Jane Doe',
-      workspaceId: 'ws-1',
-    });
+    userRepo.findByIds.mockResolvedValue([
+      { id: userId, name: 'Jane Doe', workspaceId: 'ws-1' },
+    ]);
 
     const rows = await service.listRows('db-1', user, 'ws-1');
 
     expect(rows[0].cells[0].value).toEqual({
-      id: 'user-42',
+      id: userId,
       name: 'Jane Doe',
     });
+    expect(userRepo.findByIds).toHaveBeenCalledWith([userId], 'ws-1');
+    expect(userRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it('loads one hundred distinct user cell references with one repository query', async () => {
+    const userIds = Array.from(
+      { length: 100 },
+      (_, index) =>
+        `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    );
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue(
+      userIds.map((id, index) => ({
+        id: `row-${index}`,
+        pageId: `row-page-${index}`,
+        cells: [{ propertyId: 'prop-user', value: { id } }],
+      })),
+    );
+    userRepo.findByIds.mockResolvedValue(
+      userIds.map((id, index) => ({
+        id,
+        name: `User ${index}`,
+        workspaceId: 'ws-1',
+      })),
+    );
+
+    const rows = await service.listRows('db-1', user, 'ws-1');
+
+    expect(rows).toHaveLength(100);
+    expect(userRepo.findByIds).toHaveBeenCalledTimes(1);
+    expect(userRepo.findByIds).toHaveBeenCalledWith(userIds, 'ws-1');
+    expect(userRepo.findById).not.toHaveBeenCalled();
   });
 
   it('parses serialized user cell value and does not throw on invalid user lookup', async () => {
@@ -1089,7 +1122,7 @@ describe('DatabaseService mixed tree flows', () => {
         ],
       },
     ]);
-    userRepo.findById.mockRejectedValue(
+    userRepo.findByIds.mockRejectedValue(
       new Error('invalid input syntax for type uuid'),
     );
 

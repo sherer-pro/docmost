@@ -25,7 +25,6 @@ export * from "./lib/search-and-replace";
 export * from "./lib/embed-provider";
 export * from "./lib/subpages";
 export * from "./lib/transclusion";
-export * from "./lib/page-embed";
 export * from "./lib/page-template";
 export * from "./lib/highlight";
 export * from "./lib/heading/heading";

@@ -173,4 +173,40 @@ describe('WorkspaceController', () => {
 
     expect(authCookieService.clearAuthCookies).toHaveBeenCalledWith(res);
   });
+
+  it('allows a settings manager to update page history retention', async () => {
+    const { controller, workspaceService } = createController(true);
+    workspaceService.update.mockResolvedValue({
+      ...workspace,
+      pageHistoryRetentionDays: 90,
+    });
+
+    await expect(
+      controller.updateWorkspace(
+        {} as any,
+        { pageHistoryRetentionDays: 90 } as any,
+        authUser,
+        workspace,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ pageHistoryRetentionDays: 90 }),
+    );
+    expect(workspaceService.update).toHaveBeenCalledWith(workspace.id, {
+      pageHistoryRetentionDays: 90,
+    });
+  });
+
+  it('rejects page history retention changes without settings permission', async () => {
+    const { controller, workspaceService } = createController(false);
+
+    await expect(
+      controller.updateWorkspace(
+        {} as any,
+        { pageHistoryRetentionDays: null } as any,
+        authUser,
+        workspace,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+    expect(workspaceService.update).not.toHaveBeenCalled();
+  });
 });

@@ -4,15 +4,12 @@ import {
   CreateFromTemplateDto,
   CreateIndependentPageCopyDto,
   CreatePageTemplateDto,
-  DetachPageEmbedDto,
   DetachSyncedTemplateDto,
-  InsertPageEmbedDto,
   PageTemplateDestinationsDto,
   PageTemplateDiscoveryDto,
   PageTemplatePaginationDto,
   PublishPageTemplateDto,
 } from '../dto/page-template.dto';
-import { PageEmbedCommandService } from './page-embed-command.service';
 import { PageTemplateInstanceService } from './page-template-instance.service';
 import { PageTemplateSyncService } from './page-template-sync.service';
 
@@ -21,7 +18,6 @@ export class PageTemplateService {
   constructor(
     private readonly instances: PageTemplateInstanceService,
     private readonly sync: PageTemplateSyncService,
-    private readonly pageEmbeds: PageEmbedCommandService,
   ) {}
 
   getProvenance(pageId: string, user: User) {
@@ -114,13 +110,5 @@ export class PageTemplateService {
     user: User,
   ) {
     return this.instances.detachTemplate(pageId, dto, idempotencyKey, user);
-  }
-
-  insertPageEmbed(dto: InsertPageEmbedDto, idempotencyKey: string, user: User) {
-    return this.pageEmbeds.insertPageEmbed(dto, idempotencyKey, user);
-  }
-
-  detachPageEmbed(dto: DetachPageEmbedDto, idempotencyKey: string, user: User) {
-    return this.pageEmbeds.detachPageEmbed(dto, idempotencyKey, user);
   }
 }

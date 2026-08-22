@@ -1,4 +1,7 @@
-import api, { unwrapApiResponse } from "@/lib/api-client";
+import api, {
+  runWithIdempotencyLease,
+  unwrapApiResponse,
+} from "@/lib/api-client";
 import {
   ICopyPageToSpace,
   IExportPageParams,
@@ -146,8 +149,16 @@ export async function movePageToSpace(data: IMovePageToSpace): Promise<void> {
 }
 
 export async function duplicatePage(data: ICopyPageToSpace): Promise<IPage> {
-  const req = await api.post<IPage>("/pages/duplicate", data);
-  return req.data;
+  return runWithIdempotencyLease({
+    scope: "/pages/duplicate",
+    payload: data,
+    operation: async (idempotencyKey) => {
+      const response = await api.post<IPage>("/pages/duplicate", data, {
+        headers: { "Idempotency-Key": idempotencyKey },
+      });
+      return response.data;
+    },
+  });
 }
 
 export async function getSidebarPages(

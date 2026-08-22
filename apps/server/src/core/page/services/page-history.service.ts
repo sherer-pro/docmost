@@ -8,6 +8,18 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
 import { PageAccessService } from '../../page-access/page-access.service';
 
+type HistoryEnrichmentCaches = {
+  userCache: Map<string, Record<string, unknown>>;
+  pageCache: Map<string, Record<string, unknown> | null>;
+  selectCache: Map<string, Map<string, string>>;
+};
+
+type HistoryEnrichmentReferences = {
+  userIds: Set<string>;
+  pageIds: Set<string>;
+  propertyIds: Set<string>;
+};
+
 @Injectable()
 export class PageHistoryService {
   constructor(
@@ -107,6 +119,195 @@ export class PageHistoryService {
     return candidateValue?.trim() || null;
   }
 
+  private createEnrichmentCaches(): HistoryEnrichmentCaches {
+    return {
+      userCache: new Map<string, Record<string, unknown>>(),
+      pageCache: new Map<string, Record<string, unknown> | null>(),
+      selectCache: new Map<string, Map<string, string>>(),
+    };
+  }
+
+  private buildSelectOptionMap(settings: unknown): Map<string, string> {
+    const optionMap = new Map<string, string>();
+    const options = this.asArray(
+      (settings as Record<string, unknown> | null)?.['options'],
+    );
+    for (const option of options) {
+      if (!this.isRecord(option)) continue;
+      const value = option.value;
+      const label = option.label;
+      if (
+        typeof value === 'string' &&
+        value.trim() &&
+        typeof label === 'string' &&
+        label.trim()
+      ) {
+        optionMap.set(value, label);
+      }
+    }
+    return optionMap;
+  }
+
+  private collectEnrichmentReferences(
+    changeType: string | null,
+    changeData: unknown,
+    references: HistoryEnrichmentReferences,
+  ): void {
+    if (!this.isRecord(changeData)) return;
+
+    if (changeType === 'page.events.combined') {
+      for (const event of this.asArray(changeData.events)) {
+        if (!this.isRecord(event)) continue;
+        this.collectEnrichmentReferences(
+          typeof event.changeType === 'string' ? event.changeType : null,
+          event.changeData,
+          references,
+        );
+      }
+      return;
+    }
+
+    if (changeType === 'page.custom-fields.updated') {
+      for (const change of this.asArray(changeData.changes)) {
+        if (!this.isRecord(change)) continue;
+        if (change.field === 'assigneeId') {
+          for (const value of [change.oldValue, change.newValue]) {
+            const userId = this.extractUserId(value);
+            if (userId) references.userIds.add(userId);
+          }
+        } else if (change.field === 'stakeholderIds') {
+          for (const value of [
+            ...this.asArray(change.oldValue),
+            ...this.asArray(change.newValue),
+          ]) {
+            const userId = this.extractUserId(value);
+            if (userId) references.userIds.add(userId);
+          }
+        }
+      }
+      return;
+    }
+
+    if (changeType !== 'database.row.cells.updated') return;
+    for (const change of this.asArray(changeData.changes)) {
+      if (!this.isRecord(change)) continue;
+      const values = [change.oldValue, change.newValue];
+      if (change.propertyType === 'user') {
+        for (const value of values) {
+          const userId = this.extractUserId(value);
+          if (userId) references.userIds.add(userId);
+        }
+      } else if (change.propertyType === 'page_reference') {
+        for (const value of values) {
+          const pageId = this.extractPageId(value);
+          if (pageId) references.pageIds.add(pageId);
+        }
+      } else if (
+        change.propertyType === 'select' &&
+        typeof change.propertyId === 'string'
+      ) {
+        references.propertyIds.add(change.propertyId);
+      }
+    }
+  }
+
+  private async preloadEnrichmentCaches(
+    histories: PageHistory[],
+    user?: User,
+  ): Promise<HistoryEnrichmentCaches> {
+    const caches = this.createEnrichmentCaches();
+    const references: HistoryEnrichmentReferences = {
+      userIds: new Set(),
+      pageIds: new Set(),
+      propertyIds: new Set(),
+    };
+    for (const history of histories) {
+      this.collectEnrichmentReferences(
+        history.changeType,
+        history.changeData,
+        references,
+      );
+    }
+
+    const workspaceId = histories[0]?.workspaceId;
+    if (!workspaceId) return caches;
+
+    for (const userId of references.userIds) {
+      caches.userCache.set(userId, {
+        id: userId,
+        name: userId,
+        avatarUrl: null,
+      });
+    }
+    for (const pageId of references.pageIds) {
+      caches.pageCache.set(pageId, null);
+    }
+    for (const propertyId of references.propertyIds) {
+      caches.selectCache.set(propertyId, new Map());
+    }
+
+    await Promise.all([
+      (async () => {
+        try {
+          const users = await this.userRepo.findByIds(
+            [...references.userIds],
+            workspaceId,
+          );
+          for (const resolvedUser of users) {
+            caches.userCache.set(resolvedUser.id, {
+              id: resolvedUser.id,
+              name: resolvedUser.name?.trim() || resolvedUser.id,
+              avatarUrl: resolvedUser.avatarUrl ?? null,
+            });
+          }
+        } catch {
+          // Preserve identifier-only fallbacks for malformed legacy payloads.
+        }
+      })(),
+      (async () => {
+        if (!user || references.pageIds.size === 0) return;
+        try {
+          const pages = await this.pageRepo.findReferencesByIds(
+            [...references.pageIds],
+            workspaceId,
+          );
+          const accessByPageId =
+            await this.pageAccessService.getEffectiveAccessForPages(
+              pages,
+              user,
+            );
+          for (const page of pages) {
+            if (!accessByPageId.get(page.id)?.capabilities.canRead) continue;
+            caches.pageCache.set(page.id, {
+              id: page.id,
+              title: page.title?.trim() || page.id,
+              slugId: page.slugId ?? null,
+            });
+          }
+        } catch {
+          // Fail closed: unresolved page metadata remains null.
+        }
+      })(),
+      (async () => {
+        try {
+          const properties = await this.databasePropertyRepo.findByIds(
+            [...references.propertyIds],
+            workspaceId,
+          );
+          for (const property of properties) {
+            caches.selectCache.set(
+              property.id,
+              this.buildSelectOptionMap(property.settings),
+            );
+          }
+        } catch {
+          // Raw option values remain readable if metadata cannot be loaded.
+        }
+      })(),
+    ]);
+    return caches;
+  }
+
   private async resolveHistoryUserRef(
     userId: string,
     workspaceId: string,
@@ -187,30 +388,8 @@ export class PageHistoryService {
       return cachedOptions.get(optionValue) ?? optionValue;
     }
 
-    const optionMap = new Map<string, string>();
     const property = await this.databasePropertyRepo.findById(propertyId);
-    const options = this.asArray(
-      (property?.settings as Record<string, unknown> | null)?.['options'],
-    );
-
-    for (const option of options) {
-      if (!this.isRecord(option)) {
-        continue;
-      }
-
-      const optionRawValue = option.value;
-      const optionRawLabel = option.label;
-      if (
-        typeof optionRawValue !== 'string' ||
-        !optionRawValue.trim() ||
-        typeof optionRawLabel !== 'string' ||
-        !optionRawLabel.trim()
-      ) {
-        continue;
-      }
-
-      optionMap.set(optionRawValue, optionRawLabel);
-    }
+    const optionMap = this.buildSelectOptionMap(property?.settings);
 
     selectCache.set(propertyId, optionMap);
     return optionMap.get(optionValue) ?? optionValue;
@@ -451,14 +630,11 @@ export class PageHistoryService {
   private async enrichHistoryEntry(
     history: PageHistory,
     user?: User,
+    caches: HistoryEnrichmentCaches = this.createEnrichmentCaches(),
   ): Promise<PageHistory> {
     if (!history || !history.changeType || !history.changeData) {
       return history;
     }
-
-    const userCache = new Map<string, Record<string, unknown>>();
-    const pageCache = new Map<string, Record<string, unknown> | null>();
-    const selectCache = new Map<string, Map<string, string>>();
 
     return {
       ...history,
@@ -467,9 +643,9 @@ export class PageHistoryService {
         changeData: history.changeData,
         workspaceId: history.workspaceId,
         user,
-        userCache,
-        pageCache,
-        selectCache,
+        userCache: caches.userCache,
+        pageCache: caches.pageCache,
+        selectCache: caches.selectCache,
       })) as never,
     };
   }
@@ -486,7 +662,8 @@ export class PageHistoryService {
       return history;
     }
 
-    return this.enrichHistoryEntry(history, user);
+    const caches = await this.preloadEnrichmentCaches([history], user);
+    return this.enrichHistoryEntry(history, user, caches);
   }
 
   async findMetadataById(
@@ -509,8 +686,11 @@ export class PageHistoryService {
       paginationOptions,
     );
 
+    const caches = await this.preloadEnrichmentCaches(result.items, user);
     const enrichedItems = await Promise.all(
-      result.items.map((history) => this.enrichHistoryEntry(history, user)),
+      result.items.map((history) =>
+        this.enrichHistoryEntry(history, user, caches),
+      ),
     );
 
     return {

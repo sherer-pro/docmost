@@ -25,7 +25,7 @@ import APP_ROUTE from "@/lib/app-route.ts";
 import useAuth from "@/features/auth/hooks/use-auth.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { useTranslation } from "react-i18next";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { AvatarIconType } from "@/types/avatar.types.ts";
 import classes from "./top-menu.module.css";
 import useUserRole from "@/hooks/use-user-role.tsx";
 

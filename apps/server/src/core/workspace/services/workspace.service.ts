@@ -40,6 +40,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 import { SsoEndpointPolicyService } from '../../../integrations/environment/sso-endpoint-policy.service';
 import { SpacePolicyService } from '../../space-policy/space-policy.service';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+import { Optional } from '@nestjs/common';
 
 @Injectable()
 export class WorkspaceService {
@@ -59,6 +61,7 @@ export class WorkspaceService {
     private eventEmitter: EventEmitter2,
     private readonly ssoEndpointPolicy: SsoEndpointPolicyService,
     private readonly spacePolicy: SpacePolicyService,
+    @Optional() private readonly queueOutboxService?: QueueOutboxService,
   ) {}
 
   async findById(workspaceId: string) {
@@ -656,7 +659,16 @@ export class WorkspaceService {
       throw new BadRequestException('You cannot delete a user with owner role');
     }
 
-    await executeTx(this.db, async (trx) => {
+    if (!this.queueOutboxService) {
+      throw new Error('queue_outbox_unavailable');
+    }
+    const cleanupEnqueued = await executeTx(this.db, async (trx) => {
+      const enqueued =
+        await this.queueOutboxService!.enqueueUserAvatarCleanup(
+          userId,
+          workspaceId,
+          trx,
+        );
       await this.userRepo.updateUser(
         {
           name: 'Deleted user',
@@ -683,16 +695,14 @@ export class WorkspaceService {
       await this.watcherRepo.deleteByUserAndWorkspace(userId, workspaceId, {
         trx,
       });
+      return enqueued;
     });
 
-    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
+    await this.eventEmitter.emitAsync(EventName.AUTHORIZATION_CHANGED, {
       workspaceId,
+      userId,
     });
 
-    try {
-      await this.attachmentQueue.add(QueueJob.DELETE_USER_AVATARS, user);
-    } catch (err) {
-      // empty
-    }
+    if (cleanupEnqueued) this.queueOutboxService.kick();
   }
 }

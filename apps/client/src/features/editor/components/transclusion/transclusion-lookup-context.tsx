@@ -294,10 +294,10 @@ export function TransclusionLookupProvider({
       }, INVALIDATION_COALESCE_MS);
     };
 
-    socket.on("page-embed:invalidate", refreshActiveLookups);
+    socket.on("transclusion:invalidate", refreshActiveLookups);
     socket.on("connect", refreshActiveLookups);
     return () => {
-      socket.off("page-embed:invalidate", refreshActiveLookups);
+      socket.off("transclusion:invalidate", refreshActiveLookups);
       socket.off("connect", refreshActiveLookups);
       if (invalidationTimerRef.current) {
         clearTimeout(invalidationTimerRef.current);

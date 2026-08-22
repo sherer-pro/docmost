@@ -358,7 +358,7 @@ The fork provides more advanced terminology management:
 
 - per-space controls for which built-in tags appear in the editor slash menu;
 
-- portable tag availability settings in schema-v4 space archives;
+- portable tag availability settings in schema-V5 space archives;
 
 - a terminology dictionary;
 
@@ -445,7 +445,7 @@ The editor includes the following additional capabilities:
 
 - synced blocks created from selected document fragments, with reference lookup and safe unsyncing;
 
-- compatibility-only materialization of legacy whole-page `pageEmbed` data; creating new whole-page live embeds is not part of the editor or API contract;
+- a V5-only Docmost archive contract that rejects legacy whole-page `pageEmbed` data; creating new whole-page live embeds is not part of the editor or API contract;
 
 - audio file upload and playback;
 
@@ -491,9 +491,23 @@ A custom portable Docmost archive format has also been added:
 
 - protection against corrupted and excessively large ZIP archives.
 
-Schema-v4 Docmost archives preserve and remap only synced relationships whose
+Schema-V5 Docmost archives preserve and remap only synced relationships whose
 source is inside the archive. External relationships are exported with an
-access-checked snapshot and become ordinary content during import.
+access-checked snapshot and become ordinary content during import. Export emits
+only V5; import preview, confirmation, and processing reject V2, V3, V4, newer
+schemas, and any nested `pageEmbed` node.
+
+Trusted legacy V2-V4 archive JSON can be converted outside the application with
+`corepack pnpm --filter ./apps/server archive:convert-v5 -- --input=PATH --output=PATH`.
+The converter uses only the supplied extracted archive or JSON file, preserves
+modern synced-block snapshots, gives materialized legacy attachments separate
+consumer ownership, and never connects to a Docmost runtime.
+
+An existing database is evacuated separately before the destructive T040
+migration. Run the candidate's read-only
+`page-embed:prepare-removal` plan, then select explicit bounded policies under
+full maintenance as documented in the
+[legacy whole-page embed removal runbook](./apps/server/docs/page-embed-removal-runbook.md).
 
 ![Import and export options](./docs/images/fork-specific-enhancements/en/import-export.png)
 
@@ -944,8 +958,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.2.2`. Follow the
-[v1.2.2 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.2.md)
+For the current candidate the only accepted release tag is `v1.2.3`. Follow the
+[v1.2.3 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.3.md)
 before deployment.
 
 For backend changes:

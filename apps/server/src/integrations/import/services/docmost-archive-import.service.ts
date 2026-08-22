@@ -1,18 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  Optional,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { FileTask } from '@docmost/db/types/entity.types';
 import {
-  DOCMOST_ARCHIVE_SCHEMA_VERSION,
-  DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
-  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
   type DocmostArchiveData,
   type DocmostArchiveManifest,
   type DocmostImportOptions,
@@ -20,8 +12,8 @@ import {
 } from '@docmost/api-contract';
 import { promises as fs, createReadStream } from 'node:fs';
 import * as path from 'node:path';
-import { v7 as uuid7 } from 'uuid';
-import { generateSlugId } from '../../../common/helpers';
+import { v5 as uuid5, v7 as uuid7 } from 'uuid';
+import { createHash } from 'node:crypto';
 import {
   getProsemirrorContent,
   getAttachmentIds,
@@ -38,7 +30,6 @@ import { executeTx } from '@docmost/db/utils';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { BacklinkRepo } from '@docmost/db/repos/backlink/backlink.repo';
 import { TransclusionService } from '../../../core/page/transclusion/transclusion.service';
-import { PageEmbedService } from '../../../core/page/transclusion/page-embed.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../../common/events/event.contants';
 import { sanitize } from 'sanitize-filename-ts';
@@ -51,14 +42,13 @@ import { sql } from 'kysely';
 import { normalizeBuiltInTagValues } from '@docmost/editor-ext/server';
 import { QueueJob, QueueName } from '../../queue/constants';
 import { CONTENT_INDEXABLE_EXTENSIONS } from '../../../core/attachment/attachment.constants';
-import {
-  collectPageEmbedsFromPmJson,
-  collectReferencesFromPmJson,
-} from '../../../core/page/transclusion/utils/transclusion-prosemirror.util';
-import type { PageEmbedGraphLease } from '../../../core/page/transclusion/page-embed-graph-lock.service';
-import { PageTemplatePolicyService } from '../../../core/page/transclusion/page-template-policy.service';
+import { collectReferencesFromPmJson } from '../../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { FileTaskStatus } from '../utils/file.utils';
 import { normalizeLabelName } from '../../../core/label/utils';
+import {
+  containsPageEmbedNode,
+  getDocmostArchiveSchemaError,
+} from '../../docmost-archive.utils';
 
 interface StagedAttachment {
   sourceId: string;
@@ -80,17 +70,23 @@ interface ArchiveSnapshotValue {
 const DOCMOST_ATTACHMENT_UPLOAD_ATTEMPTS = 3;
 const DOCMOST_ATTACHMENT_RETRY_DELAY_MS = 2_000;
 
+const deterministicImportId = (
+  fileTaskId: string,
+  kind: string,
+  sourceId: string,
+) => uuid5(`${kind}:${sourceId}`, fileTaskId);
+
+const deterministicImportSlug = (fileTaskId: string, sourceId: string) =>
+  createHash('sha256')
+    .update(`${fileTaskId}:slug:${sourceId}`)
+    .digest('hex')
+    .slice(0, 10);
+
 const transclusionSnapshotKey = (
   referencePageId: string | undefined,
   sourcePageId: string,
   transclusionId: string,
 ) => `${referencePageId ?? '*'}::${sourcePageId}::${transclusionId}`;
-
-const pageEmbedSnapshotKey = (
-  referencePageId: string,
-  referenceNodeId: string,
-  sourcePageId: string,
-) => `${referencePageId}::${referenceNodeId}::${sourcePageId}`;
 
 @Injectable()
 export class DocmostArchiveImportService {
@@ -103,19 +99,17 @@ export class DocmostArchiveImportService {
     private readonly storageService: StorageService,
     private readonly backlinkRepo: BacklinkRepo,
     private readonly transclusionService: TransclusionService,
-    private readonly pageEmbedService: PageEmbedService,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE)
     private readonly attachmentQueue: Queue,
-    @Optional()
-    private readonly pageTemplatePolicy?: PageTemplatePolicyService,
   ) {}
 
   async process(opts: {
     extractDir: string;
     fileTask: FileTask;
+    leaseToken: string;
   }): Promise<ImportReport> {
-    const { extractDir, fileTask } = opts;
+    const { extractDir, fileTask, leaseToken } = opts;
     if (!fileTask.spaceId || !fileTask.creatorId) {
       throw new BadRequestException(
         'Import task has no target space or creator',
@@ -125,15 +119,15 @@ export class DocmostArchiveImportService {
     const manifest = JSON.parse(
       await fs.readFile(path.join(extractDir, 'docmost-metadata.json'), 'utf8'),
     ) as DocmostArchiveManifest;
-    if (
-      manifest.source !== 'docmost' ||
-      ![
-        DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
-        DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
-        DOCMOST_ARCHIVE_SCHEMA_VERSION,
-      ].includes(manifest.schemaVersion as 2 | 3 | 4)
-    ) {
-      throw new BadRequestException('Unsupported Docmost archive');
+    if (manifest.source !== 'docmost') {
+      throw new BadRequestException('Not a Docmost archive');
+    }
+    const schemaError = getDocmostArchiveSchemaError(manifest.schemaVersion);
+    if (schemaError) throw new BadRequestException(schemaError);
+    if (containsPageEmbedNode(manifest)) {
+      throw new BadRequestException(
+        'Docmost archive schema 5 cannot contain pageEmbed nodes',
+      );
     }
     const dataPath = this.resolveArchivePath(extractDir, manifest.dataFile);
     const data = JSON.parse(
@@ -147,25 +141,47 @@ export class DocmostArchiveImportService {
         'Docmost archive data does not match manifest',
       );
     }
+    if (containsPageEmbedNode(data)) {
+      throw new BadRequestException(
+        'Docmost archive schema 5 cannot contain pageEmbed nodes',
+      );
+    }
 
     const options = this.resolveOptions(fileTask.options);
     const report = this.createEmptyReport();
-    const pageIdMap = new Map(data.pages.map((page) => [page.id, uuid7()]));
+    const pageIdMap = new Map(
+      data.pages.map((page) => [
+        page.id,
+        deterministicImportId(fileTask.id, 'page', page.id),
+      ]),
+    );
     const slugIdMap = new Map(
-      data.pages.map((page) => [page.slugId, generateSlugId()]),
+      data.pages.map((page) => [
+        page.slugId,
+        deterministicImportSlug(fileTask.id, page.slugId),
+      ]),
     );
     const databaseIdMap = new Map(
-      (data.databases ?? []).map((database) => [database.id, uuid7()]),
+      (data.databases ?? []).map((database) => [
+        database.id,
+        deterministicImportId(fileTask.id, 'database', database.id),
+      ]),
     );
     const propertyIdMap = new Map(
-      (data.databaseProperties ?? []).map((property) => [property.id, uuid7()]),
+      (data.databaseProperties ?? []).map((property) => [
+        property.id,
+        deterministicImportId(fileTask.id, 'database-property', property.id),
+      ]),
     );
     const attachmentIdMap = new Map(
       (data.attachments ?? [])
         .filter((attachment) =>
           Boolean(attachment.pageId && pageIdMap.has(attachment.pageId)),
         )
-        .map((attachment) => [attachment.id, uuid7()]),
+        .map((attachment) => [
+          attachment.id,
+          deterministicImportId(fileTask.id, 'attachment', attachment.id),
+        ]),
     );
     const userIdMap = await this.buildUserIdMap(data, fileTask.workspaceId);
     const snapshotAttachmentMapsByConsumer = new Map<
@@ -193,20 +209,6 @@ export class DocmostArchiveImportService {
         { content: snapshot.content, attachmentIdMap: mapping },
       );
     }
-    const pageEmbedSnapshots = new Map<string, ArchiveSnapshotValue>();
-    for (const snapshot of 'pageEmbedSnapshots' in data
-      ? data.pageEmbedSnapshots
-      : []) {
-      const mapping = consumerAttachmentMap(snapshot.referencePageId);
-      pageEmbedSnapshots.set(
-        pageEmbedSnapshotKey(
-          snapshot.referencePageId,
-          snapshot.referenceNodeId,
-          snapshot.sourcePageId,
-        ),
-        { content: snapshot.content, attachmentIdMap: mapping },
-      );
-    }
     for (const page of data.pages) {
       const mapping = consumerAttachmentMap(page.id);
       for (const reference of collectReferencesFromPmJson(page.content)) {
@@ -229,71 +231,17 @@ export class DocmostArchiveImportService {
         if (!snapshot) continue;
         snapshot.attachmentIdMap = mapping;
         for (const attachmentId of getAttachmentIds(snapshot.content)) {
-          if (!mapping.has(attachmentId)) mapping.set(attachmentId, uuid7());
-        }
-      }
-      for (const reference of collectPageEmbedsFromPmJson(page.content)) {
-        if (pageIdMap.has(reference.sourcePageId)) continue;
-        const snapshot = pageEmbedSnapshots.get(
-          pageEmbedSnapshotKey(
-            page.id,
-            reference.referenceNodeId,
-            reference.sourcePageId,
-          ),
-        );
-        if (!snapshot) continue;
-        snapshot.attachmentIdMap = mapping;
-        for (const attachmentId of getAttachmentIds(snapshot.content)) {
-          if (!mapping.has(attachmentId)) mapping.set(attachmentId, uuid7());
-        }
-      }
-    }
-
-    const actor = await this.db
-      .selectFrom('users')
-      .selectAll()
-      .where('id', '=', fileTask.creatorId)
-      .where('workspaceId', '=', fileTask.workspaceId)
-      .executeTakeFirstOrThrow();
-    const effectivePolicy = await this.pageTemplatePolicy?.resolveForUser(
-      fileTask.workspaceId,
-      fileTask.spaceId,
-      actor.id,
-    );
-    const allowPageEmbeds = false;
-    if (!allowPageEmbeds) {
-      const archivePageById = new Map(
-        data.pages.map((page) => [page.id, page]),
-      );
-      const collectMaterializedAttachments = (
-        consumerPageId: string,
-        content: unknown,
-        visitedPageIds: Set<string>,
-      ) => {
-        const mapping = consumerAttachmentMap(consumerPageId);
-        for (const reference of collectPageEmbedsFromPmJson(content)) {
-          const source = archivePageById.get(reference.sourcePageId);
-          if (!source || visitedPageIds.has(source.id)) continue;
-          for (const attachmentId of getAttachmentIds(source.content)) {
-            if (!mapping.has(attachmentId)) {
-              mapping.set(attachmentId, uuid7());
-            }
+          if (!mapping.has(attachmentId)) {
+            mapping.set(
+              attachmentId,
+              deterministicImportId(
+                fileTask.id,
+                `snapshot-attachment:${page.id}`,
+                attachmentId,
+              ),
+            );
           }
-          const nextVisited = new Set(visitedPageIds);
-          nextVisited.add(source.id);
-          collectMaterializedAttachments(
-            consumerPageId,
-            source.content,
-            nextVisited,
-          );
         }
-      };
-      for (const page of data.pages) {
-        collectMaterializedAttachments(
-          page.id,
-          page.content,
-          new Set([page.id]),
-        );
       }
     }
 
@@ -306,9 +254,11 @@ export class DocmostArchiveImportService {
       snapshotAttachmentMapsByConsumer,
     });
 
-    const rootContainerId = data.scope === 'space' ? uuid7() : null;
+    const rootContainerId =
+      data.scope === 'space'
+        ? deterministicImportId(fileTask.id, 'root', data.sourceSpace?.id ?? '*')
+        : null;
     const createdPageIds: string[] = [];
-    let graphLease: PageEmbedGraphLease | undefined;
     try {
       let nextRootPosition = await this.pageService.nextPagePosition(
         fileTask.spaceId,
@@ -326,23 +276,11 @@ export class DocmostArchiveImportService {
         attachmentIdMap,
         userIdMap,
         transclusionSnapshots,
-        pageEmbedSnapshots,
         snapshotAttachmentMapsByConsumer,
-        allowPageEmbeds,
         rootContainerId,
         nextRootPosition,
         report,
       });
-      graphLease = await this.pageEmbedService.prepareBulkPageReferences(
-        rewrittenPages.map((page) => ({
-          id: page.id,
-          workspaceId: page.workspaceId,
-          spaceId: page.spaceId,
-          content: page.content,
-        })),
-        actor,
-        'import',
-      );
 
       await executeTx(this.db, async (trx) => {
         if (rootContainerId) {
@@ -351,7 +289,7 @@ export class DocmostArchiveImportService {
             .insertInto('pages')
             .values({
               id: rootContainerId,
-              slugId: generateSlugId(),
+              slugId: deterministicImportSlug(fileTask.id, 'root'),
               title: `${data.sourceSpace?.name || manifest.displayName} (imported)`,
               content: emptyContent as any,
               textContent: '',
@@ -422,29 +360,35 @@ export class DocmostArchiveImportService {
           report,
           trx,
         });
-        await this.insertDerivedPageState(rewrittenPages, trx, graphLease);
+        await this.insertDerivedPageState(rewrittenPages, trx);
 
         report.created.pages = createdPageIds.length;
         report.created.databases = data.databases?.length ?? 0;
         report.created.rows = data.databaseRows?.length ?? 0;
         report.created.attachments = stagedAttachments.length;
-        await this.markImportCommitted(trx, fileTask, report);
+        if (stagedAttachments.length > 0) {
+          await trx
+            .updateTable('fileTaskImportArtifacts')
+            .set({
+              status: 'attached',
+              completedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where('fileTaskId', '=', fileTask.id)
+            .where('artifactType', '=', 'attachment')
+            .where(
+              'attachmentId',
+              'in',
+              stagedAttachments.map((attachment) => attachment.id),
+            )
+            .execute();
+        }
+        await this.markImportCommitted(trx, fileTask, leaseToken, report);
       });
     } catch (error) {
-      await Promise.allSettled(
-        stagedAttachments.map((attachment) =>
-          this.storageService.delete(attachment.filePath),
-        ),
-      );
+      // Uploaded paths are owned by durable artifact rows. Immediate deletion
+      // would race a lease takeover using the same deterministic paths.
       throw error;
-    } finally {
-      if (graphLease) {
-        try {
-          await graphLease.release();
-        } catch (error) {
-          this.logger.error('Failed to release page embed graph lease', error);
-        }
-      }
     }
 
     await Promise.all(
@@ -577,6 +521,24 @@ export class DocmostArchiveImportService {
         AttachmentType.File,
         params.fileTask.workspaceId,
       )}/${id}/${safeFileName}`;
+      const artifactSourcePath = `${sourceId}:${attachment.archivePath}`;
+      await this.db
+        .insertInto('fileTaskImportArtifacts')
+        .values({
+          fileTaskId: params.fileTask.id,
+          artifactType: 'attachment',
+          attachmentId: id,
+          pageId,
+          sourcePath: artifactSourcePath,
+          filePath,
+          status: 'pending',
+        })
+        .onConflict((oc) =>
+          oc
+            .columns(['fileTaskId', 'pageId', 'sourcePath'])
+            .doNothing(),
+        )
+        .execute();
       let lastError: unknown;
       for (
         let attempt = 1;
@@ -589,6 +551,12 @@ export class DocmostArchiveImportService {
             createReadStream(sourcePath),
             { recreateClient: true },
           );
+          await this.db
+            .updateTable('fileTaskImportArtifacts')
+            .set({ status: 'uploaded', updatedAt: new Date() })
+            .where('fileTaskId', '=', params.fileTask.id)
+            .where('attachmentId', '=', id)
+            .execute();
           lastError = undefined;
           break;
         } catch (error) {
@@ -604,7 +572,6 @@ export class DocmostArchiveImportService {
         }
       }
       if (lastError) {
-        await this.storageService.delete(filePath).catch(() => undefined);
         throw lastError;
       }
       staged.push({
@@ -640,11 +607,8 @@ export class DocmostArchiveImportService {
       }
       return staged;
     } catch (error) {
-      await Promise.allSettled(
-        staged.map((attachment) =>
-          this.storageService.delete(attachment.filePath),
-        ),
-      );
+      // Durable artifact rows retain every attempted storage path. Cleanup is
+      // deferred until the fenced task reaches Failed.
       throw error;
     }
   }
@@ -658,6 +622,7 @@ export class DocmostArchiveImportService {
   private async markImportCommitted(
     trx: KyselyTransaction,
     fileTask: FileTask,
+    leaseToken: string,
     report: ImportReport,
   ): Promise<void> {
     const previousResult =
@@ -672,14 +637,17 @@ export class DocmostArchiveImportService {
         status: FileTaskStatus.Success,
         errorMessage: null,
         result: { ...previousResult, report } as any,
+        leaseToken: null,
+        leaseExpiresAt: null,
         updatedAt: new Date(),
       })
       .where('id', '=', fileTask.id)
       .where('status', '=', FileTaskStatus.Processing)
+      .where('leaseToken', '=', leaseToken)
       .executeTakeFirst();
 
-    if (result.numUpdatedRows !== 1n) {
-      throw new Error('Import task is no longer in processing state');
+    if (Number(result.numUpdatedRows) !== 1) {
+      throw new Error('file_import_lease_lost');
     }
   }
 
@@ -692,17 +660,12 @@ export class DocmostArchiveImportService {
     attachmentIdMap: Map<string, string>;
     userIdMap: Map<string, string>;
     transclusionSnapshots: Map<string, ArchiveSnapshotValue>;
-    pageEmbedSnapshots: Map<string, ArchiveSnapshotValue>;
     snapshotAttachmentMapsByConsumer: Map<string, Map<string, string>>;
-    allowPageEmbeds: boolean;
     rootContainerId: string | null;
     nextRootPosition: string;
     report: ImportReport;
   }) {
     const sourceIds = new Set(params.data.pages.map((page) => page.id));
-    const archivePageContentById = new Map(
-      params.data.pages.map((page) => [page.id, page.content]),
-    );
     const databasePageIds = new Set([
       ...(params.data.databases ?? []).flatMap((database) =>
         database.pageId ? [database.pageId] : [],
@@ -736,10 +699,6 @@ export class DocmostArchiveImportService {
           sourceArchivePageId: page.id,
           userIdMap: params.userIdMap,
           transclusionSnapshots: params.transclusionSnapshots,
-          pageEmbedSnapshots: params.pageEmbedSnapshots,
-          archivePageContentById,
-          materializingPageIds: new Set(),
-          allowPageEmbeds: params.allowPageEmbeds && !isDatabasePage,
           fallbackUserId: params.fileTask.creatorId!,
           report: params.report,
         },
@@ -856,8 +815,6 @@ export class DocmostArchiveImportService {
               attachmentIdMap,
               userIdMap,
               transclusionSnapshots: new Map(),
-              pageEmbedSnapshots: new Map(),
-              allowPageEmbeds: false,
               fallbackUserId: fileTask.creatorId!,
               report,
             },
@@ -1171,7 +1128,6 @@ export class DocmostArchiveImportService {
   private async insertDerivedPageState(
     pages: Array<Record<string, any>>,
     trx: KyselyTransaction,
-    graphLease?: PageEmbedGraphLease,
   ): Promise<void> {
     const derivedPages = pages.map((page) => ({
       id: page.id,
@@ -1183,16 +1139,6 @@ export class DocmostArchiveImportService {
       trx,
     );
     await this.transclusionService.insertReferencesForPages(derivedPages, trx);
-    await this.pageEmbedService.insertPageReferencesForPages(
-      pages.map((page) => ({
-        id: page.id,
-        workspaceId: page.workspaceId,
-        spaceId: page.spaceId,
-        content: page.content,
-      })),
-      trx,
-      graphLease,
-    );
 
     const backlinks = [];
     const pageIds = new Set(pages.map((page) => page.id));
@@ -1254,15 +1200,16 @@ export class DocmostArchiveImportService {
       sourceArchivePageId?: string;
       userIdMap: Map<string, string>;
       transclusionSnapshots: Map<string, ArchiveSnapshotValue>;
-      pageEmbedSnapshots: Map<string, ArchiveSnapshotValue>;
-      archivePageContentById?: Map<string, unknown>;
-      materializingPageIds?: Set<string>;
-      allowPageEmbeds?: boolean;
       fallbackUserId: string;
       report: ImportReport;
     },
   ): any {
     if (!node || typeof node !== 'object') return node;
+    if (node.type === 'pageEmbed') {
+      throw new BadRequestException(
+        'Docmost archive schema 5 cannot contain pageEmbed nodes',
+      );
+    }
     const attrs = node.attrs ? { ...node.attrs } : undefined;
 
     if (node.type === 'mention' && attrs?.entityType === 'page') {
@@ -1332,85 +1279,6 @@ export class DocmostArchiveImportService {
         };
       }
       attrs.sourcePageId = mapped;
-    }
-    if (node.type === 'pageEmbed' && attrs?.sourcePageId) {
-      const referenceNodeId = attrs.id;
-      const sourcePageId = attrs.sourcePageId;
-      const mapped = context.pageIdMap.get(sourcePageId);
-      const snapshot =
-        typeof context.sourceArchivePageId === 'string' &&
-        typeof referenceNodeId === 'string'
-          ? context.pageEmbedSnapshots.get(
-              pageEmbedSnapshotKey(
-                context.sourceArchivePageId,
-                referenceNodeId,
-                sourcePageId,
-              ),
-            )
-          : undefined;
-      if (context.allowPageEmbeds === false) {
-        const fallbackContent =
-          context.archivePageContentById?.get(sourcePageId) ??
-          snapshot?.content;
-        const materializing = context.materializingPageIds ?? new Set<string>();
-        if (fallbackContent && !materializing.has(sourcePageId)) {
-          materializing.add(sourcePageId);
-          try {
-            const snapshotDoc = getProsemirrorContent(fallbackContent);
-            return (snapshotDoc.content ?? []).flatMap((child: unknown) => {
-              const rewritten = this.rewritePmNode(child, {
-                ...context,
-                sourceArchivePageId: sourcePageId,
-                attachmentIdMap:
-                  context.externalSnapshotAttachmentIdMap ??
-                  snapshot?.attachmentIdMap ??
-                  context.attachmentIdMap,
-                materializingPageIds: materializing,
-              });
-              return Array.isArray(rewritten) ? rewritten : [rewritten];
-            });
-          } finally {
-            materializing.delete(sourcePageId);
-          }
-        }
-        context.report.skipped.pageReferences += 1;
-        context.report.warnings.push(
-          'A page embed could not remain live and was replaced with a placeholder.',
-        );
-        return {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: '[Embedded page unavailable after import]' },
-          ],
-        };
-      }
-      attrs.id = uuid7();
-      if (mapped) {
-        attrs.sourcePageId = mapped;
-      } else {
-        if (snapshot) {
-          const snapshotDoc = getProsemirrorContent(snapshot.content);
-          return (snapshotDoc.content ?? []).flatMap((child: unknown) => {
-            const rewritten = this.rewritePmNode(child, {
-              ...context,
-              attachmentIdMap:
-                context.externalSnapshotAttachmentIdMap ??
-                snapshot.attachmentIdMap,
-            });
-            return Array.isArray(rewritten) ? rewritten : [rewritten];
-          });
-        }
-        context.report.skipped.pageReferences += 1;
-        context.report.warnings.push(
-          'A page embed referenced a page outside the archive and was replaced with a placeholder.',
-        );
-        return {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: '[Embedded page unavailable after import]' },
-          ],
-        };
-      }
     }
     if (typeof attrs?.databaseId === 'string') {
       const mapped = context.databaseIdMap.get(attrs.databaseId);

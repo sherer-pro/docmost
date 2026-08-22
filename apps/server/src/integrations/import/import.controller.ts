@@ -161,6 +161,9 @@ export class ImportController {
       workspace.id,
     );
     const spaceAbility = await this.spaceAbility.createForUser(user, spaceId);
+    if (spaceAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+      throw new ForbiddenException();
+    }
     const workspaceAbility = this.workspaceAbility.createForUser(
       user,
       workspace,

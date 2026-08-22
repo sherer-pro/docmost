@@ -35,6 +35,7 @@ export interface IPageHistoryJob {
 
 export interface IPageHistoryEventFlushJob {
   pageId: string;
+  batchId?: string;
 }
 
 export interface INotificationCreateJob {

@@ -15,11 +15,7 @@ export interface IAttachment {
   deletedAt: string | null;
 }
 
-export enum AvatarIconType {
-  AVATAR = "avatar",
-  SPACE_ICON = "space-icon",
-  WORKSPACE_ICON = "workspace-icon",
-}
+export { AvatarIconType } from "@/types/avatar.types.ts";
 
 export enum AttachmentType {
   AVATAR = "avatar",

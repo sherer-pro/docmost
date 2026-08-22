@@ -1,7 +1,7 @@
 import React from "react";
 import { Avatar } from "@mantine/core";
 import { getAvatarUrl } from "@/lib/config.ts";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { AvatarIconType } from "@/types/avatar.types.ts";
 import { getInitialsColor } from "@/lib/get-initials-color.ts";
 
 interface CustomAvatarProps {

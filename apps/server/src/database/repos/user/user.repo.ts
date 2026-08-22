@@ -82,6 +82,16 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
+  async findByIds(userIds: string[], workspaceId: string): Promise<User[]> {
+    if (userIds.length === 0) return [];
+    return this.db
+      .selectFrom('users')
+      .select(this.baseFields)
+      .where('id', 'in', userIds)
+      .where('workspaceId', '=', workspaceId)
+      .execute();
+  }
+
   async findByEmail(
     email: string,
     workspaceId: string,

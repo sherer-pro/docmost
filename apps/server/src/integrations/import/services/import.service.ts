@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { MultipartFile } from '@fastify/multipart';
@@ -40,23 +41,28 @@ import {
 } from '../utils/file.utils';
 import { v7 as uuid7 } from 'uuid';
 import { StorageService } from '../../storage/storage.service';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
-import { QueueJob, QueueName } from '../../queue/constants';
 import * as JSZip from 'jszip';
 import { Readable } from 'node:stream';
 import {
-  DOCMOST_ARCHIVE_SCHEMA_VERSION,
-  DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION,
-  DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION,
   type DocmostArchiveData,
   type DocmostArchiveManifest,
   type DocmostImportOptions,
   type ImportPreview,
 } from '@docmost/api-contract';
+import {
+  containsPageEmbedNode,
+  getDocmostArchiveSchemaError,
+} from '../../docmost-archive.utils';
 import { createHash } from 'node:crypto';
+import { executeTx } from '@docmost/db/utils';
+import { QueueOutboxService } from '../../queue/outbox/queue-outbox.service';
 
 type ImportSettingsAvailability = ImportPreview['availableSettings'];
+const FILE_UPLOAD_LEASE_MS = 2 * 60 * 1000;
+const FILE_UPLOAD_LEASE_RENEW_MS = 30 * 1000;
+const DOCMOST_ARCHIVE_MAX_ATTACHMENT_DESCRIPTORS = 10_000;
+const DOCMOST_ARCHIVE_MAX_LOGICAL_ATTACHMENT_BYTES =
+  DEFAULT_EXTRACT_ZIP_LIMITS.maxTotalUncompressedBytes;
 
 @Injectable()
 export class ImportService {
@@ -66,8 +72,7 @@ export class ImportService {
     private readonly pageRepo: PageRepo,
     private readonly storageService: StorageService,
     @InjectKysely() private readonly db: KyselyDB,
-    @InjectQueue(QueueName.FILE_TASK_QUEUE)
-    private readonly fileTaskQueue: Queue,
+    @Optional() private readonly queueOutbox?: QueueOutboxService,
   ) {}
 
   async importPage(
@@ -246,38 +251,211 @@ export class ImportService {
     const fileNameWithExt = fileName + fileExtension;
 
     const fileTaskId = uuid7();
+    const uploadLeaseToken = uuid7();
     const filePath = `${getFileTaskFolderPath(FileTaskType.Import, workspaceId)}/${fileTaskId}/${fileNameWithExt}`;
 
-    // upload file
-    const { stream, getBytesRead } = createByteCountingStream(file.file);
+    if (!this.queueOutbox) {
+      throw new Error('queue_outbox_unavailable');
+    }
 
-    await this.storageService.upload(filePath, stream);
-
-    const fileSize = getBytesRead();
-
-    const fileTask = await this.db
-      .insertInto('fileTasks')
-      .values({
-        id: fileTaskId,
-        type: FileTaskType.Import,
-        source: source,
-        status: FileTaskStatus.Processing,
-        fileName: fileNameWithExt,
-        filePath: filePath,
-        fileSize: fileSize,
-        fileExt: 'zip',
-        creatorId: userId,
-        spaceId: spaceId,
-        workspaceId: workspaceId,
-      })
-      .returningAll()
-      .executeTakeFirst();
-
-    await this.fileTaskQueue.add(QueueJob.IMPORT_TASK, {
-      fileTaskId: fileTaskId,
+    let fileTask = await executeTx(this.db, async (trx) => {
+      const uploading = await trx
+        .insertInto('fileTasks')
+        .values({
+          id: fileTaskId,
+          type: FileTaskType.Import,
+          source: source,
+          status: FileTaskStatus.Uploading,
+          leaseToken: uploadLeaseToken,
+          leaseExpiresAt: new Date(Date.now() + FILE_UPLOAD_LEASE_MS),
+          fileName: fileNameWithExt,
+          filePath: filePath,
+          fileSize: null,
+          fileExt: 'zip',
+          creatorId: userId,
+          spaceId: spaceId,
+          workspaceId: workspaceId,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      await trx
+        .insertInto('fileTaskImportArtifacts')
+        .values({
+          fileTaskId,
+          artifactType: 'archive',
+          attachmentId: null,
+          pageId: null,
+          sourcePath: fileNameWithExt,
+          filePath,
+          status: 'pending',
+        })
+        .execute();
+      return uploading;
     });
 
+    const { stream, getBytesRead } = createByteCountingStream(file.file);
+    const uploadLease = this.startFileUploadLeaseRenewal(
+      fileTaskId,
+      uploadLeaseToken,
+    );
+    try {
+      await this.storageService.upload(filePath, stream);
+      await uploadLease.stop();
+      if (uploadLease.isLost()) throw new Error('file_task_upload_lease_lost');
+    } catch (error) {
+      await uploadLease.stop();
+      try {
+        await this.failUploadingImportAndCompensate(
+          fileTaskId,
+          filePath,
+          uploadLeaseToken,
+        );
+      } catch {
+        // The durable task and archive locator remain available to a
+        // reconciler even if either the state transition or cleanup fails.
+      }
+      throw error;
+    }
+
+    const fileSize = getBytesRead();
+    fileTask = await executeTx(this.db, async (trx) => {
+      const pending = await trx
+        .updateTable('fileTasks')
+        .set({
+          status: FileTaskStatus.Pending,
+          fileSize,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where('id', '=', fileTaskId)
+        .where('status', '=', FileTaskStatus.Uploading)
+        .where('leaseToken', '=', uploadLeaseToken)
+        .returningAll()
+        .executeTakeFirst();
+      if (!pending) throw new Error('file_task_upload_state_changed');
+      await trx
+        .updateTable('fileTaskImportArtifacts')
+        .set({ status: 'uploaded', updatedAt: new Date() })
+        .where('fileTaskId', '=', fileTaskId)
+        .where('artifactType', '=', 'archive')
+        .execute();
+      await this.queueOutbox!.enqueueFileImport(fileTaskId, trx);
+      return pending;
+    });
+    this.queueOutbox.kick();
+
     return fileTask;
+  }
+
+  private startFileUploadLeaseRenewal(
+    fileTaskId: string,
+    leaseToken: string,
+  ): { isLost: () => boolean; stop: () => Promise<void> } {
+    let stopped = false;
+    let lost = false;
+    let timer: NodeJS.Timeout | undefined;
+    let renewal = Promise.resolve();
+
+    const schedule = () => {
+      if (stopped || lost) return;
+      timer = setTimeout(() => {
+        renewal = this.db
+          .updateTable('fileTasks')
+          .set({
+            leaseExpiresAt: new Date(Date.now() + FILE_UPLOAD_LEASE_MS),
+            updatedAt: new Date(),
+          })
+          .where('id', '=', fileTaskId)
+          .where('status', '=', FileTaskStatus.Uploading)
+          .where('leaseToken', '=', leaseToken)
+          .where('leaseExpiresAt', '>', new Date())
+          .executeTakeFirst()
+          .then((result) => {
+            if (Number(result.numUpdatedRows) !== 1) {
+              lost = true;
+              return;
+            }
+            schedule();
+          })
+          .catch(() => {
+            lost = true;
+          });
+      }, FILE_UPLOAD_LEASE_RENEW_MS);
+      timer.unref();
+    };
+
+    schedule();
+    return {
+      isLost: () => lost,
+      stop: async () => {
+        stopped = true;
+        if (timer) clearTimeout(timer);
+        await renewal;
+      },
+    };
+  }
+
+  private async cleanupUploadedArchive(
+    fileTaskId: string,
+    filePath: string,
+  ): Promise<void> {
+    await this.storageService.delete(filePath);
+    await this.db
+      .updateTable('fileTaskImportArtifacts')
+      .set({
+        status: 'cleaned',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where('fileTaskId', '=', fileTaskId)
+      .where('artifactType', '=', 'archive')
+      .execute();
+  }
+
+  private async failUploadingImportAndCompensate(
+    fileTaskId: string,
+    filePath: string,
+    uploadLeaseToken: string,
+  ): Promise<void> {
+    const failed = await this.db
+      .updateTable('fileTasks')
+      .set({
+        status: FileTaskStatus.Failed,
+        errorMessage: 'file_task_upload_failed',
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', fileTaskId)
+      .where('status', '=', FileTaskStatus.Uploading)
+      .where('leaseToken', '=', uploadLeaseToken)
+      .executeTakeFirst();
+
+    if (Number(failed.numUpdatedRows) !== 1) {
+      const current = await this.db
+        .selectFrom('fileTasks')
+        .select('status')
+        .where('id', '=', fileTaskId)
+        .executeTakeFirst();
+      if (current?.status !== FileTaskStatus.Failed) return;
+    }
+
+    // A stale-upload reconciler may have deleted the path and marked its
+    // locator cleaned while the old storage request was still in flight. Mark
+    // the locator compensatable again before deleting the possibly late object
+    // so a failed delete remains visible to the periodic reconciler.
+    await this.db
+      .updateTable('fileTaskImportArtifacts')
+      .set({
+        status: 'uploaded',
+        completedAt: null,
+        updatedAt: new Date(),
+      })
+      .where('fileTaskId', '=', fileTaskId)
+      .where('artifactType', '=', 'archive')
+      .execute();
+    await this.cleanupUploadedArchive(fileTaskId, filePath);
   }
 
   async previewDocmostZip(
@@ -320,24 +498,26 @@ export class ImportService {
     );
     const fileNameWithExt = `${fileName}${fileExtension}`;
     const fileTaskId = uuid7();
+    const uploadLeaseToken = uuid7();
     const filePath = `${getFileTaskFolderPath(
       FileTaskType.Import,
       workspaceId,
     )}/${fileTaskId}/${fileNameWithExt}`;
     const savedPreview = { ...preview, fileTaskId };
 
-    await this.storageService.upload(filePath, Readable.from(fileBuffer));
-    try {
-      await this.db
+    await executeTx(this.db, async (trx) => {
+      await trx
         .insertInto('fileTasks')
         .values({
           id: fileTaskId,
           type: FileTaskType.Import,
           source: FileImportSource.Docmost,
-          status: FileTaskStatus.Pending,
+          status: FileTaskStatus.Uploading,
+          leaseToken: uploadLeaseToken,
+          leaseExpiresAt: new Date(Date.now() + FILE_UPLOAD_LEASE_MS),
           fileName: fileNameWithExt,
           filePath,
-          fileSize: fileBuffer.byteLength,
+          fileSize: null,
           fileExt: 'zip',
           creatorId: userId,
           spaceId,
@@ -345,8 +525,66 @@ export class ImportService {
           result: { preview: savedPreview } as any,
         })
         .execute();
+      await trx
+        .insertInto('fileTaskImportArtifacts')
+        .values({
+          fileTaskId,
+          artifactType: 'archive',
+          attachmentId: null,
+          pageId: null,
+          sourcePath: fileNameWithExt,
+          filePath,
+          status: 'pending',
+        })
+        .execute();
+    });
+
+    const uploadLease = this.startFileUploadLeaseRenewal(
+      fileTaskId,
+      uploadLeaseToken,
+    );
+    try {
+      await this.storageService.upload(filePath, Readable.from(fileBuffer));
+      await uploadLease.stop();
+      if (uploadLease.isLost()) throw new Error('file_task_upload_lease_lost');
+
+      const pending = await executeTx(this.db, async (trx) => {
+        const updated = await trx
+          .updateTable('fileTasks')
+          .set({
+            status: FileTaskStatus.Pending,
+            fileSize: fileBuffer.byteLength,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            updatedAt: new Date(),
+          })
+          .where('id', '=', fileTaskId)
+          .where('status', '=', FileTaskStatus.Uploading)
+          .where('leaseToken', '=', uploadLeaseToken)
+          .executeTakeFirst();
+        if (Number(updated.numUpdatedRows) !== 1) {
+          throw new Error('file_task_upload_state_changed');
+        }
+        await trx
+          .updateTable('fileTaskImportArtifacts')
+          .set({ status: 'uploaded', updatedAt: new Date() })
+          .where('fileTaskId', '=', fileTaskId)
+          .where('artifactType', '=', 'archive')
+          .execute();
+        return updated;
+      });
+      if (!pending) throw new Error('file_task_upload_state_changed');
     } catch (error) {
-      await this.storageService.delete(filePath);
+      await uploadLease.stop();
+      try {
+        await this.failUploadingImportAndCompensate(
+          fileTaskId,
+          filePath,
+          uploadLeaseToken,
+        );
+      } catch {
+        // The failed/uploading task keeps the archive locator for recovery.
+      }
       throw error;
     }
 
@@ -376,37 +614,30 @@ export class ImportService {
     workspaceId: string,
   ) {
     await this.getPendingDocmostImportTask(fileTaskId, userId, workspaceId);
-
-    const updated = await this.db
-      .updateTable('fileTasks')
-      .set({
-        status: FileTaskStatus.Processing,
-        options: options as any,
-        updatedAt: new Date(),
-      })
-      .where('id', '=', fileTaskId)
-      .where('status', '=', FileTaskStatus.Pending)
-      .returningAll()
-      .executeTakeFirst();
-    if (!updated) {
-      throw new BadRequestException('Import task state changed');
+    if (!this.queueOutbox) {
+      throw new Error('queue_outbox_unavailable');
     }
 
-    try {
-      await this.fileTaskQueue.add(QueueJob.IMPORT_TASK, { fileTaskId });
-    } catch (error) {
-      await this.db
+    const updated = await executeTx(this.db, async (trx) => {
+      const pending = await trx
         .updateTable('fileTasks')
         .set({
           status: FileTaskStatus.Pending,
-          options: null,
+          options: options as any,
           updatedAt: new Date(),
         })
         .where('id', '=', fileTaskId)
-        .where('status', '=', FileTaskStatus.Processing)
-        .execute();
-      throw error;
-    }
+        .where('status', '=', FileTaskStatus.Pending)
+        .where('options', 'is', null)
+        .returningAll()
+        .executeTakeFirst();
+      if (!pending) {
+        throw new BadRequestException('Import task state changed');
+      }
+      await this.queueOutbox!.enqueueFileImport(fileTaskId, trx);
+      return pending;
+    });
+    this.queueOutbox.kick();
     return updated;
   }
 
@@ -429,6 +660,19 @@ export class ImportService {
     if (fileTask.status !== FileTaskStatus.Pending) {
       throw new BadRequestException('Import task is not awaiting confirmation');
     }
+    const result =
+      fileTask.result &&
+      typeof fileTask.result === 'object' &&
+      !Array.isArray(fileTask.result)
+        ? (fileTask.result as Record<string, unknown>)
+        : null;
+    const preview =
+      result?.preview &&
+      typeof result.preview === 'object' &&
+      !Array.isArray(result.preview)
+        ? (result.preview as Record<string, unknown>)
+        : null;
+    this.assertSupportedDocmostArchiveSchema(preview?.schemaVersion);
     return fileTask;
   }
 
@@ -437,27 +681,48 @@ export class ImportService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    const fileTask = await this.db
-      .selectFrom('fileTasks')
-      .selectAll()
+    const cancelled = await this.db
+      .updateTable('fileTasks')
+      .set({
+        status: FileTaskStatus.Failed,
+        errorMessage: 'file_task_cancelled',
+        updatedAt: new Date(),
+      })
       .where('id', '=', fileTaskId)
+      .where('source', '=', FileImportSource.Docmost)
+      .where('creatorId', '=', userId)
+      .where('workspaceId', '=', workspaceId)
+      .where('status', '=', FileTaskStatus.Pending)
+      .where('options', 'is', null)
+      .returning(['id', 'filePath'])
       .executeTakeFirst();
-    if (!fileTask || fileTask.source !== FileImportSource.Docmost) {
-      throw new NotFoundException('Docmost import task not found');
-    }
-    if (fileTask.creatorId !== userId || fileTask.workspaceId !== workspaceId) {
-      throw new ForbiddenException();
-    }
-    if (fileTask.status !== FileTaskStatus.Pending) {
-      throw new BadRequestException('Only pending imports can be cancelled');
+    if (!cancelled) {
+      const existing = await this.db
+        .selectFrom('fileTasks')
+        .select(['source', 'creatorId', 'workspaceId'])
+        .where('id', '=', fileTaskId)
+        .executeTakeFirst();
+      if (!existing || existing.source !== FileImportSource.Docmost) {
+        throw new NotFoundException('Docmost import task not found');
+      }
+      if (
+        existing.creatorId !== userId ||
+        existing.workspaceId !== workspaceId
+      ) {
+        throw new ForbiddenException();
+      }
+      throw new BadRequestException(
+        'Only an unconfirmed pending import can be cancelled',
+      );
     }
 
-    await this.storageService.delete(fileTask.filePath);
-    await this.db
-      .deleteFrom('fileTasks')
-      .where('id', '=', fileTaskId)
-      .where('status', '=', FileTaskStatus.Pending)
-      .execute();
+    try {
+      await this.cleanupUploadedArchive(cancelled.id, cancelled.filePath);
+    } catch {
+      // Failed is terminal and the durable artifact locator remains for the
+      // failed-import reconciler to retry cleanup.
+      this.logger.warn({ event: 'docmost_import_cancel_cleanup_deferred' });
+    }
   }
 
   /**
@@ -506,6 +771,7 @@ export class ImportService {
     // written by whoever produced the archive.
     const readBudget = createZipReadBudget();
     const entries = Object.values(zip.files);
+    const entriesByNormalizedPath = new Map<string, JSZip.JSZipObject>();
     if (entries.length > DEFAULT_EXTRACT_ZIP_LIMITS.maxEntries) {
       throw new BadRequestException(
         `ZIP entry count exceeds ${DEFAULT_EXTRACT_ZIP_LIMITS.maxEntries}`,
@@ -525,6 +791,7 @@ export class ImportService {
       ) {
         throw new BadRequestException('Unsafe ZIP entry path');
       }
+      if (!entry.dir) entriesByNormalizedPath.set(normalized, entry);
       if (
         normalized.split('/').filter(Boolean).length >
         DEFAULT_EXTRACT_ZIP_LIMITS.maxPathDepth
@@ -580,19 +847,10 @@ export class ImportService {
     ) {
       throw new BadRequestException('Invalid Docmost archive metadata');
     }
-    const manifestSchemaVersion = Number(manifest.schemaVersion);
-    if (manifestSchemaVersion > DOCMOST_ARCHIVE_SCHEMA_VERSION) {
+    this.assertSupportedDocmostArchiveSchema(manifest.schemaVersion);
+    if (containsPageEmbedNode(manifest)) {
       throw new BadRequestException(
-        `Archive schema ${manifestSchemaVersion} is newer than supported schema ${DOCMOST_ARCHIVE_SCHEMA_VERSION}`,
-      );
-    }
-    if (
-      manifestSchemaVersion !== DOCMOST_ARCHIVE_LEGACY_SCHEMA_VERSION &&
-      manifestSchemaVersion !== DOCMOST_ARCHIVE_PAGE_EMBED_SCHEMA_VERSION &&
-      manifestSchemaVersion !== DOCMOST_ARCHIVE_SCHEMA_VERSION
-    ) {
-      throw new BadRequestException(
-        `Unsupported Docmost archive schema ${manifestSchemaVersion}`,
+        'Docmost archive schema 5 cannot contain pageEmbed nodes',
       );
     }
 
@@ -629,6 +887,16 @@ export class ImportService {
     ) {
       throw new BadRequestException('Invalid Docmost archive data');
     }
+    if (containsPageEmbedNode(data)) {
+      throw new BadRequestException(
+        'Docmost archive schema 5 cannot contain pageEmbed nodes',
+      );
+    }
+    if (data.attachments.length > DOCMOST_ARCHIVE_MAX_ATTACHMENT_DESCRIPTORS) {
+      throw new BadRequestException(
+        `Docmost archive attachment descriptor count exceeds ${DOCMOST_ARCHIVE_MAX_ATTACHMENT_DESCRIPTORS}`,
+      );
+    }
     this.assertDocmostArchiveReferences(data);
 
     for (const page of data.pages) {
@@ -659,6 +927,11 @@ export class ImportService {
         );
       }
     }
+    const verifiedAttachmentEntries = new Map<
+      string,
+      { size: number; sha256: string }
+    >();
+    let logicalAttachmentBytes = 0;
     for (const attachment of data.attachments ?? []) {
       if (
         typeof attachment.sha256 !== 'string' ||
@@ -668,30 +941,47 @@ export class ImportService {
           `Archive attachment has an invalid checksum: ${attachment.fileName}`,
         );
       }
-      const attachmentFile = zip.file(attachment.archivePath);
-      if (!attachmentFile) {
+      const normalizedArchivePath = path.posix.normalize(
+        attachment.archivePath,
+      );
+      let verified = verifiedAttachmentEntries.get(normalizedArchivePath);
+      if (!verified) {
+        const attachmentFile = entriesByNormalizedPath.get(
+          normalizedArchivePath,
+        );
+        if (!attachmentFile) {
+          throw new BadRequestException(
+            `Archive attachment is missing: ${attachment.fileName}`,
+          );
+        }
+        const attachmentBuffer = await this.readArchiveEntry(
+          attachmentFile,
+          readBudget,
+        );
+        verified = {
+          size: attachmentBuffer.byteLength,
+          sha256: createHash('sha256').update(attachmentBuffer).digest('hex'),
+        };
+        verifiedAttachmentEntries.set(normalizedArchivePath, verified);
+      }
+      logicalAttachmentBytes += verified.size;
+      if (
+        logicalAttachmentBytes > DOCMOST_ARCHIVE_MAX_LOGICAL_ATTACHMENT_BYTES
+      ) {
         throw new BadRequestException(
-          `Archive attachment is missing: ${attachment.fileName}`,
+          'Docmost archive logical attachment size exceeds the limit',
         );
       }
-      const attachmentBuffer = await this.readArchiveEntry(
-        attachmentFile,
-        readBudget,
+      const declaredSize = this.parseArchiveAttachmentSize(
+        attachment.fileSize,
+        attachment.fileName,
       );
-      const declaredSize = Number(attachment.fileSize);
-      if (
-        Number.isFinite(declaredSize) &&
-        declaredSize >= 0 &&
-        attachmentBuffer.byteLength !== declaredSize
-      ) {
+      if (declaredSize !== null && verified.size !== declaredSize) {
         throw new BadRequestException(
           `Archive attachment size does not match metadata: ${attachment.fileName}`,
         );
       }
-      const sha256 = createHash('sha256')
-        .update(attachmentBuffer)
-        .digest('hex');
-      if (sha256 !== attachment.sha256) {
+      if (verified.sha256 !== attachment.sha256) {
         throw new BadRequestException(
           `Archive attachment checksum does not match metadata: ${attachment.fileName}`,
         );
@@ -720,6 +1010,34 @@ export class ImportService {
       },
       warnings: [],
     };
+  }
+
+  private parseArchiveAttachmentSize(
+    value: string | number | null | undefined,
+    fileName: string,
+  ): number | null {
+    if (value === null || value === undefined) return null;
+    if (
+      (typeof value === 'string' && !/^(0|[1-9]\d*)$/.test(value)) ||
+      (typeof value !== 'string' && typeof value !== 'number')
+    ) {
+      throw new BadRequestException(
+        `Archive attachment has invalid size metadata: ${fileName}`,
+      );
+    }
+
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+      throw new BadRequestException(
+        `Archive attachment has invalid size metadata: ${fileName}`,
+      );
+    }
+    return parsed;
+  }
+
+  private assertSupportedDocmostArchiveSchema(schemaVersion: unknown): void {
+    const error = getDocmostArchiveSchemaError(schemaVersion);
+    if (error) throw new BadRequestException(error);
   }
 
   private assertDocmostArchiveReferences(data: DocmostArchiveData): void {

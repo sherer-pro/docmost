@@ -604,17 +604,17 @@ export class DatabaseService {
       return rows;
     }
 
-    const userDisplayEntries = await Promise.all(
-      userIds.map(
-        async (userId) =>
-          [
-            userId,
-            (await this.resolveUserNameById(userId, workspaceId)) || userId,
-          ] as const,
-      ),
+    const validUserIds = userIds.filter((userId) => isValidUuid(userId));
+    let users: User[] = [];
+    try {
+      users = await this.userRepo.findByIds(validUserIds, workspaceId);
+    } catch {
+      // Cell values are user-authored legacy data. A failed enrichment query
+      // must not make the database rows endpoint unavailable.
+    }
+    const userNameById = new Map(
+      users.map((user) => [user.id, user.name?.trim() || user.id]),
     );
-
-    const userNameById = new Map(userDisplayEntries);
 
     return rows.map((row) => ({
       ...row,

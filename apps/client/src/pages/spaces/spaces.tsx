@@ -12,9 +12,10 @@ import { PageFrame, SectionHeader } from "@/components/ui/page-frame";
 export default function Spaces() {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
-  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
+  const { search, cursor, goNext, goPrev, handleSearch } =
+    usePaginateAndSearch();
 
-  const { data, isLoading } = useGetSpacesQuery({
+  const { data, isLoading, isError, refetch } = useGetSpacesQuery({
     cursor,
     limit: 30,
     query: search,
@@ -37,6 +38,9 @@ export default function Spaces() {
         <Box>
           <AllSpacesList
             spaces={data?.items || []}
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={() => void refetch()}
             onSearch={handleSearch}
             hasPrevPage={data?.meta?.hasPrevPage}
             hasNextPage={data?.meta?.hasNextPage}

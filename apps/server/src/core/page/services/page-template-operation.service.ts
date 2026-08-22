@@ -14,20 +14,15 @@ import type {
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { StorageService } from '../../../integrations/storage/storage.service';
-import { strictJsonToNode } from '../../../collaboration/collaboration.util';
 import { hashProseMirrorJson } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { getAttachmentIds } from '../../../common/helpers/prosemirror/utils';
-import { materializePageContent } from '../transclusion/utils/page-embed-materialize.util';
 import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-unsync.util';
-import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
 
 export type PageTemplateOperationKind =
   | 'snapshot'
-  | 'embed_insert'
-  | 'embed_detach'
+  | 'page_duplicate'
   | 'template_sync'
-  | 'template_detach'
-  | 'legacy_embed_migration';
+  | 'template_detach';
 
 const OPERATION_LEASE_MS = 5 * 60 * 1000;
 
@@ -80,32 +75,13 @@ export class PageTemplateOperationService {
         .returningAll()
         .executeTakeFirst();
     } catch (error) {
-      if (kind === 'embed_detach' && (error as any)?.code === '23505') {
-        const active = await this.db
-          .selectFrom('pageTemplateOperations')
-          .selectAll()
-          .where('workspaceId', '=', user.workspaceId)
-          .where('operationKind', '=', 'embed_detach')
-          .where('consumerPageId', '=', fields.consumerPageId as string)
-          .where('referenceNodeId', '=', fields.referenceNodeId as string)
-          .where('status', '=', 'pending')
-          .executeTakeFirst();
-        if (active) {
-          const settled = await this.waitForOperationToSettle(active.id);
-          if (settled?.status === 'completed') return settled;
-          throw this.conflict(
-            'page_template_operation_in_progress',
-            'Another detach operation is still running',
-          );
-        }
-      }
       throw error;
     }
     if (inserted) return inserted;
     const existing = await this.findOperation(kind, idempotencyKey, user);
     if (!existing || existing.requestHash !== requestHash) {
       throw this.conflict(
-        'page_template_idempotency_conflict',
+        this.idempotencyConflictCode(kind),
         'Idempotency key was used for a different request',
       );
     }
@@ -127,20 +103,6 @@ export class PageTemplateOperationService {
           .executeTakeFirst();
         if (claimed) return claimed;
       } catch (error) {
-        if (kind === 'embed_detach' && (error as any)?.code === '23505') {
-          const active = await this.findActiveDetachOperation(
-            user.workspaceId,
-            fields,
-          );
-          if (active) {
-            const settled = await this.waitForOperationToSettle(active.id);
-            if (settled?.status === 'completed') return settled;
-            throw this.conflict(
-              'page_template_operation_in_progress',
-              'Another detach operation is still running',
-            );
-          }
-        }
         throw error;
       }
     }
@@ -171,7 +133,7 @@ export class PageTemplateOperationService {
         .executeTakeFirst();
       if (claimed) return claimed;
       throw this.conflict(
-        'page_template_operation_in_progress',
+        this.operationInProgressCode(kind),
         'An operation with this idempotency key is already running',
       );
     }
@@ -199,28 +161,11 @@ export class PageTemplateOperationService {
     if (!operation) return undefined;
     if (operation.requestHash !== this.hashRequest(request)) {
       throw this.conflict(
-        'page_template_idempotency_conflict',
+        this.idempotencyConflictCode(kind),
         'Idempotency key was used for a different request',
       );
     }
     return operation.status === 'completed' ? operation : undefined;
-  }
-
-  findCompletedDetach(
-    consumerPageId: string,
-    referenceNodeId: string,
-    user: User,
-  ) {
-    return this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', user.workspaceId)
-      .where('operationKind', '=', 'embed_detach')
-      .where('consumerPageId', '=', consumerPageId)
-      .where('referenceNodeId', '=', referenceNodeId)
-      .where('status', '=', 'completed')
-      .orderBy('updatedAt', 'desc')
-      .executeTakeFirst();
   }
 
   async completeOperation(
@@ -363,12 +308,10 @@ export class PageTemplateOperationService {
       .execute();
   }
 
-  async stageMaterializedContent(
+  async stageAttachmentRewrittenContent(
     operationId: string,
     leaseToken: string,
     liveSource: unknown,
-    sourcePageId: string,
-    targetPageId: string,
     storedMapping: unknown,
   ) {
     const existingMapping = new Map(
@@ -377,12 +320,8 @@ export class PageTemplateOperationService {
         item.newAttachmentId,
       ]),
     );
-    const regenerated = materializePageContent(liveSource, {
-      sourcePageId,
-      targetPageId,
-    });
     const rewritten = rewriteAttachmentsForUnsync(
-      regenerated,
+      liveSource,
       (oldAttachmentId) =>
         existingMapping.get(oldAttachmentId ?? '') ?? uuid7(),
     );
@@ -440,27 +379,6 @@ export class PageTemplateOperationService {
     }
   }
 
-  async stageAttachmentMapping(
-    operationId: string,
-    leaseToken: string,
-    attachmentMapping: Array<{
-      oldAttachmentId: string;
-      newAttachmentId: string;
-    }>,
-  ): Promise<void> {
-    await this.db
-      .updateTable('pageTemplateOperations')
-      .set({
-        attachmentMapping: attachmentMapping as any,
-        leaseExpiresAt: new Date(Date.now() + OPERATION_LEASE_MS),
-        updatedAt: new Date(),
-      })
-      .where('id', '=', operationId)
-      .where('status', '=', 'pending')
-      .where('leaseToken', '=', leaseToken)
-      .executeTakeFirstOrThrow();
-  }
-
   async assertOperationLease(
     operationId: string,
     leaseToken: string,
@@ -515,7 +433,21 @@ export class PageTemplateOperationService {
   }
 
   hashRequest(request: unknown): string {
+    // This serialization is part of the persisted operation contract. Changing
+    // it would invalidate idempotency keys written by earlier releases.
     return createHash('sha256').update(JSON.stringify(request)).digest('hex');
+  }
+
+  private idempotencyConflictCode(kind: PageTemplateOperationKind): string {
+    return kind === 'page_duplicate'
+      ? 'idempotency_key_reused'
+      : 'page_template_idempotency_conflict';
+  }
+
+  private operationInProgressCode(kind: PageTemplateOperationKind): string {
+    return kind === 'page_duplicate'
+      ? 'idempotency_operation_in_progress'
+      : 'page_template_operation_in_progress';
   }
 
   encodePageCursor(row: { updatedAt: Date | string; id: string }): string {
@@ -604,49 +536,6 @@ export class PageTemplateOperationService {
       : 'page_template_operation_failed';
   }
 
-  async releaseGraphLease(
-    graphLease: PageEmbedGraphLease | undefined,
-  ): Promise<void> {
-    if (!graphLease) return;
-    try {
-      await graphLease.release();
-    } catch {
-      // Ownership is verified inside the transaction immediately before commit.
-      // A release failure after commit must not turn a durable success into a retry.
-    }
-  }
-
-  private findActiveDetachOperation(
-    workspaceId: string,
-    fields: Record<string, unknown>,
-  ) {
-    return this.db
-      .selectFrom('pageTemplateOperations')
-      .selectAll()
-      .where('workspaceId', '=', workspaceId)
-      .where('operationKind', '=', 'embed_detach')
-      .where('consumerPageId', '=', fields.consumerPageId as string)
-      .where('referenceNodeId', '=', fields.referenceNodeId as string)
-      .where('status', '=', 'pending')
-      .executeTakeFirst();
-  }
-
-  private async waitForOperationToSettle(
-    operationId: string,
-  ): Promise<any | undefined> {
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      const operation = await this.db
-        .selectFrom('pageTemplateOperations')
-        .selectAll()
-        .where('id', '=', operationId)
-        .executeTakeFirst();
-      if (!operation || operation.status !== 'pending') return operation;
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    }
-    return undefined;
-  }
-
   private async reconcileExpiredOperations(workspaceId: string): Promise<void> {
     const expired = await this.db
       .selectFrom('pageTemplateOperations')
@@ -705,24 +594,20 @@ export class PageTemplateOperationService {
     leaseToken: string,
   ): Promise<boolean> {
     const pageId =
-      operation.operationKind === 'snapshot'
+      operation.operationKind === 'snapshot' ||
+      operation.operationKind === 'page_duplicate'
         ? operation.resultPageId
         : operation.consumerPageId;
     if (!pageId) return false;
     const page = await this.pageRepo.findById(pageId, { includeContent: true });
     if (!page || page.deletedAt) return false;
-    if (operation.operationKind === 'snapshot') {
+    if (
+      operation.operationKind === 'snapshot' ||
+      operation.operationKind === 'page_duplicate'
+    ) {
       return this.completeOperation(
         operation.id,
         { resultPageId: page.id },
-        leaseToken,
-      );
-    }
-    if (operation.operationKind === 'legacy_embed_migration') {
-      if (this.containsNodeType(page.content, 'pageEmbed')) return false;
-      return this.completeOperation(
-        operation.id,
-        { afterContentHash: hashProseMirrorJson(page.content as any) },
         leaseToken,
       );
     }
@@ -745,21 +630,7 @@ export class PageTemplateOperationService {
         leaseToken,
       );
     }
-    if (operation.operationKind === 'template_sync') return false;
-    const occurrence = this.findPageEmbed(
-      page.content,
-      operation.referenceNodeId,
-    );
-    const completed =
-      operation.operationKind === 'embed_insert'
-        ? occurrence?.sourcePageId === operation.sourcePageId
-        : !occurrence;
-    if (!completed) return false;
-    return this.completeOperation(
-      operation.id,
-      { afterContentHash: hashProseMirrorJson(page.content as any) },
-      leaseToken,
-    );
+    return false;
   }
 
   private async cleanupAbandonedOperation(operation: any): Promise<void> {
@@ -806,25 +677,6 @@ export class PageTemplateOperationService {
         this.containsNodeType(child, type),
       )
     );
-  }
-
-  private findPageEmbed(content: unknown, referenceNodeId: string) {
-    const doc = strictJsonToNode(content as any);
-    let result:
-      | { position: number; nodeSize: number; sourcePageId: string }
-      | undefined;
-    doc.descendants((node, position) => {
-      if (node.type.name !== 'pageEmbed' || node.attrs.id !== referenceNodeId) {
-        return true;
-      }
-      result = {
-        position,
-        nodeSize: node.nodeSize,
-        sourcePageId: node.attrs.sourcePageId,
-      };
-      return false;
-    });
-    return result;
   }
 
   private conflict(code: string, message: string): ConflictException {

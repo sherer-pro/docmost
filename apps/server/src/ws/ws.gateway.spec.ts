@@ -76,7 +76,7 @@ describe('WsGateway.handleMessage', () => {
     removeConnection: jest.fn(),
   };
   const pageTransclusionReferencesRepo = {
-    findUsagesBySource: jest.fn(async () => []),
+    findConsumerSpaceIdsBySourcePageIds: jest.fn(async () => []),
   };
 
   beforeAll(async () => {
@@ -111,38 +111,25 @@ describe('WsGateway.handleMessage', () => {
   });
 
   it('invalidates block consumers when an update omits workspaceId', async () => {
-    pageRepo.findById
-      .mockResolvedValueOnce({
-        id: 'source-page',
-        workspaceId: 'workspace-a',
-        spaceId: 'space-source',
-        deletedAt: null,
-      })
-      .mockResolvedValueOnce({
-        id: 'consumer-page',
-        workspaceId: 'workspace-a',
-        spaceId: 'space-consumer',
-        deletedAt: null,
-      });
-    pageTransclusionReferencesRepo.findUsagesBySource.mockResolvedValueOnce([
-      {
-        referenceKind: 'block',
-        referencePageId: 'consumer-page',
-        sourcePageId: 'source-page',
-      },
-    ]);
+    pageRepo.findById.mockResolvedValueOnce({
+      id: 'source-page',
+      workspaceId: 'workspace-a',
+      spaceId: 'space-source',
+      deletedAt: null,
+    });
+    pageTransclusionReferencesRepo.findConsumerSpaceIdsBySourcePageIds.mockResolvedValueOnce(
+      ['space-consumer'],
+    );
     const emitInvalidation = jest
-      .spyOn(gateway, 'emitPageEmbedInvalidation')
+      .spyOn(gateway, 'emitTransclusionInvalidation')
       .mockImplementation(() => undefined);
 
-    await gateway.handlePageEmbedSourceUpdated({ pageIds: ['source-page'] });
+    await gateway.handleTransclusionSourceUpdated({ pageIds: ['source-page'] });
 
     expect(
-      pageTransclusionReferencesRepo.findUsagesBySource,
-    ).toHaveBeenCalledWith('source-page', 'workspace-a');
-    expect(emitInvalidation).toHaveBeenCalledWith(
-      new Set(['space-consumer']),
-    );
+      pageTransclusionReferencesRepo.findConsumerSpaceIdsBySourcePageIds,
+    ).toHaveBeenCalledWith(['source-page'], 'workspace-a');
+    expect(emitInvalidation).toHaveBeenCalledWith(['space-consumer']);
   });
 
   it('relays a message only to an authorized space room', async () => {
@@ -395,44 +382,18 @@ describe('WsGateway.handleMessage', () => {
     );
   });
 
-  it('invalidates access-sensitive client caches after page access changes', () => {
-    const socket = createSocketMock(['workspace-workspace-1']);
-    socket.data.user = { workspaceId: 'workspace-1' };
-    (gateway as any).server.sockets.sockets.set(socket.id, socket);
+  it('emits the modern transclusion invalidation contract', () => {
+    const emit = jest.fn();
+    const to = jest.fn(() => ({ emit }));
+    (gateway as any).server.to = to;
 
-    gateway.handlePageEmbedVisibilityChanged({ workspaceId: 'workspace-1' });
+    gateway.emitTransclusionInvalidation(['space-1', 'space-1']);
 
-    expect(socket.emit).toHaveBeenCalledWith('page-embed:invalidate', {
-      operation: 'page_embed_invalidate',
+    expect(to).toHaveBeenCalledTimes(1);
+    expect(to).toHaveBeenCalledWith('space-space-1');
+    expect(emit).toHaveBeenCalledWith('transclusion:invalidate', {
+      operation: 'transclusion_invalidate',
     });
-    expect(socket.emit).toHaveBeenCalledWith('access:invalidate', {
-      operation: 'access_invalidate',
-    });
-  });
-
-  it('targets access invalidation while broadcasting embed invalidation', () => {
-    const affected = createSocketMock(['workspace-workspace-1']);
-    affected.data.user = { id: 'user-1', workspaceId: 'workspace-1' };
-    const unaffected = createSocketMock(['workspace-workspace-1']);
-    unaffected.data.user = { id: 'user-2', workspaceId: 'workspace-1' };
-    (gateway as any).server.sockets.sockets.set(affected.id, affected);
-    (gateway as any).server.sockets.sockets.set('socket-2', unaffected);
-
-    gateway.handlePageEmbedVisibilityChanged({
-      workspaceId: 'workspace-1',
-      accessUserIds: ['user-1'],
-    });
-
-    expect(affected.emit).toHaveBeenCalledWith('access:invalidate', {
-      operation: 'access_invalidate',
-    });
-    expect(unaffected.emit).toHaveBeenCalledWith('page-embed:invalidate', {
-      operation: 'page_embed_invalidate',
-    });
-    expect(unaffected.emit).not.toHaveBeenCalledWith(
-      'access:invalidate',
-      expect.anything(),
-    );
   });
 
   it('removes a space room immediately when its effective policy becomes stricter', async () => {

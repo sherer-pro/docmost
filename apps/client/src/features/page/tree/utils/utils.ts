@@ -349,17 +349,6 @@ export const dropTreeNode = (
   return treeApi.data;
 };
 
-/**
- * @deprecated Use `dropTreeNode` directly. This compatibility wrapper will be
- * removed after 2026-06-30.
- */
-export const deleteTreeNode = (
-  nodes: SpaceTreeNode[],
-  nodeId: string,
-): SpaceTreeNode[] => {
-  return dropTreeNode(nodes, nodeId);
-};
-
 export function buildTreeWithChildren(items: SpaceTreeNode[]): SpaceTreeNode[] {
   const nodeMap = {};
   let result: SpaceTreeNode[] = [];

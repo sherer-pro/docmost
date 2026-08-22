@@ -52,6 +52,20 @@ export class DatabasePropertyRepo {
       .executeTakeFirst();
   }
 
+  async findByIds(
+    propertyIds: string[],
+    workspaceId: string,
+  ): Promise<DatabaseProperty[]> {
+    if (propertyIds.length === 0) return [];
+    return this.db
+      .selectFrom('databaseProperties')
+      .selectAll()
+      .where('id', 'in', [...new Set(propertyIds)])
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .execute();
+  }
+
   /**
    * Updates a database property.
    */

@@ -22,6 +22,7 @@ import { PageAccessModule } from '../core/page-access/page-access.module';
 import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
 import { CollabPageUpdatePublisherService } from './services/collab-page-update-publisher.service';
 import { CollaborationHistoryModule } from './services/collaboration-history.module';
+import { QueueOutboxPersistenceModule } from '../database/persistence/queue-outbox-persistence.module';
 
 @Module({
   providers: [
@@ -41,6 +42,7 @@ import { CollaborationHistoryModule } from './services/collaboration-history.mod
     PageAccessModule,
     SpacePolicyModule,
     CollaborationHistoryModule,
+    QueueOutboxPersistenceModule,
   ],
 })
 export class CollaborationRuntimeModule

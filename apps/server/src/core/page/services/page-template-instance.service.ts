@@ -8,7 +8,10 @@ import {
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
 import { v7 as uuid7 } from 'uuid';
-import type { KyselyDB } from '@docmost/db/types/kysely.types';
+import type {
+  KyselyDB,
+  KyselyTransaction,
+} from '@docmost/db/types/kysely.types';
 import type { Page, User } from '@docmost/db/types/entity.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
@@ -22,10 +25,8 @@ import {
   SpaceCaslSubject,
 } from '../../casl/interfaces/space-ability.type';
 import { PageAccessService } from '../../page-access/page-access.service';
-import { PageEmbedService } from '../transclusion/page-embed.service';
 import { PageTemplatePolicyService } from '../transclusion/page-template-policy.service';
 import { TransclusionService } from '../transclusion/transclusion.service';
-import { materializePageContent } from '../transclusion/utils/page-embed-materialize.util';
 import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-unsync.util';
 import {
   CreateFromTemplateDto,
@@ -38,7 +39,6 @@ import {
 } from '../dto/page-template.dto';
 import { PageService } from './page.service';
 import { executeTx } from '@docmost/db/utils';
-import type { PageEmbedGraphLease } from '../transclusion/page-embed-graph-lock.service';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
 import type { TemplateKind } from '@docmost/api-contract';
 import {
@@ -64,7 +64,6 @@ export class PageTemplateInstanceService {
     private readonly attachmentRepo: AttachmentRepo,
     private readonly storageService: StorageService,
     private readonly policy: PageTemplatePolicyService,
-    private readonly pageEmbedService: PageEmbedService,
     private readonly transclusionService: TransclusionService,
     private readonly pageHistoryRecorder: PageHistoryRecorderService,
     private readonly content: PageTemplateContentService,
@@ -476,31 +475,13 @@ export class PageTemplateInstanceService {
         resultPageId: proposedTargetPageId,
       },
     );
-    if (operation.status === 'completed' && operation.resultPageId) {
-      const existing = await this.replayCreatedPageOperation(
-        operation,
-        user,
-        'Completed template result not found',
-      );
-      return { page: existing, idempotent: true };
-    }
-    const targetPageId = operation.resultPageId as string;
-    const recoveredPage = await this.pageRepo.findById(targetPageId);
-    if (recoveredPage && !recoveredPage.deletedAt) {
-      const completed = await this.operations.completeOperation(
-        operation.id,
-        { resultPageId: targetPageId },
-        operation.leaseToken,
-      );
-      if (!completed) {
-        throw this.conflict(
-          'page_template_operation_lease_lost',
-          'The page template operation lease was lost',
-        );
-      }
-      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
-      return { page: recoveredPage, idempotent: true };
-    }
+    const resolution = await this.resolveCreatedPageOperation(
+      operation,
+      user,
+      'Completed template result not found',
+    );
+    if ('page' in resolution) return resolution;
+    const { targetPageId } = resolution;
     const rewritten = operation.stagedContent
       ? {
           content: operation.stagedContent,
@@ -512,16 +493,10 @@ export class PageTemplateInstanceService {
           const sourceContent = source
             ? await this.content.getLiveContent(source.id, user)
             : { type: 'doc', content: [{ type: 'paragraph' }] };
-          const materialized = source
-            ? materializePageContent(sourceContent, {
-                sourcePageId: source.id,
-                targetPageId,
-              })
-            : sourceContent;
           const normalized =
             dto.kind === 'synced'
-              ? normalizeTemplateDraft(materialized, uuid7)
-              : materialized;
+              ? normalizeTemplateDraft(sourceContent, uuid7)
+              : sourceContent;
           const staged = source
             ? rewriteAttachmentsForUnsync(normalized, () => uuid7())
             : { content: normalized, copies: [] };
@@ -575,27 +550,9 @@ export class PageTemplateInstanceService {
             deferSideEffects: true,
           },
         );
-        for (const row of attachmentRows) {
-          await this.attachmentRepo.insertAttachment(row, trx);
-        }
-        await this.transclusionService.insertTransclusionsForPages(
-          [
-            {
-              id: created.id,
-              workspaceId: created.workspaceId,
-              content: created.content,
-            },
-          ],
-          trx,
-        );
-        await this.transclusionService.insertReferencesForPages(
-          [
-            {
-              id: created.id,
-              workspaceId: created.workspaceId,
-              content: created.content,
-            },
-          ],
+        await this.persistCreatedPageSideEffects(
+          created,
+          attachmentRows,
           trx,
         );
         return created;
@@ -603,25 +560,13 @@ export class PageTemplateInstanceService {
       await this.finalizeCreatedPageOperation(operation, page, user);
       return { page, idempotent: false };
     } catch (error) {
-      const ownsLease = await this.operations.ownsOperationLease(
-        operation.id,
-        operation.leaseToken,
+      await this.compensateCreatedPageOperationFailure(
+        operation,
+        targetPageId,
+        user,
+        copiedPaths,
+        error,
       );
-      if (ownsLease) {
-        await this.operations.failOperation(
-          operation.id,
-          this.operations.errorCode(error),
-          operation.leaseToken,
-        );
-        await this.db
-          .deleteFrom('pages')
-          .where('id', '=', targetPageId)
-          .where('creatorId', '=', user.id)
-          .execute();
-        await Promise.allSettled(
-          copiedPaths.map((path) => this.storageService.delete(path)),
-        );
-      }
       throw error;
     }
   }
@@ -813,6 +758,111 @@ export class PageTemplateInstanceService {
     }
   }
 
+  private async resolveCreatedPageOperation(
+    operation: any,
+    user: User,
+    notFoundMessage: string,
+  ): Promise<
+    | { page: Page; idempotent: true }
+    | { targetPageId: string }
+  > {
+    if (operation.status === 'completed' && operation.resultPageId) {
+      const page = await this.replayCreatedPageOperation(
+        operation,
+        user,
+        notFoundMessage,
+      );
+      return { page, idempotent: true };
+    }
+
+    const targetPageId = operation.resultPageId as string;
+    const recoveredPage = await this.pageRepo.findById(targetPageId);
+    if (!recoveredPage || recoveredPage.deletedAt) return { targetPageId };
+
+    const completed = await this.operations.completeOperation(
+      operation.id,
+      { resultPageId: targetPageId },
+      operation.leaseToken,
+    );
+    if (!completed) {
+      throw this.conflict(
+        'page_template_operation_lease_lost',
+        'The page template operation lease was lost',
+      );
+    }
+    await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
+    return { page: recoveredPage, idempotent: true };
+  }
+
+  private async readOrStageAttachmentRewrittenContent(
+    operation: any,
+    loadSource: () => Promise<unknown>,
+  ) {
+    if (operation.stagedContent) {
+      return {
+        content: operation.stagedContent,
+        copies: this.operations.readAttachmentMapping(
+          operation.attachmentMapping,
+        ),
+      };
+    }
+    return this.operations.stageAttachmentRewrittenContent(
+      operation.id,
+      operation.leaseToken,
+      await loadSource(),
+      operation.attachmentMapping,
+    );
+  }
+
+  private async persistCreatedPageSideEffects(
+    page: Page,
+    attachmentRows: any[],
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    for (const row of attachmentRows) {
+      await this.attachmentRepo.insertAttachment(row, trx);
+    }
+    const pages = [
+      {
+        id: page.id,
+        workspaceId: page.workspaceId,
+        content: page.content,
+      },
+    ];
+    await this.transclusionService.insertTransclusionsForPages(pages, trx);
+    await this.transclusionService.insertReferencesForPages(pages, trx);
+  }
+
+  private async compensateCreatedPageOperationFailure(
+    operation: any,
+    targetPageId: string,
+    user: User,
+    copiedPaths: string[],
+    error: unknown,
+  ): Promise<void> {
+    if (
+      !(await this.operations.ownsOperationLease(
+        operation.id,
+        operation.leaseToken,
+      ))
+    ) {
+      return;
+    }
+    await this.operations.failOperation(
+      operation.id,
+      this.operations.errorCode(error),
+      operation.leaseToken,
+    );
+    await this.db
+      .deleteFrom('pages')
+      .where('id', '=', targetPageId)
+      .where('creatorId', '=', user.id)
+      .execute();
+    await Promise.allSettled(
+      copiedPaths.map((path) => this.storageService.delete(path)),
+    );
+  }
+
   async createFromTemplate(
     dto: CreateFromTemplateDto,
     idempotencyKey: string,
@@ -888,52 +938,22 @@ export class PageTemplateInstanceService {
       dto,
       { sourcePageId: source.id, resultPageId: proposedTargetPageId },
     );
-    if (operation.status === 'completed' && operation.resultPageId) {
-      const existing = await this.replayCreatedPageOperation(
-        operation,
-        user,
-        'Completed template result not found',
-      );
-      return { page: existing, idempotent: true };
-    }
-
-    const targetPageId = operation.resultPageId as string;
-    const recoveredPage = await this.pageRepo.findById(targetPageId);
-    if (recoveredPage && !recoveredPage.deletedAt) {
-      const completed = await this.operations.completeOperation(
-        operation.id,
-        { resultPageId: targetPageId },
-        operation.leaseToken,
-      );
-      if (!completed) {
-        throw this.conflict(
-          'page_template_operation_lease_lost',
-          'The page template operation lease was lost',
-        );
-      }
-      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
-      return { page: recoveredPage, idempotent: true };
-    }
+    const resolution = await this.resolveCreatedPageOperation(
+      operation,
+      user,
+      'Completed template result not found',
+    );
+    if ('page' in resolution) return resolution;
+    const { targetPageId } = resolution;
     const copiedPaths: string[] = [];
-    let graphLease: PageEmbedGraphLease | undefined;
     try {
-      const rewritten = operation.stagedContent
-        ? {
-            content: operation.stagedContent,
-            copies: this.operations.readAttachmentMapping(
-              operation.attachmentMapping,
-            ),
-          }
-        : await this.operations.stageMaterializedContent(
-            operation.id,
-            operation.leaseToken,
-            templateKind === 'synced'
-              ? createTemplateInstanceContent(publishedRevision!.content)
-              : await this.content.getLiveContent(source.id, user),
-            source.id,
-            targetPageId,
-            operation.attachmentMapping,
-          );
+      const rewritten = await this.readOrStageAttachmentRewrittenContent(
+        operation,
+        async () =>
+          templateKind === 'synced'
+            ? createTemplateInstanceContent(publishedRevision!.content)
+            : this.content.getLiveContent(source.id, user),
+      );
       const attachmentRows = await this.content.copyAttachments(
         rewritten.copies,
         source,
@@ -944,18 +964,6 @@ export class PageTemplateInstanceService {
         false,
       );
       strictJsonToNode(rewritten.content as any);
-      graphLease = await this.pageEmbedService.prepareBulkPageReferences(
-        [
-          {
-            id: targetPageId,
-            workspaceId: user.workspaceId,
-            spaceId: dto.spaceId,
-            content: rewritten.content,
-          },
-        ],
-        user,
-        'snapshot',
-      );
       await this.operations.assertOperationLease(
         operation.id,
         operation.leaseToken,
@@ -1029,40 +1037,10 @@ export class PageTemplateInstanceService {
             deferSideEffects: true,
           },
         );
-        for (const row of attachmentRows) {
-          await this.attachmentRepo.insertAttachment(row, trx);
-        }
-        await this.transclusionService.insertTransclusionsForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              content: createdPage.content,
-            },
-          ],
+        await this.persistCreatedPageSideEffects(
+          createdPage,
+          attachmentRows,
           trx,
-        );
-        await this.transclusionService.insertReferencesForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              content: createdPage.content,
-            },
-          ],
-          trx,
-        );
-        await this.pageEmbedService.insertPageReferencesForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              spaceId: createdPage.spaceId,
-              content: createdPage.content,
-            },
-          ],
-          trx,
-          graphLease,
         );
         const templateInstance = await trx
           .insertInto('pageTemplateInstances')
@@ -1095,28 +1073,14 @@ export class PageTemplateInstanceService {
       await this.finalizeCreatedPageOperation(operation, page, user);
       return { page, idempotent: false };
     } catch (error) {
-      const ownsLease = await this.operations.ownsOperationLease(
-        operation.id,
-        operation.leaseToken,
+      await this.compensateCreatedPageOperationFailure(
+        operation,
+        targetPageId,
+        user,
+        copiedPaths,
+        error,
       );
-      if (ownsLease) {
-        await this.operations.failOperation(
-          operation.id,
-          this.operations.errorCode(error),
-          operation.leaseToken,
-        );
-        await this.db
-          .deleteFrom('pages')
-          .where('id', '=', targetPageId)
-          .where('creatorId', '=', user.id)
-          .execute();
-        await Promise.allSettled(
-          copiedPaths.map((path) => this.storageService.delete(path)),
-        );
-      }
       throw error;
-    } finally {
-      await this.operations.releaseGraphLease(graphLease);
     }
   }
 
@@ -1436,53 +1400,23 @@ export class PageTemplateInstanceService {
       request,
       { sourcePageId: source.id, resultPageId: proposedTargetPageId },
     );
-    if (operation.status === 'completed' && operation.resultPageId) {
-      const existing = await this.replayCreatedPageOperation(
-        operation,
-        user,
-        'Completed independent copy not found',
-      );
-      return { page: existing, idempotent: true };
-    }
-
-    const targetPageId = operation.resultPageId as string;
-    const recoveredPage = await this.pageRepo.findById(targetPageId);
-    if (recoveredPage && !recoveredPage.deletedAt) {
-      const completed = await this.operations.completeOperation(
-        operation.id,
-        { resultPageId: targetPageId },
-        operation.leaseToken,
-      );
-      if (!completed) {
-        throw this.conflict(
-          'page_template_operation_lease_lost',
-          'The page template operation lease was lost',
-        );
-      }
-      await this.finalizeCreatedPageOperation(operation, recoveredPage, user);
-      return { page: recoveredPage, idempotent: true };
-    }
+    const resolution = await this.resolveCreatedPageOperation(
+      operation,
+      user,
+      'Completed independent copy not found',
+    );
+    if ('page' in resolution) return resolution;
+    const { targetPageId } = resolution;
 
     const copiedPaths: string[] = [];
-    let graphLease: PageEmbedGraphLease | undefined;
     try {
-      const rewritten = operation.stagedContent
-        ? {
-            content: operation.stagedContent,
-            copies: this.operations.readAttachmentMapping(
-              operation.attachmentMapping,
-            ),
-          }
-        : await this.operations.stageMaterializedContent(
-            operation.id,
-            operation.leaseToken,
-            detachTemplateContent(
-              await this.content.getLiveContent(source.id, user),
-            ),
-            source.id,
-            targetPageId,
-            operation.attachmentMapping,
-          );
+      const rewritten = await this.readOrStageAttachmentRewrittenContent(
+        operation,
+        async () =>
+          detachTemplateContent(
+            await this.content.getLiveContent(source.id, user),
+          ),
+      );
       strictJsonToNode(rewritten.content as any);
       const attachmentRows = await this.content.copyAttachments(
         rewritten.copies,
@@ -1492,18 +1426,6 @@ export class PageTemplateInstanceService {
         user,
         copiedPaths,
         false,
-      );
-      graphLease = await this.pageEmbedService.prepareBulkPageReferences(
-        [
-          {
-            id: targetPageId,
-            workspaceId: source.workspaceId,
-            spaceId: source.spaceId,
-            content: rewritten.content,
-          },
-        ],
-        user,
-        'snapshot',
       );
       await this.operations.assertOperationLease(
         operation.id,
@@ -1562,68 +1484,24 @@ export class PageTemplateInstanceService {
             deferSideEffects: true,
           },
         );
-        for (const row of attachmentRows) {
-          await this.attachmentRepo.insertAttachment(row, trx);
-        }
-        await this.transclusionService.insertTransclusionsForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              content: createdPage.content,
-            },
-          ],
+        await this.persistCreatedPageSideEffects(
+          createdPage,
+          attachmentRows,
           trx,
-        );
-        await this.transclusionService.insertReferencesForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              content: createdPage.content,
-            },
-          ],
-          trx,
-        );
-        await this.pageEmbedService.insertPageReferencesForPages(
-          [
-            {
-              id: createdPage.id,
-              workspaceId: createdPage.workspaceId,
-              spaceId: createdPage.spaceId,
-              content: createdPage.content,
-            },
-          ],
-          trx,
-          graphLease,
         );
         return createdPage;
       });
       await this.finalizeCreatedPageOperation(operation, page, user);
       return { page, idempotent: false };
     } catch (error) {
-      const ownsLease = await this.operations.ownsOperationLease(
-        operation.id,
-        operation.leaseToken,
+      await this.compensateCreatedPageOperationFailure(
+        operation,
+        targetPageId,
+        user,
+        copiedPaths,
+        error,
       );
-      if (ownsLease) {
-        await this.operations.failOperation(
-          operation.id,
-          this.operations.errorCode(error),
-          operation.leaseToken,
-        );
-        await this.db
-          .deleteFrom('pages')
-          .where('id', '=', targetPageId)
-          .where('creatorId', '=', user.id)
-          .execute();
-        await Promise.allSettled(
-          copiedPaths.map((path) => this.storageService.delete(path)),
-        );
-      }
       throw error;
-    } finally {
-      await this.operations.releaseGraphLease(graphLease);
     }
   }
 

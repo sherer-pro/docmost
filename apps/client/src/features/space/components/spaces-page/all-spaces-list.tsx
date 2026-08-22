@@ -9,7 +9,6 @@ import { getSpaceUrl } from "@/lib/config";
 import { prefetchSpace } from "@/features/space/queries/space-query";
 import { SearchInput } from "@/components/common/search-input";
 import Paginate from "@/components/common/paginate";
-import NoTableResults from "@/components/common/no-table-results";
 import SpaceSettingsModal from "@/features/space/components/settings-modal";
 import classes from "./all-spaces-list.module.css";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -23,9 +22,13 @@ import {
   getResponsivePrimaryCellProps,
 } from "@/components/ui/responsive-table";
 import useUserRole from "@/hooks/use-user-role";
+import { AsyncQueryState } from "@/components/ui/async-query-state";
 
 interface AllSpacesListProps {
   spaces: any[];
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   onSearch: (query: string) => void;
   hasPrevPage?: boolean;
   hasNextPage?: boolean;
@@ -35,6 +38,9 @@ interface AllSpacesListProps {
 
 export default function AllSpacesList({
   spaces,
+  isLoading,
+  isError,
+  onRetry,
   onSearch,
   hasPrevPage,
   hasNextPage,
@@ -52,32 +58,47 @@ export default function AllSpacesList({
     openSettings();
   };
 
+  const state = isLoading
+    ? "loading"
+    : isError
+      ? "error"
+      : spaces.length === 0
+        ? "empty"
+        : "ready";
+
   return (
     <Box>
       <SearchInput onSearch={onSearch} />
 
       <Space h="md" />
 
-      <Table.ScrollContainer
-        minWidth={500}
-        className={tableClasses.responsiveScroll}
+      <AsyncQueryState
+        state={state}
+        loadingLabel={t("Spaces")}
+        errorTitle={t("Could not load spaces")}
+        emptyTitle={t("No space found")}
+        retryLabel={t("Try again")}
+        onRetry={onRetry}
       >
-        <Table
-          highlightOnHover
-          verticalSpacing="sm"
-          className={tableClasses.responsiveTable}
+        <Table.ScrollContainer
+          minWidth={500}
+          className={tableClasses.responsiveScroll}
         >
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t("Space")}</Table.Th>
-              <Table.Th>{t("Members")}</Table.Th>
-              <Table.Th w={100}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
+          <Table
+            highlightOnHover
+            verticalSpacing="sm"
+            className={tableClasses.responsiveTable}
+          >
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("Space")}</Table.Th>
+                <Table.Th>{t("Members")}</Table.Th>
+                <Table.Th w={100}></Table.Th>
+              </Table.Tr>
+            </Table.Thead>
 
-          <Table.Tbody>
-            {spaces.length > 0 ? (
-              spaces.map((space) => (
+            <Table.Tbody>
+              {spaces.map((space) => (
                 <Table.Tr key={space.id}>
                   <Table.Td {...getResponsivePrimaryCellProps(t("Space"))}>
                     <Anchor
@@ -154,15 +175,13 @@ export default function AllSpacesList({
                     )}
                   </Table.Td>
                 </Table.Tr>
-              ))
-            ) : (
-              <NoTableResults colSpan={3} />
-            )}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </AsyncQueryState>
 
-      {spaces.length > 0 && (
+      {state === "ready" && (
         <Paginate
           hasPrevPage={hasPrevPage}
           hasNextPage={hasNextPage}

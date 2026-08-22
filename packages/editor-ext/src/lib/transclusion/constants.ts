@@ -5,9 +5,6 @@
  * - `transclusionReference`: sync blocks cannot transclude other sync blocks,
  *   which keeps the transclusion graph acyclic and lets the renderer skip
  *   cycle-aware traversal entirely.
- * - `pageEmbed`: whole-page references are also page-level leaves. Keeping
- *   them out of source blocks prevents mixed block/page reference cycles.
- *
  * Child-only nodes (`listItem`, `tableRow`, `column`, etc.) are also excluded
  * because they are already constrained by their parent containers.
  */

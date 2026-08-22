@@ -3,7 +3,6 @@ import { describe, it } from "vitest";
 import {
   buildTree,
   buildTreeWithChildren,
-  deleteTreeNode,
   dropTreeNode,
   insertDatabaseRowNode,
   insertOrUpdateTreeNode,
@@ -73,15 +72,6 @@ describe("dropTreeNode", () => {
     );
   });
 
-  it("keeps backward-compatible deleteTreeNode wrapper aligned with dropTreeNode", () => {
-    const child = createNode("child", [], "parent");
-    const parent = createNode("parent", [child]);
-
-    const dropResult = dropTreeNode([parent], "child");
-    const deleteResult = deleteTreeNode([parent], "child");
-
-    assert.deepEqual(deleteResult, dropResult);
-  });
 });
 
 describe("tree node mappers", () => {

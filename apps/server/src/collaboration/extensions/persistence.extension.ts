@@ -42,11 +42,9 @@ import {
   HISTORY_MAX_INTERVAL,
 } from '../constants';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
-import { PageEmbedService } from '../../core/page/transclusion/page-embed.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
-import type { PageEmbedGraphLease } from '../../core/page/transclusion/page-embed-graph-lock.service';
 import { validateTemplateInstanceMutation } from '@docmost/editor-ext/server';
 import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
 import { PageTemplatePolicyService } from '../../core/page/transclusion/page-template-policy.service';
@@ -80,7 +78,6 @@ export class PersistenceExtension implements Extension {
     @InjectQueue(QueueName.NOTIFICATION_QUEUE) private notificationQueue: Queue,
     private readonly collabHistory: CollabHistoryService,
     private readonly transclusionService: TransclusionService,
-    private readonly pageEmbedService: PageEmbedService,
     private readonly eventEmitter: EventEmitter2,
     private readonly collabPageUpdates: CollabPageUpdatePublisherService,
     private readonly pageTemplatePolicy: PageTemplatePolicyService,
@@ -172,10 +169,6 @@ export class PersistenceExtension implements Extension {
 
     let page: Page = null;
     const editingUserIds = this.peekContributors(documentName);
-    const graphLease = context?.pageEmbedGraphLease as
-      | PageEmbedGraphLease
-      | undefined;
-
     let persistenceError: unknown = null;
     for (
       let attempt = 1;
@@ -366,8 +359,6 @@ export class PersistenceExtension implements Extension {
             lockedPage.workspaceId,
             tiptapJson,
             trx,
-            context?.pageTemplateMutationId,
-            graphLease,
           );
 
           if (mutationOperation) {
@@ -695,8 +686,6 @@ export class PersistenceExtension implements Extension {
     workspaceId: string,
     tiptapJson: unknown,
     trx: Parameters<TransclusionService['syncPageTransclusions']>[3],
-    pageTemplateMutationId?: string,
-    graphLease?: PageEmbedGraphLease,
   ): Promise<void> {
     await this.transclusionService.syncPageTransclusions(
       pageId,
@@ -710,22 +699,13 @@ export class PersistenceExtension implements Extension {
       tiptapJson,
       trx,
     );
-    await this.pageEmbedService.syncPageReferences(
-      pageId,
-      workspaceId,
-      tiptapJson,
-      trx,
-      pageTemplateMutationId,
-      graphLease,
-    );
   }
 
   private getContentIntegrityErrorCode(error: unknown): string | null {
     if (!(error instanceof HttpException)) {
       const message = (error as Error)?.message;
       return typeof message === 'string' &&
-        (message.startsWith('page_embed_') ||
-          message.startsWith('page_template_managed_') ||
+        (message.startsWith('page_template_managed_') ||
           message === 'page_template_policy_denied')
         ? message
         : null;
@@ -734,8 +714,7 @@ export class PersistenceExtension implements Extension {
     if (!response || typeof response !== 'object') return null;
     const code = (response as { code?: unknown }).code;
     return typeof code === 'string' &&
-      (code.startsWith('page_embed_') ||
-        code.startsWith('page_template_managed_') ||
+      (code.startsWith('page_template_managed_') ||
         code === 'page_template_policy_denied')
       ? code
       : null;
@@ -758,6 +737,6 @@ export class PersistenceExtension implements Extension {
         tiptapExtensions,
       );
       Y.applyUpdate(document, Y.encodeStateAsUpdate(restored));
-    }, 'page_embed_integrity_recovery');
+    }, 'page_template_integrity_recovery');
   }
 }

@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Readable } from 'stream';
 import { StorageService } from '../../../integrations/storage/storage.service';
@@ -38,6 +39,9 @@ import {
   SAFE_FILE_VALIDATION_ERROR_MESSAGE,
   validateFileExtensionAndSignature,
 } from '../../../common/helpers/file-validation';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
+
+type LegacyAttachmentCleanupScope = 'page' | 'space' | 'user_avatar';
 
 @Injectable()
 export class AttachmentService {
@@ -51,6 +55,8 @@ export class AttachmentService {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @InjectQueue(QueueName.SEARCH_QUEUE) private searchQueue: Queue,
+    @Optional()
+    private readonly queueOutboxService?: QueueOutboxService,
   ) {}
 
   async uploadFile(opts: {
@@ -396,101 +402,79 @@ export class AttachmentService {
   }
 
   async handleDeleteSpaceAttachments(spaceId: string) {
-    try {
-      const attachments = await this.attachmentRepo.findBySpaceId(spaceId);
-      if (!attachments || attachments.length === 0) {
-        return;
-      }
-
-      const failedDeletions = [];
-
-      await Promise.all(
-        attachments.map(async (attachment) => {
-          try {
-            await this.storageService.delete(attachment.filePath);
-            await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch {
-            failedDeletions.push(attachment.id);
-            this.logger.error({ event: 'space_attachment_delete_failed' });
-          }
-        }),
-      );
-
-      if (failedDeletions.length === attachments.length) {
-        throw new Error('space_attachment_delete_failed');
-      }
-    } catch (err) {
-      throw err;
-    }
+    await this.stageLegacyAttachmentCleanup('space', spaceId);
   }
 
   async handleDeleteUserAvatars(userId: string) {
-    try {
-      const userAvatars = await this.db
-        .selectFrom('attachments')
-        .select(['id', 'filePath'])
-        .where('creatorId', '=', userId)
-        .where('type', '=', AttachmentType.Avatar)
-        .execute();
-
-      if (!userAvatars || userAvatars.length === 0) {
-        return;
-      }
-
-      await Promise.all(
-        userAvatars.map(async (attachment) => {
-          try {
-            await this.storageService.delete(attachment.filePath);
-            await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch {
-            this.logger.error({ event: 'user_avatar_delete_failed' });
-          }
-        }),
-      );
-    } catch (err) {
-      throw err;
-    }
+    await this.stageLegacyAttachmentCleanup('user_avatar', userId);
   }
 
   async handleDeletePageAttachments(pageId: string) {
-    try {
-      // Fetch attachments for this page from database
-      const attachments = await this.db
-        .selectFrom('attachments')
-        .select(['id', 'filePath'])
-        .where('pageId', '=', pageId)
-        .execute();
+    await this.stageLegacyAttachmentCleanup('page', pageId);
+  }
 
-      if (!attachments || attachments.length === 0) {
-        return;
-      }
-
-      const failedDeletions = [];
-
-      await Promise.all(
-        attachments.map(async (attachment) => {
-          try {
-            // Delete from storage
-            await this.storageService.delete(attachment.filePath);
-            // Delete from database
-            await this.attachmentRepo.deleteAttachmentById(attachment.id);
-          } catch {
-            failedDeletions.push(attachment.id);
-            this.logger.error({ event: 'page_attachment_delete_failed' });
-          }
-        }),
-      );
-
-      if (failedDeletions.length > 0) {
-        this.logger.warn({
-          event: 'page_attachment_delete_batch_incomplete',
-          failedCount: failedDeletions.length,
-        });
-      }
-    } catch (err) {
-      this.logger.error({ event: 'page_attachment_delete_batch_failed' });
-      throw err;
+  private async stageLegacyAttachmentCleanup(
+    scopeType: LegacyAttachmentCleanupScope,
+    scopeId: string,
+  ): Promise<void> {
+    const queueOutbox = this.queueOutboxService;
+    if (!queueOutbox) {
+      throw new Error('attachment_cleanup_outbox_unavailable');
     }
+
+    let staged = false;
+    await executeTx(this.db, async (trx) => {
+      let query = trx
+        .selectFrom('attachments')
+        .select(['id', 'workspaceId']);
+      if (scopeType === 'page') {
+        query = query.where('pageId', '=', scopeId);
+      } else if (scopeType === 'space') {
+        query = query.where('spaceId', '=', scopeId);
+      } else {
+        query = query
+          .where('creatorId', '=', scopeId)
+          .where('type', '=', AttachmentType.Avatar);
+      }
+
+      const attachments = await query.forUpdate().execute();
+      if (attachments.length === 0) return;
+
+      const workspaceIds = [
+        ...new Set(attachments.map(({ workspaceId }) => workspaceId)),
+      ];
+      if (workspaceIds.length !== 1) {
+        throw new Error('legacy_attachment_cleanup_workspace_mismatch');
+      }
+
+      const workspaceId = workspaceIds[0];
+      if (scopeType === 'page') {
+        staged = await queueOutbox.enqueuePageAttachmentCleanup(
+          [scopeId],
+          scopeId,
+          workspaceId,
+          trx,
+        );
+      } else if (scopeType === 'space') {
+        staged = await queueOutbox.enqueueSpaceAttachmentCleanup(
+          scopeId,
+          workspaceId,
+          trx,
+        );
+      } else {
+        staged = await queueOutbox.enqueueUserAvatarCleanup(
+          scopeId,
+          workspaceId,
+          trx,
+        );
+      }
+
+      if (!staged) {
+        throw new Error('legacy_attachment_cleanup_not_staged');
+      }
+    });
+
+    if (staged) queueOutbox.kick();
   }
 
   async removeUserAvatar(user: User) {

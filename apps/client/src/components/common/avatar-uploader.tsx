@@ -3,7 +3,7 @@ import { Menu, Box, Loader } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { IconTrash, IconUpload } from "@tabler/icons-react";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { AvatarIconType } from "@/types/avatar.types.ts";
 import { notifications } from "@mantine/notifications";
 
 interface AvatarUploaderProps {

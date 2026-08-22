@@ -105,9 +105,23 @@ Several existing read-only endpoints still use `POST` for historical body-shaped
 Rules:
 
 - Add a canonical `GET` route for read-only operations when parameters can be represented as path/query values.
+
 - Do not add a second method or path for an existing operation without an explicit compatibility decision and removal condition.
 - Regenerate the route inventory and test the canonical route behavior whenever the routing contract changes.
 - Leave command-like routes (`/actions/*`, create/update/delete, imports, exports, revoke, unsync) as mutating methods.
+
+## Mutation idempotency
+
+`POST /pages/duplicate` accepts an `Idempotency-Key` header containing 1-128
+ASCII letters, digits, `.`, `_`, or `-`. A completed request is replayed from
+the persisted operation result; reusing the key with a different source or
+destination returns a conflict, and an in-flight request cannot create a second
+page tree. The operation result is committed in the same PostgreSQL transaction
+as the copied pages and attachment outbox intent.
+
+Requests without the header remain temporarily supported and return
+`Deprecation: true` plus `X-Docmost-Required-Header: Idempotency-Key`. New
+clients must always send the header.
 
 ## Databases API shape
 

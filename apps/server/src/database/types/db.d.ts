@@ -667,6 +667,37 @@ export interface Backlinks {
   workspaceId: string;
 }
 
+export interface AttachmentCleanupBatches {
+  completedAt: Timestamp | null;
+  completedCount: Generated<number>;
+  createdAt: Generated<Timestamp>;
+  failedCount: Generated<number>;
+  id: Generated<string>;
+  itemCount: Generated<number>;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
+  scopeId: string;
+  scopeType: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  workspaceId: string;
+}
+
+export interface AttachmentCleanupItems {
+  attachmentId: string;
+  attemptCount: Generated<number>;
+  batchId: string;
+  completedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  filePath: string;
+  id: Generated<string>;
+  lastErrorCode: string | null;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface Comments {
   content: Json | null;
   createdAt: Generated<Timestamp>;
@@ -790,6 +821,7 @@ export interface Favorites {
 }
 
 export interface FileTasks {
+  attemptCount: Generated<number>;
   createdAt: Generated<Timestamp>;
   creatorId: string | null;
   deletedAt: Timestamp | null;
@@ -799,6 +831,8 @@ export interface FileTasks {
   filePath: string;
   fileSize: Int8 | null;
   id: Generated<string>;
+  leaseExpiresAt: Timestamp | null;
+  leaseToken: string | null;
   options: Json | null;
   result: Json | null;
   source: string | null;
@@ -807,6 +841,31 @@ export interface FileTasks {
   type: string | null;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
+}
+
+export interface FileTaskImportArtifacts {
+  artifactType: Generated<string>;
+  attachmentId: string | null;
+  completedAt: Timestamp | null;
+  createdAt: Generated<Timestamp>;
+  filePath: string;
+  fileTaskId: string;
+  id: Generated<string>;
+  pageId: string | null;
+  sourcePath: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface FileTaskImportPages {
+  createdAt: Generated<Timestamp>;
+  fileTaskId: string;
+  id: Generated<string>;
+  pageId: string;
+  slugId: string;
+  sourcePath: string;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface Groups {
@@ -886,6 +945,7 @@ export interface PageHistory {
   pageId: string;
   slug: string | null;
   slugId: string | null;
+  sourceBatchId: string | null;
   spaceId: string;
   title: string | null;
   updatedAt: Generated<Timestamp>;
@@ -934,10 +994,8 @@ export interface PageTransclusionReferences {
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
   referencePageId: string;
-  referenceKind: Generated<string>;
-  referenceNodeId: string | null;
   sourcePageId: string;
-  transclusionId: string | null;
+  transclusionId: string;
   workspaceId: string;
 }
 
@@ -983,13 +1041,11 @@ export interface PageTemplateOperations {
   consumerPageId: string | null;
   createdAt: Generated<Timestamp>;
   errorCode: string | null;
-  graphFencingToken: Int8 | null;
   id: Generated<string>;
   idempotencyKey: string;
   leaseToken: string | null;
   leaseExpiresAt: Timestamp | null;
   operationKind: string;
-  referenceNodeId: string | null;
   requestHash: string;
   requestedById: string;
   resultPageId: string | null;
@@ -1025,17 +1081,6 @@ export interface PageTemplateInstances {
   spaceId: string;
   status: Generated<string>;
   templatePageId: string | null;
-  updatedAt: Generated<Timestamp>;
-  workspaceId: string;
-}
-
-export interface PageTemplateLegacyMigrationErrors {
-  consumerPageId: string;
-  createdAt: Generated<Timestamp>;
-  errorCode: string;
-  id: Generated<string>;
-  referenceNodeId: string;
-  sourcePageId: string | null;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
 }
@@ -1092,12 +1137,6 @@ export interface PageTemplatePublishConfirmations {
   removedFieldIds: Json;
   requestedById: string;
   templatePageId: string;
-}
-
-export interface PageEmbedGraphFences {
-  lastToken: Int8;
-  updatedAt: Generated<Timestamp>;
-  workspaceId: string;
 }
 
 export interface PageTransclusions {
@@ -1160,6 +1199,12 @@ export interface QueueOutbox {
   secretPayload: string | null;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
+}
+
+export interface PageDuplicateAttachmentPins {
+  createdAt: Generated<Timestamp>;
+  outboxId: string;
+  sourceAttachmentId: string;
 }
 
 export interface Shares {
@@ -1328,6 +1373,7 @@ export interface Workspaces {
   id: Generated<string>;
   logo: string | null;
   name: string | null;
+  pageHistoryRetentionDays: number | null;
   settings: Json | null;
   updatedAt: Generated<Timestamp>;
 }
@@ -1361,6 +1407,8 @@ export interface DB {
   aiSpaceContentExclusions: AiSpaceContentExclusions;
   aiSpaceContentPolicies: AiSpaceContentPolicies;
   apiKeys: ApiKeys;
+  attachmentCleanupBatches: AttachmentCleanupBatches;
+  attachmentCleanupItems: AttachmentCleanupItems;
   attachments: Attachments;
   authAccounts: AuthAccounts;
   authProviderGroupMappings: AuthProviderGroupMappings;
@@ -1376,22 +1424,23 @@ export interface DB {
   dictionaryTermAliases: DictionaryTermAliases;
   dictionaryTerms: DictionaryTerms;
   favorites: Favorites;
+  fileTaskImportArtifacts: FileTaskImportArtifacts;
+  fileTaskImportPages: FileTaskImportPages;
   fileTasks: FileTasks;
   groups: Groups;
   groupUsers: GroupUsers;
   labels: Labels;
   notifications: Notifications;
   pageAccessRules: PageAccessRules;
+  pageDuplicateAttachmentPins: PageDuplicateAttachmentPins;
   pageHistory: PageHistory;
   pageLabels: PageLabels;
   pages: Pages;
-  pageEmbedGraphFences: PageEmbedGraphFences;
   pageTransclusionReferences: PageTransclusionReferences;
   pageTransclusions: PageTransclusions;
   pageTemplateGroupPolicies: PageTemplateGroupPolicies;
   pageTemplateAttachmentMappings: PageTemplateAttachmentMappings;
   pageTemplateInstances: PageTemplateInstances;
-  pageTemplateLegacyMigrationErrors: PageTemplateLegacyMigrationErrors;
   pageTemplateOperations: PageTemplateOperations;
   pageTemplatePublishConfirmations: PageTemplatePublishConfirmations;
   pageTemplateRevisions: PageTemplateRevisions;

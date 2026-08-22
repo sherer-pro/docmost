@@ -8,12 +8,10 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { EventName } from '../../../common/events/event.contants';
 import {
   PAGE_TEMPLATE_ACTIONS,
   PageTemplateAction,
-} from '../../../common/config/page-embed.constants';
+} from '../../../common/config/page-template.constants';
 import { SpaceRole, UserRole } from '../../../common/helpers/types/permission';
 import type {
   PageTemplatePolicyGroupsQuery,
@@ -36,12 +34,7 @@ export class PageTemplatePolicyService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly environment: EnvironmentService,
-    private readonly eventEmitter: EventEmitter2,
   ) {}
-
-  getMaxPageEmbedDepth(): number {
-    return this.environment.getMaxPageEmbedDepth();
-  }
 
   async resolveForUser(
     workspaceId: string,
@@ -219,7 +212,6 @@ export class PageTemplatePolicyService {
             .returning('revision')
             .executeTakeFirst();
     if (!updated) this.throwRevisionConflict();
-    this.emitVisibilityChanged(params.workspaceId);
     return this.getWorkspacePolicy(params.workspaceId);
   }
 
@@ -289,7 +281,6 @@ export class PageTemplatePolicyService {
             .returning('revision')
             .executeTakeFirst();
     if (!updated) this.throwRevisionConflict();
-    this.emitVisibilityChanged(params.workspaceId);
     return this.getSpacePolicy(params.workspaceId, params.spaceId);
   }
 
@@ -452,7 +443,6 @@ export class PageTemplatePolicyService {
         revision: Number(updated.revision),
       };
     });
-    this.emitVisibilityChanged(params.workspaceId);
     return result;
   }
 
@@ -477,12 +467,6 @@ export class PageTemplatePolicyService {
       .forUpdate()
       .executeTakeFirst();
     if (!group) this.throwInactiveSpaceGroup();
-  }
-
-  private emitVisibilityChanged(workspaceId: string): void {
-    this.eventEmitter.emit(EventName.PAGE_EMBED_VISIBILITY_CHANGED, {
-      workspaceId,
-    });
   }
 
   private throwRevisionConflict(): never {

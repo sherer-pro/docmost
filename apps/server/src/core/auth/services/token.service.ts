@@ -120,14 +120,12 @@ export class TokenService {
     pageId: string;
     workspaceId: string;
     shareId?: string;
-    pageEmbedSource?: boolean;
   }): Promise<string> {
-    const { pageId, workspaceId, shareId, pageEmbedSource } = opts;
+    const { pageId, workspaceId, shareId } = opts;
     const payload: JwtAttachmentPayload = {
       pageId,
       workspaceId,
       shareId,
-      pageEmbedSource,
       type: JwtType.ATTACHMENT,
     };
 

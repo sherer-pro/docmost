@@ -73,6 +73,7 @@ jest.mock('../../collaboration/collaboration.util', () => ({
 import { ExportService } from './export.service';
 import { ExportFormat } from './dto/export-dto';
 import * as JSZip from 'jszip';
+import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
 
 describe('ExportService PDF export', () => {
   let spaceSettings: Record<string, unknown> = {};
@@ -92,7 +93,6 @@ describe('ExportService PDF export', () => {
 
   const environmentService = {
     getAppUrl: jest.fn(() => 'http://localhost:3000'),
-    getMaxPageEmbedDepth: jest.fn(() => 5),
   };
 
   const htmlPdfRendererService = {
@@ -132,10 +132,6 @@ describe('ExportService PDF export', () => {
   const transclusionService = {
     lookup: jest.fn(async () => ({ items: [] })),
   };
-  const pageEmbedService = {
-    lookup: jest.fn(async () => ({ items: [] })),
-  };
-
   const service = new ExportService(
     pageRepo as any,
     db as any,
@@ -145,7 +141,6 @@ describe('ExportService PDF export', () => {
     tokenService as any,
     pageAccessService as any,
     transclusionService as any,
-    pageEmbedService as any,
   );
 
   const streamToBuffer = async (
@@ -268,7 +263,7 @@ describe('ExportService PDF export', () => {
     expect(pdfHtml).toContain('[data-tag-value="pilot"]');
   });
 
-  it('exports normalized tag settings as an additive v4 setting', () => {
+  it('exports normalized tag settings as an additive V5 setting', () => {
     expect(
       (service as any).getPortableSpaceSettings({
         dictionary: { enabled: true },
@@ -283,6 +278,176 @@ describe('ExportService PDF export', () => {
     expect((service as any).getPortableSpaceSettings({})).toEqual({
       tags: { disabled: [] },
     });
+  });
+
+  it('writes only the V5 Docmost archive schema', async () => {
+    const attachmentId = '55555555-5555-4555-8555-555555555555';
+    const attachmentPayload = Buffer.from('actual attachment bytes');
+    const archiveQuery = (tableName: string) => {
+      const query: any = {
+        select: jest.fn(() => query),
+        selectAll: jest.fn(() => query),
+        innerJoin: jest.fn(() => query),
+        where: jest.fn(() => query),
+        execute: jest.fn(async () =>
+          tableName === 'attachments'
+            ? [
+                {
+                  id: attachmentId,
+                  pageId: 'page-1',
+                  fileName: 'actual.txt',
+                  fileSize: null,
+                  fileExt: '.txt',
+                  mimeType: 'text/plain',
+                  type: 'file',
+                  filePath: `workspace/page-1/${attachmentId}/actual.txt`,
+                },
+              ]
+            : [],
+        ),
+        executeTakeFirst: jest.fn(async () =>
+          tableName === 'spaces'
+            ? {
+                id: 'space-1',
+                workspaceId: 'ws-1',
+                name: 'Space',
+                settings: {},
+              }
+            : undefined,
+        ),
+      };
+      return query;
+    };
+    db.selectFrom.mockImplementation(archiveQuery);
+    storageService.read.mockResolvedValue(attachmentPayload);
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Archive content',
+    });
+    (page as any).content = {
+      type: 'doc',
+      content: [
+        {
+          type: 'transclusionReference',
+          attrs: {
+            sourcePageId: 'external-page',
+            transclusionId: 'block-1',
+          },
+        },
+        {
+          type: 'attachment',
+          attrs: {
+            attachmentId,
+            url: `/api/attachments/files/${attachmentId}/actual.txt`,
+          },
+        },
+      ],
+    };
+    transclusionService.lookup.mockResolvedValue({
+      items: [
+        {
+          sourcePageId: 'external-page',
+          transclusionId: 'block-1',
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Snapshot content' }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const zip = await (service as any).createDocmostArchive({
+      scope: 'page',
+      displayName: 'Root',
+      spaceId: 'space-1',
+      pages: [page],
+      rootPageId: page.id,
+      authorizedUser: { id: 'user-1', workspaceId: 'ws-1' },
+    });
+    const manifest = JSON.parse(
+      await zip.file('docmost-metadata.json').async('string'),
+    );
+    const data = JSON.parse(
+      await zip.file('docmost-data.json').async('string'),
+    );
+
+    expect(manifest.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
+    expect(data.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
+    expect(data.attachments).toEqual([
+      expect.objectContaining({
+        id: attachmentId,
+        fileSize: attachmentPayload.byteLength,
+      }),
+    ]);
+    expect(data.transclusionSnapshots).toEqual([
+      {
+        referencePageId: 'page-1',
+        sourcePageId: 'external-page',
+        transclusionId: 'block-1',
+        content: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Snapshot content' }],
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('refuses to emit a V5 archive containing nested pageEmbed data', async () => {
+    const archiveQuery = (tableName: string) => {
+      const query: any = {
+        select: jest.fn(() => query),
+        selectAll: jest.fn(() => query),
+        innerJoin: jest.fn(() => query),
+        where: jest.fn(() => query),
+        execute: jest.fn(async () => []),
+        executeTakeFirst: jest.fn(async () =>
+          tableName === 'spaces'
+            ? {
+                id: 'space-1',
+                workspaceId: 'ws-1',
+                name: 'Space',
+                settings: {},
+              }
+            : undefined,
+        ),
+      };
+      return query;
+    };
+    db.selectFrom.mockImplementation(archiveQuery);
+    const page = createPage({
+      id: 'page-1',
+      slugId: 'slug-1',
+      title: 'Root',
+      parentPageId: null,
+      text: 'Archive content',
+    });
+    (page as any).settings = {
+      malicious: { nested: [{ type: 'pageEmbed' }] },
+    };
+
+    await expect(
+      (service as any).createDocmostArchive({
+        scope: 'page',
+        displayName: 'Root',
+        spaceId: 'space-1',
+        pages: [page],
+        rootPageId: page.id,
+        authorizedUser: { id: 'user-1', workspaceId: 'ws-1' },
+      }),
+    ).rejects.toThrow('schema 5 with pageEmbed nodes');
   });
 
   it('materializes references with a framed localized snapshot', async () => {

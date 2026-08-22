@@ -153,32 +153,6 @@ describe('AttachmentFileAccessService', () => {
     ).resolves.toBeDefined();
   });
 
-  it('rejects a legacy embedded-source cookie after public page embeds are retired', async () => {
-    const { service, shareService, tokenService } = createService();
-    tokenService.verifyJwt.mockResolvedValueOnce({
-      workspaceId: workspace.id,
-      pageId,
-      shareId: 'share-1',
-      pageEmbedSource: true,
-    });
-
-    await expect(
-      service.getPublicFile(
-        { headers: {}, cookies: {} } as any,
-        createReply(),
-        workspace,
-        fileId,
-        'share-token',
-      ),
-    ).rejects.toThrow('File not found');
-    expect(shareService.getShareForPage).toHaveBeenCalledWith(
-      'source-page',
-      workspace.id,
-      'share-1',
-    );
-    expect(shareService.lookupTransclusionForShare).not.toHaveBeenCalled();
-  });
-
   it('keeps trusted inline image responses inline', async () => {
     const { service } = createService({
       fileExt: '.png',

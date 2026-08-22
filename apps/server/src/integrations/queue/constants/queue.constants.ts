@@ -22,6 +22,7 @@ export enum QueueJob {
   ADD_PAGE_WATCHERS = 'add-page-watchers',
   DUPLICATE_PAGE_ATTACHMENTS = 'duplicate-page-attachments',
   PROCESS_QUEUE_OUTBOX = 'process-queue-outbox',
+  PURGE_QUEUE_OUTBOX = 'purge-queue-outbox',
 
   IMPORT_TASK = 'import-task',
   EXPORT_TASK = 'export-task',
@@ -41,12 +42,9 @@ export enum QueueJob {
   PAGE_RESTORED = 'page-restored',
   PAGE_DELETED = 'page-deleted',
 
-  SPACE_CREATED = 'space-created',
   SPACE_UPDATED = 'space-updated',
   SPACE_DELETED = 'space-deleted',
 
-  WORKSPACE_CREATED = 'workspace-created',
-  WORKSPACE_SPACE_UPDATED = 'workspace-updated',
   WORKSPACE_DELETED = 'workspace-deleted',
   AI_CHAT_RUN = 'ai-chat-run',
   AI_AUX_RUN = 'ai-aux-run',
@@ -55,6 +53,8 @@ export enum QueueJob {
 
   PAGE_HISTORY = 'page-history',
   PAGE_HISTORY_EVENT_FLUSH = 'page-history-event-flush',
+  PAGE_HISTORY_EVENT_RECONCILE = 'page-history-event-reconcile',
+  PAGE_HISTORY_RETENTION_CLEANUP = 'page-history-retention-cleanup',
 
   COMMENT_NOTIFICATION = 'comment-notification',
   COMMENT_RESOLVED_NOTIFICATION = 'comment-resolved-notification',
