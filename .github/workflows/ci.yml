@@ -221,6 +221,9 @@ jobs:
           python -m pip install -r apps/client/e2e/requirements.txt
           pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - name: Docmost export artifact verifier unit tests
+        run: python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py
+
       - name: Build the production image once
         run: |
           build_version="$(node -p "require('./package.json').version")"

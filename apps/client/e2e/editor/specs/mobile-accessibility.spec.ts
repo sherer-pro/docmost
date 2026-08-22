@@ -84,7 +84,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
       page.getByRole("menuitem", { name: "Page details" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Comments" }),
+      page.getByRole("menuitem", { name: "Comments", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("menuitem", { name: "Table of contents" }),

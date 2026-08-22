@@ -10,7 +10,9 @@ const registrationSource = readFileSync(
   "utf8",
 );
 
-function createServiceWorkerHarness() {
+function createServiceWorkerHarness(options?: {
+  beforeCachePut?: (cacheName: string) => Promise<void>;
+}) {
   const listeners = new Map<string, (event: any) => void>();
   const cacheStores = new Map<
     string,
@@ -31,6 +33,7 @@ function createServiceWorkerHarness() {
 
     return {
       put: async (request: RequestInfo | URL, response: Response) => {
+        await options?.beforeCachePut?.(cacheName);
         const key = requestKey(request);
         const normalizedRequest =
           request instanceof Request ? request : new Request(key);
@@ -43,8 +46,7 @@ function createServiceWorkerHarness() {
         store?.get(requestKey(request))?.response.clone(),
       delete: async (request: RequestInfo | URL) =>
         store?.delete(requestKey(request)) ?? false,
-      keys: async () =>
-        [...(store?.values() ?? [])].map(({ request }) => request),
+      keys: async () => cacheKeys(cacheName),
       addAll: vi.fn().mockResolvedValue(undefined),
     };
   };
@@ -54,6 +56,10 @@ function createServiceWorkerHarness() {
     keys: vi.fn(async () => [...cacheStores.keys()]),
     match: vi.fn(async () => undefined),
   };
+  const cacheKeys = vi.fn(async (cacheName: string) => {
+    const store = cacheStores.get(cacheName);
+    return [...(store?.values() ?? [])].map(({ request }) => request);
+  });
   const showNotification = vi.fn().mockResolvedValue(undefined);
   const focus = vi.fn().mockResolvedValue(undefined);
   const openWindow = vi.fn().mockResolvedValue(undefined);
@@ -103,8 +109,19 @@ function createServiceWorkerHarness() {
         cache: Awaited<ReturnType<typeof openCache>>,
         request: Request,
       ) => Promise<Response | undefined>;
-      networkFirstForResource: (request: Request) => Promise<Response>;
+      isValidDocumentResponse: (response: Response) => Promise<boolean>;
+      networkFirstForDocuments: (request: Request) => Promise<{
+        response: Response;
+        cacheWrite: Promise<void>;
+      }>;
+      networkFirstForResource: (request: Request) => Promise<{
+        response: Response;
+        cacheWrite: Promise<void>;
+      }>;
     },
+    cacheKeys,
+    cacheEntryCount: (cacheName: string) =>
+      cacheStores.get(cacheName)?.size ?? 0,
   };
 }
 
@@ -168,12 +185,15 @@ describe("service worker safety policy", () => {
   });
 
   it("keeps background runtime cache writes inside the fetch event lifetime", () => {
-    expect(source).toContain("event.waitUntil(networkResponsePromise");
     expect(source).toContain(
-      "await putRuntimeResponse(cache, request, response)",
+      "event.waitUntil(networkOperation.then(({ cacheWrite }) => cacheWrite))",
+    );
+    expect(source).toContain("respondWithNetworkFirst(event");
+    expect(source).toContain(
+      "event.waitUntil(operation.then(({ cacheWrite }) => cacheWrite))",
     );
     expect(source).toContain(
-      "await putRuntimeResponse(cache, request, networkResponse)",
+      "cacheWrite = putRuntimeResponse(cache, request, networkResponse)",
     );
   });
 
@@ -211,6 +231,42 @@ describe("service worker safety policy", () => {
     expect(source).not.toContain("new Response(response.clone().body");
   });
 
+  it("coalesces a burst of runtime writes before enforcing cache limits", async () => {
+    const { caches, workerContext, cacheKeys, cacheEntryCount } =
+      createServiceWorkerHarness();
+    const runtimeCacheName = "docmost-pwa-v9-runtime";
+    const metadataCacheName = "docmost-pwa-v9-runtime-metadata";
+    const runtimeCache = await caches.open(runtimeCacheName);
+
+    await Promise.all(
+      Array.from({ length: 220 }, (_, index) => {
+        const request = new Request(
+          `http://localhost:3000/assets/chunk-${index}.js`,
+        );
+        return workerContext.putRuntimeResponse(
+          runtimeCache,
+          request,
+          new Response(`chunk-${index}`),
+        );
+      }),
+    );
+
+    const runtimeScans = cacheKeys.mock.calls.filter(
+      ([cacheName]) => cacheName === runtimeCacheName,
+    );
+    expect(runtimeScans.length).toBeLessThanOrEqual(3);
+    expect(cacheEntryCount(runtimeCacheName)).toBe(200);
+    expect(cacheEntryCount(metadataCacheName)).toBe(200);
+  });
+
+  it("releases maintenance ownership before the shared promise resolves", () => {
+    expect(source).toContain("runtimeMaintenancePromise = null;");
+    expect(source).toContain(
+      "instead of joining a promise whose finalizer already ran",
+    );
+    expect(source).not.toContain("})().finally(() => {");
+  });
+
   it("removes stale response and metadata entries together", async () => {
     const { caches, workerContext } = createServiceWorkerHarness();
     const runtimeCache = await caches.open("docmost-pwa-v9-runtime");
@@ -230,18 +286,160 @@ describe("service worker safety policy", () => {
   });
 
   it("returns a successful network response when the cache write fails", async () => {
-    const { caches, fetchMock, workerContext } = createServiceWorkerHarness();
-    const runtimeCache = await caches.open("docmost-pwa-v9-runtime");
-    runtimeCache.put = vi.fn().mockRejectedValue(new Error("quota exceeded"));
+    const { fetchMock, workerContext } = createServiceWorkerHarness({
+      beforeCachePut: async (cacheName) => {
+        if (cacheName === "docmost-pwa-v9-runtime") {
+          throw new Error("quota exceeded");
+        }
+      },
+    });
     fetchMock.mockResolvedValue(
       new Response("fresh", { headers: { "Content-Type": "text/css" } }),
     );
 
-    const response = await workerContext.networkFirstForResource(
-      new Request("http://localhost:3000/assets/app.css"),
-    );
+    const { response, cacheWrite } =
+      await workerContext.networkFirstForResource(
+        new Request("http://localhost:3000/assets/app.css"),
+      );
+    await cacheWrite;
 
     expect(await response.text()).toBe("fresh");
+  });
+
+  it("delivers a navigation response before its background cache write settles", async () => {
+    let releaseCacheWrite: (() => void) | undefined;
+    const cacheWriteGate = new Promise<void>((resolve) => {
+      releaseCacheWrite = resolve;
+    });
+    const beforeCachePut = vi.fn(async (cacheName: string) => {
+      if (cacheName === "docmost-pwa-v9-runtime") {
+        await cacheWriteGate;
+      }
+    });
+    const { fetchMock, workerContext } = createServiceWorkerHarness({
+      beforeCachePut,
+    });
+    const createDocumentResponse = () =>
+      new Response(
+        '<!doctype html><html><body><div id="root"></div></body></html>',
+        {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        },
+      );
+    await expect(
+      workerContext.isValidDocumentResponse(createDocumentResponse()),
+    ).resolves.toBe(true);
+    fetchMock.mockImplementation(async () => createDocumentResponse());
+
+    const { response, cacheWrite } =
+      await workerContext.networkFirstForDocuments(
+        new Request("http://localhost:3000/s/general/p/page-1"),
+      );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(
+      workerContext.isValidDocumentResponse(response.clone()),
+    ).resolves.toBe(true);
+    await expect(response.text()).resolves.toContain('id="root"');
+    await vi.waitFor(() => {
+      expect(beforeCachePut).toHaveBeenCalledWith("docmost-pwa-v9-runtime");
+    });
+    let cacheWriteSettled = false;
+    cacheWrite.then(() => {
+      cacheWriteSettled = true;
+    });
+    await Promise.resolve();
+    expect(cacheWriteSettled).toBe(false);
+
+    releaseCacheWrite?.();
+    await cacheWrite;
+    expect(cacheWriteSettled).toBe(true);
+  });
+
+  it("delivers a network-first locale before its background cache write settles", async () => {
+    let releaseCacheWrite: (() => void) | undefined;
+    const cacheWriteGate = new Promise<void>((resolve) => {
+      releaseCacheWrite = resolve;
+    });
+    const { listeners, fetchMock } = createServiceWorkerHarness({
+      beforeCachePut: async (cacheName) => {
+        if (cacheName === "docmost-pwa-v9-runtime") {
+          await cacheWriteGate;
+        }
+      },
+    });
+    fetchMock.mockResolvedValue(
+      new Response('{"ready":true}', {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    let responsePromise: Promise<Response> | undefined;
+    let lifetimePromise: Promise<void> | undefined;
+
+    listeners.get("fetch")?.({
+      request: new Request("http://localhost:3000/locales/en/translation.json"),
+      respondWith: (promise: Promise<Response>) => {
+        responsePromise = promise;
+      },
+      waitUntil: (promise: Promise<void>) => {
+        lifetimePromise = promise;
+      },
+    });
+
+    await expect(responsePromise).resolves.toBeInstanceOf(Response);
+    let cacheWriteSettled = false;
+    lifetimePromise?.then(() => {
+      cacheWriteSettled = true;
+    });
+    await Promise.resolve();
+    expect(cacheWriteSettled).toBe(false);
+
+    releaseCacheWrite?.();
+    await lifetimePromise;
+    expect(cacheWriteSettled).toBe(true);
+  });
+
+  it("delivers a cold runtime asset before its background cache write settles", async () => {
+    let releaseCacheWrite: (() => void) | undefined;
+    const cacheWriteGate = new Promise<void>((resolve) => {
+      releaseCacheWrite = resolve;
+    });
+    const { listeners, fetchMock } = createServiceWorkerHarness({
+      beforeCachePut: async (cacheName) => {
+        if (cacheName === "docmost-pwa-v9-runtime") {
+          await cacheWriteGate;
+        }
+      },
+    });
+    fetchMock.mockResolvedValue(
+      new Response("export const ready = true;", {
+        headers: { "Content-Type": "application/javascript" },
+      }),
+    );
+    let responsePromise: Promise<Response> | undefined;
+    let lifetimePromise: Promise<void> | undefined;
+
+    listeners.get("fetch")?.({
+      request: new Request("http://localhost:3000/assets/database-page.js"),
+      respondWith: (promise: Promise<Response>) => {
+        responsePromise = promise;
+      },
+      waitUntil: (promise: Promise<void>) => {
+        lifetimePromise = promise;
+      },
+    });
+
+    await expect(responsePromise).resolves.toBeInstanceOf(Response);
+    let cacheWriteSettled = false;
+    lifetimePromise?.then(() => {
+      cacheWriteSettled = true;
+    });
+    await Promise.resolve();
+    expect(cacheWriteSettled).toBe(false);
+
+    releaseCacheWrite?.();
+    await lifetimePromise;
+    expect(cacheWriteSettled).toBe(true);
   });
 
   it("displays the aggregated push payload with its target URL", async () => {

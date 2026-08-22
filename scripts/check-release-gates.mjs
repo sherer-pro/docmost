@@ -40,6 +40,7 @@ const REQUIRED_JOB_COMMANDS = {
     "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
     "python -m pip install -r apps/client/e2e/requirements.txt",
+    "python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py",
     "pnpm test:editor:e2e",
     "pnpm test:ai:e2e",
     "pnpm test:ai-context:e2e",
@@ -401,7 +402,10 @@ function validateCiTriggerContract(errors, ciSource) {
   }
   const pushTrigger =
     /^\s{2}push:\s*\r?\n((?:\s{4}.*(?:\r?\n|$))*)/mu.exec(triggers)?.[1] ?? "";
-  if (!/^\s{4}branches:/mu.test(pushTrigger) || !/\bmain\b/u.test(pushTrigger)) {
+  if (
+    !/^\s{4}branches:/mu.test(pushTrigger) ||
+    !/\bmain\b/u.test(pushTrigger)
+  ) {
     errors.push("ci.yml push trigger must target the main branch");
   }
 }

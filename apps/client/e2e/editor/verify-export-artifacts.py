@@ -40,6 +40,7 @@ EXPECTED_EDITOR_MERMAID_TEXT = (
     "Visible error",
 )
 EXPECTED_TAG_LABELS = ("TBD", "TODO", "DONE", "Core", "Future", "Pilot")
+DOCMOST_ARCHIVE_SCHEMA_VERSION = 5
 
 
 def parse_markdown_token_count(content: str) -> int:
@@ -163,8 +164,16 @@ def verify_docmost(archive_path: Path) -> dict[str, Any]:
     with zipfile.ZipFile(archive_path) as archive:
         manifest = json.loads(archive.read("docmost-metadata.json"))
         data = json.loads(archive.read("docmost-data.json"))
-    assert manifest["schemaVersion"] == 4
-    assert data["schemaVersion"] == 4
+    manifest_version = manifest.get("schemaVersion")
+    data_version = data.get("schemaVersion")
+    assert manifest_version == DOCMOST_ARCHIVE_SCHEMA_VERSION, (
+        "Docmost manifest schemaVersion must be "
+        f"{DOCMOST_ARCHIVE_SCHEMA_VERSION}, got {manifest_version!r}"
+    )
+    assert data_version == DOCMOST_ARCHIVE_SCHEMA_VERSION, (
+        "Docmost data schemaVersion must be "
+        f"{DOCMOST_ARCHIVE_SCHEMA_VERSION}, got {data_version!r}"
+    )
     page_ids = {page["id"] for page in data["pages"]}
     internal_references = 0
     external_references = 0

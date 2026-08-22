@@ -11,6 +11,8 @@ const CURRENT_CACHES = new Set([
 const RUNTIME_CACHE_MAX_ENTRIES = 200;
 const RUNTIME_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 let lastRuntimeExpiryCheck = 0;
+let runtimeMaintenancePromise = null;
+let runtimeMaintenanceRequested = false;
 
 const APP_SHELL_ASSETS = [
   "/",
@@ -83,19 +85,35 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstForDocuments(request));
+    respondWithNetworkFirst(event, networkFirstForDocuments(request));
     return;
   }
 
   if (url.pathname.startsWith("/locales/")) {
-    event.respondWith(networkFirstForResource(request));
+    respondWithNetworkFirst(event, networkFirstForResource(request));
     return;
   }
 
-  const networkResponsePromise = updateRuntimeCache(request);
-  event.waitUntil(networkResponsePromise.then(() => undefined));
-  event.respondWith(staleWhileRevalidate(request, networkResponsePromise));
+  const networkOperation = updateRuntimeCache(request);
+  const networkResponse = networkOperation.then(({ response }) => response);
+  event.waitUntil(networkOperation.then(({ cacheWrite }) => cacheWrite));
+  event.respondWith(staleWhileRevalidate(request, networkResponse));
 });
+
+/**
+ * Returns a successful network-first response without making the document or
+ * locale wait for CacheStorage maintenance. The same operation promise keeps
+ * the background write inside the fetch event lifetime.
+ *
+ * @param {FetchEvent} event - Fetch event receiving the response.
+ * @param {Promise<{response: Response, cacheWrite: Promise<void>}>} operation
+ * Network-first operation.
+ * @returns {void}
+ */
+function respondWithNetworkFirst(event, operation) {
+  event.respondWith(operation.then(({ response }) => response));
+  event.waitUntil(operation.then(({ cacheWrite }) => cacheWrite));
+}
 
 self.addEventListener("push", (event) => {
   event.waitUntil(handlePushEvent(event));
@@ -186,7 +204,8 @@ async function handleNotificationClick(event) {
  * Network First strategy for HTML navigation.
  *
  * @param {Request} request - Original browser navigation request.
- * @returns {Promise<Response>} Fresh network response or fallback from cache/offline page.
+ * @returns {Promise<{response: Response, cacheWrite: Promise<void>}>}
+ * Fresh response and background cache completion.
  */
 async function networkFirstForDocuments(request) {
   const cache = await caches.open(RUNTIME_CACHE);
@@ -198,7 +217,10 @@ async function networkFirstForDocuments(request) {
     const cachedResponse = await getFreshRuntimeResponse(cache, request);
 
     if (cachedResponse && (await isValidDocumentResponse(cachedResponse))) {
-      return cachedResponse;
+      return {
+        response: cachedResponse,
+        cacheWrite: Promise.resolve(),
+      };
     }
 
     if (cachedResponse) {
@@ -208,25 +230,30 @@ async function networkFirstForDocuments(request) {
     const offlinePage = await caches.match("/offline.html");
 
     if (offlinePage) {
-      return offlinePage;
+      return {
+        response: offlinePage,
+        cacheWrite: Promise.resolve(),
+      };
     }
 
-    return new Response("Offline", {
-      status: 503,
-      statusText: "Offline",
-      headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    return {
+      response: new Response("Offline", {
+        status: 503,
+        statusText: "Offline",
+        headers: { "Content-Type": "text/plain; charset=UTF-8" },
+      }),
+      cacheWrite: Promise.resolve(),
+    };
+  }
+
+  let cacheWrite = Promise.resolve();
+  if (await isValidDocumentResponse(response)) {
+    cacheWrite = putRuntimeResponse(cache, request, response).catch(() => {
+      // A cache quota failure must not hide a successful network response.
     });
   }
 
-  if (await isValidDocumentResponse(response)) {
-    try {
-      await putRuntimeResponse(cache, request, response);
-    } catch {
-      // A cache quota failure must not hide a successful network response.
-    }
-  }
-
-  return response;
+  return { response, cacheWrite };
 }
 
 /**
@@ -260,7 +287,8 @@ async function isValidDocumentResponse(response) {
  * Network First strategy for resources that must not remain stale while online.
  *
  * @param {Request} request - Original resource request.
- * @returns {Promise<Response>} Fresh network response or the latest cached response.
+ * @returns {Promise<{response: Response, cacheWrite: Promise<void>}>}
+ * Fresh response and background cache completion.
  */
 async function networkFirstForResource(request) {
   const cache = await caches.open(RUNTIME_CACHE);
@@ -271,23 +299,28 @@ async function networkFirstForResource(request) {
   } catch {
     const cachedResponse = await getFreshRuntimeResponse(cache, request);
     if (cachedResponse) {
-      return cachedResponse;
+      return {
+        response: cachedResponse,
+        cacheWrite: Promise.resolve(),
+      };
     }
-    return new Response("Offline", {
-      status: 503,
-      statusText: "Offline",
-      headers: { "Content-Type": "text/plain; charset=UTF-8" },
-    });
+    return {
+      response: new Response("Offline", {
+        status: 503,
+        statusText: "Offline",
+        headers: { "Content-Type": "text/plain; charset=UTF-8" },
+      }),
+      cacheWrite: Promise.resolve(),
+    };
   }
 
+  let cacheWrite = Promise.resolve();
   if (response.ok) {
-    try {
-      await putRuntimeResponse(cache, request, response);
-    } catch {
+    cacheWrite = putRuntimeResponse(cache, request, response).catch(() => {
       // A cache quota failure must not hide a successful network response.
-    }
+    });
   }
-  return response;
+  return { response, cacheWrite };
 }
 
 /**
@@ -323,7 +356,8 @@ async function staleWhileRevalidate(request, networkResponsePromise) {
  * event lifetime through event.waitUntil().
  *
  * @param {Request} request - Original request for a static resource.
- * @returns {Promise<Response|null>} Network response or null when offline.
+ * @returns {Promise<{response: Response|null, cacheWrite: Promise<void>}>}
+ * Network response and background cache completion.
  */
 async function updateRuntimeCache(request) {
   const cache = await caches.open(RUNTIME_CACHE);
@@ -332,17 +366,21 @@ async function updateRuntimeCache(request) {
   try {
     networkResponse = await fetch(request);
   } catch {
-    return null;
+    return {
+      response: null,
+      cacheWrite: Promise.resolve(),
+    };
   }
 
+  let cacheWrite = Promise.resolve();
   if (networkResponse.ok) {
-    try {
-      await putRuntimeResponse(cache, request, networkResponse);
-    } catch {
-      // The fetched response is still usable when runtime caching fails.
-    }
+    cacheWrite = putRuntimeResponse(cache, request, networkResponse).catch(
+      () => {
+        // The fetched response is still usable when runtime caching fails.
+      },
+    );
   }
-  return networkResponse;
+  return { response: networkResponse, cacheWrite };
 }
 
 /**
@@ -373,7 +411,46 @@ async function putRuntimeResponse(cache, request, response) {
     throw error;
   }
 
-  await enforceRuntimeCacheLimits(cache, metadataCache);
+  await scheduleRuntimeCacheMaintenance(cache, metadataCache);
+}
+
+/**
+ * Coalesces concurrent response writes into a bounded number of cache scans.
+ * A busy route can request hundreds of assets at once; running a full
+ * retention scan for every response would serialize application startup on
+ * CacheStorage, particularly in Firefox.
+ *
+ * @param {Cache} cache - Runtime cache.
+ * @param {Cache} metadataCache - Runtime metadata cache.
+ * @returns {Promise<void>} Shared maintenance completion.
+ */
+function scheduleRuntimeCacheMaintenance(cache, metadataCache) {
+  runtimeMaintenanceRequested = true;
+  if (!runtimeMaintenancePromise) {
+    runtimeMaintenancePromise = (async () => {
+      try {
+        while (true) {
+          // Let concurrently completed cache writes join this maintenance pass.
+          await Promise.resolve();
+          runtimeMaintenanceRequested = false;
+          await enforceRuntimeCacheLimits(cache, metadataCache);
+
+          if (!runtimeMaintenanceRequested) {
+            // Clear ownership before resolving. A write queued immediately
+            // after this synchronous assignment starts a new maintenance pass
+            // instead of joining a promise whose finalizer already ran.
+            runtimeMaintenancePromise = null;
+            return;
+          }
+        }
+      } catch (error) {
+        runtimeMaintenancePromise = null;
+        throw error;
+      }
+    })();
+  }
+
+  return runtimeMaintenancePromise;
 }
 
 /**

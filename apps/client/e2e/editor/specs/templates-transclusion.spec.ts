@@ -64,7 +64,13 @@ async function setPageEditMode(
   page: import("@playwright/test").Page,
   mode: "Edit" | "Read",
 ) {
-  await page.getByText(mode, { exact: true }).click();
+  const modeRadio = page
+    .getByRole("radiogroup")
+    .getByRole("radio", { name: mode, exact: true });
+  const modeLabel = modeRadio.locator("xpath=following-sibling::label");
+  await expect(modeLabel).toBeVisible();
+  await modeLabel.click();
+  await expect(modeRadio).toBeChecked();
   await expect(mainEditor(page)).toHaveAttribute(
     "contenteditable",
     mode === "Edit" ? "true" : "false",
