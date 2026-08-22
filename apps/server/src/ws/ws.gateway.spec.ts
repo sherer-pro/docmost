@@ -364,7 +364,7 @@ describe('WsGateway.handleMessage', () => {
     expect(presenceService.removeConnection).toHaveBeenCalledWith(socket.id);
   });
 
-  it('refreshes matching sockets when authorization state changes', async () => {
+  it('refreshes and invalidates matching sockets when authorization state changes', async () => {
     const socket = createSocketMock(['space-space-a']);
     socket.data.userId = 'user-1';
     socket.data.workspaceId = 'workspace-1';
@@ -380,6 +380,50 @@ describe('WsGateway.handleMessage', () => {
     expect((gateway as any).refreshClientAuthorization).toHaveBeenCalledWith(
       socket,
     );
+    expect(socket.emit).toHaveBeenCalledWith('access:invalidate', {
+      operation: 'access_invalidate',
+    });
+    expect(socket.emit).toHaveBeenCalledWith('transclusion:invalidate', {
+      operation: 'transclusion_invalidate',
+    });
+  });
+
+  it('does not refresh or invalidate unrelated sockets on an authorization change', async () => {
+    const socket = createSocketMock(['space-space-a']);
+    socket.data.userId = 'user-2';
+    socket.data.workspaceId = 'workspace-1';
+    socket.data.sessionId = 'session-2';
+    (gateway as any).server.sockets.sockets.set(socket.id, socket);
+
+    await gateway.handleAuthorizationChanged({
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      sessionId: 'session-1',
+    });
+
+    expect((gateway as any).refreshClientAuthorization).not.toHaveBeenCalled();
+    expect(socket.emit).not.toHaveBeenCalled();
+  });
+
+  it('disconnects without invalidating when authorization refresh fails', async () => {
+    const socket = createSocketMock(['space-space-a']);
+    socket.data.userId = 'user-1';
+    socket.data.workspaceId = 'workspace-1';
+    socket.data.sessionId = 'session-1';
+    (gateway as any).server.sockets.sockets.set(socket.id, socket);
+    (gateway as any).refreshClientAuthorization.mockResolvedValueOnce(false);
+    const disconnectUnauthorized = jest
+      .spyOn(gateway as any, 'disconnectUnauthorized')
+      .mockImplementation(() => undefined);
+
+    await gateway.handleAuthorizationChanged({
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      sessionId: 'session-1',
+    });
+
+    expect(disconnectUnauthorized).toHaveBeenCalledWith(socket);
+    expect(socket.emit).not.toHaveBeenCalled();
   });
 
   it('emits the modern transclusion invalidation contract', () => {

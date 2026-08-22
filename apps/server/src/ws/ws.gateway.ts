@@ -104,7 +104,15 @@ export class WsGateway
       }
       if (!authorized) {
         this.disconnectUnauthorized(socket);
+        continue;
       }
+
+      socket.emit('access:invalidate', {
+        operation: 'access_invalidate',
+      });
+      socket.emit('transclusion:invalidate', {
+        operation: 'transclusion_invalidate',
+      });
     }
   }
 
