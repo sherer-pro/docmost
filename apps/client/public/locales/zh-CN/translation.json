@@ -1809,6 +1809,10 @@
             "signal": "源已删除",
             "action": "页面、数据库、数据库行、附件或词典术语在 feed 快照后消失。RAG Sync 也会移除 `database_row` 和 `dictionary_term` 托管来源，并继续运行而不重试内部 not found 错误。"
           },
+          "sourceRestored": {
+            "signal": "已恢复的来源未重新索引",
+            "action": "恢复时，Docmost 会刷新整个已恢复子树及其有效附件的时间戳，然后立即唤醒 RAG Sync。更新流和附件流无需等待常规轮询间隔即可重新上传。如果来源仍未出现，请检查 binding 健康状态和错误代码。"
+          },
           "runtimeStopped": {
             "signal": "同步已停止",
             "action": "不可重试的运行时错误已禁用绑定。请修复报告的原因；如果目标不可用，请在启用同步前重新测试 Knowledge Base。"

@@ -1809,6 +1809,10 @@
             "signal": "source removed",
             "action": "A page, database, database row, attachment, or dictionary term disappeared after the feed snapshot. RAG Sync treats `database_row` and `dictionary_term` like the other managed sources: it removes their files and continues without an internal not-found retry."
           },
+          "sourceRestored": {
+            "signal": "restored source not re-indexed",
+            "action": "Restoring a page refreshes the whole restored subtree and its live attachment timestamps, then wakes RAG Sync. The update and attachment feeds re-upload them without waiting for the regular polling interval. If they remain absent, check the binding health and error code."
+          },
           "runtimeStopped": {
             "signal": "synchronization stopped",
             "action": "A non-retryable runtime error disabled the binding. Fix the reported cause; if the target is unavailable, Test the Knowledge Base again before enabling synchronization."

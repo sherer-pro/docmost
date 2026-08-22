@@ -1809,6 +1809,10 @@
             "signal": "fuente eliminada",
             "action": "Una página, base de datos, fila, adjunto o término del diccionario desapareció después de la instantánea del feed. RAG Sync elimina también las fuentes administradas `database_row` y `dictionary_term` y continúa sin reintentar un error interno not found."
           },
+          "sourceRestored": {
+            "signal": "origen restaurado sin reindexar",
+            "action": "Al restaurar, Docmost actualiza la marca de tiempo de todo el subárbol restaurado y de sus adjuntos activos, y después activa RAG Sync. Los feeds de actualizaciones y adjuntos los vuelven a cargar sin esperar el intervalo normal de sondeo. Si siguen ausentes, revise el estado y el código de error del binding."
+          },
           "runtimeStopped": {
             "signal": "sincronización detenida",
             "action": "Un error de ejecución no reintentable deshabilitó el vínculo. Corrija la causa indicada; si el destino no está disponible, vuelva a probar la Knowledge Base antes de habilitar la sincronización."

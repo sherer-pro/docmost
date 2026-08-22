@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 15,
   "anchors": [
     "assistant",
     "retrieval",
@@ -206,6 +206,8 @@
     "troubleshooting.rows.sourceAccessChanged.signal",
     "troubleshooting.rows.sourceRemoved.action",
     "troubleshooting.rows.sourceRemoved.signal",
+    "troubleshooting.rows.sourceRestored.action",
+    "troubleshooting.rows.sourceRestored.signal",
     "troubleshooting.title"
   ]
 }
