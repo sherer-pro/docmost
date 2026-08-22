@@ -5,6 +5,8 @@ import {
   type AiAssistantProfileGroupPolicy,
   type AiAssistantProfileIcon,
   type AiBuiltinToolCapability,
+  type AiBuiltinToolCatalogEntry,
+  type AiBuiltinToolCategory,
   type AiQuickCommand,
 } from "@docmost/api-contract";
 import {
@@ -24,6 +26,9 @@ import {
   Text,
   Textarea,
   TextInput,
+  ThemeIcon,
+  Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { modals } from "@mantine/modals";
@@ -31,13 +36,36 @@ import { notifications } from "@mantine/notifications";
 import {
   IconArrowDown,
   IconArrowUp,
+  IconBook,
+  IconBrain,
+  IconBriefcase,
+  IconCheck,
+  IconCircle,
+  IconCode,
+  IconDatabase,
+  IconEdit,
+  IconFileText,
+  IconHistory,
+  IconLanguage,
+  IconLink,
+  IconMessages,
+  IconPaperclip,
+  IconPlayerPlay,
   IconPlus,
   IconRobot,
+  IconSearch,
+  IconSettings,
+  IconShare,
+  IconSitemap,
   IconSparkles,
+  IconStack2,
   IconTrash,
+  IconUsers,
+  IconWand,
   IconX,
+  type Icon as TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useAiAssistantProfilePolicyQuery,
@@ -60,6 +88,51 @@ import {
   buildAiAssistantProfileCapabilityOptions,
   normalizeAiAssistantProfileQuickCommands,
 } from "@/features/ai/utils/ai-assistant-profile-form.ts";
+import styles from "./ai-assistant-profiles-settings.module.css";
+
+type ProfileSection =
+  | "basics"
+  | "instructions"
+  | "model"
+  | "tools"
+  | "access"
+  | "launch";
+
+const PROFILE_SECTIONS: Array<{
+  value: ProfileSection;
+  icon: TablerIcon;
+}> = [
+  { value: "basics", icon: IconRobot },
+  { value: "instructions", icon: IconFileText },
+  { value: "model", icon: IconSettings },
+  { value: "tools", icon: IconWand },
+  { value: "access", icon: IconUsers },
+  { value: "launch", icon: IconPlayerPlay },
+];
+
+const PROFILE_ICON_COMPONENTS: Record<AiAssistantProfileIcon, TablerIcon> = {
+  sparkles: IconSparkles,
+  robot: IconRobot,
+  brain: IconBrain,
+  book: IconBook,
+  briefcase: IconBriefcase,
+  code: IconCode,
+  language: IconLanguage,
+  search: IconSearch,
+};
+
+const TOOL_CATEGORY_ICONS: Record<AiBuiltinToolCategory, TablerIcon> = {
+  search: IconSearch,
+  page_read: IconFileText,
+  page_write: IconEdit,
+  context: IconStack2,
+  database: IconDatabase,
+  page_structure: IconSitemap,
+  collaboration: IconMessages,
+  history: IconHistory,
+  attachments: IconPaperclip,
+  sharing: IconShare,
+};
 
 type ProfileForm = {
   name: string;
@@ -121,6 +194,9 @@ export function AiAssistantProfilesSettings({
   const testAgent = useTestAiAssistantProfileAgentMutation(spaceId);
   const [opened, setOpened] = useState(false);
   const [editingId, setEditingId] = useState<string | undefined>();
+  const [activeSection, setActiveSection] = useState<ProfileSection>("basics");
+  const [toolSearch, setToolSearch] = useState("");
+  const sectionNavRef = useRef<HTMLElement>(null);
   const detailQuery = useAiAssistantProfileQuery(spaceId, editingId);
   const form = useForm<ProfileForm>({ initialValues: EMPTY_FORM });
 
@@ -145,6 +221,27 @@ export function AiAssistantProfilesSettings({
   );
 
   useEffect(() => {
+    if (!opened) {
+      return;
+    }
+
+    sectionNavRef.current
+      ?.querySelector<HTMLElement>('[aria-current="step"]')
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+  }, [activeSection, opened]);
+  const availableBuiltinTools = useMemo(() => {
+    const effective = new Set(toolsQuery.data?.effectiveCapabilities ?? []);
+    return (toolsQuery.data?.catalog ?? []).filter(
+      (tool) =>
+        tool.exposures.includes("agent") && effective.has(tool.capability),
+    );
+  }, [toolsQuery.data]);
+
+  useEffect(() => {
     const profile = detailQuery.data;
     if (!profile || profile.id !== editingId) return;
     form.setValues(toForm(profile));
@@ -153,6 +250,8 @@ export function AiAssistantProfilesSettings({
 
   const openCreate = () => {
     setEditingId(undefined);
+    setActiveSection("basics");
+    setToolSearch("");
     form.setValues({
       ...EMPTY_FORM,
       allowedBuiltinCapabilities: toolsQuery.data?.effectiveCapabilities ?? [],
@@ -163,6 +262,8 @@ export function AiAssistantProfilesSettings({
 
   const openEdit = (profileId: string) => {
     setEditingId(profileId);
+    setActiveSection("basics");
+    setToolSearch("");
     setOpened(true);
   };
 
@@ -176,11 +277,22 @@ export function AiAssistantProfilesSettings({
 
   const save = async () => {
     const values = form.values;
-    if (!values.name.trim() || !values.instructions.trim()) {
+    form.clearErrors();
+    if (!values.name.trim()) {
+      form.setFieldError("name", t("ai.profiles.requiredField"));
+      setActiveSection("basics");
+      notifications.show({ color: "red", message: t("ai.profiles.required") });
+      return;
+    }
+    if (!values.instructions.trim()) {
+      form.setFieldError("instructions", t("ai.profiles.requiredField"));
+      setActiveSection("instructions");
       notifications.show({ color: "red", message: t("ai.profiles.required") });
       return;
     }
     if (values.autoStart && !values.launchMessage.trim()) {
+      form.setFieldError("launchMessage", t("ai.profiles.requiredField"));
+      setActiveSection("launch");
       notifications.show({
         color: "red",
         message: t("ai.profiles.launchRequired"),
@@ -227,6 +339,27 @@ export function AiAssistantProfilesSettings({
       showError(error);
     }
   };
+
+  const isSectionComplete = (section: ProfileSection) => {
+    switch (section) {
+      case "basics":
+        return Boolean(form.values.name.trim());
+      case "instructions":
+        return Boolean(form.values.instructions.trim());
+      case "launch":
+        return (
+          !form.values.autoStart || Boolean(form.values.launchMessage.trim())
+        );
+      default:
+        return true;
+    }
+  };
+
+  const activeSectionConfig =
+    PROFILE_SECTIONS.find((section) => section.value === activeSection) ??
+    PROFILE_SECTIONS[0];
+  const ActiveSectionIcon = activeSectionConfig.icon;
+  const SelectedProfileIcon = PROFILE_ICON_COMPONENTS[form.values.icon];
 
   if (profilesQuery.isLoading || policyQuery.isLoading)
     return <Loader size="sm" />;
@@ -376,369 +509,847 @@ export function AiAssistantProfilesSettings({
         ))
       )}
 
-      <Modal.Root opened={opened} onClose={() => setOpened(false)} size="xl">
+      <Modal.Root
+        opened={opened}
+        onClose={() => setOpened(false)}
+        size="min(1180px, calc(100vw - 32px))"
+        centered
+      >
         <Modal.Overlay />
         <Modal.Content
+          className={styles.modalContent}
           aria-label={
             editingId
               ? t("ai.profiles.editTitle")
               : t("ai.profiles.createTitle")
           }
         >
-          <Modal.Body>
-            <Group justify="space-between" mb="md">
-              <Text component="h2" size="lg" fw={600}>
-                {editingId
-                  ? t("ai.profiles.editTitle")
-                  : t("ai.profiles.createTitle")}
-              </Text>
-              <AccessibleActionIcon
-                variant="subtle"
-                label={t("Close")}
-                onClick={() => setOpened(false)}
+          <Modal.Body className={styles.modalBody}>
+            <div className={styles.modalLayout}>
+              <Group
+                className={styles.modalHeader}
+                justify="space-between"
+                wrap="nowrap"
               >
-                <IconX size={20} />
-              </AccessibleActionIcon>
-            </Group>
-            {editingId && detailQuery.isLoading ? (
-              <Loader size="sm" />
-            ) : (
-              <Stack gap="md">
-                <Group grow align="flex-start">
-                  <TextInput
-                    label={t("ai.profiles.name")}
-                    maxLength={AI_ASSISTANT_PROFILE_LIMITS.name}
-                    required
-                    {...form.getInputProps("name")}
-                  />
-                  <Select
-                    label={t("ai.profiles.icon")}
-                    data={AI_ASSISTANT_PROFILE_ICONS.map((icon) => ({
-                      value: icon,
-                      label: icon,
-                    }))}
-                    allowDeselect={false}
-                    {...form.getInputProps("icon")}
-                  />
-                </Group>
-                <TextInput
-                  label={t("ai.profiles.profileDescription")}
-                  maxLength={AI_ASSISTANT_PROFILE_LIMITS.description}
-                  {...form.getInputProps("description")}
-                />
-                <Textarea
-                  label={t("ai.profiles.instructions")}
-                  minRows={5}
-                  maxLength={AI_ASSISTANT_PROFILE_LIMITS.instructions}
-                  required
-                  {...form.getInputProps("instructions")}
-                />
-                <Switch
-                  label={t("ai.profiles.enabled")}
-                  {...form.getInputProps("enabled", { type: "checkbox" })}
-                />
-                <Switch
-                  label={t("ai.profiles.inheritQuickCommands")}
-                  {...form.getInputProps("inheritQuickCommands", {
-                    type: "checkbox",
-                  })}
-                />
-                {!form.values.inheritQuickCommands && (
-                  <Stack gap="xs">
-                    {form.values.quickCommands.map((command, index) => (
-                      <Paper
-                        key={command.id || index}
-                        withBorder
-                        p="sm"
-                        radius="md"
+                <div>
+                  <Text component="h2" size="lg" fw={600}>
+                    {editingId
+                      ? t("ai.profiles.editTitle")
+                      : t("ai.profiles.createTitle")}
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    {t("ai.profiles.editorDescription")}
+                  </Text>
+                </div>
+                <AccessibleActionIcon
+                  variant="subtle"
+                  label={t("Close")}
+                  onClick={() => setOpened(false)}
+                >
+                  <IconX size={20} />
+                </AccessibleActionIcon>
+              </Group>
+
+              <aside className={styles.sidebar}>
+                <Stack className={styles.profilePreview} gap="sm">
+                  <Group wrap="nowrap" align="flex-start">
+                    <div className={styles.profileAvatar}>
+                      <SelectedProfileIcon size={30} aria-hidden />
+                    </div>
+                    <div className={styles.profileName}>
+                      <Text fw={600} truncate>
+                        {form.values.name.trim() ||
+                          t("ai.profiles.unnamedProfile")}
+                      </Text>
+                      <Badge
+                        mt={4}
+                        size="sm"
+                        variant="light"
+                        color={form.values.enabled ? "green" : "gray"}
                       >
-                        <Stack gap="sm">
-                          <Group grow align="flex-start">
-                            <TextInput
-                              label={t("ai.profiles.commandLabel")}
-                              maxLength={120}
-                              {...form.getInputProps(
-                                `quickCommands.${index}.label`,
-                              )}
-                            />
-                            <TextInput
-                              label={t("ai.settings.commandDescription")}
-                              description={t(
-                                "ai.settings.commandDescriptionHint",
-                              )}
-                              maxLength={500}
-                              styles={{
-                                description: {
-                                  color: "var(--mantine-color-text)",
-                                },
-                              }}
-                              {...form.getInputProps(
-                                `quickCommands.${index}.description`,
-                              )}
-                            />
-                          </Group>
-                          <Textarea
-                            label={t("ai.profiles.commandPrompt")}
-                            minRows={2}
-                            maxLength={4000}
-                            {...form.getInputProps(
-                              `quickCommands.${index}.prompt`,
-                            )}
+                        {form.values.enabled
+                          ? t("ai.profiles.enabledState")
+                          : t("ai.profiles.disabled")}
+                      </Badge>
+                    </div>
+                  </Group>
+                  <Group
+                    className={styles.inheritanceSummary}
+                    gap="xs"
+                    wrap="nowrap"
+                  >
+                    <IconLink size={16} aria-hidden />
+                    <Text size="xs" c="dimmed">
+                      {form.values.inheritQuickCommands
+                        ? t("ai.profiles.quickCommandsInherited")
+                        : t("ai.profiles.quickCommandsCustom")}
+                    </Text>
+                  </Group>
+                </Stack>
+
+                <nav
+                  ref={sectionNavRef}
+                  className={styles.sectionNav}
+                  aria-label={t("ai.profiles.sectionsLabel")}
+                >
+                  {PROFILE_SECTIONS.map((section) => {
+                    const SectionIcon = section.icon;
+                    const complete = isSectionComplete(section.value);
+                    return (
+                      <UnstyledButton
+                        key={section.value}
+                        className={`${styles.sectionNavItem} ${
+                          activeSection === section.value
+                            ? styles.sectionNavItemActive
+                            : ""
+                        }`}
+                        aria-current={
+                          activeSection === section.value ? "step" : undefined
+                        }
+                        onClick={() => setActiveSection(section.value)}
+                      >
+                        <SectionIcon size={19} aria-hidden />
+                        <Text
+                          className={styles.sectionNavLabel}
+                          size="sm"
+                          fw={activeSection === section.value ? 600 : 500}
+                        >
+                          {t(`ai.profiles.section.${section.value}`)}
+                        </Text>
+                        {complete ? (
+                          <IconCheck
+                            size={16}
+                            color="var(--mantine-color-teal-6)"
+                            aria-hidden
                           />
-                          <Group justify="space-between">
-                            <Switch
-                              label={t("ai.settings.commandEnabled")}
-                              {...form.getInputProps(
-                                `quickCommands.${index}.enabled`,
-                                { type: "checkbox" },
-                              )}
-                            />
-                            <Group gap="xs">
-                              <AccessibleActionIcon
-                                variant="subtle"
-                                label={t("ai.settings.moveCommandUp")}
-                                disabled={index === 0}
-                                onClick={() =>
-                                  form.reorderListItem("quickCommands", {
-                                    from: index,
-                                    to: index - 1,
-                                  })
-                                }
-                              >
-                                <IconArrowUp size={16} />
-                              </AccessibleActionIcon>
-                              <AccessibleActionIcon
-                                variant="subtle"
-                                label={t("ai.settings.moveCommandDown")}
-                                disabled={
-                                  index === form.values.quickCommands.length - 1
-                                }
-                                onClick={() =>
-                                  form.reorderListItem("quickCommands", {
-                                    from: index,
-                                    to: index + 1,
-                                  })
-                                }
-                              >
-                                <IconArrowDown size={16} />
-                              </AccessibleActionIcon>
-                              <AccessibleActionIcon
-                                variant="subtle"
-                                color="red"
-                                label={t("Delete")}
-                                onClick={() =>
-                                  form.removeListItem("quickCommands", index)
-                                }
-                              >
-                                <IconTrash size={16} />
-                              </AccessibleActionIcon>
-                            </Group>
-                          </Group>
-                        </Stack>
-                      </Paper>
-                    ))}
-                    <Button
-                      variant="default"
-                      onClick={() =>
-                        form.insertListItem("quickCommands", {
-                          id: crypto.randomUUID(),
-                          label: "",
-                          description: "",
-                          prompt: "",
-                          enabled: true,
-                          position: form.values.quickCommands.length,
-                        })
-                      }
+                        ) : (
+                          <IconCircle
+                            size={14}
+                            color="var(--mantine-color-gray-5)"
+                            aria-hidden
+                          />
+                        )}
+                      </UnstyledButton>
+                    );
+                  })}
+                </nav>
+
+                <div className={styles.iconPicker}>
+                  <Text size="sm" fw={600} mb="sm">
+                    {t("ai.profiles.icon")}
+                  </Text>
+                  <div className={styles.iconGrid}>
+                    {AI_ASSISTANT_PROFILE_ICONS.map((icon) => {
+                      const ProfileIcon = PROFILE_ICON_COMPONENTS[icon];
+                      const label = t(`ai.profiles.iconName.${icon}`);
+                      return (
+                        <Tooltip key={icon} label={label} withArrow>
+                          <UnstyledButton
+                            className={`${styles.iconChoice} ${
+                              form.values.icon === icon
+                                ? styles.iconChoiceActive
+                                : ""
+                            }`}
+                            aria-label={label}
+                            aria-pressed={form.values.icon === icon}
+                            onClick={() => form.setFieldValue("icon", icon)}
+                          >
+                            <ProfileIcon size={22} aria-hidden />
+                          </UnstyledButton>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                  <Text size="xs" c="dimmed" mt="sm">
+                    {t("ai.profiles.iconDescription")}
+                  </Text>
+                </div>
+              </aside>
+
+              <main className={styles.content}>
+                {editingId && detailQuery.isLoading ? (
+                  <Loader size="sm" />
+                ) : (
+                  <Stack gap="lg">
+                    <Group
+                      className={styles.sectionHeading}
+                      gap="sm"
+                      wrap="nowrap"
+                      align="flex-start"
                     >
-                      {t("ai.profiles.addCommand")}
-                    </Button>
-                  </Stack>
-                )}
-                <Group grow align="flex-start">
-                  <TextInput
-                    label={t("ai.profiles.modelOverride")}
-                    maxLength={AI_ASSISTANT_PROFILE_LIMITS.modelId}
-                    disabled={profilesQuery.data.modelOverridesEnabled !== true}
-                    {...form.getInputProps("chatModelOverride")}
-                  />
-                  <NumberInput
-                    label={t("ai.profiles.temperatureOverride")}
-                    min={0}
-                    max={2}
-                    decimalScale={2}
-                    disabled={profilesQuery.data.modelOverridesEnabled !== true}
-                    {...form.getInputProps("temperatureOverride")}
-                  />
-                  <NumberInput
-                    label={t("ai.profiles.maxTokensOverride")}
-                    min={1}
-                    disabled={profilesQuery.data.modelOverridesEnabled !== true}
-                    {...form.getInputProps("maxOutputTokensOverride")}
-                  />
-                </Group>
-                <MultiSelect
-                  label={t("ai.profiles.builtinTools")}
-                  data={capabilityOptions}
-                  searchable
-                  {...form.getInputProps("allowedBuiltinCapabilities")}
-                />
-                <MultiSelect
-                  label={t("ai.profiles.externalTools")}
-                  description={t("ai.profiles.externalToolsDescription")}
-                  styles={{
-                    description: { color: "var(--mantine-color-text)" },
-                  }}
-                  data={externalOptions}
-                  searchable
-                  {...form.getInputProps("allowedExternalTools")}
-                />
-                <MultiSelect
-                  label={t("ai.profiles.visibleGroups")}
-                  data={groupOptions}
-                  searchable
-                  value={form.values.groupPolicies.map(
-                    (policy) => policy.groupId,
-                  )}
-                  onChange={(groupIds) => {
-                    const current = new Map(
-                      form.values.groupPolicies.map((policy) => [
-                        policy.groupId,
-                        policy,
-                      ]),
-                    );
-                    form.setFieldValue(
-                      "groupPolicies",
-                      groupIds.map(
-                        (groupId) =>
-                          current.get(groupId) ?? {
-                            groupId,
-                            available: true,
-                            allowedBuiltinCapabilities: null,
-                          },
-                      ),
-                    );
-                  }}
-                />
-                {form.values.groupPolicies.map((policy, index) => (
-                  <Paper key={policy.groupId} withBorder p="sm">
-                    <Stack gap="xs">
-                      <Checkbox
-                        label={t("ai.profiles.groupAvailable", {
-                          group:
-                            groupOptions.find(
-                              (group) => group.value === policy.groupId,
-                            )?.label ?? policy.groupId,
-                        })}
-                        checked={policy.available}
-                        onChange={(event) =>
-                          form.setFieldValue(
-                            `groupPolicies.${index}.available`,
-                            event.currentTarget.checked,
-                          )
-                        }
-                      />
-                      <MultiSelect
-                        label={t("ai.profiles.groupBuiltinTools")}
-                        description={t(
-                          "ai.profiles.groupBuiltinToolsDescription",
-                        )}
-                        styles={{
-                          description: { color: "var(--mantine-color-text)" },
-                        }}
-                        data={capabilityOptions.filter((option) =>
-                          form.values.allowedBuiltinCapabilities.includes(
-                            option.value as AiBuiltinToolCapability,
-                          ),
-                        )}
-                        clearable
-                        value={policy.allowedBuiltinCapabilities ?? []}
-                        onChange={(value) =>
-                          form.setFieldValue(
-                            `groupPolicies.${index}.allowedBuiltinCapabilities`,
-                            value as AiBuiltinToolCapability[],
-                          )
-                        }
-                      />
-                    </Stack>
-                  </Paper>
-                ))}
-                <Switch
-                  label={t("ai.profiles.autoStart")}
-                  {...form.getInputProps("autoStart", { type: "checkbox" })}
-                />
-                {form.values.autoStart && (
-                  <Textarea
-                    label={t("ai.profiles.launchMessage")}
-                    maxLength={AI_ASSISTANT_PROFILE_LIMITS.launchMessage}
-                    required
-                    {...form.getInputProps("launchMessage")}
-                  />
-                )}
-                {editingId && detailQuery.data && (
-                  <Paper withBorder p="sm">
-                    <Group justify="space-between">
+                      <ThemeIcon variant="light" size={36} radius="md">
+                        <ActiveSectionIcon size={20} aria-hidden />
+                      </ThemeIcon>
                       <div>
-                        <Text fw={600}>{t("ai.profiles.verification")}</Text>
+                        <Text component="h3" size="xl" fw={600}>
+                          {t(`ai.profiles.section.${activeSection}`)}
+                        </Text>
                         <Text size="sm" c="dimmed">
-                          {t(
-                            `ai.profiles.agentReason.${detailQuery.data.agent.reason}`,
-                          )}
+                          {t(`ai.profiles.sectionDescription.${activeSection}`)}
                         </Text>
                       </div>
-                      <Group gap="xs">
-                        <Button
-                          variant="default"
-                          loading={testModel.isPending}
-                          onClick={() =>
-                            void testModel
-                              .mutateAsync(editingId)
-                              .then(() =>
-                                notifications.show({
-                                  color: "green",
-                                  message: t("ai.profiles.modelTestPassed"),
-                                }),
-                              )
-                              .catch(showError)
-                          }
-                        >
-                          {t("ai.profiles.testModel")}
-                        </Button>
-                        <Button
-                          loading={testAgent.isPending}
-                          onClick={() =>
-                            void testAgent
-                              .mutateAsync(editingId)
-                              .then(() =>
-                                notifications.show({
-                                  color: "green",
-                                  message: t("ai.profiles.agentTestPassed"),
-                                }),
-                              )
-                              .catch(showError)
-                          }
-                        >
-                          {t("ai.profiles.testAgent")}
-                        </Button>
-                      </Group>
                     </Group>
-                  </Paper>
+
+                    {activeSection === "basics" && (
+                      <Stack gap="md">
+                        <div className={styles.fieldGrid}>
+                          <TextInput
+                            label={t("ai.profiles.name")}
+                            maxLength={AI_ASSISTANT_PROFILE_LIMITS.name}
+                            required
+                            {...form.getInputProps("name")}
+                          />
+                          <TextInput
+                            label={t("ai.profiles.profileDescription")}
+                            maxLength={AI_ASSISTANT_PROFILE_LIMITS.description}
+                            {...form.getInputProps("description")}
+                          />
+                        </div>
+                        <Switch
+                          label={t("ai.profiles.enabled")}
+                          description={t("ai.profiles.enabledDescription")}
+                          {...form.getInputProps("enabled", {
+                            type: "checkbox",
+                          })}
+                        />
+                        <Paper
+                          className={styles.mobileIconPicker}
+                          withBorder
+                          p="md"
+                          radius="md"
+                        >
+                          <Text size="sm" fw={600} mb="xs">
+                            {t("ai.profiles.icon")}
+                          </Text>
+                          <Text size="xs" c="dimmed" mb="sm">
+                            {t("ai.profiles.iconMobileHint")}
+                          </Text>
+                          <div className={styles.iconGrid}>
+                            {AI_ASSISTANT_PROFILE_ICONS.map((icon) => {
+                              const ProfileIcon = PROFILE_ICON_COMPONENTS[icon];
+                              const label = t(`ai.profiles.iconName.${icon}`);
+                              return (
+                                <Tooltip key={icon} label={label} withArrow>
+                                  <UnstyledButton
+                                    className={`${styles.iconChoice} ${
+                                      form.values.icon === icon
+                                        ? styles.iconChoiceActive
+                                        : ""
+                                    }`}
+                                    aria-label={label}
+                                    aria-pressed={form.values.icon === icon}
+                                    onClick={() =>
+                                      form.setFieldValue("icon", icon)
+                                    }
+                                  >
+                                    <ProfileIcon size={20} aria-hidden />
+                                  </UnstyledButton>
+                                </Tooltip>
+                              );
+                            })}
+                          </div>
+                        </Paper>
+                      </Stack>
+                    )}
+
+                    {activeSection === "instructions" && (
+                      <Stack gap="md">
+                        <Textarea
+                          label={t("ai.profiles.instructions")}
+                          description={t("ai.profiles.instructionsDescription")}
+                          minRows={10}
+                          autosize
+                          maxRows={18}
+                          maxLength={AI_ASSISTANT_PROFILE_LIMITS.instructions}
+                          required
+                          {...form.getInputProps("instructions")}
+                        />
+                        <Switch
+                          label={t("ai.profiles.inheritQuickCommands")}
+                          description={t(
+                            "ai.profiles.inheritQuickCommandsDescription",
+                          )}
+                          {...form.getInputProps("inheritQuickCommands", {
+                            type: "checkbox",
+                          })}
+                        />
+                        {!form.values.inheritQuickCommands && (
+                          <Stack gap="sm">
+                            <Group justify="space-between">
+                              <div>
+                                <Text fw={600}>
+                                  {t("ai.profiles.customQuickCommands")}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                  {t(
+                                    "ai.profiles.customQuickCommandsDescription",
+                                  )}
+                                </Text>
+                              </div>
+                              <Button
+                                variant="default"
+                                leftSection={<IconPlus size={16} />}
+                                onClick={() =>
+                                  form.insertListItem("quickCommands", {
+                                    id: crypto.randomUUID(),
+                                    label: "",
+                                    description: "",
+                                    prompt: "",
+                                    enabled: true,
+                                    position: form.values.quickCommands.length,
+                                  })
+                                }
+                              >
+                                {t("ai.profiles.addCommand")}
+                              </Button>
+                            </Group>
+                            {form.values.quickCommands.map((command, index) => (
+                              <Paper
+                                key={command.id || index}
+                                className={styles.quickCommandCard}
+                                withBorder
+                                p="md"
+                                radius="md"
+                              >
+                                <Stack gap="sm">
+                                  <div className={styles.fieldGrid}>
+                                    <TextInput
+                                      label={t("ai.profiles.commandLabel")}
+                                      maxLength={120}
+                                      {...form.getInputProps(
+                                        `quickCommands.${index}.label`,
+                                      )}
+                                    />
+                                    <TextInput
+                                      label={t(
+                                        "ai.settings.commandDescription",
+                                      )}
+                                      maxLength={500}
+                                      {...form.getInputProps(
+                                        `quickCommands.${index}.description`,
+                                      )}
+                                    />
+                                  </div>
+                                  <Textarea
+                                    label={t("ai.profiles.commandPrompt")}
+                                    minRows={3}
+                                    maxLength={4000}
+                                    {...form.getInputProps(
+                                      `quickCommands.${index}.prompt`,
+                                    )}
+                                  />
+                                  <Group justify="space-between">
+                                    <Switch
+                                      label={t("ai.settings.commandEnabled")}
+                                      {...form.getInputProps(
+                                        `quickCommands.${index}.enabled`,
+                                        { type: "checkbox" },
+                                      )}
+                                    />
+                                    <Group gap={4}>
+                                      <AccessibleActionIcon
+                                        variant="subtle"
+                                        label={t("ai.settings.moveCommandUp")}
+                                        disabled={index === 0}
+                                        onClick={() =>
+                                          form.reorderListItem(
+                                            "quickCommands",
+                                            { from: index, to: index - 1 },
+                                          )
+                                        }
+                                      >
+                                        <IconArrowUp size={16} />
+                                      </AccessibleActionIcon>
+                                      <AccessibleActionIcon
+                                        variant="subtle"
+                                        label={t("ai.settings.moveCommandDown")}
+                                        disabled={
+                                          index ===
+                                          form.values.quickCommands.length - 1
+                                        }
+                                        onClick={() =>
+                                          form.reorderListItem(
+                                            "quickCommands",
+                                            { from: index, to: index + 1 },
+                                          )
+                                        }
+                                      >
+                                        <IconArrowDown size={16} />
+                                      </AccessibleActionIcon>
+                                      <AccessibleActionIcon
+                                        variant="subtle"
+                                        color="red"
+                                        label={t("Delete")}
+                                        onClick={() =>
+                                          form.removeListItem(
+                                            "quickCommands",
+                                            index,
+                                          )
+                                        }
+                                      >
+                                        <IconTrash size={16} />
+                                      </AccessibleActionIcon>
+                                    </Group>
+                                  </Group>
+                                </Stack>
+                              </Paper>
+                            ))}
+                          </Stack>
+                        )}
+                      </Stack>
+                    )}
+
+                    {activeSection === "model" && (
+                      <Stack gap="md">
+                        {profilesQuery.data.modelOverridesEnabled !== true && (
+                          <Alert
+                            color="yellow"
+                            icon={<IconSettings size={18} />}
+                          >
+                            {t("ai.profiles.modelOverridesDisabled")}
+                          </Alert>
+                        )}
+                        <div className={styles.modelGrid}>
+                          <TextInput
+                            label={t("ai.profiles.modelOverride")}
+                            maxLength={AI_ASSISTANT_PROFILE_LIMITS.modelId}
+                            disabled={
+                              profilesQuery.data.modelOverridesEnabled !== true
+                            }
+                            {...form.getInputProps("chatModelOverride")}
+                          />
+                          <NumberInput
+                            label={t("ai.profiles.temperatureOverride")}
+                            min={0}
+                            max={2}
+                            decimalScale={2}
+                            disabled={
+                              profilesQuery.data.modelOverridesEnabled !== true
+                            }
+                            {...form.getInputProps("temperatureOverride")}
+                          />
+                          <NumberInput
+                            label={t("ai.profiles.maxTokensOverride")}
+                            min={1}
+                            disabled={
+                              profilesQuery.data.modelOverridesEnabled !== true
+                            }
+                            {...form.getInputProps("maxOutputTokensOverride")}
+                          />
+                        </div>
+                        {editingId && detailQuery.data && (
+                          <Paper
+                            className={styles.verificationCard}
+                            withBorder
+                            p="md"
+                          >
+                            <Group justify="space-between">
+                              <div>
+                                <Text fw={600}>
+                                  {t("ai.profiles.modelVerification")}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                  {t(
+                                    "ai.profiles.modelVerificationDescription",
+                                  )}
+                                </Text>
+                              </div>
+                              <Button
+                                variant="default"
+                                leftSection={<IconSettings size={16} />}
+                                loading={testModel.isPending}
+                                onClick={() =>
+                                  void testModel
+                                    .mutateAsync(editingId)
+                                    .then(() =>
+                                      notifications.show({
+                                        color: "green",
+                                        message: t(
+                                          "ai.profiles.modelTestPassed",
+                                        ),
+                                      }),
+                                    )
+                                    .catch(showError)
+                                }
+                              >
+                                {t("ai.profiles.testModel")}
+                              </Button>
+                            </Group>
+                          </Paper>
+                        )}
+                      </Stack>
+                    )}
+
+                    {activeSection === "tools" && (
+                      <Stack gap="lg">
+                        <ProfileToolPicker
+                          catalog={availableBuiltinTools}
+                          value={form.values.allowedBuiltinCapabilities}
+                          search={toolSearch}
+                          onSearchChange={setToolSearch}
+                          onChange={(value) =>
+                            form.setFieldValue(
+                              "allowedBuiltinCapabilities",
+                              value,
+                            )
+                          }
+                        />
+                        <MultiSelect
+                          label={t("ai.profiles.externalTools")}
+                          description={t(
+                            "ai.profiles.externalToolsDescription",
+                          )}
+                          data={externalOptions}
+                          searchable
+                          {...form.getInputProps("allowedExternalTools")}
+                        />
+                        {editingId && detailQuery.data && (
+                          <Paper
+                            className={styles.verificationCard}
+                            withBorder
+                            p="md"
+                          >
+                            <Group justify="space-between">
+                              <div>
+                                <Text fw={600}>
+                                  {t("ai.profiles.verification")}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                  {t(
+                                    `ai.profiles.agentReason.${detailQuery.data.agent.reason}`,
+                                  )}
+                                </Text>
+                              </div>
+                              <Button
+                                leftSection={<IconRobot size={16} />}
+                                loading={testAgent.isPending}
+                                onClick={() =>
+                                  void testAgent
+                                    .mutateAsync(editingId)
+                                    .then(() =>
+                                      notifications.show({
+                                        color: "green",
+                                        message: t(
+                                          "ai.profiles.agentTestPassed",
+                                        ),
+                                      }),
+                                    )
+                                    .catch(showError)
+                                }
+                              >
+                                {t("ai.profiles.testAgent")}
+                              </Button>
+                            </Group>
+                          </Paper>
+                        )}
+                      </Stack>
+                    )}
+
+                    {activeSection === "access" && (
+                      <Stack gap="md">
+                        <MultiSelect
+                          label={t("ai.profiles.visibleGroups")}
+                          description={t(
+                            "ai.profiles.visibleGroupsDescription",
+                          )}
+                          data={groupOptions}
+                          searchable
+                          value={form.values.groupPolicies.map(
+                            (policy) => policy.groupId,
+                          )}
+                          onChange={(groupIds) => {
+                            const current = new Map(
+                              form.values.groupPolicies.map((policy) => [
+                                policy.groupId,
+                                policy,
+                              ]),
+                            );
+                            form.setFieldValue(
+                              "groupPolicies",
+                              groupIds.map(
+                                (groupId) =>
+                                  current.get(groupId) ?? {
+                                    groupId,
+                                    available: true,
+                                    allowedBuiltinCapabilities: null,
+                                  },
+                              ),
+                            );
+                          }}
+                        />
+                        {form.values.groupPolicies.length === 0 && (
+                          <Alert color="blue" variant="light">
+                            {t("ai.profiles.noGroupPolicies")}
+                          </Alert>
+                        )}
+                        {form.values.groupPolicies.map((policy, index) => (
+                          <Paper
+                            key={policy.groupId}
+                            className={styles.policyCard}
+                            withBorder
+                            p="md"
+                            radius="md"
+                          >
+                            <Stack gap="sm">
+                              <Checkbox
+                                label={t("ai.profiles.groupAvailable", {
+                                  group:
+                                    groupOptions.find(
+                                      (group) => group.value === policy.groupId,
+                                    )?.label ?? policy.groupId,
+                                })}
+                                checked={policy.available}
+                                onChange={(event) =>
+                                  form.setFieldValue(
+                                    `groupPolicies.${index}.available`,
+                                    event.currentTarget.checked,
+                                  )
+                                }
+                              />
+                              <MultiSelect
+                                label={t("ai.profiles.groupBuiltinTools")}
+                                description={t(
+                                  "ai.profiles.groupBuiltinToolsDescription",
+                                )}
+                                data={capabilityOptions.filter((option) =>
+                                  form.values.allowedBuiltinCapabilities.includes(
+                                    option.value as AiBuiltinToolCapability,
+                                  ),
+                                )}
+                                clearable
+                                value={policy.allowedBuiltinCapabilities ?? []}
+                                onChange={(value) =>
+                                  form.setFieldValue(
+                                    `groupPolicies.${index}.allowedBuiltinCapabilities`,
+                                    value as AiBuiltinToolCapability[],
+                                  )
+                                }
+                              />
+                            </Stack>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    )}
+
+                    {activeSection === "launch" && (
+                      <Stack gap="md">
+                        <Paper withBorder p="md" radius="md">
+                          <Switch
+                            label={t("ai.profiles.autoStart")}
+                            description={t("ai.profiles.autoStartDescription")}
+                            {...form.getInputProps("autoStart", {
+                              type: "checkbox",
+                            })}
+                          />
+                        </Paper>
+                        {form.values.autoStart && (
+                          <Textarea
+                            label={t("ai.profiles.launchMessage")}
+                            description={t(
+                              "ai.profiles.launchMessageDescription",
+                            )}
+                            minRows={5}
+                            maxLength={
+                              AI_ASSISTANT_PROFILE_LIMITS.launchMessage
+                            }
+                            required
+                            {...form.getInputProps("launchMessage")}
+                          />
+                        )}
+                      </Stack>
+                    )}
+                  </Stack>
                 )}
-                <Group justify="flex-end">
+              </main>
+
+              <Group className={styles.footer} justify="flex-end">
+                <Group className={styles.footerActions} gap="sm">
                   <Button variant="default" onClick={() => setOpened(false)}>
                     {t("Cancel")}
                   </Button>
                   <Button
                     loading={createProfile.isPending || updateProfile.isPending}
+                    disabled={editingId !== undefined && detailQuery.isLoading}
                     onClick={() => void save()}
                   >
                     {t("Save")}
                   </Button>
                 </Group>
-              </Stack>
-            )}
+              </Group>
+            </div>
           </Modal.Body>
         </Modal.Content>
       </Modal.Root>
+    </Stack>
+  );
+}
+
+function ProfileToolPicker({
+  catalog,
+  value,
+  search,
+  onSearchChange,
+  onChange,
+}: {
+  catalog: AiBuiltinToolCatalogEntry[];
+  value: AiBuiltinToolCapability[];
+  search: string;
+  onSearchChange: (value: string) => void;
+  onChange: (value: AiBuiltinToolCapability[]) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const selected = new Set(value);
+  const normalizedSearch = search.trim().toLocaleLowerCase(i18n.language);
+  const visible = catalog.filter((tool) => {
+    if (!normalizedSearch) return true;
+    const label = t(`ai.toolPolicy.tool.${tool.name}`);
+    return `${label} ${tool.capability}`
+      .toLocaleLowerCase(i18n.language)
+      .includes(normalizedSearch);
+  });
+  const groups = new Map<AiBuiltinToolCategory, AiBuiltinToolCatalogEntry[]>();
+  for (const tool of visible) {
+    const items = groups.get(tool.category) ?? [];
+    items.push(tool);
+    groups.set(tool.category, items);
+  }
+
+  const toggleTool = (
+    capability: AiBuiltinToolCapability,
+    checked: boolean,
+  ) => {
+    const next = new Set(value);
+    if (checked) next.add(capability);
+    else next.delete(capability);
+    onChange([...next]);
+  };
+
+  const toggleCategory = (
+    tools: AiBuiltinToolCatalogEntry[],
+    checked: boolean,
+  ) => {
+    const next = new Set(value);
+    for (const tool of tools) {
+      if (checked) next.add(tool.capability);
+      else next.delete(tool.capability);
+    }
+    onChange([...next]);
+  };
+
+  return (
+    <Stack gap="sm">
+      <Group justify="space-between" align="flex-end">
+        <div>
+          <Text fw={600}>{t("ai.profiles.builtinToolsShort")}</Text>
+          <Text size="sm" c="dimmed">
+            {t("ai.profiles.builtinToolsDescription")}
+          </Text>
+        </div>
+        <Badge variant="light">
+          {t("ai.profiles.selectedTools", {
+            selected: value.length,
+            total: catalog.length,
+          })}
+        </Badge>
+      </Group>
+      <TextInput
+        value={search}
+        onChange={(event) => onSearchChange(event.currentTarget.value)}
+        placeholder={t("ai.profiles.searchTools")}
+        leftSection={<IconSearch size={16} aria-hidden />}
+        aria-label={t("ai.profiles.searchTools")}
+      />
+      {groups.size === 0 ? (
+        <Alert color="gray">{t("ai.profiles.noToolsFound")}</Alert>
+      ) : (
+        [...groups.entries()].map(([category, tools]) => {
+          const CategoryIcon = TOOL_CATEGORY_ICONS[category];
+          const selectedInCategory = tools.filter((tool) =>
+            selected.has(tool.capability),
+          ).length;
+          return (
+            <Paper
+              key={category}
+              className={styles.toolCategory}
+              withBorder
+              radius="md"
+            >
+              <Group
+                className={styles.toolCategoryHeader}
+                justify="space-between"
+                wrap="nowrap"
+              >
+                <Group gap="sm" wrap="nowrap">
+                  <ThemeIcon variant="light" size={30} radius="sm">
+                    <CategoryIcon size={17} aria-hidden />
+                  </ThemeIcon>
+                  <div>
+                    <Text size="sm" fw={600}>
+                      {t(`ai.toolPolicy.category.${category}`)}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {t("ai.toolPolicy.categorySelection", {
+                        selected: selectedInCategory,
+                        total: tools.length,
+                      })}
+                    </Text>
+                  </div>
+                </Group>
+                <Checkbox
+                  checked={
+                    selectedInCategory === tools.length && tools.length > 0
+                  }
+                  indeterminate={
+                    selectedInCategory > 0 && selectedInCategory < tools.length
+                  }
+                  aria-label={t("ai.profiles.toggleToolCategory", {
+                    category: t(`ai.toolPolicy.category.${category}`),
+                  })}
+                  onChange={(event) =>
+                    toggleCategory(tools, event.currentTarget.checked)
+                  }
+                />
+              </Group>
+              {tools.map((tool) => {
+                const label = t(`ai.toolPolicy.tool.${tool.name}`);
+                return (
+                  <Group
+                    key={tool.capability}
+                    className={styles.toolRow}
+                    wrap="nowrap"
+                  >
+                    <Checkbox
+                      checked={selected.has(tool.capability)}
+                      aria-label={label}
+                      onChange={(event) =>
+                        toggleTool(tool.capability, event.currentTarget.checked)
+                      }
+                    />
+                    <div className={styles.toolIcon}>
+                      <CategoryIcon size={17} aria-hidden />
+                    </div>
+                    <div className={styles.toolLabel}>
+                      <Text size="sm" fw={500}>
+                        {label}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {tool.capability}
+                      </Text>
+                    </div>
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color={tool.writeClass === "write" ? "orange" : "gray"}
+                    >
+                      {t(`ai.profiles.toolClass.${tool.writeClass}`)}
+                    </Badge>
+                  </Group>
+                );
+              })}
+            </Paper>
+          );
+        })
+      )}
     </Stack>
   );
 }
