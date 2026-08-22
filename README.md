@@ -944,8 +944,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.2.1`. Follow the
-[v1.2.1 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.1.md)
+For the current candidate the only accepted release tag is `v1.2.2`. Follow the
+[v1.2.2 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.2.md)
 before deployment.
 
 For backend changes:
