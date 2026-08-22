@@ -107,6 +107,9 @@ describe('PageService move', () => {
       pageIds: [MOVED_PAGE_ID],
       workspaceId: 'workspace-1',
     });
+    expect(eventEmitter.emit).toHaveBeenCalledWith('rag-sync.scope.changed', {
+      spaceId: 'space-1',
+    });
   });
 
   it('rejects a move under the page own descendant to keep the tree acyclic', async () => {

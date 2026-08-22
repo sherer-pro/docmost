@@ -185,7 +185,9 @@ describe('PageRepo identifier contract', () => {
           // The recursive CTE now carries a bounding `level` column, so the
           // outer query selects explicit columns instead of `selectAll()`.
           select: jest.fn(() => ({
-            execute: jest.fn().mockResolvedValue([{ id: 'resolved-page-id' }]),
+            execute: jest.fn().mockResolvedValue([
+              { id: 'resolved-page-id', spaceId: 'space-1' },
+            ]),
           })),
         })),
       };
@@ -213,6 +215,10 @@ describe('PageRepo identifier contract', () => {
       pageIds: ['resolved-page-id'],
       workspaceId: 'workspace-1',
     });
+    expect(eventEmitterMock.emit).toHaveBeenCalledWith(
+      EventName.RAG_SYNC_SCOPE_CHANGED,
+      { spaceId: 'space-1' },
+    );
   });
 
   it('resolves slug identifier before restorePage recursive restore', async () => {
@@ -255,10 +261,14 @@ describe('PageRepo identifier contract', () => {
       };
     });
 
-    dbMock.updateTable.mockReturnValue({
-      set: jest.fn(() => ({
-        where: jest.fn(() => ({ execute: jest.fn().mockResolvedValue(undefined) })),
-      })),
+    const updateQueries = new Map<string, any>();
+    dbMock.updateTable.mockImplementation((table: string) => {
+      const query: any = {};
+      query.set = jest.fn(() => query);
+      query.where = jest.fn(() => query);
+      query.execute = jest.fn().mockResolvedValue(undefined);
+      updateQueries.set(table, query);
+      return query;
     });
 
     await pageRepo.restorePage('docs-home', 'workspace-1');
@@ -268,6 +278,27 @@ describe('PageRepo identifier contract', () => {
       pageIds: ['resolved-page-id'],
       workspaceId: 'workspace-1',
     });
+    expect(eventEmitterMock.emit).toHaveBeenCalledWith(
+      EventName.RAG_SYNC_SCOPE_CHANGED,
+      { spaceId: 'space-1' },
+    );
+    const pageUpdate = updateQueries.get('pages');
+    const attachmentUpdate = updateQueries.get('attachments');
+    const restoredAt = pageUpdate.set.mock.calls[0][0].updatedAt;
+    expect(restoredAt).toBeInstanceOf(Date);
+    expect(pageUpdate.set).toHaveBeenCalledWith({
+      deletedById: null,
+      deletedAt: null,
+      updatedAt: restoredAt,
+    });
+    expect(attachmentUpdate.set).toHaveBeenCalledWith({
+      updatedAt: restoredAt,
+    });
+    expect(attachmentUpdate.where.mock.calls).toEqual([
+      ['workspaceId', '=', 'workspace-1'],
+      ['pageId', 'in', ['resolved-page-id']],
+      ['deletedAt', 'is', null],
+    ]);
   });
 
   it('restores a subtree and detaches its deleted parent atomically', async () => {
@@ -321,11 +352,13 @@ describe('PageRepo identifier contract', () => {
           })),
         };
       }),
-      updateTable: jest.fn(() => ({
-        set: jest.fn(() => ({
-          where: jest.fn(() => ({ execute: updateExecute })),
-        })),
-      })),
+      updateTable: jest.fn(() => {
+        const query: any = {};
+        query.set = jest.fn(() => query);
+        query.where = jest.fn(() => query);
+        query.execute = updateExecute;
+        return query;
+      }),
     };
 
     const executeTxSpy = jest
@@ -346,10 +379,11 @@ describe('PageRepo identifier contract', () => {
     );
 
     expect(executeTxSpy).toHaveBeenCalledTimes(1);
-    expect(trxMock.updateTable).toHaveBeenCalledTimes(2);
+    expect(trxMock.updateTable).toHaveBeenCalledTimes(3);
     expect(sequence).toEqual([
       'transaction-start',
       'transaction-commit',
+      'event',
       'event',
     ]);
   });

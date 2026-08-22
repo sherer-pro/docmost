@@ -309,18 +309,22 @@ export class PageRepo {
       .withRecursive('page_descendants', (db) =>
         db
           .selectFrom('pages')
-          .select(['id', sql<number>`0`.as('level')])
+          .select(['id', 'spaceId', sql<number>`0`.as('level')])
           .where('id', '=', pageId)
           .unionAll((exp) =>
             exp
               .selectFrom('pages as p')
-              .select(['p.id', sql<number>`pd.level + 1`.as('level')])
+              .select([
+                'p.id',
+                'p.spaceId',
+                sql<number>`pd.level + 1`.as('level'),
+              ])
               .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
               .where(sql`pd.level`, '<', sql.lit(MAX_PAGE_TREE_DEPTH)),
           ),
       )
       .selectFrom('page_descendants')
-      .select(['id'])
+      .select(['id', 'spaceId'])
       .execute();
 
     const pageIds = descendants.map((d) => d.id);
@@ -343,6 +347,9 @@ export class PageRepo {
         pageIds: pageIds,
         workspaceId,
       });
+      for (const spaceId of new Set(descendants.map((page) => page.spaceId))) {
+        this.eventEmitter.emit(EventName.RAG_SYNC_SCOPE_CHANGED, { spaceId });
+      }
     }
   }
 
@@ -351,6 +358,7 @@ export class PageRepo {
     workspaceId: string,
   ): Promise<string[]> {
     let restoredPageIds: string[] = [];
+    let restoredSpaceId: string | null = null;
 
     await executeTx(this.db, async (trx) => {
       const pageId = await this.resolvePageId(pageIdentifier, trx);
@@ -368,6 +376,7 @@ export class PageRepo {
       if (!pageToRestore) {
         return;
       }
+      restoredSpaceId = pageToRestore.spaceId;
 
       let shouldDetachFromParent = false;
       if (pageToRestore.parentPageId) {
@@ -407,10 +416,18 @@ export class PageRepo {
         return;
       }
 
+      const restoredAt = new Date();
       await trx
         .updateTable('pages')
-        .set({ deletedById: null, deletedAt: null })
+        .set({ deletedById: null, deletedAt: null, updatedAt: restoredAt })
         .where('id', 'in', restoredPageIds)
+        .execute();
+      await trx
+        .updateTable('attachments')
+        .set({ updatedAt: restoredAt })
+        .where('workspaceId', '=', workspaceId)
+        .where('pageId', 'in', restoredPageIds)
+        .where('deletedAt', 'is', null)
         .execute();
 
       if (shouldDetachFromParent) {
@@ -427,6 +444,11 @@ export class PageRepo {
         pageIds: restoredPageIds,
         workspaceId,
       });
+      if (restoredSpaceId) {
+        this.eventEmitter.emit(EventName.RAG_SYNC_SCOPE_CHANGED, {
+          spaceId: restoredSpaceId,
+        });
+      }
     }
     return restoredPageIds;
   }

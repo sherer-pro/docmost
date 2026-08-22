@@ -64,8 +64,12 @@ describe('PageService template subtree deletion guard', () => {
         });
       }
       return [
-        { id: ROOT_PAGE_ID, templateKind: null },
-        { id: TEMPLATE_PAGE_ID, templateKind: 'synced' },
+        { id: ROOT_PAGE_ID, spaceId: 'space-1', templateKind: null },
+        {
+          id: TEMPLATE_PAGE_ID,
+          spaceId: 'space-1',
+          templateKind: 'synced',
+        },
       ];
     });
     activeInstanceQuery = chain(
@@ -213,6 +217,28 @@ describe('PageService template subtree deletion guard', () => {
     expect(eventEmitter.emit).toHaveBeenCalledWith('page.deleted', {
       pageIds: [ROOT_PAGE_ID, TEMPLATE_PAGE_ID],
       workspaceId: 'workspace-1',
+    });
+  });
+
+  it('wakes RAG Sync after a soft-deleted subtree commits', async () => {
+    activeInstance = undefined;
+
+    await service.removePage(ROOT_PAGE_ID, 'user-1', 'workspace-1');
+
+    expect(sequence).toEqual([
+      'transaction-start',
+      'page-lock',
+      'active-instance-check',
+      'soft-delete',
+      'share-delete',
+      'transaction-commit',
+    ]);
+    expect(eventEmitter.emit).toHaveBeenCalledWith('page.soft_deleted', {
+      pageIds: [ROOT_PAGE_ID, TEMPLATE_PAGE_ID],
+      workspaceId: 'workspace-1',
+    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith('rag-sync.scope.changed', {
+      spaceId: 'space-1',
     });
   });
 });
