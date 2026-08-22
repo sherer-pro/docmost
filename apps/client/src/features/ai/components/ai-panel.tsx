@@ -1799,7 +1799,7 @@ export function AiPanel() {
                             </Box>
                             <Button
                               size="compact-sm"
-                              style={{ minHeight: 32 }}
+                              className={classes.profileStartButton}
                               onClick={() => void startProfile(profile.id)}
                             >
                               {t("ai.profiles.start")}
