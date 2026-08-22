@@ -78,6 +78,11 @@
   min-width: 0;
 }
 
+.profileStartButton {
+  flex: 0 0 auto;
+  min-height: 32px;
+}
+
 .jumpToLatest {
   position: absolute;
   z-index: 2;
