@@ -32,6 +32,7 @@ const mockImage =
 const mockPort = Number(process.env.DOCMOST_AI_MOCK_PORT ?? 1080);
 const providerBaseUrl =
   process.env.DOCMOST_AI_PROVIDER_BASE_URL ?? `http://127.0.0.1:${mockPort}/v1`;
+const retrievalUrl = `${new URL(providerBaseUrl).origin}/retrieval`;
 const auditEmailDomain =
   process.env.DOCMOST_AI_AUDIT_EMAIL_DOMAIN?.trim() || "audit.invalid";
 const runId = new Date()
@@ -358,6 +359,10 @@ try {
         requestTimeoutMs: 15000,
         reasoningEnabled: true,
         visionEnabled: true,
+        retrieval: {
+          adapter: "http-json-v1",
+          url: retrievalUrl,
+        },
         quickCommands: [
           {
             id: "audit-summary",
