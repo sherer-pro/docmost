@@ -29,7 +29,11 @@ test("localized assistant remains operable at desktop, mobile and narrow widths"
   await expect(search).toBeVisible();
   const searchWasChecked = await search.isChecked();
   await search.click();
+  await expect(search).toBeEnabled();
   await expect(search).toBeChecked({ checked: !searchWasChecked });
+  await search.click();
+  await expect(search).toBeEnabled();
+  await expect(search).toBeChecked({ checked: searchWasChecked });
 
   const mode = page.getByTestId("ai-composer-mode");
   await expect(
@@ -62,7 +66,7 @@ test("localized assistant remains operable at desktop, mobile and narrow widths"
               rect.left >= footer.left - 1 && rect.right <= footer.right + 1
             );
           });
-    });
+      });
     expect(footerFits).toBe(true);
 
     const originalViewport = page.viewportSize();

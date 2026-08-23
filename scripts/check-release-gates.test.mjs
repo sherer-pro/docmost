@@ -259,6 +259,36 @@ test("AI browser API setup binds the transport host to the CSRF origin", () => {
   );
 });
 
+test("AI browser acceptance provisions deterministic space retrieval", () => {
+  const retrievalUrl = aiAuditSource.indexOf(
+    "const retrievalUrl = `${new URL(providerBaseUrl).origin}/retrieval`;",
+  );
+  const configureRetrieval = aiAuditSource.search(
+    /retrieval: \{\s*adapter: "http-json-v1",\s*url: retrievalUrl,\s*\}/u,
+  );
+  const run = aiAuditSource.indexOf("exitCode = await runPlaywright()");
+  const retrievalExpectation = aiMockExpectations.find(
+    (expectation) =>
+      expectation.httpRequest?.method === "POST" &&
+      expectation.httpRequest?.path === "/retrieval",
+  );
+
+  assert.ok(retrievalUrl >= 0, "retrieval URL must follow the provider origin");
+  assert.ok(
+    configureRetrieval > retrievalUrl,
+    "the audit space must enable http-json-v1 retrieval",
+  );
+  assert.ok(
+    run > configureRetrieval,
+    "retrieval must be configured before the responsive browser matrix",
+  );
+  assert.ok(retrievalExpectation, "missing deterministic retrieval response");
+  assert.equal(retrievalExpectation.httpResponse.statusCode, 200);
+  assert.deepEqual(JSON.parse(retrievalExpectation.httpResponse.body), {
+    items: [],
+  });
+});
+
 test("AI browser acceptance opens the off-screen assistant before use", () => {
   assert.match(aiSupportSource, /openButton\.or\(composer\)\.first\(\)/u);
   assert.match(aiSupportSource, /if \(asideIsOpen\) \{/u);

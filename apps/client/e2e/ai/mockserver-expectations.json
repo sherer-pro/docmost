@@ -52,6 +52,15 @@
   },
   {
     "priority": 110,
+    "httpRequest": { "method": "POST", "path": "/retrieval" },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": [{ "name": "Content-Type", "values": ["application/json"] }],
+      "body": "{\"items\":[]}"
+    }
+  },
+  {
+    "priority": 110,
     "httpRequest": {
       "method": "POST",
       "path": "/v1/chat/completions",
