@@ -21,6 +21,7 @@ import type {
   TransclusionDeletionGuardStorage,
   TransclusionSourceState,
 } from "@/features/editor/extensions/transclusion-deletion-guard";
+import { useEditorPageId } from "@/features/editor/hooks/use-editor-page-id";
 import { useEditorEditable } from "./use-editor-editable";
 
 export default function TransclusionView(props: NodeViewProps) {
@@ -31,8 +32,7 @@ export default function TransclusionView(props: NodeViewProps) {
     setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
 
   const isEditable = useEditorEditable(editor);
-  // @ts-ignore - editor.storage.pageId is set by the host editor (page-editor.tsx onCreate)
-  const sourcePageId: string | undefined = editor.storage?.pageId;
+  const sourcePageId = useEditorPageId(editor);
   const transclusionId: string | null = node.attrs.id ?? null;
   const referencesQuery = useReferencesQuery(
     sourcePageId ?? null,

@@ -25,6 +25,7 @@ import {
 import { buildPageUrl } from "@/features/page/page.utils";
 import { getTransclusionReferenceKey } from "@docmost/editor-ext";
 import type { TransclusionClipboardStorage } from "@/features/editor/extensions/transclusion-clipboard";
+import { useEditorPageId } from "@/features/editor/hooks/use-editor-page-id";
 import { useTransclusionViewport } from "./use-transclusion-viewport";
 import { useEditorEditable } from "./use-editor-editable";
 
@@ -101,8 +102,7 @@ function TransclusionReferenceBody({
       setRefreshing(false);
     }
   };
-  // @ts-ignore - editor.storage.pageId is set by the host editor
-  const hostPageId: string | undefined = editor.storage?.pageId;
+  const hostPageId = useEditorPageId(editor);
   const unsyncMutation = useUnsyncReferenceMutation();
   // Cached against the dropdown's identical query so the source link target
   // is ready as soon as the controls fade in on hover, without a second
