@@ -5,15 +5,31 @@ import {
   buildMigrationFailureReport,
   commandState,
   compareInventories,
+  composeServiceLookupArgs,
   migrationRetryState,
   parseArguments,
   parseEnvFile,
+  previousApplicationContainerLookupArgs,
   rollbackPreflightMatches,
   rollbackPhaseCanRun,
   rollbackState,
   serializeEnvFile,
   storageArchiveDockerArgs,
 } from "./production-db.mjs";
+
+test("includes stopped API container only when rollback provenance needs it", () => {
+  assert.deepEqual(previousApplicationContainerLookupArgs(), [
+    "ps",
+    "-a",
+    "-q",
+    "docmost",
+  ]);
+  assert.deepEqual(composeServiceLookupArgs("docmost"), [
+    "ps",
+    "-q",
+    "docmost",
+  ]);
+});
 
 test("preserves the primary migration error when automatic rollback fails", () => {
   assert.deepEqual(

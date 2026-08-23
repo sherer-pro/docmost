@@ -135,6 +135,13 @@ Before the maintenance window:
    `DOCMOST_ROLLBACK_HOOK` against the preserved legacy Compose directory before
    entering maintenance.
 
+If a release-specific pre-migration cleanup has already stopped the API and
+collaboration processes, leave their canonical stopped Compose containers in
+place. The operator reads the previous application image from the stopped
+`docmost` container for rollback provenance before cutover. Do not run
+`docker compose rm` or `docker compose down`; health and startup gates still
+require newly selected services to be running and healthy.
+
 Start the migration:
 
 ```bash
