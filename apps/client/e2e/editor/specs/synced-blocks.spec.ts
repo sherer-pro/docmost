@@ -769,9 +769,11 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
       .locator('[data-type="transclusionSource"]')
       .first();
     await firstSource.hover();
-    await firstSource
-      .getByRole("button", { name: "Copy synced block" })
-      .click();
+    const copySyncedBlockButton = firstSource.getByRole("button", {
+      name: "Copy synced block",
+    });
+    await expect(copySyncedBlockButton).toBeEnabled({ timeout: 15_000 });
+    await copySyncedBlockButton.click();
     await expect
       .poll(() =>
         page.evaluate(
