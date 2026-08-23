@@ -166,6 +166,10 @@ Rerun the read-only plan with the same bounds. Before T040,
 change record.
 
 Then run the normal production migration operator from the same candidate.
+Leave the stopped canonical `docmost` and `collab` Compose containers present
+during this handoff so the operator can record the previous application image
+for rollback; do not remove or recreate either writer between final ledger
+verification and the operator start.
 T040 repeats every JSON/reference/operation predicate, verifies the exact page
 hash ledger and completed attachment-clone ledger, restores the ordinary block
 reference source-page foreign key, removes the retired schema, and drops both

@@ -827,8 +827,16 @@ function waitForPostgresReady(context, containerName, timeoutSeconds = 180) {
   throw new Error(`PostgreSQL container ${containerName} did not become ready`);
 }
 
+export function composeServiceLookupArgs(service, includeStopped = false) {
+  return ["ps", ...(includeStopped ? ["-a"] : []), "-q", service];
+}
+
+export function previousApplicationContainerLookupArgs() {
+  return composeServiceLookupArgs("docmost", true);
+}
+
 function composeServiceContainer(context, service) {
-  return compose(context, ["ps", "-q", service]).stdout.trim();
+  return compose(context, composeServiceLookupArgs(service)).stdout.trim();
 }
 
 function waitForComposeService(context, service) {
@@ -846,8 +854,8 @@ function composeNetwork(databaseInspection) {
   return preferred || names[0];
 }
 
-function runningServiceImage(context, service, label) {
-  const id = composeServiceContainer(context, service);
+function serviceImageFromComposeLookup(context, lookupArgs, label) {
+  const id = compose(context, lookupArgs).stdout.trim();
   if (!id)
     throw new Error(
       `The current ${label} container is required for rollback metadata`,
@@ -862,11 +870,22 @@ function runningServiceImage(context, service, label) {
 }
 
 function runningApplicationImage(context) {
-  return runningServiceImage(context, "docmost", "Docmost");
+  // Release-specific cleanup can intentionally leave writers stopped before
+  // the migration operator starts. Inspect that stopped canonical container
+  // for rollback provenance without relaxing health/startup lookups.
+  return serviceImageFromComposeLookup(
+    context,
+    previousApplicationContainerLookupArgs(),
+    "Docmost",
+  );
 }
 
 function runningDatabaseImage(context) {
-  return runningServiceImage(context, "db", "PostgreSQL");
+  return serviceImageFromComposeLookup(
+    context,
+    composeServiceLookupArgs("db"),
+    "PostgreSQL",
+  );
 }
 
 function candidateDatabaseUrl(context, containerName) {
