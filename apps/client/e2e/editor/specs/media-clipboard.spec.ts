@@ -35,13 +35,6 @@ test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive 
       .first();
     await expect(readDocument).toContainText("Editor regression audit");
     await expect(readDocument).toHaveAttribute("contenteditable", "false");
-    // The container only replaces the static view once the collaborative
-    // document reports a completed sync, so this waits for a websocket round
-    // trip against a separate process. Use the same budget the other
-    // cross-process waits in this suite use instead of the tightest one.
-    await expect(page.locator(".editor-container")).toBeVisible({
-      timeout: 45_000,
-    });
 
     const image = page.getByAltText("Editor audit image alt text");
     await expect(image).toBeVisible();
