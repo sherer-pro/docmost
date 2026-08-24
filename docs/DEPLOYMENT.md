@@ -147,6 +147,19 @@ one-shot schema migration, collaboration health, and API health. The API and
 collaboration services run with `DATABASE_MIGRATION_MODE=external`; they never
 apply migrations themselves.
 
+Each long-running application container starts a first-party Node.js supervisor
+as PID 1 and one API or collaboration child. The supervisor probes
+`/api/health/live` every five seconds with a two-second timeout and a 60-second
+startup grace. Three consecutive failures terminate only that child/container;
+Compose `restart: unless-stopped` then restores the affected service without
+restarting the other application process, PostgreSQL, or Redis. The supervisor
+forwards an external `SIGTERM` or `SIGINT` and does not shorten the application's
+ordinary graceful shutdown.
+
+`/api/health/live` is process liveness only. Compose and ingress readiness must
+continue to use `/api/health`, which verifies PostgreSQL and Redis. Do not route
+traffic based only on liveness.
+
 Inspect the completed one-shot services and long-running health state:
 
 ```bash
@@ -160,8 +173,10 @@ docker compose \
 Do not treat a successful image pull or build as startup evidence. Confirm that
 `image-preflight`, `db-preflight`, and `db-migrate` exited successfully, both
 long-running application services are healthy, `/api/health` returns `200`,
-the setup/sign-in flow works, and collaboration connects through its public
-origin before opening general ingress.
+both PID 1/child process trees are present, the setup/sign-in flow works, and
+collaboration connects through its public origin before opening general ingress.
+The immutable-image CI recovery smoke is the fault-injection evidence; do not
+repeat `SIGSTOP` fault injection in production.
 
 ## 5. Upgrades and rollback
 

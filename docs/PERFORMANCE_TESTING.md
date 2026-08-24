@@ -44,8 +44,23 @@ automatically, but this cannot make screenshots of real user content safe.
 
 ## Server diagnostics
 
-`PERFORMANCE_DIAGNOSTICS_ENABLED=false` is the default. Enable it only for a
-bounded observation window:
+The API and collaboration process always sample V8 memory every 30 seconds.
+Sampling is silent while pressure is normal. A privacy-safe
+`runtime_heap_pressure` event is emitted:
+
+- as `warning` after two consecutive samples at or above 85% of the V8 heap
+  limit;
+- as `critical` immediately at or above 95%, then at most once every five
+  minutes while critical pressure persists;
+- as `recovery` after two consecutive samples below 75%.
+
+These events contain only RSS, heap used/total/limit, external memory, array
+buffers, heap ratio, and process uptime. They never create heap dumps and never
+contain routes, URLs, IDs, cookies, request data, or user content.
+
+Detailed route and event-loop diagnostics remain opt-in.
+`PERFORMANCE_DIAGNOSTICS_ENABLED=false` is the default in both local and
+production Compose. Enable it only for a bounded observation window:
 
 ```dotenv
 PERFORMANCE_DIAGNOSTICS_ENABLED=true
@@ -53,7 +68,8 @@ PERFORMANCE_DIAGNOSTICS_ENABLED=true
 
 The API then adds `Server-Timing: app;dur=...` and emits one aggregate JSON log
 per minute. The log contains only route templates, HTTP method, status class,
-latency buckets, active-request count, event-loop p95/max, RSS, and heap usage.
+latency buckets, active-request count, event-loop p95/max, and the same bounded
+memory fields.
 It never uses the request URL as a route label and does not log IP addresses,
 user agents, query strings, IDs, cookies, request bodies, or response content.
 Disable the variable after the observation window.
@@ -137,6 +153,12 @@ At 50 virtual sessions, aggregate API p95 must be at most 300 ms and p99 at most
 750 ms, with no timeouts or unexpected 5xx responses. If sidebar latency fails,
 profile `getSidebarAccessSnapshot` before implementing the optional active-path
 hydration endpoint; existing sidebar endpoints must remain compatible.
+
+CI additionally runs the production-built Typesense projection against its
+isolated Typesense service with 1,000 synthetic pages and 1,000 attachments of
+16 KiB each. After two warmup cycles, eight measured reconciliation cycles run
+under `node --expose-gc`. The heap slope must not exceed 1 MiB per cycle and the
+final sample must remain within 32 MiB of the early measured plateau.
 
 ## Candidate verification and rollout
 
