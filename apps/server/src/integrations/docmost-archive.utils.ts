@@ -1,5 +1,19 @@
 import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
 
+export interface DocmostArchiveZipLimits {
+  maxEntries: number;
+  maxEntryUncompressedBytes: number;
+  maxTotalUncompressedBytes: number;
+  maxPathDepth: number;
+}
+
+export const DOCMOST_ARCHIVE_ZIP_LIMITS: Readonly<DocmostArchiveZipLimits> = {
+  maxEntries: 10_000,
+  maxEntryUncompressedBytes: 250 * 1024 * 1024,
+  maxTotalUncompressedBytes: 512 * 1024 * 1024,
+  maxPathDepth: 64,
+};
+
 export function getDocmostArchiveSchemaError(
   schemaVersion: unknown,
 ): string | null {

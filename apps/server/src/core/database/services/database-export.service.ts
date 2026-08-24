@@ -31,6 +31,7 @@ export interface DatabaseExportRequest {
   includeAttachments: boolean;
   currentView?: DatabaseExportViewSnapshot;
   tableState?: DatabaseExportTableState;
+  abortSignal?: AbortSignal;
   cellDisplay: DatabaseExportCellDisplay;
 }
 
@@ -51,10 +52,16 @@ export class DatabaseExportService {
 
   async exportDatabase(request: DatabaseExportRequest) {
     if (request.format === DatabaseExportFormat.Docmost) {
-      const archive = await this.exportService.exportDatabaseArchive(
-        request.databaseId,
-        request.user,
-      );
+      const archive = request.abortSignal
+        ? await this.exportService.exportDatabaseArchive(
+            request.databaseId,
+            request.user,
+            request.abortSignal,
+          )
+        : await this.exportService.exportDatabaseArchive(
+            request.databaseId,
+            request.user,
+          );
       return {
         contentType: 'application/zip',
         fileName: archive.fileName,

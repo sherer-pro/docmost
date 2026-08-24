@@ -7,6 +7,7 @@ import {
   ZipBudgetExceededError,
   type ZipReadBudget,
 } from '../../../common/security/untrusted-document.util';
+import { DOCMOST_ARCHIVE_ZIP_LIMITS } from '../../docmost-archive.utils';
 
 export { readZipEntryWithBudget, ZipBudgetExceededError, type ZipReadBudget };
 
@@ -49,10 +50,7 @@ interface ExtractZipState {
 }
 
 export const DEFAULT_EXTRACT_ZIP_LIMITS: ExtractZipLimits = {
-  maxEntries: 10_000,
-  maxEntryUncompressedBytes: 250 * 1024 * 1024,
-  maxTotalUncompressedBytes: 512 * 1024 * 1024,
-  maxPathDepth: 64,
+  ...DOCMOST_ARCHIVE_ZIP_LIMITS,
 };
 
 /**

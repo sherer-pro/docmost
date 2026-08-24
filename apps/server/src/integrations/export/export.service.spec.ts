@@ -74,6 +74,9 @@ import { ExportService } from './export.service';
 import { ExportFormat } from './dto/export-dto';
 import * as JSZip from 'jszip';
 import { DOCMOST_ARCHIVE_SCHEMA_VERSION } from '@docmost/api-contract';
+import { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
+import { DOCMOST_ARCHIVE_ZIP_LIMITS } from '../docmost-archive.utils';
 
 describe('ExportService PDF export', () => {
   let spaceSettings: Record<string, unknown> = {};
@@ -89,6 +92,7 @@ describe('ExportService PDF export', () => {
 
   const storageService = {
     read: jest.fn(),
+    readStream: jest.fn(),
   };
 
   const environmentService = {
@@ -162,6 +166,16 @@ describe('ExportService PDF export', () => {
     });
   };
 
+  const getZipCompressionMethods = (archive: Buffer): number[] => {
+    const methods: number[] = [];
+    for (let offset = 0; offset <= archive.byteLength - 12; offset += 1) {
+      if (archive.readUInt32LE(offset) === 0x02014b50) {
+        methods.push(archive.readUInt16LE(offset + 10));
+      }
+    }
+    return methods;
+  };
+
   const createPage = (params: {
     id: string;
     slugId: string;
@@ -233,6 +247,8 @@ describe('ExportService PDF export', () => {
     spaceSettings = {};
     mockUserLookup([]);
     transclusionService.lookup.mockResolvedValue({ items: [] });
+    storageService.readStream.mockImplementation(async () => Readable.from([]));
+    (service as any).docmostArchiveLimits = DOCMOST_ARCHIVE_ZIP_LIMITS;
   });
 
   it('adds visible export-safe styles for all built-in tags', async () => {
@@ -319,7 +335,9 @@ describe('ExportService PDF export', () => {
       return query;
     };
     db.selectFrom.mockImplementation(archiveQuery);
-    storageService.read.mockResolvedValue(attachmentPayload);
+    storageService.readStream.mockImplementation(async () =>
+      Readable.from([attachmentPayload]),
+    );
     const page = createPage({
       id: 'page-1',
       slugId: 'slug-1',
@@ -378,6 +396,15 @@ describe('ExportService PDF export', () => {
     const data = JSON.parse(
       await zip.file('docmost-data.json').async('string'),
     );
+    const archiveBuffer = await streamToBuffer(
+      (service as any).generateDocmostArchiveStream(zip),
+    );
+    const roundTripZip = await JSZip.loadAsync(archiveBuffer, {
+      checkCRC32: true,
+    });
+    const roundTripAttachment = await roundTripZip
+      .file(`files/${attachmentId}/actual.txt`)
+      ?.async('nodebuffer');
 
     expect(manifest.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
     expect(data.schemaVersion).toBe(DOCMOST_ARCHIVE_SCHEMA_VERSION);
@@ -385,8 +412,19 @@ describe('ExportService PDF export', () => {
       expect.objectContaining({
         id: attachmentId,
         fileSize: attachmentPayload.byteLength,
+        sha256: createHash('sha256').update(attachmentPayload).digest('hex'),
       }),
     ]);
+    expect(roundTripAttachment).toEqual(attachmentPayload);
+    expect(getZipCompressionMethods(archiveBuffer)).not.toHaveLength(0);
+    expect(new Set(getZipCompressionMethods(archiveBuffer))).toEqual(
+      new Set([0]),
+    );
+    expect(await roundTripZip.file('Root.md')?.async('string')).toContain(
+      'Snapshot content',
+    );
+    expect(storageService.read).not.toHaveBeenCalled();
+    expect(storageService.readStream).toHaveBeenCalledTimes(2);
     expect(data.transclusionSnapshots).toEqual([
       {
         referencePageId: 'page-1',
@@ -403,6 +441,216 @@ describe('ExportService PDF export', () => {
         },
       },
     ]);
+  });
+
+  it('hashes attachment streams with at most two concurrent reads', async () => {
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    storageService.readStream.mockImplementation(async (filePath: string) =>
+      Readable.from(
+        (async function* () {
+          activeReads += 1;
+          maxActiveReads = Math.max(maxActiveReads, activeReads);
+          try {
+            await new Promise((resolve) => setImmediate(resolve));
+            yield Buffer.from(filePath);
+          } finally {
+            activeReads -= 1;
+          }
+        })(),
+      ),
+    );
+    const attachments = Array.from({ length: 6 }, (_, index) => ({
+      id: `attachment-${index}`,
+      filePath: `file-${index}`,
+    }));
+    const budget = { entryCount: 0, totalUncompressedBytes: 0 };
+
+    const payloads = await (service as any).inspectDocmostArchiveAttachments(
+      attachments,
+      undefined,
+      budget,
+      DOCMOST_ARCHIVE_ZIP_LIMITS,
+    );
+
+    expect(payloads.size).toBe(6);
+    expect(maxActiveReads).toBe(2);
+    expect(storageService.readStream).toHaveBeenCalledTimes(6);
+  });
+
+  it('rejects per-entry and total uncompressed size limit violations', async () => {
+    storageService.readStream.mockImplementation(async () =>
+      Readable.from([Buffer.from('four')]),
+    );
+    const perEntryLimits = {
+      ...DOCMOST_ARCHIVE_ZIP_LIMITS,
+      maxEntryUncompressedBytes: 3,
+    };
+
+    await expect(
+      (service as any).inspectDocmostArchiveAttachments(
+        [{ id: 'attachment-1', filePath: 'file-1' }],
+        undefined,
+        { entryCount: 0, totalUncompressedBytes: 0 },
+        perEntryLimits,
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'docmost_archive_export_limit_exceeded' },
+      status: 400,
+    });
+
+    const totalLimits = {
+      ...DOCMOST_ARCHIVE_ZIP_LIMITS,
+      maxTotalUncompressedBytes: 5,
+    };
+    await expect(
+      (service as any).inspectDocmostArchiveAttachments(
+        [{ id: 'attachment-1', filePath: 'file-1' }],
+        undefined,
+        { entryCount: 1, totalUncompressedBytes: 2 },
+        totalLimits,
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'docmost_archive_export_limit_exceeded' },
+      status: 400,
+    });
+  });
+
+  it('rejects projected and actual ZIP entry count violations', () => {
+    const limits = { ...DOCMOST_ARCHIVE_ZIP_LIMITS, maxEntries: 2 };
+    const zip = new JSZip();
+    zip.file('one.md', 'one');
+
+    expect(() =>
+      (service as any).assertProjectedDocmostArchiveEntries(
+        zip,
+        ['docmost-data.json', 'docmost-metadata.json'],
+        limits,
+      ),
+    ).toThrow('ZIP entry count exceeds');
+
+    zip.file('two.md', 'two');
+    zip.file('three.md', 'three');
+    expect(() =>
+      (service as any).assertDocmostArchiveZipStructure(zip, limits),
+    ).toThrow('ZIP entry count exceeds');
+  });
+
+  it('rejects an attachment that changes between inspection and ZIP streaming', async () => {
+    storageService.readStream
+      .mockResolvedValueOnce(Readable.from([Buffer.from('first')]))
+      .mockResolvedValueOnce(Readable.from([Buffer.from('other')]));
+    const budget = { entryCount: 0, totalUncompressedBytes: 0 };
+    const source = { id: 'attachment-1', filePath: 'file-1' };
+    const payloads = await (service as any).inspectDocmostArchiveAttachments(
+      [source],
+      undefined,
+      budget,
+      DOCMOST_ARCHIVE_ZIP_LIMITS,
+    );
+    const stream = (
+      service as any
+    ).createVerifiedDocmostArchiveAttachmentStream(
+      source,
+      payloads.get(source.id),
+      new AbortController().signal,
+      DOCMOST_ARCHIVE_ZIP_LIMITS,
+    );
+
+    await expect(streamToBuffer(stream)).rejects.toMatchObject({
+      response: { code: 'docmost_archive_export_attachment_changed' },
+      status: 400,
+    });
+  });
+
+  it('propagates storage failures and aborts in-flight inspection', async () => {
+    storageService.readStream.mockRejectedValueOnce(
+      new Error('storage unavailable'),
+    );
+    await expect(
+      (service as any).inspectDocmostArchiveAttachments(
+        [{ id: 'attachment-1', filePath: 'file-1' }],
+        undefined,
+        { entryCount: 0, totalUncompressedBytes: 0 },
+        DOCMOST_ARCHIVE_ZIP_LIMITS,
+      ),
+    ).rejects.toThrow('storage unavailable');
+
+    storageService.readStream.mockImplementation(
+      async (_filePath: string, signal: AbortSignal) => {
+        const stream = new Readable({ read() {} });
+        signal.addEventListener(
+          'abort',
+          () => stream.destroy(new Error('storage read aborted')),
+          { once: true },
+        );
+        return stream;
+      },
+    );
+    const controller = new AbortController();
+    const inspection = (service as any).inspectDocmostArchiveAttachments(
+      [{ id: 'attachment-1', filePath: 'file-1' }],
+      controller.signal,
+      { entryCount: 0, totalUncompressedBytes: 0 },
+      DOCMOST_ARCHIVE_ZIP_LIMITS,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.abort(new Error('client disconnected'));
+
+    await expect(inspection).rejects.toThrow(/client disconnected|aborted/);
+  });
+
+  it('holds one export slot and releases it on every terminal path', async () => {
+    const firstLease = (service as any).acquireDocmostArchiveExport();
+    let busyError: any;
+    try {
+      (service as any).acquireDocmostArchiveExport();
+    } catch (error) {
+      busyError = error;
+    }
+    expect(busyError).toMatchObject({
+      response: {
+        statusCode: 429,
+        code: 'docmost_archive_export_busy',
+      },
+      status: 429,
+    });
+    firstLease.fail(new Error('build failed'));
+
+    const successfulLease = (service as any).acquireDocmostArchiveExport();
+    await streamToBuffer(successfulLease.finish(Readable.from(['ok'])));
+
+    const errorLease = (service as any).acquireDocmostArchiveExport();
+    const errorStream = errorLease.finish(
+      new Readable({
+        read() {
+          this.destroy(new Error('stream failed'));
+        },
+      }),
+    );
+    await expect(streamToBuffer(errorStream)).rejects.toThrow('stream failed');
+
+    const closedLease = (service as any).acquireDocmostArchiveExport();
+    const closedStream = closedLease.finish(new Readable({ read() {} }));
+    const closed = new Promise((resolve) =>
+      closedStream.once('close', resolve),
+    );
+    closedStream.destroy();
+    await closed;
+
+    const abortController = new AbortController();
+    const abortedLease = (service as any).acquireDocmostArchiveExport(
+      abortController.signal,
+    );
+    const abortedStream = abortedLease.finish(new Readable({ read() {} }));
+    const aborted = new Promise((resolve) =>
+      abortedStream.once('close', resolve),
+    );
+    abortController.abort(new Error('client disconnected'));
+    await aborted;
+
+    const finalLease = (service as any).acquireDocmostArchiveExport();
+    finalLease.fail(new Error('test cleanup'));
   });
 
   it('refuses to emit a V5 archive containing nested pageEmbed data', async () => {

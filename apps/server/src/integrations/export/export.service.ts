@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -81,10 +83,15 @@ import {
   PAGE_AI_ROLE,
   type PageAiRole,
 } from '@docmost/api-contract';
-import { containsPageEmbedNode } from '../docmost-archive.utils';
+import {
+  containsPageEmbedNode,
+  DOCMOST_ARCHIVE_ZIP_LIMITS,
+  type DocmostArchiveZipLimits,
+} from '../docmost-archive.utils';
 import { sanitize } from 'sanitize-filename-ts';
 import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/transclusion-prosemirror.util';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
@@ -181,6 +188,32 @@ const DEFAULT_PAGE_CUSTOM_FIELD_LABELS: PageCustomFieldLabels = {
 };
 
 const DEFAULT_EXPORT_LOCALE = 'en-US';
+const DOCMOST_ARCHIVE_HASH_CONCURRENCY = 2;
+
+interface DocmostArchiveAttachmentSource {
+  id: string;
+  filePath: string;
+}
+
+interface DocmostArchiveAttachmentPayload {
+  fileSize: number;
+  sha256: string;
+}
+
+interface DocmostArchiveBudgetState {
+  totalUncompressedBytes: number;
+}
+
+interface DocmostArchiveAbortContext {
+  controller: AbortController;
+  cleanup: () => void;
+}
+
+interface DocmostArchiveExportLease {
+  signal: AbortSignal;
+  finish: (stream: NodeJS.ReadableStream) => NodeJS.ReadableStream;
+  fail: (reason: unknown) => void;
+}
 
 @Injectable()
 export class ExportService {
@@ -196,6 +229,8 @@ export class ExportService {
     PageCustomFieldLabels
   >();
   private availableClientLocalesCache: string[] | null = null;
+  private docmostArchiveExportActive = false;
+  private readonly docmostArchiveLimits = DOCMOST_ARCHIVE_ZIP_LIMITS;
 
   constructor(
     private readonly pageRepo: PageRepo,
@@ -207,6 +242,403 @@ export class ExportService {
     private readonly pageAccessService: PageAccessService,
     private readonly transclusionService: TransclusionService,
   ) {}
+
+  private acquireDocmostArchiveExport(
+    externalSignal?: AbortSignal,
+  ): DocmostArchiveExportLease {
+    if (this.docmostArchiveExportActive) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          code: 'docmost_archive_export_busy',
+          message: 'Another Docmost archive export is already running',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (externalSignal?.aborted) {
+      throw this.getDocmostArchiveAbortError(externalSignal);
+    }
+
+    this.docmostArchiveExportActive = true;
+    const abortContext = this.createDocmostArchiveAbortContext(externalSignal);
+    let settled = false;
+
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      abortContext.cleanup();
+      this.docmostArchiveExportActive = false;
+    };
+    const fail = (reason: unknown) => {
+      if (!abortContext.controller.signal.aborted) {
+        abortContext.controller.abort(reason);
+      }
+      settle();
+    };
+    const finish = (stream: NodeJS.ReadableStream) => {
+      const readable = stream as Readable;
+      let streamEnded = false;
+      const abortStream = () => {
+        if (!readable.destroyed) {
+          readable.destroy(
+            this.getDocmostArchiveAbortError(abortContext.controller.signal),
+          );
+        }
+      };
+      const finishSuccessfully = () => {
+        streamEnded = true;
+        settle();
+      };
+      const finishWithFailure = (reason?: unknown) => {
+        if (settled) return;
+        if (!abortContext.controller.signal.aborted) {
+          abortContext.controller.abort(reason);
+        }
+        settle();
+      };
+
+      abortContext.controller.signal.addEventListener('abort', abortStream, {
+        once: true,
+      });
+      readable.once('end', finishSuccessfully);
+      readable.once('error', finishWithFailure);
+      readable.once('close', () => {
+        if (!streamEnded) {
+          finishWithFailure(
+            new Error('Docmost archive export stream was closed'),
+          );
+          return;
+        }
+        settle();
+      });
+
+      if (abortContext.controller.signal.aborted) {
+        abortStream();
+      }
+      return stream;
+    };
+
+    return {
+      signal: abortContext.controller.signal,
+      finish,
+      fail,
+    };
+  }
+
+  private createDocmostArchiveAbortContext(
+    externalSignal?: AbortSignal,
+  ): DocmostArchiveAbortContext {
+    const controller = new AbortController();
+    const abortFromExternalSignal = () =>
+      controller.abort(externalSignal?.reason);
+
+    if (externalSignal?.aborted) {
+      abortFromExternalSignal();
+    } else if (externalSignal) {
+      externalSignal.addEventListener('abort', abortFromExternalSignal, {
+        once: true,
+      });
+    }
+
+    return {
+      controller,
+      cleanup: () =>
+        externalSignal?.removeEventListener('abort', abortFromExternalSignal),
+    };
+  }
+
+  private getDocmostArchiveAbortError(signal: AbortSignal): Error {
+    if (signal.reason instanceof Error) return signal.reason;
+    const error = new Error('Docmost archive export was aborted');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  private throwIfDocmostArchiveAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw this.getDocmostArchiveAbortError(signal);
+    }
+  }
+
+  private docmostArchiveLimitError(message: string): HttpException {
+    return new HttpException(
+      {
+        statusCode: HttpStatus.BAD_REQUEST,
+        code: 'docmost_archive_export_limit_exceeded',
+        message,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private docmostArchiveAttachmentChangedError(): HttpException {
+    return new HttpException(
+      {
+        statusCode: HttpStatus.BAD_REQUEST,
+        code: 'docmost_archive_export_attachment_changed',
+        message: 'An attachment changed while the Docmost archive was exported',
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private assertDocmostArchiveEntrySize(
+    fileSize: number,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): void {
+    if (fileSize > limits.maxEntryUncompressedBytes) {
+      throw this.docmostArchiveLimitError(
+        'A Docmost archive ZIP entry exceeds the supported size limit',
+      );
+    }
+  }
+
+  private addDocmostArchiveBytes(
+    budget: DocmostArchiveBudgetState,
+    fileSize: number,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): void {
+    this.assertDocmostArchiveEntrySize(fileSize, limits);
+    budget.totalUncompressedBytes += fileSize;
+    if (budget.totalUncompressedBytes > limits.maxTotalUncompressedBytes) {
+      throw this.docmostArchiveLimitError(
+        'Docmost archive uncompressed data exceeds the supported total size limit',
+      );
+    }
+  }
+
+  private assertDocmostArchiveZipStructure(
+    zip: JSZip,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): void {
+    const entryNames = Object.keys(zip.files);
+    if (entryNames.length > limits.maxEntries) {
+      throw this.docmostArchiveLimitError(
+        'Docmost archive ZIP entry count exceeds the supported limit',
+      );
+    }
+    if (
+      entryNames.some(
+        (entryName) =>
+          entryName.split('/').filter(Boolean).length > limits.maxPathDepth,
+      )
+    ) {
+      throw this.docmostArchiveLimitError(
+        'A Docmost archive ZIP path exceeds the supported depth limit',
+      );
+    }
+  }
+
+  private assertProjectedDocmostArchiveEntries(
+    zip: JSZip,
+    entryNames: readonly string[],
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): void {
+    const projectedNames = new Set(Object.keys(zip.files));
+    entryNames.forEach((entryName) => projectedNames.add(entryName));
+    if (projectedNames.size > limits.maxEntries) {
+      throw this.docmostArchiveLimitError(
+        'Docmost archive ZIP entry count exceeds the supported limit',
+      );
+    }
+    if (
+      Array.from(projectedNames).some(
+        (entryName) =>
+          entryName.split('/').filter(Boolean).length > limits.maxPathDepth,
+      )
+    ) {
+      throw this.docmostArchiveLimitError(
+        'A Docmost archive ZIP path exceeds the supported depth limit',
+      );
+    }
+  }
+
+  private async measureDocmostArchiveZipEntries(
+    zip: JSZip,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): Promise<DocmostArchiveBudgetState> {
+    this.assertDocmostArchiveZipStructure(zip, limits);
+    const budget: DocmostArchiveBudgetState = {
+      totalUncompressedBytes: 0,
+    };
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir) continue;
+      const fileSize = (await entry.async('uint8array')).byteLength;
+      this.addDocmostArchiveBytes(budget, fileSize, limits);
+    }
+    return budget;
+  }
+
+  private addDocmostArchiveStringEntry(
+    zip: JSZip,
+    entryName: string,
+    content: string,
+    budget: DocmostArchiveBudgetState,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): void {
+    this.addDocmostArchiveBytes(budget, Buffer.byteLength(content), limits);
+    zip.file(entryName, content, {
+      compression: 'STORE',
+      createFolders: false,
+    });
+  }
+
+  private generateDocmostArchiveStream(zip: JSZip): NodeJS.ReadableStream {
+    return zip.generateNodeStream({
+      type: 'nodebuffer',
+      streamFiles: true,
+      compression: 'STORE',
+    });
+  }
+
+  private async inspectDocmostArchiveAttachments(
+    attachments: readonly DocmostArchiveAttachmentSource[],
+    parentSignal: AbortSignal | undefined,
+    budget: DocmostArchiveBudgetState,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): Promise<Map<string, DocmostArchiveAttachmentPayload>> {
+    const abortContext = this.createDocmostArchiveAbortContext(parentSignal);
+    const payloads = new Map<string, DocmostArchiveAttachmentPayload>();
+    let nextIndex = 0;
+
+    const worker = async () => {
+      try {
+        while (true) {
+          const index = nextIndex++;
+          if (index >= attachments.length) return;
+          const attachment = attachments[index];
+          payloads.set(
+            attachment.id,
+            await this.inspectDocmostArchiveAttachment(
+              attachment,
+              abortContext.controller.signal,
+              budget,
+              limits,
+            ),
+          );
+        }
+      } catch (error) {
+        if (!abortContext.controller.signal.aborted) {
+          abortContext.controller.abort(error);
+        }
+        throw error;
+      }
+    };
+
+    const workers = Array.from(
+      {
+        length: Math.min(DOCMOST_ARCHIVE_HASH_CONCURRENCY, attachments.length),
+      },
+      () => worker(),
+    );
+    const results = await Promise.allSettled(workers);
+    abortContext.cleanup();
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (failure) throw failure.reason;
+    return payloads;
+  }
+
+  private async inspectDocmostArchiveAttachment(
+    attachment: DocmostArchiveAttachmentSource,
+    signal: AbortSignal,
+    budget: DocmostArchiveBudgetState,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): Promise<DocmostArchiveAttachmentPayload> {
+    this.throwIfDocmostArchiveAborted(signal);
+    const source = await this.storageService.readStream(
+      attachment.filePath,
+      signal,
+    );
+    const hash = createHash('sha256');
+    let fileSize = 0;
+
+    try {
+      for await (const rawChunk of source) {
+        this.throwIfDocmostArchiveAborted(signal);
+        const chunk = Buffer.isBuffer(rawChunk)
+          ? rawChunk
+          : Buffer.from(rawChunk as Uint8Array);
+        fileSize += chunk.byteLength;
+        this.assertDocmostArchiveEntrySize(fileSize, limits);
+        budget.totalUncompressedBytes += chunk.byteLength;
+        if (budget.totalUncompressedBytes > limits.maxTotalUncompressedBytes) {
+          throw this.docmostArchiveLimitError(
+            'Docmost archive uncompressed data exceeds the supported total size limit',
+          );
+        }
+        hash.update(chunk);
+      }
+    } finally {
+      if (!source.destroyed) {
+        source.destroy(
+          signal.aborted ? this.getDocmostArchiveAbortError(signal) : undefined,
+        );
+      }
+    }
+
+    return {
+      fileSize,
+      sha256: hash.digest('hex'),
+    };
+  }
+
+  private createVerifiedDocmostArchiveAttachmentStream(
+    attachment: DocmostArchiveAttachmentSource,
+    expected: DocmostArchiveAttachmentPayload,
+    signal: AbortSignal,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): Readable {
+    return Readable.from(
+      this.verifyDocmostArchiveAttachment(attachment, expected, signal, limits),
+    );
+  }
+
+  private async *verifyDocmostArchiveAttachment(
+    attachment: DocmostArchiveAttachmentSource,
+    expected: DocmostArchiveAttachmentPayload,
+    signal: AbortSignal,
+    limits: Readonly<DocmostArchiveZipLimits>,
+  ): AsyncGenerator<Buffer> {
+    this.throwIfDocmostArchiveAborted(signal);
+    const source = await this.storageService.readStream(
+      attachment.filePath,
+      signal,
+    );
+    const hash = createHash('sha256');
+    let fileSize = 0;
+
+    try {
+      for await (const rawChunk of source) {
+        this.throwIfDocmostArchiveAborted(signal);
+        const chunk = Buffer.isBuffer(rawChunk)
+          ? rawChunk
+          : Buffer.from(rawChunk as Uint8Array);
+        fileSize += chunk.byteLength;
+        this.assertDocmostArchiveEntrySize(fileSize, limits);
+        if (fileSize > expected.fileSize) {
+          throw this.docmostArchiveAttachmentChangedError();
+        }
+        hash.update(chunk);
+        yield chunk;
+      }
+    } finally {
+      if (!source.destroyed) {
+        source.destroy(
+          signal.aborted ? this.getDocmostArchiveAbortError(signal) : undefined,
+        );
+      }
+    }
+
+    if (
+      fileSize !== expected.fileSize ||
+      hash.digest('hex') !== expected.sha256
+    ) {
+      throw this.docmostArchiveAttachmentChangedError();
+    }
+  }
 
   async exportPage(
     format: string,
@@ -1871,97 +2303,105 @@ export class ExportService {
     headingNumberingByPageId?: Record<string, boolean>,
     authorizedUser?: User,
     allowedPageIds?: Set<string>,
+    abortSignal?: AbortSignal,
   ) {
-    let pages: Page[];
+    const archiveLease =
+      format === ExportFormat.Docmost
+        ? this.acquireDocmostArchiveExport(abortSignal)
+        : null;
 
-    if (includeChildren) {
-      //@ts-ignore
-      pages = await this.pageRepo.getPageAndDescendants(pageId, {
-        includeContent: true,
-      });
+    try {
+      let pages: Page[];
 
-      if (authorizedUser) {
-        pages = await this.filterReadablePages(pages, pageId, authorizedUser);
-      }
-      if (allowedPageIds) {
-        pages = pages.filter((page) => allowedPageIds.has(page.id));
-        const retainedPageIds = new Set(pages.map((page) => page.id));
-        pages = pages.map((page) =>
-          page.id !== pageId &&
-          page.parentPageId &&
-          !retainedPageIds.has(page.parentPageId)
-            ? { ...page, parentPageId: pageId }
-            : page,
-        );
-      }
-    } else {
-      // Only fetch the single page when includeChildren is false
-      const page = await this.pageRepo.findById(pageId, {
-        includeContent: true,
-      });
-      if (page) {
-        pages = !allowedPageIds || allowedPageIds.has(page.id) ? [page] : [];
-      }
-    }
+      if (includeChildren) {
+        //@ts-ignore
+        pages = await this.pageRepo.getPageAndDescendants(pageId, {
+          includeContent: true,
+        });
 
-    if (!pages || pages.length === 0) {
-      throw new BadRequestException('No pages to export');
-    }
-
-    if (format === ExportFormat.Docmost) {
-      if (!authorizedUser) {
-        throw new BadRequestException(
-          'Authorized user is required for Docmost archive export',
-        );
+        if (authorizedUser) {
+          pages = await this.filterReadablePages(pages, pageId, authorizedUser);
+        }
+        if (allowedPageIds) {
+          pages = pages.filter((page) => allowedPageIds.has(page.id));
+          const retainedPageIds = new Set(pages.map((page) => page.id));
+          pages = pages.map((page) =>
+            page.id !== pageId &&
+            page.parentPageId &&
+            !retainedPageIds.has(page.parentPageId)
+              ? { ...page, parentPageId: pageId }
+              : page,
+          );
+        }
+      } else {
+        // Only fetch the single page when includeChildren is false
+        const page = await this.pageRepo.findById(pageId, {
+          includeContent: true,
+        });
+        if (page) {
+          pages = !allowedPageIds || allowedPageIds.has(page.id) ? [page] : [];
+        }
       }
-      const rootPage = pages.find((page) => page.id === pageId) ?? pages[0];
-      const zip = await this.createDocmostArchive({
-        scope: 'page',
-        displayName: getPageTitle(rootPage.title),
-        spaceId: rootPage.spaceId,
-        pages,
-        rootPageId: pageId,
+
+      if (!pages || pages.length === 0) {
+        throw new BadRequestException('No pages to export');
+      }
+
+      if (format === ExportFormat.Docmost) {
+        if (!authorizedUser) {
+          throw new BadRequestException(
+            'Authorized user is required for Docmost archive export',
+          );
+        }
+        const rootPage = pages.find((page) => page.id === pageId) ?? pages[0];
+        const zip = await this.createDocmostArchive({
+          scope: 'page',
+          displayName: getPageTitle(rootPage.title),
+          spaceId: rootPage.spaceId,
+          pages,
+          rootPageId: pageId,
+          authorizedUser,
+          abortSignal: archiveLease!.signal,
+        });
+
+        return archiveLease!.finish(this.generateDocmostArchiveStream(zip));
+      }
+
+      const spaceSettings = await this.getSpaceSettings(pages[0].spaceId);
+      const spaceHeadingNumberingEnabled =
+        resolveHeadingNumberingEnabled(spaceSettings);
+      const spaceAiRoleEnabled = this.resolveSpaceAiRoleEnabled(spaceSettings);
+
+      const parentPageIndex = pages.findIndex((obj) => obj.id === pageId);
+      // set to null to make export of pages with parentId work
+      pages[parentPageIndex].parentPageId = null;
+
+      const tree = buildTree(pages as Page[]);
+
+      const zip = new JSZip();
+      await this.zipPages(
+        tree,
+        format,
+        zip,
+        includeAttachments,
+        locale,
+        spaceHeadingNumberingEnabled,
+        spaceAiRoleEnabled,
+        headingNumberingByPageId,
         authorizedUser,
-      });
+      );
 
-      return zip.generateNodeStream({
+      const zipFile = zip.generateNodeStream({
         type: 'nodebuffer',
         streamFiles: true,
         compression: 'DEFLATE',
       });
+
+      return zipFile;
+    } catch (error) {
+      archiveLease?.fail(error);
+      throw error;
     }
-
-    const spaceSettings = await this.getSpaceSettings(pages[0].spaceId);
-    const spaceHeadingNumberingEnabled =
-      resolveHeadingNumberingEnabled(spaceSettings);
-    const spaceAiRoleEnabled = this.resolveSpaceAiRoleEnabled(spaceSettings);
-
-    const parentPageIndex = pages.findIndex((obj) => obj.id === pageId);
-    // set to null to make export of pages with parentId work
-    pages[parentPageIndex].parentPageId = null;
-
-    const tree = buildTree(pages as Page[]);
-
-    const zip = new JSZip();
-    await this.zipPages(
-      tree,
-      format,
-      zip,
-      includeAttachments,
-      locale,
-      spaceHeadingNumberingEnabled,
-      spaceAiRoleEnabled,
-      headingNumberingByPageId,
-      authorizedUser,
-    );
-
-    const zipFile = zip.generateNodeStream({
-      type: 'nodebuffer',
-      streamFiles: true,
-      compression: 'DEFLATE',
-    });
-
-    return zipFile;
   }
 
   async exportSpace(
@@ -1972,137 +2412,152 @@ export class ExportService {
     headingNumberingByPageId?: Record<string, boolean>,
     allowedPageIds?: Set<string>,
     authorizedUser?: User,
+    abortSignal?: AbortSignal,
   ) {
-    const space = await this.db
-      .selectFrom('spaces')
-      .selectAll()
-      .where('id', '=', spaceId)
-      .executeTakeFirst();
+    const archiveLease =
+      format === ExportFormat.Docmost
+        ? this.acquireDocmostArchiveExport(abortSignal)
+        : null;
 
-    if (!space) {
-      throw new NotFoundException('Space not found');
-    }
+    try {
+      const space = await this.db
+        .selectFrom('spaces')
+        .selectAll()
+        .where('id', '=', spaceId)
+        .executeTakeFirst();
 
-    let pages = await this.db
-      .selectFrom('pages')
-      .select([
-        'pages.id',
-        'pages.slugId',
-        'pages.title',
-        'pages.icon',
-        'pages.position',
-        'pages.content',
-        'pages.parentPageId',
-        'pages.spaceId',
-        'pages.workspaceId',
-        'pages.createdAt',
-        'pages.updatedAt',
-        'pages.settings',
-      ])
-      .where('spaceId', '=', spaceId)
-      .where('deletedAt', 'is', null)
-      .where('templateKind', 'is', null)
-      .execute();
-    if (allowedPageIds) {
-      pages = pages.filter((page) => allowedPageIds.has(page.id));
-    }
-
-    if (format === ExportFormat.Docmost) {
-      if (!authorizedUser) {
-        throw new BadRequestException(
-          'Authorized user is required for Docmost archive export',
-        );
+      if (!space) {
+        throw new NotFoundException('Space not found');
       }
-      const zip = await this.createDocmostArchive({
-        scope: 'space',
-        displayName: space.name || 'space',
-        spaceId,
-        pages: pages as Page[],
+
+      let pages = await this.db
+        .selectFrom('pages')
+        .select([
+          'pages.id',
+          'pages.slugId',
+          'pages.title',
+          'pages.icon',
+          'pages.position',
+          'pages.content',
+          'pages.parentPageId',
+          'pages.spaceId',
+          'pages.workspaceId',
+          'pages.createdAt',
+          'pages.updatedAt',
+          'pages.settings',
+        ])
+        .where('spaceId', '=', spaceId)
+        .where('deletedAt', 'is', null)
+        .where('templateKind', 'is', null)
+        .execute();
+      if (allowedPageIds) {
+        pages = pages.filter((page) => allowedPageIds.has(page.id));
+      }
+
+      if (format === ExportFormat.Docmost) {
+        if (!authorizedUser) {
+          throw new BadRequestException(
+            'Authorized user is required for Docmost archive export',
+          );
+        }
+        const zip = await this.createDocmostArchive({
+          scope: 'space',
+          displayName: space.name || 'space',
+          spaceId,
+          pages: pages as Page[],
+          authorizedUser,
+          abortSignal: archiveLease!.signal,
+        });
+        return {
+          fileStream: archiveLease!.finish(
+            this.generateDocmostArchiveStream(zip),
+          ),
+          fileName: `${space.name}-docmost-archive.zip`,
+        };
+      }
+
+      const tree = buildTree(pages as Page[]);
+
+      const zip = new JSZip();
+
+      await this.zipPages(
+        tree,
+        format,
+        zip,
+        includeAttachments,
+        locale,
+        resolveHeadingNumberingEnabled(space.settings),
+        this.resolveSpaceAiRoleEnabled(space.settings),
+        headingNumberingByPageId,
         authorizedUser,
+      );
+
+      const zipFile = zip.generateNodeStream({
+        type: 'nodebuffer',
+        streamFiles: true,
+        compression: 'DEFLATE',
       });
+
+      const fileName = `${space.name}-space-export.zip`;
       return {
-        fileStream: zip.generateNodeStream({
-          type: 'nodebuffer',
-          streamFiles: true,
-          compression: 'DEFLATE',
-        }),
-        fileName: `${space.name}-docmost-archive.zip`,
+        fileStream: zipFile,
+        fileName,
       };
+    } catch (error) {
+      archiveLease?.fail(error);
+      throw error;
     }
-
-    const tree = buildTree(pages as Page[]);
-
-    const zip = new JSZip();
-
-    await this.zipPages(
-      tree,
-      format,
-      zip,
-      includeAttachments,
-      locale,
-      resolveHeadingNumberingEnabled(space.settings),
-      this.resolveSpaceAiRoleEnabled(space.settings),
-      headingNumberingByPageId,
-      authorizedUser,
-    );
-
-    const zipFile = zip.generateNodeStream({
-      type: 'nodebuffer',
-      streamFiles: true,
-      compression: 'DEFLATE',
-    });
-
-    const fileName = `${space.name}-space-export.zip`;
-    return {
-      fileStream: zipFile,
-      fileName,
-    };
   }
 
   async exportDatabaseArchive(
     databaseId: string,
     authorizedUser: User,
+    abortSignal?: AbortSignal,
   ): Promise<{
     fileStream: NodeJS.ReadableStream;
     fileName: string;
   }> {
-    const database = await this.db
-      .selectFrom('databases')
-      .selectAll()
-      .where('id', '=', databaseId)
-      .where('deletedAt', 'is', null)
-      .executeTakeFirst();
+    const archiveLease = this.acquireDocmostArchiveExport(abortSignal);
 
-    if (!database || !database.pageId) {
-      throw new NotFoundException('Database not found');
+    try {
+      const database = await this.db
+        .selectFrom('databases')
+        .selectAll()
+        .where('id', '=', databaseId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst();
+
+      if (!database || !database.pageId) {
+        throw new NotFoundException('Database not found');
+      }
+
+      let pages = (await this.pageRepo.getPageAndDescendants(database.pageId, {
+        includeContent: true,
+      })) as Page[];
+      pages = await this.filterReadablePages(
+        pages,
+        database.pageId,
+        authorizedUser,
+      );
+      const zip = await this.createDocmostArchive({
+        scope: 'database',
+        displayName: database.name,
+        spaceId: database.spaceId,
+        pages: pages as Page[],
+        databaseId,
+        rootPageId: database.pageId,
+        authorizedUser,
+        abortSignal: archiveLease.signal,
+      });
+
+      return {
+        fileStream: archiveLease.finish(this.generateDocmostArchiveStream(zip)),
+        fileName: `${database.name}-docmost-archive.zip`,
+      };
+    } catch (error) {
+      archiveLease.fail(error);
+      throw error;
     }
-
-    let pages = (await this.pageRepo.getPageAndDescendants(database.pageId, {
-      includeContent: true,
-    })) as Page[];
-    pages = await this.filterReadablePages(
-      pages,
-      database.pageId,
-      authorizedUser,
-    );
-    const zip = await this.createDocmostArchive({
-      scope: 'database',
-      displayName: database.name,
-      spaceId: database.spaceId,
-      pages: pages as Page[],
-      databaseId,
-      rootPageId: database.pageId,
-      authorizedUser,
-    });
-
-    return {
-      fileStream: zip.generateNodeStream({
-        type: 'nodebuffer',
-        streamFiles: true,
-        compression: 'DEFLATE',
-      }),
-      fileName: `${database.name}-docmost-archive.zip`,
-    };
   }
 
   private async createDocmostArchive(params: {
@@ -2113,7 +2568,10 @@ export class ExportService {
     rootPageId?: string;
     databaseId?: string;
     authorizedUser: User;
+    abortSignal?: AbortSignal;
   }): Promise<JSZip> {
+    const abortSignal = params.abortSignal ?? new AbortController().signal;
+    this.throwIfDocmostArchiveAborted(abortSignal);
     const space = await this.db
       .selectFrom('spaces')
       .selectAll()
@@ -2424,33 +2882,14 @@ export class ExportService {
       );
     }
 
-    const attachmentBuffers = new Map<string, Buffer>();
-    await Promise.all(
-      authorizedAttachmentRows.map(async (attachment) => {
-        attachmentBuffers.set(
-          attachment.id,
-          await this.storageService.read(attachment.filePath),
-        );
-      }),
-    );
-    const archiveAttachments: DocmostArchiveAttachment[] =
-      authorizedAttachmentRows.map((attachment) => {
-        const safeFileName =
-          sanitize(attachment.fileName) ||
-          `${attachment.id}${attachment.fileExt || ''}`;
-        const fileBuffer = attachmentBuffers.get(attachment.id)!;
-        return {
-          id: attachment.id,
-          pageId: attachment.pageId,
-          fileName: attachment.fileName,
-          fileSize: fileBuffer.byteLength,
-          fileExt: attachment.fileExt,
-          mimeType: attachment.mimeType,
-          type: attachment.type,
-          archivePath: `files/${attachment.id}/${safeFileName}`,
-          sha256: createHash('sha256').update(fileBuffer).digest('hex'),
-        };
-      });
+    const attachmentSources = authorizedAttachmentRows.map((attachment) => ({
+      id: attachment.id,
+      filePath: attachment.filePath,
+      archivePath: `files/${attachment.id}/${
+        sanitize(attachment.fileName) ||
+        `${attachment.id}${attachment.fileExt || ''}`
+      }`,
+    }));
 
     const referencedIds = new Set<string>();
     for (const page of archivePages) {
@@ -2513,6 +2952,41 @@ export class ExportService {
     const legacyMetadata = legacyMetadataFile
       ? (JSON.parse(await legacyMetadataFile.async('string')) as ExportMetadata)
       : ({ pages: {} } as ExportMetadata);
+    zip.remove('docmost-metadata.json');
+
+    const limits = this.docmostArchiveLimits;
+    this.assertProjectedDocmostArchiveEntries(
+      zip,
+      [
+        'docmost-data.json',
+        'docmost-metadata.json',
+        ...attachmentSources.map((attachment) => attachment.archivePath),
+      ],
+      limits,
+    );
+    const budget = await this.measureDocmostArchiveZipEntries(zip, limits);
+    const attachmentPayloads = await this.inspectDocmostArchiveAttachments(
+      attachmentSources,
+      abortSignal,
+      budget,
+      limits,
+    );
+    this.throwIfDocmostArchiveAborted(abortSignal);
+    const archiveAttachments: DocmostArchiveAttachment[] =
+      authorizedAttachmentRows.map((attachment, index) => {
+        const payload = attachmentPayloads.get(attachment.id)!;
+        return {
+          id: attachment.id,
+          pageId: attachment.pageId,
+          fileName: attachment.fileName,
+          fileSize: payload.fileSize,
+          fileExt: attachment.fileExt,
+          mimeType: attachment.mimeType,
+          type: attachment.type,
+          archivePath: attachmentSources[index].archivePath,
+          sha256: payload.sha256,
+        };
+      });
 
     const portableSpaceSettings = this.getPortableSpaceSettings(space.settings);
     const data: DocmostArchiveDataV5 = {
@@ -2551,14 +3025,38 @@ export class ExportService {
       pages: legacyMetadata.pages,
     };
 
-    zip.file('docmost-data.json', JSON.stringify(data, null, 2));
-    zip.file('docmost-metadata.json', JSON.stringify(manifest, null, 2));
-    await Promise.all(
-      archiveAttachments.map(async (descriptor) => {
-        const fileBuffer = attachmentBuffers.get(descriptor.id)!;
-        zip.file(descriptor.archivePath, fileBuffer);
-      }),
+    this.addDocmostArchiveStringEntry(
+      zip,
+      'docmost-data.json',
+      JSON.stringify(data, null, 2),
+      budget,
+      limits,
     );
+    this.addDocmostArchiveStringEntry(
+      zip,
+      'docmost-metadata.json',
+      JSON.stringify(manifest, null, 2),
+      budget,
+      limits,
+    );
+    archiveAttachments.forEach((descriptor, index) => {
+      const payload = attachmentPayloads.get(descriptor.id)!;
+      zip.file(
+        descriptor.archivePath,
+        this.createVerifiedDocmostArchiveAttachmentStream(
+          attachmentSources[index],
+          payload,
+          abortSignal,
+          limits,
+        ),
+        {
+          binary: true,
+          compression: 'STORE',
+          createFolders: false,
+        },
+      );
+    });
+    this.assertDocmostArchiveZipStructure(zip, limits);
 
     return zip;
   }

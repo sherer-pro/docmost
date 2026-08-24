@@ -1326,6 +1326,7 @@ export class DatabaseService {
     includeChildren = false,
     includeAttachments = false,
     currentView?: DatabaseExportViewSnapshot,
+    abortSignal?: AbortSignal,
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     if (!database.pageId) {
@@ -1369,6 +1370,7 @@ export class DatabaseService {
       includeAttachments,
       currentView,
       tableState,
+      abortSignal,
       cellDisplay: (row, propertyId) =>
         this.getRowCellDisplayValue({
           row,
