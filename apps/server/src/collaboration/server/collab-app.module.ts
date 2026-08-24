@@ -13,6 +13,7 @@ import { LoggerModule } from '../../common/logger/logger.module';
 import { RedisModule } from '@nestjs-labs/nestjs-ioredis';
 import { RedisConfigService } from '../../integrations/redis/redis-config.service';
 import { StorageModule } from '../../integrations/storage/storage.module';
+import { PerformanceDiagnosticsModule } from '../../integrations/performance/performance-diagnostics.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
       imports: [EnvironmentModule],
     }),
     HealthModule,
+    PerformanceDiagnosticsModule,
     EventEmitterModule.forRoot(),
     RedisModule.forRootAsync({
       useClass: RedisConfigService,

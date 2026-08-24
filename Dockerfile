@@ -133,4 +133,4 @@ VOLUME ["/app/data/storage"]
 
 EXPOSE 3000
 
-CMD ["node", "apps/server/dist/apps/server/src/main"]
+CMD ["node", "apps/server/dist/apps/server/src/runtime/process-supervisor.js"]

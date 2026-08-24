@@ -115,7 +115,10 @@ services:
     pull_policy: never
     command:
       - node
+      - apps/server/dist/apps/server/src/runtime/process-supervisor.js
       - apps/server/dist/apps/server/src/collaboration/server/collab-main.js
+      - COLLAB_PORT
+      - collab
     depends_on:
       db:
         condition: service_healthy
