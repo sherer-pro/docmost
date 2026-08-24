@@ -32,6 +32,7 @@ const REQUIRED_JOB_COMMANDS = {
     "pnpm server:build",
     "pnpm --filter ./apps/server migration:latest",
     "pnpm --filter ./apps/server test:e2e",
+    "node --expose-gc scripts/ci-typesense-memory-soak.mjs",
   ],
   "production-smoke": [
     'build_version="$(node -p "require(\'./package.json\').version")"',
@@ -39,6 +40,7 @@ const REQUIRED_JOB_COMMANDS = {
     "node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci",
     "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
+    "node scripts/ci-runtime-recovery-smoke.mjs",
     "python -m pip install -r apps/client/e2e/requirements.txt",
     "python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py",
     "pnpm test:editor:e2e",
@@ -62,6 +64,10 @@ const REQUIRED_JOB_METADATA = {
     'TYPESENSE_E2E_ISOLATED: "true"',
   ],
   "production-smoke": [
+    "--restart unless-stopped --name docmost-app",
+    "--restart unless-stopped --name docmost-app-replica",
+    "--restart unless-stopped --name docmost-collab",
+    "apps/server/dist/apps/server/src/runtime/process-supervisor.js",
     "-e DRAWIO_URL=https://embed.diagrams.net",
     "DOCMOST_DRAWIO_AUDIT_URL: https://embed.diagrams.net",
     "cache-dependency-path: apps/client/e2e/requirements.txt",
@@ -412,7 +418,7 @@ function validateCiTriggerContract(errors, ciSource) {
 
 function validateProductionSmokeCollaborationRuntime(errors, ciSource) {
   const productionSmoke = jobBlock(ciSource, "production-smoke");
-  const start = productionSmoke.indexOf("docker run -d --name docmost-collab");
+  const start = productionSmoke.indexOf("--name docmost-collab");
   const commandEnd = productionSmoke.indexOf(
     "apps/server/dist/apps/server/src/collaboration/server/collab-main.js",
     start,
@@ -425,6 +431,13 @@ function validateProductionSmokeCollaborationRuntime(errors, ciSource) {
     errors.push(
       "production-smoke collaboration runtime must enable page templates with the API runtimes",
     );
+  }
+  if (
+    !collaborationCommand.includes(
+      "apps/server/dist/apps/server/src/runtime/process-supervisor.js",
+    )
+  ) {
+    errors.push("production-smoke collaboration runtime must use supervisor");
   }
 }
 
@@ -439,6 +452,10 @@ function validateDockerfileDependencyInstall(errors, dockerfileSource) {
     [
       'org.opencontainers.image.revision="${BUILD_REVISION}"',
       "Dockerfile must label the OCI image revision",
+    ],
+    [
+      'CMD ["node", "apps/server/dist/apps/server/src/runtime/process-supervisor.js"]',
+      "Dockerfile must start the first-party process supervisor",
     ],
   ]) {
     if (!dockerfileSource.includes(fragment)) errors.push(message);
