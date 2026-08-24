@@ -86,7 +86,7 @@ test("integration provisions ephemeral Typesense storage", () => {
 });
 
 test("production smoke keeps page templates enabled in collaboration", () => {
-  const marker = "docker run -d --name docmost-collab";
+  const marker = "--name docmost-collab";
   const start = ciSource.indexOf(marker);
   assert.ok(start >= 0, "collaboration runtime fixture must exist");
   const flag = "-e PAGE_TEMPLATES_ENABLED=true";
@@ -99,6 +99,28 @@ test("production smoke keeps page templates enabled in collaboration", () => {
       "production-smoke collaboration runtime must enable page templates with the API runtimes",
     ),
   );
+});
+
+test("CI keeps memory and supervisor recovery gates mandatory", () => {
+  for (const [needle, expectedError] of [
+    [
+      "node --expose-gc scripts/ci-typesense-memory-soak.mjs",
+      "integration must run node --expose-gc scripts/ci-typesense-memory-soak.mjs",
+    ],
+    [
+      "node scripts/ci-runtime-recovery-smoke.mjs",
+      "production-smoke must run node scripts/ci-runtime-recovery-smoke.mjs",
+    ],
+    [
+      "apps/server/dist/apps/server/src/runtime/process-supervisor.js",
+      "production-smoke must define apps/server/dist/apps/server/src/runtime/process-supervisor.js",
+    ],
+  ]) {
+    const mutated = ciSource.replace(needle, "removed-runtime-gate");
+    assert.notEqual(mutated, ciSource, `fixture must contain ${needle}`);
+    const errors = validateReleaseGateContract(inputs({ ciSource: mutated }));
+    assert.ok(errors.includes(expectedError));
+  }
 });
 
 test("shared E2E requirements include the Markdown parser", () => {

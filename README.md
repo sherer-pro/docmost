@@ -713,7 +713,9 @@ The fork includes its own maintenance and development infrastructure:
 
 - quick and full composite verification pipelines;
 
-- a staging-only browser/API performance harness and privacy-safe opt-in server diagnostics documented in [`docs/PERFORMANCE_TESTING.md`](./docs/PERFORMANCE_TESTING.md);
+- a staging-only browser/API performance harness, always-on privacy-safe heap-pressure events, and opt-in route diagnostics documented in [`docs/PERFORMANCE_TESTING.md`](./docs/PERFORMANCE_TESTING.md);
+
+- independent PID 1 supervisors for the API and collaboration processes, with immutable-image self-healing recovery gates;
 
 - API route inventory generation;
 
@@ -812,8 +814,9 @@ check passes. A host-development `.env` may therefore keep
 the API container. Custom container topologies should override the service
 environment in a non-versioned `docker-compose.override.yml`.
 
-Compose starts the API and dedicated collaboration process from the same
-application image. `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET`
+Compose starts independently supervised API and dedicated collaboration child
+processes from the same application image. Readiness remains `/api/health`,
+while the supervisors use `/api/health/live`. `APP_SECRET` and the independent `COLLAB_INTERNAL_SECRET`
 from `.env` are mounted as Docker
 secrets and are not copied into container configuration metadata. Optional
 credential secrets are defined but not granted by the base stack, so disabled
@@ -958,8 +961,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.2.4`. Follow the
-[v1.2.4 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.4.md)
+For the current candidate the only accepted release tag is `v1.2.5`. Follow the
+[v1.2.5 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.5.md)
 before deployment.
 
 For backend changes:

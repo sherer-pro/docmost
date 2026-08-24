@@ -487,7 +487,8 @@ reindex и rollback описаны в [архитектуре и эксплуа�
 - автоматическую публикацию контейнеров;
 - проверку переменных окружения;
 - составные сценарии быстрой и полной проверки;
-- browser/API performance harness только для staging и privacy-safe серверную диагностику с явным включением, описанные в [`docs/PERFORMANCE_TESTING.md`](./docs/PERFORMANCE_TESTING.md);
+- browser/API performance harness только для staging, постоянно работающие privacy-safe события давления на heap и серверную диагностику routes с явным включением, описанные в [`docs/PERFORMANCE_TESTING.md`](./docs/PERFORMANCE_TESTING.md);
+- независимые PID 1 supervisor-процессы для API и collaboration с gates самовосстановления immutable image;
 - генерацию перечня API routes;
 - автоматические проверки актуальности RAG-документации и отсутствия удалённых компонентов Enterprise Edition;
 - security tests;
