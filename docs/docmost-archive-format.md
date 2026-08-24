@@ -35,12 +35,24 @@ deeply it is nested. Validation is fail-closed before any page or attachment is
 materialized. Unknown editor nodes are rejected instead of being silently
 dropped. Attachment descriptors include SHA-256 checksums; preview verifies
 both size and checksum before a task can start. The V5 exporter records the
-actual payload buffer byte length. Preview accepts a legacy V5 descriptor with
-`fileSize: null` only after reading the real payload and verifying its SHA-256;
-the normalized size never bypasses byte accounting. An archive may describe at
-most 10,000 attachments and at most 512 MiB of aggregate logical attachment
-bytes. The verified physical payload size is counted once per descriptor, even
-when multiple descriptors name the same `archivePath`.
+actual payload byte length while streaming each storage object. Preview accepts
+a legacy V5 descriptor with `fileSize: null` only after reading the real payload
+and verifying its SHA-256;
+the normalized size never bypasses byte accounting. Export and import enforce
+the same ZIP budgets: at most 10,000 actual entries, at most 250 MiB of
+uncompressed data in one entry, at most 512 MiB of total uncompressed data, and
+at most 64 path components. The verified physical payload size is counted once
+per descriptor, even when multiple descriptors name the same `archivePath`.
+
+Docmost archive export uses ZIP `STORE` rather than DEFLATE. Attachments are
+first streamed from storage with at most two concurrent reads to calculate the
+real size and SHA-256, then streamed again into the ZIP and revalidated. A file
+that changes between those reads fails the download instead of producing an
+inconsistent archive. One API process permits one active Docmost archive export;
+a concurrent request fails immediately with HTTP `429` and code
+`docmost_archive_export_busy`. Closing the HTTP connection aborts active storage
+reads and releases the process-local export slot. Markdown, HTML, and PDF export
+compression is unchanged.
 
 ## Imported and excluded data
 
