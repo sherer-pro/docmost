@@ -1,4 +1,7 @@
-import { DatabaseSearchProjectionService } from './database-search-projection.service';
+import {
+  DATABASE_PROJECTION_BATCH_SIZE,
+  DatabaseSearchProjectionService,
+} from './database-search-projection.service';
 import { randomUUID } from 'node:crypto';
 
 describe('DatabaseSearchProjectionService', () => {
@@ -65,6 +68,46 @@ describe('DatabaseSearchProjectionService', () => {
       text: 'Café Society',
       matches: [{ start: 0, end: 4, value: 'Café' }],
     });
+  });
+
+  it('reads a workspace through bounded cursor pages', async () => {
+    const rows = Array.from({ length: 1_005 }, (_, index) => ({
+      pageId: `page-${String(index).padStart(4, '0')}`,
+      workspaceId: index < 503 ? 'workspace-a' : 'workspace-b',
+    }));
+    const batches = Array.from(
+      { length: Math.ceil(rows.length / DATABASE_PROJECTION_BATCH_SIZE) },
+      (_, index) =>
+        rows.slice(
+          index * DATABASE_PROJECTION_BATCH_SIZE,
+          (index + 1) * DATABASE_PROJECTION_BATCH_SIZE,
+        ),
+    );
+    batches.push([]);
+    const execute = jest.fn().mockImplementation(async () => batches.shift());
+    const query: any = {
+      innerJoin: jest.fn(() => query),
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      orderBy: jest.fn(() => query),
+      limit: jest.fn(() => query),
+      execute,
+    };
+    const db = { selectFrom: jest.fn(() => query) } as any;
+    const service = new DatabaseSearchProjectionService(db);
+    const refreshPages = jest
+      .spyOn(service, 'refreshPages')
+      .mockResolvedValue(undefined);
+
+    const pageIds = await service.refreshWorkspace();
+
+    expect(pageIds).toHaveLength(rows.length);
+    expect(execute).toHaveBeenCalledTimes(11);
+    expect(refreshPages).toHaveBeenCalled();
+    for (const [batch] of refreshPages.mock.calls) {
+      expect(batch.length).toBeLessThanOrEqual(DATABASE_PROJECTION_BATCH_SIZE);
+    }
+    expect(query.where).toHaveBeenCalledWith(expect.any(Function));
   });
 });
 
