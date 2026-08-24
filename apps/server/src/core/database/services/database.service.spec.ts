@@ -505,6 +505,27 @@ describe('DatabaseService mixed tree flows', () => {
     expect(exported.fileName).toBe('database-docmost-archive.zip');
   });
 
+  it('passes the HTTP abort signal to Docmost database archive export', async () => {
+    const controller = new AbortController();
+
+    await service.exportDatabase(
+      'db-1',
+      DatabaseExportFormat.Docmost,
+      user,
+      'ws-1',
+      false,
+      false,
+      undefined,
+      controller.signal,
+    );
+
+    expect(exportService.exportDatabaseArchive).toHaveBeenCalledWith(
+      'db-1',
+      user,
+      controller.signal,
+    );
+  });
+
   it('allows a writer to export a readable nested database', async () => {
     pageRepo.findById.mockResolvedValue({
       id: 'db-root-page',

@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   Res,
 } from '@nestjs/common';
@@ -32,10 +33,12 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
   DatabaseRowPageIdDto,
+  DatabaseExportFormat,
   ExportDatabaseDto,
 } from './dto/database.dto';
-import { FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { createExportRequestLifetime } from '../../integrations/export/export-request-lifetime';
 
 @UseGuards(JwtAuthGuard)
 @Controller('databases')
@@ -357,24 +360,39 @@ export class DatabaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Res() res: FastifyReply,
+    @Req() req?: FastifyRequest,
   ) {
-    const exported = await this.databaseService.exportDatabase(
-      databaseId,
-      dto.format,
-      user,
-      workspace.id,
-      dto.includeChildren,
-      dto.includeAttachments,
-      dto.currentView,
-    );
+    const requestLifetime =
+      dto.format === DatabaseExportFormat.Docmost
+        ? createExportRequestLifetime(req, res)
+        : null;
 
-    res.headers({
-      'Content-Type': exported.contentType,
-      'Content-Disposition':
-        'attachment; filename="' + encodeURIComponent(exported.fileName) + '"',
-    });
+    try {
+      const exported = await this.databaseService.exportDatabase(
+        databaseId,
+        dto.format,
+        user,
+        workspace.id,
+        dto.includeChildren,
+        dto.includeAttachments,
+        dto.currentView,
+        requestLifetime?.signal,
+      );
 
-    res.send(exported.fileStream);
+      res.headers({
+        'Content-Type': exported.contentType,
+        'Content-Disposition':
+          'attachment; filename="' +
+          encodeURIComponent(exported.fileName) +
+          '"',
+      });
+
+      requestLifetime?.attachToStream(exported.fileStream);
+      res.send(exported.fileStream);
+    } catch (error) {
+      requestLifetime?.cleanup();
+      throw error;
+    }
   }
   /**
    * Creates a database view.

@@ -5,12 +5,14 @@ import {
   HttpStatus,
   NotFoundException,
   Post,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ExportService } from './export.service';
 import {
   CopyMarkdownWithCommentsDto,
+  ExportFormat,
   ExportPageDto,
   ExportSpaceDto,
 } from './dto/export-dto';
@@ -19,12 +21,13 @@ import { User } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
-import { FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { sanitize } from 'sanitize-filename-ts';
 import { PageAccessService } from '../../core/page-access/page-access.service';
 import { CopyMarkdownWithCommentsService } from './copy-markdown-with-comments.service';
 import { normalizeUserSettings } from '../../core/user/utils/user-preferences.util';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
+import { createExportRequestLifetime } from './export-request-lifetime';
 
 /**
  * Shared service layer for export controllers.
@@ -39,66 +42,103 @@ class ExportControllerDelegate {
     private readonly pageAccessService: PageAccessService,
   ) {}
 
-  async exportPage(dto: ExportPageDto, user: User, res: FastifyReply) {
-    const page = await this.pageRepo.findById(dto.pageId, {
-      includeContent: true,
-    });
+  async exportPage(
+    dto: ExportPageDto,
+    user: User,
+    res: FastifyReply,
+    req?: FastifyRequest,
+  ) {
+    const requestLifetime =
+      dto.format === ExportFormat.Docmost
+        ? createExportRequestLifetime(req, res)
+        : null;
 
-    if (!page || page.deletedAt) {
-      throw new NotFoundException('Page not found');
+    try {
+      const page = await this.pageRepo.findById(dto.pageId, {
+        includeContent: true,
+      });
+
+      if (!page || page.deletedAt) {
+        throw new NotFoundException('Page not found');
+      }
+
+      await this.pageAccessService.assertCanReadPage(page, user);
+
+      if (page.parentPageId == null) {
+        await this.spaceAbility.assertHasFullSpaceAccess(user, page.spaceId);
+      }
+
+      const zipFileStream = await this.exportService.exportPages(
+        dto.pageId,
+        dto.format,
+        dto.includeAttachments,
+        dto.includeChildren,
+        user.locale,
+        normalizeUserSettings(user.settings).preferences
+          .headingNumberingByPageId,
+        // Only the root page is authorized above; the service filters descendants
+        // through the page access rules.
+        user,
+        undefined,
+        requestLifetime?.signal,
+      );
+
+      const fileName = sanitize(page.title || 'untitled') + '.zip';
+
+      res.headers({
+        'Content-Type': 'application/zip',
+        'Content-Disposition':
+          'attachment; filename="' + encodeURIComponent(fileName) + '"',
+      });
+
+      requestLifetime?.attachToStream(zipFileStream);
+      res.send(zipFileStream);
+    } catch (error) {
+      requestLifetime?.cleanup();
+      throw error;
     }
-
-    await this.pageAccessService.assertCanReadPage(page, user);
-
-    if (page.parentPageId == null) {
-      await this.spaceAbility.assertHasFullSpaceAccess(user, page.spaceId);
-    }
-
-    const zipFileStream = await this.exportService.exportPages(
-      dto.pageId,
-      dto.format,
-      dto.includeAttachments,
-      dto.includeChildren,
-      user.locale,
-      normalizeUserSettings(user.settings).preferences.headingNumberingByPageId,
-      // Only the root page is authorized above; the service filters descendants
-      // through the page access rules.
-      user,
-    );
-
-    const fileName = sanitize(page.title || 'untitled') + '.zip';
-
-    res.headers({
-      'Content-Type': 'application/zip',
-      'Content-Disposition':
-        'attachment; filename="' + encodeURIComponent(fileName) + '"',
-    });
-
-    res.send(zipFileStream);
   }
 
-  async exportSpace(dto: ExportSpaceDto, user: User, res: FastifyReply) {
-    await this.spaceAbility.assertHasFullSpaceAccess(user, dto.spaceId);
+  async exportSpace(
+    dto: ExportSpaceDto,
+    user: User,
+    res: FastifyReply,
+    req?: FastifyRequest,
+  ) {
+    const requestLifetime =
+      dto.format === ExportFormat.Docmost
+        ? createExportRequestLifetime(req, res)
+        : null;
 
-    const exportFile = await this.exportService.exportSpace(
-      dto.spaceId,
-      dto.format,
-      dto.includeAttachments,
-      user.locale,
-      normalizeUserSettings(user.settings).preferences.headingNumberingByPageId,
-      undefined,
-      user,
-    );
+    try {
+      await this.spaceAbility.assertHasFullSpaceAccess(user, dto.spaceId);
 
-    res.headers({
-      'Content-Type': 'application/zip',
-      'Content-Disposition':
-        'attachment; filename="' +
-        encodeURIComponent(sanitize(exportFile.fileName)) +
-        '"',
-    });
+      const exportFile = await this.exportService.exportSpace(
+        dto.spaceId,
+        dto.format,
+        dto.includeAttachments,
+        user.locale,
+        normalizeUserSettings(user.settings).preferences
+          .headingNumberingByPageId,
+        undefined,
+        user,
+        requestLifetime?.signal,
+      );
 
-    res.send(exportFile.fileStream);
+      res.headers({
+        'Content-Type': 'application/zip',
+        'Content-Disposition':
+          'attachment; filename="' +
+          encodeURIComponent(sanitize(exportFile.fileName)) +
+          '"',
+      });
+
+      requestLifetime?.attachToStream(exportFile.fileStream);
+      res.send(exportFile.fileStream);
+    } catch (error) {
+      requestLifetime?.cleanup();
+      throw error;
+    }
   }
 }
 
@@ -132,8 +172,9 @@ export class PageExportController {
     @Body() dto: ExportPageDto,
     @AuthUser() user: User,
     @Res() res: FastifyReply,
+    @Req() req?: FastifyRequest,
   ) {
-    return this.delegate.exportPage(dto, user, res);
+    return this.delegate.exportPage(dto, user, res, req);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -194,7 +235,8 @@ export class SpaceExportController {
     @Body() dto: ExportSpaceDto,
     @AuthUser() user: User,
     @Res() res: FastifyReply,
+    @Req() req?: FastifyRequest,
   ) {
-    return this.delegate.exportSpace(dto, user, res);
+    return this.delegate.exportSpace(dto, user, res, req);
   }
 }

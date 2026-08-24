@@ -4,6 +4,8 @@ import {
   SpaceExportController,
 } from './export.controller';
 import { ExportFormat } from './dto/export-dto';
+import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 
 describe('PageExportController markdown copy with comments', () => {
   const exportService = {};
@@ -245,6 +247,40 @@ describe('Export controllers full space access', () => {
     expect(reply.send).toHaveBeenCalledWith('space-stream');
   });
 
+  it('passes an HTTP disconnect abort signal to Docmost archive storage', async () => {
+    let resolveExport: (stream: Readable) => void = () => undefined;
+    let exportSignal: AbortSignal | undefined;
+    exportService.exportPages.mockImplementationOnce((async (
+      ...args: unknown[]
+    ) => {
+      exportSignal = args[8] as AbortSignal;
+      return new Promise<Readable>((resolve) => {
+        resolveExport = resolve;
+      });
+    }) as any);
+    const requestRaw = new EventEmitter();
+    const replyRaw = Object.assign(new EventEmitter(), {
+      writableEnded: false,
+    });
+    const reply = createReply(replyRaw);
+    const exporting = pageController.exportPageAction(
+      {
+        pageId: 'page-1',
+        format: ExportFormat.Docmost,
+      },
+      createUser('admin'),
+      reply as any,
+      { raw: requestRaw } as any,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    replyRaw.emit('close');
+
+    expect(exportSignal?.aborted).toBe(true);
+    resolveExport(Readable.from([]));
+    await exporting;
+  });
+
   it('does not start a whole-space export after a full-access denial', async () => {
     spaceAbility.assertHasFullSpaceAccess.mockRejectedValueOnce(
       new ForbiddenException(),
@@ -274,9 +310,10 @@ function createUser(role: 'owner' | 'admin' | 'member') {
   } as any;
 }
 
-function createReply() {
+function createReply(raw?: EventEmitter & { writableEnded: boolean }) {
   return {
     headers: jest.fn(),
     send: jest.fn(),
+    raw,
   };
 }

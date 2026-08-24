@@ -51,6 +51,7 @@ import {
 } from '@docmost/api-contract';
 import {
   containsPageEmbedNode,
+  DOCMOST_ARCHIVE_ZIP_LIMITS,
   getDocmostArchiveSchemaError,
 } from '../../docmost-archive.utils';
 import { createHash } from 'node:crypto';
@@ -60,9 +61,10 @@ import { QueueOutboxService } from '../../queue/outbox/queue-outbox.service';
 type ImportSettingsAvailability = ImportPreview['availableSettings'];
 const FILE_UPLOAD_LEASE_MS = 2 * 60 * 1000;
 const FILE_UPLOAD_LEASE_RENEW_MS = 30 * 1000;
-const DOCMOST_ARCHIVE_MAX_ATTACHMENT_DESCRIPTORS = 10_000;
+const DOCMOST_ARCHIVE_MAX_ATTACHMENT_DESCRIPTORS =
+  DOCMOST_ARCHIVE_ZIP_LIMITS.maxEntries;
 const DOCMOST_ARCHIVE_MAX_LOGICAL_ATTACHMENT_BYTES =
-  DEFAULT_EXTRACT_ZIP_LIMITS.maxTotalUncompressedBytes;
+  DOCMOST_ARCHIVE_ZIP_LIMITS.maxTotalUncompressedBytes;
 
 @Injectable()
 export class ImportService {
