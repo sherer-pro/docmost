@@ -15,6 +15,8 @@ import { QueueJob, QueueName } from '../../integrations/queue/constants';
 import type { SearchParams } from 'typesense/lib/Typesense/Types';
 import type { SearchResponse } from 'typesense/lib/Typesense/Documents';
 import { sql } from 'kysely';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { DatabaseSearchProjectionService } from '../database/services/database-search-projection.service';
 
 export const TYPESENSE_PAGE_ALIAS = 'docmost_pages';
@@ -57,9 +59,39 @@ export interface TypesenseDictionaryDocument {
   updatedAt: number;
 }
 
-const INDEX_BATCH_SIZE = 500;
+export const TYPESENSE_DB_BATCH_SIZE = 100;
+export const TYPESENSE_IMPORT_MAX_BYTES = 4 * 1024 * 1024;
 const TYPESENSE_RECONCILIATION_INTERVAL_MS = 15 * 60_000;
 const TYPESENSE_SCHEDULER_RETRY_MS = 60_000;
+
+export function partitionTypesenseDocuments<T extends object>(
+  documents: T[],
+): T[][] {
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let batchBytes = 0;
+
+  for (const document of documents) {
+    const documentBytes =
+      Buffer.byteLength(JSON.stringify(document), 'utf8') + 1;
+    if (
+      batch.length > 0 &&
+      (batch.length >= TYPESENSE_DB_BATCH_SIZE ||
+        batchBytes + documentBytes > TYPESENSE_IMPORT_MAX_BYTES)
+    ) {
+      batches.push(batch);
+      batch = [];
+      batchBytes = 0;
+    }
+    batch.push(document);
+    batchBytes += documentBytes;
+  }
+
+  if (batch.length > 0) {
+    batches.push(batch);
+  }
+  return batches;
+}
 
 export type TypesenseRebuildEntity = 'pages' | 'attachments' | 'dictionary';
 
@@ -74,6 +106,8 @@ export class TypesenseIndexService
 {
   private readonly logger = new Logger(TypesenseIndexService.name);
   private readonly client: Client | null;
+  private readonly httpAgent: HttpAgent | null;
+  private readonly httpsAgent: HttpsAgent | null;
   private collectionsReady: Promise<void> | null = null;
   private collectionsCreated = false;
   private schedulerTimer?: NodeJS.Timeout;
@@ -88,15 +122,23 @@ export class TypesenseIndexService
     @Optional()
     private readonly databaseSearchProjection?: DatabaseSearchProjectionService,
   ) {
-    this.client = this.isEnabled()
-      ? new Client({
-          nodes: [{ url: this.environmentService.getTypesenseUrl() }],
-          apiKey: this.environmentService.getTypesenseApiKey(),
-          connectionTimeoutSeconds: 10,
-          numRetries: 2,
-          retryIntervalSeconds: 1,
-        })
-      : null;
+    if (this.isEnabled()) {
+      this.httpAgent = new HttpAgent({ keepAlive: true });
+      this.httpsAgent = new HttpsAgent({ keepAlive: true });
+      this.client = new Client({
+        nodes: [{ url: this.environmentService.getTypesenseUrl() }],
+        apiKey: this.environmentService.getTypesenseApiKey(),
+        connectionTimeoutSeconds: 10,
+        numRetries: 2,
+        retryIntervalSeconds: 1,
+        httpAgent: this.httpAgent,
+        httpsAgent: this.httpsAgent,
+      });
+    } else {
+      this.httpAgent = null;
+      this.httpsAgent = null;
+      this.client = null;
+    }
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -130,6 +172,8 @@ export class TypesenseIndexService
       clearInterval(this.schedulerTimer);
     }
     await this.schedulerPromise;
+    this.httpAgent?.destroy();
+    this.httpsAgent?.destroy();
   }
 
   private async registerReconciliationSafely(): Promise<void> {
@@ -273,6 +317,18 @@ export class TypesenseIndexService
     await this.ensureCollections();
 
     const uniqueIds = [...new Set(pageIds)];
+    for (
+      let index = 0;
+      index < uniqueIds.length;
+      index += TYPESENSE_DB_BATCH_SIZE
+    ) {
+      await this.reconcilePageBatch(
+        uniqueIds.slice(index, index + TYPESENSE_DB_BATCH_SIZE),
+      );
+    }
+  }
+
+  private async reconcilePageBatch(uniqueIds: string[]): Promise<void> {
     const rows = await this.db
       .selectFrom('pages')
       .innerJoin('spaces', 'spaces.id', 'pages.spaceId')
@@ -297,14 +353,11 @@ export class TypesenseIndexService
 
     const indexedIds = new Set(rows.map((row) => row.id));
     const inactiveIds = uniqueIds.filter((id) => !indexedIds.has(id));
-    await Promise.all(
-      inactiveIds.flatMap((id) => [
-        this.deleteDocument(TYPESENSE_PAGE_COLLECTION, id),
-        this.deleteByFilter(
-          TYPESENSE_ATTACHMENT_COLLECTION,
-          `pageId:=${this.filterValue(id)}`,
-        ),
-      ]),
+    await this.deleteDocumentsByIds(TYPESENSE_PAGE_COLLECTION, inactiveIds);
+    await this.deleteDocumentsByFieldIds(
+      TYPESENSE_ATTACHMENT_COLLECTION,
+      'pageId',
+      inactiveIds,
     );
 
     await this.indexAttachmentsForPageIds([...indexedIds]);
@@ -317,6 +370,18 @@ export class TypesenseIndexService
     await this.ensureCollections();
 
     const uniqueIds = [...new Set(attachmentIds)];
+    for (
+      let index = 0;
+      index < uniqueIds.length;
+      index += TYPESENSE_DB_BATCH_SIZE
+    ) {
+      await this.indexAttachmentBatch(
+        uniqueIds.slice(index, index + TYPESENSE_DB_BATCH_SIZE),
+      );
+    }
+  }
+
+  private async indexAttachmentBatch(uniqueIds: string[]): Promise<void> {
     const rows = await this.db
       .selectFrom('attachments')
       .innerJoin('pages', 'pages.id', 'attachments.pageId')
@@ -343,10 +408,9 @@ export class TypesenseIndexService
     );
 
     const indexedIds = new Set(rows.map((row) => row.id));
-    await Promise.all(
-      uniqueIds
-        .filter((id) => !indexedIds.has(id))
-        .map((id) => this.deleteDocument(TYPESENSE_ATTACHMENT_COLLECTION, id)),
+    await this.deleteDocumentsByIds(
+      TYPESENSE_ATTACHMENT_COLLECTION,
+      uniqueIds.filter((id) => !indexedIds.has(id)),
     );
   }
 
@@ -354,6 +418,20 @@ export class TypesenseIndexService
     if (termIds.length === 0) return;
     await this.ensureCollections();
     const uniqueIds = [...new Set(termIds)];
+    for (
+      let index = 0;
+      index < uniqueIds.length;
+      index += TYPESENSE_DB_BATCH_SIZE
+    ) {
+      await this.reconcileDictionaryTermBatch(
+        uniqueIds.slice(index, index + TYPESENSE_DB_BATCH_SIZE),
+      );
+    }
+  }
+
+  private async reconcileDictionaryTermBatch(
+    uniqueIds: string[],
+  ): Promise<void> {
     const terms = await this.db
       .selectFrom('dictionaryTerms')
       .innerJoin('spaces', 'spaces.id', 'dictionaryTerms.spaceId')
@@ -435,7 +513,7 @@ export class TypesenseIndexService
         .where('spaceId', '=', spaceId)
         .where('deletedAt', 'is', null)
         .orderBy('id', 'asc')
-        .limit(INDEX_BATCH_SIZE);
+        .limit(TYPESENSE_DB_BATCH_SIZE);
       if (cursor) query = query.where('id', '>', cursor);
       const terms = await query.execute();
       if (terms.length === 0) break;
@@ -478,7 +556,7 @@ export class TypesenseIndexService
         .where('deletedAt', 'is', null)
         .where('templateKind', 'is', null)
         .orderBy('id', 'asc')
-        .limit(INDEX_BATCH_SIZE);
+        .limit(TYPESENSE_DB_BATCH_SIZE);
       if (cursor) {
         query = query.where('id', '>', cursor);
       }
@@ -528,7 +606,7 @@ export class TypesenseIndexService
           qb.where('pages.workspaceId', '=', workspaceId!),
         )
         .orderBy('pages.id', 'asc')
-        .limit(INDEX_BATCH_SIZE);
+        .limit(TYPESENSE_DB_BATCH_SIZE);
 
       if (cursor) {
         query = query.where('pages.id', '>', cursor);
@@ -570,7 +648,7 @@ export class TypesenseIndexService
           qb.where('attachments.workspaceId', '=', workspaceId!),
         )
         .orderBy('attachments.id', 'asc')
-        .limit(INDEX_BATCH_SIZE);
+        .limit(TYPESENSE_DB_BATCH_SIZE);
 
       if (cursor) {
         query = query.where('attachments.id', '>', cursor);
@@ -607,7 +685,7 @@ export class TypesenseIndexService
           qb.where('dictionaryTerms.workspaceId', '=', workspaceId!),
         )
         .orderBy('dictionaryTerms.id', 'asc')
-        .limit(INDEX_BATCH_SIZE);
+        .limit(TYPESENSE_DB_BATCH_SIZE);
       if (cursor) query = query.where('dictionaryTerms.id', '>', cursor);
       const terms = await query.execute();
       if (terms.length === 0) return;
@@ -621,30 +699,50 @@ export class TypesenseIndexService
       return;
     }
 
-    const rows = await this.db
-      .selectFrom('attachments')
-      .innerJoin('pages', 'pages.id', 'attachments.pageId')
-      .innerJoin('spaces', 'spaces.id', 'attachments.spaceId')
-      .select([
-        'attachments.id',
-        'attachments.workspaceId',
-        'attachments.spaceId',
-        'attachments.pageId',
-        'attachments.fileName',
-        'attachments.textContent',
-        'attachments.updatedAt',
-      ])
-      .where('attachments.pageId', 'in', pageIds)
-      .where('attachments.deletedAt', 'is', null)
-      .where('pages.deletedAt', 'is', null)
-      .where('pages.templateKind', 'is', null)
-      .where('spaces.archivedAt', 'is', null)
-      .where('spaces.deletedAt', 'is', null)
-      .execute();
-
-    await this.upsertAttachments(
-      rows.map((row) => this.toAttachmentDocument(row)),
-    );
+    for (
+      let pageIndex = 0;
+      pageIndex < pageIds.length;
+      pageIndex += TYPESENSE_DB_BATCH_SIZE
+    ) {
+      const pageBatch = pageIds.slice(
+        pageIndex,
+        pageIndex + TYPESENSE_DB_BATCH_SIZE,
+      );
+      let cursor: string | undefined;
+      while (true) {
+        let query = this.db
+          .selectFrom('attachments')
+          .innerJoin('pages', 'pages.id', 'attachments.pageId')
+          .innerJoin('spaces', 'spaces.id', 'attachments.spaceId')
+          .select([
+            'attachments.id',
+            'attachments.workspaceId',
+            'attachments.spaceId',
+            'attachments.pageId',
+            'attachments.fileName',
+            'attachments.textContent',
+            'attachments.updatedAt',
+          ])
+          .where('attachments.pageId', 'in', pageBatch)
+          .where('attachments.deletedAt', 'is', null)
+          .where('pages.deletedAt', 'is', null)
+          .where('pages.templateKind', 'is', null)
+          .where('spaces.archivedAt', 'is', null)
+          .where('spaces.deletedAt', 'is', null)
+          .orderBy('attachments.id', 'asc')
+          .limit(TYPESENSE_DB_BATCH_SIZE);
+        if (cursor) {
+          query = query.where('attachments.id', '>', cursor);
+        }
+        const rows = await query.execute();
+        if (rows.length === 0) break;
+        await this.upsertAttachments(
+          rows.map((row) => this.toAttachmentDocument(row)),
+        );
+        cursor = rows.at(-1)!.id;
+        if (rows.length < TYPESENSE_DB_BATCH_SIZE) break;
+      }
+    }
   }
 
   private async aliasesNeedSwitch(): Promise<boolean> {
@@ -900,50 +998,30 @@ export class TypesenseIndexService
   }
 
   private async upsertPages(documents: TypesensePageDocument[]): Promise<void> {
-    if (documents.length === 0) {
-      return;
-    }
-    await this.getClient()
-      .collections<TypesensePageDocument>(TYPESENSE_PAGE_COLLECTION)
-      .documents()
-      .import(documents, { action: 'upsert', throwOnFail: true });
+    await this.upsertDocuments(TYPESENSE_PAGE_COLLECTION, documents);
   }
 
   private async upsertAttachments(
     documents: TypesenseAttachmentDocument[],
   ): Promise<void> {
-    if (documents.length === 0) {
-      return;
-    }
-    await this.getClient()
-      .collections<TypesenseAttachmentDocument>(TYPESENSE_ATTACHMENT_COLLECTION)
-      .documents()
-      .import(documents, { action: 'upsert', throwOnFail: true });
+    await this.upsertDocuments(TYPESENSE_ATTACHMENT_COLLECTION, documents);
   }
 
   private async upsertDictionary(
     documents: TypesenseDictionaryDocument[],
   ): Promise<void> {
-    if (documents.length === 0) return;
-    await this.getClient()
-      .collections<TypesenseDictionaryDocument>(TYPESENSE_DICTIONARY_COLLECTION)
-      .documents()
-      .import(documents, { action: 'upsert', throwOnFail: true });
+    await this.upsertDocuments(TYPESENSE_DICTIONARY_COLLECTION, documents);
   }
 
-  private async deleteDocument(
+  private async upsertDocuments<T extends object>(
     collection: string,
-    documentId: string,
+    documents: T[],
   ): Promise<void> {
-    try {
+    for (const batch of partitionTypesenseDocuments(documents)) {
       await this.getClient()
-        .collections(collection)
-        .documents(documentId)
-        .delete();
-    } catch (error) {
-      if (this.httpStatus(error) !== 404) {
-        throw error;
-      }
+        .collections<T>(collection)
+        .documents()
+        .import(batch, { action: 'upsert', throwOnFail: true });
     }
   }
 
@@ -1064,7 +1142,7 @@ export class TypesenseIndexService
       const document = JSON.parse(line) as { id?: unknown };
       if (typeof document.id !== 'string') return;
       ids.push(document.id);
-      if (ids.length >= INDEX_BATCH_SIZE) {
+      if (ids.length >= TYPESENSE_DB_BATCH_SIZE) {
         const batch = ids;
         ids = [];
         await callback(batch);
@@ -1093,13 +1171,24 @@ export class TypesenseIndexService
     collection: string,
     documentIds: string[],
   ): Promise<void> {
-    const chunkSize = 100;
-    for (let index = 0; index < documentIds.length; index += chunkSize) {
+    await this.deleteDocumentsByFieldIds(collection, 'id', documentIds);
+  }
+
+  private async deleteDocumentsByFieldIds(
+    collection: string,
+    field: 'id' | 'pageId',
+    documentIds: string[],
+  ): Promise<void> {
+    for (
+      let index = 0;
+      index < documentIds.length;
+      index += TYPESENSE_DB_BATCH_SIZE
+    ) {
       const ids = documentIds
-        .slice(index, index + chunkSize)
+        .slice(index, index + TYPESENSE_DB_BATCH_SIZE)
         .map((id) => this.filterValue(id))
         .join(',');
-      await this.deleteByFilter(collection, `id:=[${ids}]`);
+      await this.deleteByFilter(collection, `${field}:=[${ids}]`);
     }
   }
 

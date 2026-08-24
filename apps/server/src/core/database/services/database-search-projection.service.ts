@@ -16,6 +16,7 @@ const MAX_CELL_BYTES = 20_000;
 const MAX_ROW_BYTES = 1_000_000;
 const MAX_MATCHES_PER_ROW = 3;
 const MATCH_CONTEXT_CHARS = 80;
+export const DATABASE_PROJECTION_BATCH_SIZE = 100;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -64,77 +65,128 @@ export class DatabaseSearchProjectionService {
     databaseId: string,
     workspaceId: string,
   ): Promise<string[]> {
-    const rows = await this.db
-      .selectFrom('databaseRows')
-      .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
-      .select('databaseRows.pageId')
-      .where('databaseRows.databaseId', '=', databaseId)
-      .where('databaseRows.workspaceId', '=', workspaceId)
-      .where('databaseRows.archivedAt', 'is', null)
-      .where('pages.deletedAt', 'is', null)
-      .orderBy('databaseRows.pageId', 'asc')
-      .execute();
-    const pageIds = rows.map((row) => row.pageId);
-    await this.refreshPages(pageIds, workspaceId);
+    const pageIds: string[] = [];
+    let cursor: string | undefined;
+    while (true) {
+      let query = this.db
+        .selectFrom('databaseRows')
+        .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
+        .select('databaseRows.pageId')
+        .where('databaseRows.databaseId', '=', databaseId)
+        .where('databaseRows.workspaceId', '=', workspaceId)
+        .where('databaseRows.archivedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .orderBy('databaseRows.pageId', 'asc')
+        .limit(DATABASE_PROJECTION_BATCH_SIZE);
+      if (cursor) {
+        query = query.where('databaseRows.pageId', '>', cursor);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+      const batch = rows.map((row) => row.pageId);
+      await this.refreshPages(batch, workspaceId);
+      pageIds.push(...batch);
+      cursor = batch.at(-1);
+      if (rows.length < DATABASE_PROJECTION_BATCH_SIZE) break;
+    }
     return pageIds;
   }
 
   async refreshWorkspace(workspaceId?: string): Promise<string[]> {
-    let query = this.db
-      .selectFrom('databaseRows')
-      .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
-      .select(['databaseRows.pageId', 'databaseRows.workspaceId'])
-      .where('databaseRows.archivedAt', 'is', null)
-      .where('pages.deletedAt', 'is', null)
-      .orderBy('databaseRows.workspaceId', 'asc')
-      .orderBy('databaseRows.pageId', 'asc');
-    if (workspaceId) {
-      query = query.where('databaseRows.workspaceId', '=', workspaceId);
-    }
+    const pageIds: string[] = [];
+    let cursor: { workspaceId: string; pageId: string } | undefined;
+    while (true) {
+      let query = this.db
+        .selectFrom('databaseRows')
+        .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
+        .select(['databaseRows.pageId', 'databaseRows.workspaceId'])
+        .where('databaseRows.archivedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .orderBy('databaseRows.workspaceId', 'asc')
+        .orderBy('databaseRows.pageId', 'asc')
+        .limit(DATABASE_PROJECTION_BATCH_SIZE);
+      if (workspaceId) {
+        query = query.where('databaseRows.workspaceId', '=', workspaceId);
+      }
+      if (cursor) {
+        query = workspaceId
+          ? query.where('databaseRows.pageId', '>', cursor.pageId)
+          : query.where((eb) =>
+              eb.or([
+                eb('databaseRows.workspaceId', '>', cursor.workspaceId),
+                eb.and([
+                  eb(
+                    'databaseRows.workspaceId',
+                    '=',
+                    cursor.workspaceId,
+                  ),
+                  eb('databaseRows.pageId', '>', cursor.pageId),
+                ]),
+              ]),
+            );
+      }
 
-    const rows = await query.execute();
-    const byWorkspace = new Map<string, string[]>();
-    for (const row of rows) {
-      byWorkspace.set(row.workspaceId, [
-        ...(byWorkspace.get(row.workspaceId) ?? []),
-        row.pageId,
-      ]);
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+      const byWorkspace = new Map<string, string[]>();
+      for (const row of rows) {
+        const current = byWorkspace.get(row.workspaceId) ?? [];
+        current.push(row.pageId);
+        byWorkspace.set(row.workspaceId, current);
+        pageIds.push(row.pageId);
+      }
+      for (const [currentWorkspaceId, batch] of byWorkspace) {
+        await this.refreshPages(batch, currentWorkspaceId);
+      }
+      const last = rows.at(-1)!;
+      cursor = { workspaceId: last.workspaceId, pageId: last.pageId };
+      if (rows.length < DATABASE_PROJECTION_BATCH_SIZE) break;
     }
-    for (const [currentWorkspaceId, pageIds] of byWorkspace) {
-      await this.refreshPages(pageIds, currentWorkspaceId);
-    }
-    return rows.map((row) => row.pageId);
+    return pageIds;
   }
 
   async refreshRowsForUser(
     userId: string,
     workspaceId: string,
   ): Promise<string[]> {
-    const rows = await this.db
-      .selectFrom('databaseCells')
-      .innerJoin(
-        'databaseProperties',
-        'databaseProperties.id',
-        'databaseCells.propertyId',
-      )
-      .innerJoin('databaseRows', (join) =>
-        join
-          .onRef('databaseRows.databaseId', '=', 'databaseCells.databaseId')
-          .onRef('databaseRows.pageId', '=', 'databaseCells.pageId'),
-      )
-      .select('databaseCells.pageId')
-      .distinct()
-      .where('databaseCells.workspaceId', '=', workspaceId)
-      .where('databaseCells.deletedAt', 'is', null)
-      .where('databaseProperties.deletedAt', 'is', null)
-      .where('databaseProperties.type', '=', 'user')
-      .where('databaseRows.archivedAt', 'is', null)
-      .where(
-        sql<boolean>`LOWER(${sql.ref('databaseCells.value')}::text) LIKE ${`%${userId.toLowerCase()}%`}`,
-      )
-      .execute();
-    const pageIds = rows.map((row) => row.pageId);
-    await this.refreshPages(pageIds, workspaceId);
+    const pageIds: string[] = [];
+    let cursor: string | undefined;
+    while (true) {
+      let query = this.db
+        .selectFrom('databaseCells')
+        .innerJoin(
+          'databaseProperties',
+          'databaseProperties.id',
+          'databaseCells.propertyId',
+        )
+        .innerJoin('databaseRows', (join) =>
+          join
+            .onRef('databaseRows.databaseId', '=', 'databaseCells.databaseId')
+            .onRef('databaseRows.pageId', '=', 'databaseCells.pageId'),
+        )
+        .select('databaseCells.pageId')
+        .distinct()
+        .where('databaseCells.workspaceId', '=', workspaceId)
+        .where('databaseCells.deletedAt', 'is', null)
+        .where('databaseProperties.deletedAt', 'is', null)
+        .where('databaseProperties.type', '=', 'user')
+        .where('databaseRows.archivedAt', 'is', null)
+        .where(
+          sql<boolean>`LOWER(${sql.ref('databaseCells.value')}::text) LIKE ${`%${userId.toLowerCase()}%`}`,
+        )
+        .orderBy('databaseCells.pageId', 'asc')
+        .limit(DATABASE_PROJECTION_BATCH_SIZE);
+      if (cursor) {
+        query = query.where('databaseCells.pageId', '>', cursor);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+      const batch = rows.map((row) => row.pageId);
+      await this.refreshPages(batch, workspaceId);
+      pageIds.push(...batch);
+      cursor = batch.at(-1);
+      if (rows.length < DATABASE_PROJECTION_BATCH_SIZE) break;
+    }
     return pageIds;
   }
 
@@ -164,7 +216,7 @@ export class DatabaseSearchProjectionService {
 
   async refreshPages(pageIds: string[], workspaceId: string): Promise<void> {
     const uniqueIds = [...new Set(pageIds)];
-    const batchSize = 250;
+    const batchSize = DATABASE_PROJECTION_BATCH_SIZE;
     for (let index = 0; index < uniqueIds.length; index += batchSize) {
       const batch = uniqueIds.slice(index, index + batchSize);
       const cells = await this.loadCells(batch, workspaceId);
@@ -254,14 +306,13 @@ export class DatabaseSearchProjectionService {
       if (!INDEXABLE_PROPERTY_TYPES.has(propertyType)) continue;
       const value = this.toDisplayValue(cell, userNames);
       if (!value) continue;
-      result.set(cell.pageId, [
-        ...(result.get(cell.pageId) ?? []),
-        {
-          propertyId: cell.propertyId,
-          propertyName: cell.propertyName || cell.propertyId,
-          value: this.truncateUtf8(value, MAX_CELL_BYTES),
-        },
-      ]);
+      const pageProjections = result.get(cell.pageId) ?? [];
+      pageProjections.push({
+        propertyId: cell.propertyId,
+        propertyName: cell.propertyName || cell.propertyId,
+        value: this.truncateUtf8(value, MAX_CELL_BYTES),
+      });
+      result.set(cell.pageId, pageProjections);
     }
     return result;
   }
