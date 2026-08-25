@@ -154,6 +154,24 @@ async function reloadAfterAccessChange(page: import("@playwright/test").Page) {
   }
 }
 
+async function selectTextWithMouse(
+  page: import("@playwright/test").Page,
+  target: import("@playwright/test").Locator,
+) {
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  if (!box) throw new Error("Synced block text is not visible");
+
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2, y, { steps: 12 });
+  await page.mouse.up();
+
+  return page.evaluate(() => window.getSelection()?.toString() ?? "");
+}
+
 function collectNodeTypes(
   input: unknown,
   result = new Set<string>(),
@@ -537,6 +555,13 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     const firstReference = page
       .locator('[data-type="transclusionReference"]')
       .first();
+    const referenceText = firstReference.getByText(`Shared text ${suffix}`, {
+      exact: true,
+    });
+    await expect(referenceText).toBeVisible();
+    expect(await selectTextWithMouse(page, referenceText)).toContain(
+      `Shared text ${suffix}`,
+    );
     await firstReference.hover();
     await expect(
       firstReference.getByRole("button", { name: "Refresh" }),

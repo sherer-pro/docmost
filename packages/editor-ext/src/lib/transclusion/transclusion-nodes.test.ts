@@ -12,7 +12,7 @@ describe('transclusion node schema', () => {
   const sourcePageId = '019fdaa0-0000-7000-8000-000000000001';
   const transclusionId = '019fdaa0-0000-7000-8000-000000000002';
 
-  it('allows selecting and dragging sources and references', () => {
+  it('keeps sources draggable and reference text mouse-selectable', () => {
     const TestTransclusionSource = TransclusionSource.extend({
       content: 'paragraph+',
     });
@@ -31,7 +31,9 @@ describe('transclusion node schema', () => {
     expect(editor.schema.nodes.transclusionReference.spec.selectable).toBe(
       true,
     );
-    expect(editor.schema.nodes.transclusionReference.spec.draggable).toBe(true);
+    expect(editor.schema.nodes.transclusionReference.spec.draggable).toBe(
+      false,
+    );
 
     editor.destroy();
   });
