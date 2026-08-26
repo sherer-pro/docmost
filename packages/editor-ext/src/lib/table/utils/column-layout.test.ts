@@ -31,15 +31,25 @@ describe('allocateTableColumnWidths', () => {
   it('stops shrinking donor columns at the structural minimum', () => {
     const widths = allocateTableColumnWidths({
       ...options,
-      demands: [
-        { start: 0, span: 1, width: 900 },
-        { start: 1, span: 1, width: 150 },
-        { start: 2, span: 1, width: 150 },
-      ],
+      demands: [{ start: 0, span: 1, width: 900 }],
     });
 
     expect(widths).toEqual([504, 48, 48]);
     expect(widths[0]).toBeLessThan(900);
+  });
+
+  it('does not shrink donor columns below their measured demand', () => {
+    const widths = allocateTableColumnWidths({
+      ...options,
+      demands: [
+        { start: 0, span: 1, width: 900 },
+        { start: 1, span: 1, width: 120 },
+        { start: 2, span: 1, width: 150 },
+      ],
+    });
+
+    expect(widths).toEqual([330, 120, 150]);
+    expect(widths.reduce((total, width) => total + width, 0)).toBe(600);
   });
 
   it('returns to equal proportions after long content is removed', () => {

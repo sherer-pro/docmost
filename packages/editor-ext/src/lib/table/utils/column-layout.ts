@@ -44,8 +44,13 @@ export function allocateTableColumnWidths({
   const requestedGrowth = demandPerColumn.map((width) =>
     Math.max(0, width - baseline),
   );
-  const donorSpare = requestedGrowth.map((growth) =>
-    growth > EPSILON ? 0 : Math.max(0, baseline - safeMinWidth),
+  const donorSpare = requestedGrowth.map((growth, index) =>
+    growth > EPSILON
+      ? 0
+      : Math.max(
+          0,
+          baseline - Math.max(safeMinWidth, demandPerColumn[index]),
+        ),
   );
 
   const totalRequestedGrowth = requestedGrowth.reduce(
