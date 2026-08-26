@@ -82,6 +82,7 @@ type InternalRagUpdateItem = {
   type: 'page' | 'database';
   id: string;
   databaseId?: string;
+  documentEligible?: boolean;
   updatedAtMs: number;
 };
 
@@ -117,6 +118,7 @@ type InternalRagDatabaseDetail = {
   id: string;
   databaseId: string;
   title: string;
+  documentEligible?: boolean;
   knowledgeMarkdown?: string | null;
 };
 
@@ -412,6 +414,13 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     };
   }
 
+  private blockedPageIds(session: QuantumSession): Set<string> {
+    return new Set([
+      ...session.ragScope.excludedPageIds,
+      ...(session.ragScope.statusBlockedPageIds ?? []),
+    ]);
+  }
+
   private async findLiveDatabaseRowIds(
     session: QuantumSession,
     databaseId: string,
@@ -421,7 +430,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     const rows = await this.db
       .selectFrom('databaseRows')
       .innerJoin('databases', 'databases.id', 'databaseRows.databaseId')
-      .select('databaseRows.id as id')
+      .select(['databaseRows.id as id', 'databaseRows.pageId as pageId'])
       .where('databaseRows.workspaceId', '=', session.binding.workspaceId)
       .where('databases.workspaceId', '=', session.binding.workspaceId)
       .where('databases.spaceId', '=', session.binding.spaceId)
@@ -429,7 +438,12 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       .where('databaseRows.id', 'in', rowIds)
       .where('databaseRows.archivedAt', 'is', null)
       .execute();
-    return new Set(rows.map((row) => row.id));
+    const blockedPageIds = this.blockedPageIds(session);
+    return new Set(
+      rows
+        .filter((row) => !blockedPageIds.has(row.pageId))
+        .map((row) => row.id),
+    );
   }
 
   private async processFeed<T>(
@@ -497,7 +511,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
   ): Promise<boolean> {
     if (item.type === 'page') {
       if (!this.consumeBudget(session)) return false;
-      if (session.ragScope.excludedPageIds.includes(item.id)) {
+      if (this.blockedPageIds(session).has(item.id)) {
         const identity = sourceIdentity('page', item.id);
         await this.deleteIdentity(session, identity);
         return this.requestUploadIntentCleanup(session, identity);
@@ -606,9 +620,15 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
 
     if (progress.phase === 'document') {
       if (!this.consumeBudget(session)) return false;
-      if (
+      const identity = sourceIdentity('page', database.id);
+      if (database.documentEligible === false) {
+        await this.deleteIdentity(session, identity);
+        if (!(await this.requestUploadIntentCleanup(session, identity))) {
+          return false;
+        }
+      } else if (
         !(await this.upsertSource(session, {
-          identity: sourceIdentity('page', database.id),
+          identity,
           sourceType: 'page',
           sourceId: database.id,
           pageId: database.id,
@@ -620,8 +640,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             database.knowledgeMarkdown?.trim() || `# ${database.title}`,
           ),
         }))
-      )
+      ) {
         return false;
+      }
       progress = {
         ...progress,
         phase: 'rows',
@@ -958,7 +979,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     const extension = normalizeExtension(item.fileExt || item.fileName);
     const declaredSize = Number(item.fileSize);
     const identity = sourceIdentity('attachment', item.id);
-    if (session.ragScope.excludedPageIds.includes(item.pageId)) {
+    if (this.blockedPageIds(session).has(item.pageId)) {
       await this.deleteIdentity(session, identity);
       return this.requestUploadIntentCleanup(session, identity);
     }
@@ -1462,7 +1483,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         progress,
       );
     }
-    const blocked = new Set(session.ragScope.excludedPageIds);
+    const blocked = this.blockedPageIds(session);
     if (progress.phase === 'mappings') {
       const scan = await this.state.scanMappings(
         session.context.lease,
@@ -2028,7 +2049,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         progress,
       );
     }
-    const blockedPageIds = new Set(session.ragScope.excludedPageIds);
+    const blockedPageIds = this.blockedPageIds(session);
     const candidates = new Map<
       string,
       Array<{ file: OpenWebUiFile; metadata: RagSyncDocmostMetadataV2 }>

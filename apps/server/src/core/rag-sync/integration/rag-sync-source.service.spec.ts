@@ -38,12 +38,15 @@ describe('RagSyncSourceService', () => {
     reconcileIntervalMs: 6 * 60 * 60 * 1000,
   };
   const ragScope = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    projectionVersion: 1,
     workspaceId: binding.workspaceId,
     spaceId: binding.spaceId,
     syncTarget: null,
     fingerprint: 'scope-fingerprint',
     excludedPageIds: [],
+    ragSearchDoneOnly: false,
+    statusBlockedPageIds: [],
   } as const;
 
   it('waits for started siblings and stops scheduling after the first failure', async () => {
@@ -131,9 +134,7 @@ describe('RagSyncSourceService', () => {
             if (table === 'attachments') {
               const attachment =
                 attachmentTextById[
-                  String(
-                    equality.get('attachments.id') ?? equality.get('id'),
-                  )
+                  String(equality.get('attachments.id') ?? equality.get('id'))
                 ];
               if (!attachment) return undefined;
               const directSpaceId =
@@ -196,7 +197,7 @@ describe('RagSyncSourceService', () => {
                 .map((id) => ({
                   id,
                   sourceId: id,
-                  pageId: '',
+                  pageId: id.replace(/^row-/u, 'row-page-'),
                   databaseId: '',
                 }));
             }
@@ -884,20 +885,13 @@ describe('RagSyncSourceService', () => {
   });
 
   it('uploads extracted text for PDF attachments when local indexing is ready', async () => {
-    const { service, rag, state, storage, writer } = setup(
-      {},
-      [],
-      [],
-      [],
-      [],
-      {
-        'attachment-1': {
-          textContent: 'Extracted searchable content',
-          contentIndexStatus: 'ready',
-          spaceId: null,
-        },
+    const { service, rag, state, storage, writer } = setup({}, [], [], [], [], {
+      'attachment-1': {
+        textContent: 'Extracted searchable content',
+        contentIndexStatus: 'ready',
+        spaceId: null,
       },
-    );
+    });
     rag.getAttachmentUpdates.mockResolvedValue({
       items: [
         {
@@ -949,23 +943,16 @@ describe('RagSyncSourceService', () => {
   });
 
   it('uses distinct remote names for attachments with the same source name', async () => {
-    const { service, rag, writer } = setup(
-      {},
-      [],
-      [],
-      [],
-      [],
-      {
-        'attachment-1': {
-          textContent: 'First extracted content',
-          contentIndexStatus: 'ready',
-        },
-        'attachment-2': {
-          textContent: 'Second extracted content',
-          contentIndexStatus: 'ready',
-        },
+    const { service, rag, writer } = setup({}, [], [], [], [], {
+      'attachment-1': {
+        textContent: 'First extracted content',
+        contentIndexStatus: 'ready',
       },
-    );
+      'attachment-2': {
+        textContent: 'Second extracted content',
+        contentIndexStatus: 'ready',
+      },
+    });
     rag.getAttachmentUpdates.mockResolvedValue({
       items: [
         {
@@ -1431,8 +1418,70 @@ describe('RagSyncSourceService', () => {
     );
   });
 
+  it('removes a status-blocked database document but keeps its eligible rows', async () => {
+    const { service, rag, writer } = setup();
+    rag.getScope.mockResolvedValue({
+      ...ragScope,
+      ragSearchDoneOnly: true,
+      statusBlockedPageIds: ['database-page-1'],
+    });
+    rag.getUpdates.mockResolvedValue({
+      items: [
+        {
+          type: 'database',
+          id: 'database-page-1',
+          databaseId: 'database-1',
+          documentEligible: false,
+          updatedAtMs: 200,
+        },
+      ],
+      maxUpdatedAtMs: 200,
+      hasMore: false,
+      nextCursor: null,
+    });
+    rag.getDatabaseSyncMetadata.mockResolvedValue({
+      id: 'database-page-1',
+      databaseId: 'database-1',
+      title: 'Database',
+      documentEligible: false,
+    });
+    rag.getDatabaseSyncRowsPage.mockResolvedValue({
+      items: [
+        {
+          id: 'row-1',
+          pageId: 'row-page-1',
+          pageTitle: 'Ready row',
+          cells: [],
+        },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    writer.upload.mockResolvedValue({ id: 'row-file' });
+
+    await service.processQuantum(binding, context);
+
+    expect(writer.upload).toHaveBeenCalledTimes(1);
+    expect(writer.upload).toHaveBeenCalledWith(
+      binding,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          sourceType: 'database_row',
+          sourceId: 'row-1',
+          pageId: 'row-page-1',
+        }),
+      }),
+      context.signal,
+    );
+  });
+
   it('bounds stale database-row reconciliation with a persistent cursor', async () => {
     const { service, rag, state, writer } = setup({}, ['row-000', 'row-002']);
+    rag.getScope.mockResolvedValue({
+      ...ragScope,
+      ragSearchDoneOnly: true,
+      statusBlockedPageIds: ['row-page-000'],
+    });
     const mappings = Array.from({ length: 5 }, (_, index) => ({
       identity: `database_row:row-${String(index).padStart(3, '0')}`,
       fileId: `file-${String(index).padStart(3, '0')}`,
@@ -1510,10 +1559,9 @@ describe('RagSyncSourceService', () => {
     });
 
     expect(result).toMatchObject({ hasMore: true, processedCount: 3 });
-    expect(writer.deleteFile).toHaveBeenCalledTimes(1);
-    expect(state.deleteMapping).toHaveBeenCalledWith(
-      lease,
-      'database_row:row-001',
+    expect(writer.deleteFile).toHaveBeenCalledTimes(2);
+    expect(state.deleteMapping.mock.calls.map((call) => call[1])).toEqual(
+      expect.arrayContaining(['database_row:row-000', 'database_row:row-001']),
     );
     expect(state.setDatabaseWorkProgress).toHaveBeenLastCalledWith(
       lease,
@@ -1924,12 +1972,13 @@ describe('RagSyncSourceService', () => {
     expect(state.setMapping).not.toHaveBeenCalled();
   });
 
-  it('removes a late excluded upload after the first policy scan and keeps the transition pending', async () => {
+  it('removes a late status-blocked upload after the first policy scan and keeps the transition pending', async () => {
     const { service, rag, state, writer } = setup();
     const excludedScope = {
       ...ragScope,
       fingerprint: hex(41),
-      excludedPageIds: ['page-1'],
+      ragSearchDoneOnly: true,
+      statusBlockedPageIds: ['page-1'],
     };
     const operationId = hex(42);
     const intent = {

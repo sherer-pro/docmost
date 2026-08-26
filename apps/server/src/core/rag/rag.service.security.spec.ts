@@ -56,6 +56,8 @@ function createService(options?: {
   deleted?: Record<string, any[]>;
   aiConfig?: Record<string, unknown>;
   excludedPageIds?: string[];
+  statusBlockedPageIds?: string[];
+  ragSearchDoneOnly?: boolean;
 }) {
   const deleted = options?.deleted ?? {};
   const db = {
@@ -105,7 +107,16 @@ function createService(options?: {
       .mockResolvedValue(new Set(options?.excludedPageIds ?? [])),
     getEffectivePolicy: jest.fn().mockResolvedValue({
       fingerprint: 'policy-fingerprint',
+      ragSearchDoneOnly: options?.ragSearchDoneOnly ?? false,
       excludedPageIds: [],
+    }),
+    getRagSearchPolicy: jest.fn().mockResolvedValue({
+      revision: 0,
+      fingerprint: 'policy-fingerprint',
+      ragSearchFingerprint: 'rag-search-fingerprint',
+      ragSearchDoneOnly: options?.ragSearchDoneOnly ?? false,
+      excludedPageIds: options?.excludedPageIds ?? [],
+      statusBlockedPageIds: options?.statusBlockedPageIds ?? [],
     }),
     isPageExcluded: jest.fn().mockResolvedValue(false),
   };
@@ -126,7 +137,7 @@ function createService(options?: {
 }
 
 describe('RagService security boundaries', () => {
-  it('includes scope identity and effective page access in the v2 fingerprint', async () => {
+  it('includes scope identity and effective page access in the v3 fingerprint', async () => {
     const first = createService({ readablePageIds: ['page-1'] });
     const second = createService({ readablePageIds: ['page-1', 'page-2'] });
 
@@ -138,7 +149,7 @@ describe('RagService security boundaries', () => {
     });
 
     expect(firstScope).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget: null,
@@ -162,6 +173,21 @@ describe('RagService security boundaries', () => {
         baseUrl: 'https://open-webui.example',
         knowledgeId: 'knowledge-1',
       },
+    });
+  });
+
+  it('separates explicit exclusions from status-derived blocks in scope v3', async () => {
+    const { service } = createService({
+      excludedPageIds: ['page-explicit'],
+      ragSearchDoneOnly: true,
+      statusBlockedPageIds: ['page-without-done'],
+    });
+
+    await expect(service.getScope(scope)).resolves.toMatchObject({
+      schemaVersion: 3,
+      ragSearchDoneOnly: true,
+      excludedPageIds: ['page-explicit'],
+      statusBlockedPageIds: ['page-without-done'],
     });
   });
 
@@ -268,10 +294,13 @@ describe('RagService security boundaries', () => {
     const { service, databaseRowRepo } = createService({
       database: {
         id: databaseId,
+        name: 'Database',
         pageId: 'database-page-1',
         workspaceId: scope.workspace.id,
         spaceId: scope.space.id,
       },
+      ragSearchDoneOnly: true,
+      statusBlockedPageIds: ['database-page-1'],
       paginatedRows: {
         items: [row],
         hasMore: true,
@@ -296,6 +325,14 @@ describe('RagService security boundaries', () => {
       workspace: scope.workspace,
       space: scope.space,
     };
+
+    await expect(
+      service.getDatabaseSyncMetadata(systemScope, databaseId),
+    ).resolves.toMatchObject({
+      id: 'database-page-1',
+      databaseId,
+      documentEligible: false,
+    });
 
     await expect(
       service.getDatabaseSyncRowsPage(systemScope, databaseId, {

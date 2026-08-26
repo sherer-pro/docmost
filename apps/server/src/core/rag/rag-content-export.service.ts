@@ -88,7 +88,7 @@ export class RagContentExportService {
    * API key would read pages its own creator is denied, turning the key into a
    * privilege-escalation primitive.
    */
-  private async getReadablePageIds(
+  private async getStructuralReadablePageIds(
     scope: RagReadContext,
   ): Promise<Set<string>> {
     const excluded = await this.contentPolicy.getExcludedPageIds(
@@ -118,10 +118,28 @@ export class RagContentExportService {
     );
   }
 
+  private async getReadablePageIds(
+    scope: RagReadContext,
+  ): Promise<Set<string>> {
+    const [structuralReadablePageIds, policy] = await Promise.all([
+      this.getStructuralReadablePageIds(scope),
+      this.contentPolicy.getRagSearchPolicy(scope.space.id, scope.workspace.id),
+    ]);
+    if (!policy.ragSearchDoneOnly) {
+      return structuralReadablePageIds;
+    }
+    const statusBlockedPageIds = new Set(policy.statusBlockedPageIds);
+    return new Set(
+      [...structuralReadablePageIds].filter(
+        (pageId) => !statusBlockedPageIds.has(pageId),
+      ),
+    );
+  }
+
   async getScope(scope: RagReadContext) {
     const systemContext = this.isSystemContext(scope);
     const [policy, readablePageIds, aiConfig] = await Promise.all([
-      this.contentPolicy.getEffectivePolicy(scope.space.id, scope.workspace.id),
+      this.contentPolicy.getRagSearchPolicy(scope.space.id, scope.workspace.id),
       systemContext
         ? Promise.resolve(undefined)
         : this.getReadablePageIds(scope),
@@ -149,12 +167,12 @@ export class RagContentExportService {
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           ...this.projection.fingerprintInput(scope.space),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
           syncTarget,
-          policyFingerprint: policy.fingerprint,
+          policyFingerprint: policy.ragSearchFingerprint,
           ...(readablePageIds
             ? { readablePageIds: [...readablePageIds].sort() }
             : {}),
@@ -162,13 +180,15 @@ export class RagContentExportService {
       )
       .digest('hex');
     return {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       projectionVersion: this.projection.version,
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget,
       fingerprint,
       excludedPageIds: policy.excludedPageIds,
+      ragSearchDoneOnly: policy.ragSearchDoneOnly,
+      statusBlockedPageIds: policy.statusBlockedPageIds,
     };
   }
 
@@ -249,13 +269,8 @@ export class RagContentExportService {
       return rows;
     }
 
-    const readablePageIds = this.isSystemContext(scope)
-      ? null
-      : await this.getReadablePageIds(scope);
-
-    return readablePageIds
-      ? rows.filter((row) => readablePageIds.has(row.id))
-      : rows;
+    const readablePageIds = await this.getReadablePageIds(scope);
+    return rows.filter((row) => readablePageIds.has(row.id));
   }
 
   private getDocumentFieldsConfig(space: Space): KnowledgeDocumentFieldsConfig {
@@ -284,7 +299,11 @@ export class RagContentExportService {
   private async resolvePageInScope(
     pageIdOrSlug: string,
     scope: RagReadContext,
-    opts?: { includeContent?: boolean; allowDeleted?: boolean },
+    opts?: {
+      includeContent?: boolean;
+      allowDeleted?: boolean;
+      enforceRagSearchStatus?: boolean;
+    },
   ) {
     const page = await this.pageRepo.findById(pageIdOrSlug, {
       includeContent: opts?.includeContent,
@@ -323,6 +342,17 @@ export class RagContentExportService {
     ) {
       throw new ForbiddenException('Page is excluded from AI and RAG');
     }
+    if (opts?.enforceRagSearchStatus !== false) {
+      const policy = await this.contentPolicy.getRagSearchPolicy(
+        scope.space.id,
+        scope.workspace.id,
+      );
+      if (policy.statusBlockedPageIds.includes(page.id)) {
+        throw new ForbiddenException(
+          'Page status is not eligible for AI search and RAG',
+        );
+      }
+    }
 
     return page;
   }
@@ -343,6 +373,7 @@ export class RagContentExportService {
     if (!database) {
       const page = await this.resolvePageInScope(databaseIdOrPageSlug, scope, {
         allowDeleted: false,
+        enforceRagSearchStatus: false,
       });
       database = await this.databaseRepo.findByPageId(
         page.id,
@@ -362,6 +393,7 @@ export class RagContentExportService {
     }
     await this.resolvePageInScope(database.pageId, scope, {
       allowDeleted: false,
+      enforceRagSearchStatus: false,
     });
 
     return database;
@@ -452,12 +484,10 @@ export class RagContentExportService {
     // A readable database container does not imply read access to every row
     // page. Apply the creator's current page ACL before loading row content or
     // returning cell values.
-    const readablePageIds = this.isSystemContext(scope)
-      ? null
-      : await this.getReadablePageIds(scope);
-    const rowList = readablePageIds
-      ? selectedRows.filter((row) => readablePageIds.has(row.pageId))
-      : selectedRows;
+    const readablePageIds = await this.getReadablePageIds(scope);
+    const rowList = selectedRows.filter((row) =>
+      readablePageIds.has(row.pageId),
+    );
 
     const rowPageIds = rowList.map((row) => row.pageId);
     const rowPages =
@@ -567,7 +597,16 @@ export class RagContentExportService {
     pagination: RagFeedPagination = {},
   ) {
     const documentFields = this.getDocumentFieldsConfig(scope.space);
-    const readablePageIds = await this.getReadablePageIds(scope);
+    const [readablePageIds, structuralReadablePageIds, policy] =
+      await Promise.all([
+        this.getReadablePageIds(scope),
+        this.getStructuralReadablePageIds(scope),
+        this.contentPolicy.getRagSearchPolicy(
+          scope.space.id,
+          scope.workspace.id,
+        ),
+      ]);
+    const statusBlockedPageIds = new Set(policy.statusBlockedPageIds);
     const snapshot = await this.prepareFeedSnapshot(
       scope,
       'pages',
@@ -644,7 +683,7 @@ export class RagContentExportService {
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is', null)
       .where('pages.deletedAt', 'is', null)
-      .where('pages.id', 'in', [...readablePageIds])
+      .where('pages.id', 'in', [...structuralReadablePageIds])
       .where(
         databaseUpdatedAtMs,
         '<=',
@@ -681,13 +720,10 @@ export class RagContentExportService {
         .orderBy('pages.id', 'asc')
         .limit(queryLimit);
     }
-    const [regularPages, databaseNodes] =
-      readablePageIds.size === 0
-        ? [[], []]
-        : await Promise.all([
-            regularPagesQuery.execute(),
-            databaseNodesQuery.execute(),
-          ]);
+    const [regularPages, databaseNodes] = await Promise.all([
+      readablePageIds.size === 0 ? [] : regularPagesQuery.execute(),
+      structuralReadablePageIds.size === 0 ? [] : databaseNodesQuery.execute(),
+    ]);
 
     const regularFields = regularPages.map((page) =>
       this.buildCustomFields(page.settings, documentFields),
@@ -734,6 +770,7 @@ export class RagContentExportService {
         type: 'database',
         id: database.id,
         databaseId: database.databaseId,
+        documentEligible: !statusBlockedPageIds.has(database.id),
         slugId: database.slugId,
         title: database.title,
         icon: database.icon,
@@ -753,7 +790,7 @@ export class RagContentExportService {
           databaseFields[index],
           members,
         ),
-        ...(includeContent
+        ...(includeContent && !statusBlockedPageIds.has(database.id)
           ? {
               descriptionMarkdown:
                 this.toMarkdown(database.descriptionContent) ??
@@ -847,6 +884,7 @@ export class RagContentExportService {
       settings: mapPageSettings(page.settings),
       customFields,
       databaseId: linkedDatabase?.id ?? activeRow?.databaseId ?? null,
+      ...(linkedDatabase ? { documentEligible: true } : {}),
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       projectionUpdatedAt,
@@ -1005,9 +1043,19 @@ export class RagContentExportService {
     pagination: RagFeedPagination = {},
   ) {
     const updatedSince = new Date(updatedSinceMs);
-    const readablePageIds = this.isSystemContext(scope)
-      ? null
-      : await this.getReadablePageIds(scope);
+    const systemContext = this.isSystemContext(scope);
+    const [policy, readablePageIds, structuralReadablePageIds] =
+      await Promise.all([
+        this.contentPolicy.getRagSearchPolicy(
+          scope.space.id,
+          scope.workspace.id,
+        ),
+        systemContext ? Promise.resolve(null) : this.getReadablePageIds(scope),
+        systemContext
+          ? Promise.resolve(null)
+          : this.getStructuralReadablePageIds(scope),
+      ]);
+    const statusBlockedPageIds = new Set(policy.statusBlockedPageIds);
     const snapshot = await this.prepareFeedSnapshot(
       scope,
       'updates',
@@ -1170,8 +1218,8 @@ export class RagContentExportService {
       .where('databases.spaceId', '=', scope.space.id)
       .where('databases.deletedAt', 'is', null)
       .where('databasePages.deletedAt', 'is', null)
-      .$if(Boolean(readablePageIds), (qb) =>
-        qb.where('databasePages.id', 'in', [...readablePageIds!]),
+      .$if(Boolean(structuralReadablePageIds), (qb) =>
+        qb.where('databasePages.id', 'in', [...structuralReadablePageIds!]),
       )
       .where(lastChangedAtExpression, '>=', updatedSince)
       .where(
@@ -1192,12 +1240,15 @@ export class RagContentExportService {
         .limit(queryLimit);
     }
     const activeDatabases =
-      readablePageIds?.size === 0 ? [] : await activeDatabasesQuery.execute();
+      structuralReadablePageIds?.size === 0
+        ? []
+        : await activeDatabasesQuery.execute();
 
     const databaseUpdates: Array<{
       type: string;
       id: string;
       databaseId: string;
+      documentEligible: boolean;
       slugId: string;
       title: string;
       updatedAt: Date;
@@ -1217,6 +1268,7 @@ export class RagContentExportService {
         type: 'database',
         id: database.pageId,
         databaseId: database.databaseId,
+        documentEligible: !statusBlockedPageIds.has(database.pageId),
         slugId: database.slugId,
         title: database.title,
         updatedAt: lastChangedAt,
@@ -1235,9 +1287,11 @@ export class RagContentExportService {
       })),
       ...databaseUpdates,
     ]
-      // `id` is the page id in both branches, so page access rules apply to the
-      // whole change feed.
-      .filter((item) => !readablePageIds || readablePageIds.has(item.id))
+      .filter((item) =>
+        item.type === 'database'
+          ? !structuralReadablePageIds || structuralReadablePageIds.has(item.id)
+          : !readablePageIds || readablePageIds.has(item.id),
+      )
       .sort((a, b) => {
         if (a.updatedAtMs !== b.updatedAtMs) {
           return a.updatedAtMs - b.updatedAtMs;
@@ -1726,6 +1780,7 @@ export class RagContentExportService {
       slugId: databasePage.slugId,
       databaseId: database.id,
       type: 'database',
+      documentEligible: true,
       name: database.name,
       title: database.name,
       icon: database.icon,
@@ -1755,7 +1810,12 @@ export class RagContentExportService {
     );
     const databasePage = await this.resolvePageInScope(database.pageId, scope, {
       includeContent: true,
+      enforceRagSearchStatus: false,
     });
+    const policy = await this.contentPolicy.getRagSearchPolicy(
+      scope.space.id,
+      scope.workspace.id,
+    );
     const descriptionMarkdown =
       this.toMarkdown(database.descriptionContent) ??
       database.description ??
@@ -1776,6 +1836,7 @@ export class RagContentExportService {
     return {
       id: databasePage.id,
       databaseId: database.id,
+      documentEligible: !policy.statusBlockedPageIds.includes(databasePage.id),
       title: database.name,
       customFields,
       knowledgeMarkdown: [
@@ -2168,18 +2229,18 @@ export class RagContentExportService {
   private async getFeedScopeFingerprint(
     scope: RagReadContext,
   ): Promise<string> {
-    const policy = await this.contentPolicy.getEffectivePolicy(
+    const policy = await this.contentPolicy.getRagSearchPolicy(
       scope.space.id,
       scope.workspace.id,
     );
     return createHash('sha256')
       .update(
         JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           ...this.projection.fingerprintInput(scope.space),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
-          policyFingerprint: policy.fingerprint,
+          policyFingerprint: policy.ragSearchFingerprint,
           principal: this.isSystemContext(scope)
             ? { accessMode: 'system' }
             : { userId: scope.user.id, userRole: scope.user.role ?? null },

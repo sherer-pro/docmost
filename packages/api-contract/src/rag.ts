@@ -23,13 +23,15 @@ export interface RagSyncTarget {
 }
 
 export interface RagScope {
-  schemaVersion?: 1 | 2;
+  schemaVersion?: 1 | 2 | 3;
   projectionVersion: typeof RAG_KNOWLEDGE_PROJECTION_VERSION;
   workspaceId: string;
   spaceId: string;
   syncTarget: RagSyncTarget | null;
   fingerprint: string;
   excludedPageIds: string[];
+  ragSearchDoneOnly?: boolean;
+  statusBlockedPageIds?: string[];
 }
 
 export interface RagBlockedPageItem {
@@ -49,6 +51,7 @@ export interface RagDatabaseChange {
   type: "database";
   id: string;
   databaseId: string;
+  documentEligible: boolean;
   slugId: string;
   title: string;
   updatedAt: string;
@@ -111,6 +114,7 @@ export interface RagPageDetail {
   id: string;
   slugId: string;
   type: RagDocumentType;
+  documentEligible?: boolean;
   title: string | null;
   spaceId: string;
   databaseId: string | null;
@@ -161,6 +165,7 @@ export interface RagDatabaseDetail {
   slugId: string;
   databaseId: string;
   type: "database";
+  documentEligible: boolean;
   name: string;
   title: string;
   spaceId: string;
