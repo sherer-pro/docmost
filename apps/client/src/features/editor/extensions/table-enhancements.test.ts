@@ -357,11 +357,19 @@ describe("table widths", () => {
       const node = createTableNodeWithColumnWidths(editor, [900, 300]);
       const view = new TableView(node, 49);
 
-      expect(view.dom.querySelector("colgroup")).toBeNull();
-      expect(view.table.style.width).toBe("100%");
-      expect(view.table.style.minWidth).toBe("");
+      expect(view.dom.querySelectorAll("colgroup > col")).toHaveLength(2);
+      expect(view.table.style.tableLayout).toBe("fixed");
+      expect(view.table.style.width).toBe("98px");
+      expect(view.table.style.minWidth).toBe("98px");
+      expect(
+        Array.from(
+          view.colgroup.children,
+          (col) => (col as HTMLElement).style.width,
+        ),
+      ).toEqual(["49px", "49px"]);
       expect(view.dom.getAttribute("data-block-width-mode")).toBe("normal");
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("normal");
+      view.destroy();
     } finally {
       editor.destroy();
     }
@@ -382,15 +390,16 @@ describe("table widths", () => {
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("full");
       expect(view.dom.getAttribute("data-block-width-mode")).toBe("full");
       expect(view.table.getAttribute("data-table-width-mode")).toBe("full");
-      expect(view.table.style.width).toBe("100%");
-      expect(view.dom.querySelector("colgroup")).toBeNull();
+      expect(view.table.style.width).toBe("98px");
+      expect(view.dom.querySelectorAll("colgroup > col")).toHaveLength(2);
 
       expect(view.update(nextNode)).toBe(true);
       expect(view.dom.getAttribute("data-table-width-mode")).toBe("wide");
       expect(view.dom.getAttribute("data-block-width-mode")).toBe("wide");
       expect(view.table.getAttribute("data-table-width-mode")).toBe("wide");
-      expect(view.table.style.width).toBe("100%");
-      expect(view.dom.querySelector("colgroup")).toBeNull();
+      expect(view.table.style.width).toBe("98px");
+      expect(view.dom.querySelectorAll("colgroup > col")).toHaveLength(2);
+      view.destroy();
     } finally {
       editor.destroy();
     }
@@ -666,7 +675,7 @@ describe("table paste handling", () => {
 
   it("does not add generated column widths to pasted HTML tables", () => {
     const html = normalizePastedTableHTML(
-      '<table><tr><th>ID</th><th>Detailed description</th></tr><tr><td>1</td><td>A much longer value than the first column</td></tr></table>',
+      "<table><tr><th>ID</th><th>Detailed description</th></tr><tr><td>1</td><td>A much longer value than the first column</td></tr></table>",
     );
 
     expect(html).toContain('data-table-width-mode="wide"');
