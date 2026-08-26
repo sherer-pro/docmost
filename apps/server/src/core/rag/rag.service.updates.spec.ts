@@ -143,8 +143,18 @@ const createService = (
     {
       getExcludedPageIds: async () => new Set<string>(),
       getEffectivePolicy: async () => ({
+        revision: 0,
         fingerprint: 'policy-fingerprint',
+        ragSearchDoneOnly: false,
         excludedPageIds: [],
+      }),
+      getRagSearchPolicy: async () => ({
+        revision: 0,
+        fingerprint: 'policy-fingerprint',
+        ragSearchFingerprint: 'rag-search-fingerprint',
+        ragSearchDoneOnly: false,
+        excludedPageIds: [],
+        statusBlockedPageIds: [],
       }),
     } as any,
     {
