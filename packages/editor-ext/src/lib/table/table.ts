@@ -1,15 +1,16 @@
-import { Table } from "@tiptap/extension-table";
-import { Editor } from "@tiptap/core";
-import { DOMOutputSpec } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
-import { cellAround } from "@tiptap/pm/tables";
+import { Table } from '@tiptap/extension-table';
+import { Editor } from '@tiptap/core';
+import { DOMOutputSpec } from '@tiptap/pm/model';
+import { TextSelection } from '@tiptap/pm/state';
+import { cellAround } from '@tiptap/pm/tables';
 import {
   DEFAULT_TABLE_WIDTH_MODE,
   getTableWidthModeClass,
   normalizeTableWidthMode,
-} from "./utils/width-mode";
+} from './utils/width-mode';
+import { TableView } from './table-view';
 
-const LIST_TYPES = ["bulletList", "orderedList", "taskList"];
+const LIST_TYPES = ['bulletList', 'orderedList', 'taskList'];
 
 function isInList(editor: Editor): boolean {
   const { $from } = editor.state.selection;
@@ -26,19 +27,23 @@ function isInList(editor: Editor): boolean {
 
 function handleListIndent(editor: Editor): boolean {
   return (
-    editor.commands.sinkListItem("listItem") ||
-    editor.commands.sinkListItem("taskItem")
+    editor.commands.sinkListItem('listItem') ||
+    editor.commands.sinkListItem('taskItem')
   );
 }
 
 function handleListOutdent(editor: Editor): boolean {
   return (
-    editor.commands.liftListItem("listItem") ||
-    editor.commands.liftListItem("taskItem")
+    editor.commands.liftListItem('listItem') ||
+    editor.commands.liftListItem('taskItem')
   );
 }
 
 export const CustomTable = Table.extend({
+  addNodeView() {
+    return ({ node }) => new TableView(node, this.options.cellMinWidth);
+  },
+
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -46,18 +51,18 @@ export const CustomTable = Table.extend({
         default: DEFAULT_TABLE_WIDTH_MODE,
         parseHTML: (element) => {
           const wrapperMode = element
-            .closest(".tableWrapper")
-            ?.getAttribute("data-table-width-mode");
+            .closest('.tableWrapper')
+            ?.getAttribute('data-table-width-mode');
 
           return normalizeTableWidthMode(
-            element.getAttribute("data-table-width-mode") ||
-              element.getAttribute("data-block-width-mode") ||
-              element.getAttribute("data-width-mode") ||
+            element.getAttribute('data-table-width-mode') ||
+              element.getAttribute('data-block-width-mode') ||
+              element.getAttribute('data-width-mode') ||
               wrapperMode,
           );
         },
         renderHTML: (attributes) => ({
-          "data-table-width-mode": normalizeTableWidthMode(
+          'data-table-width-mode': normalizeTableWidthMode(
             attributes.widthMode,
           ),
         }),
@@ -68,7 +73,7 @@ export const CustomTable = Table.extend({
   addKeyboardShortcuts() {
     return {
       ...this.parent?.(),
-      "Mod-a": () => {
+      'Mod-a': () => {
         const { state, view } = this.editor;
         const { selection, doc } = state;
 
@@ -94,7 +99,7 @@ export const CustomTable = Table.extend({
       },
       Tab: () => {
         // If we're in a list within a table, handle list indentation
-        if (isInList(this.editor) && this.editor.isActive("table")) {
+        if (isInList(this.editor) && this.editor.isActive('table')) {
           if (handleListIndent(this.editor)) {
             return true;
           }
@@ -111,9 +116,9 @@ export const CustomTable = Table.extend({
 
         return this.editor.chain().addRowAfter().goToNextCell().run();
       },
-      "Shift-Tab": () => {
+      'Shift-Tab': () => {
         // If we're in a list within a table, handle list outdentation
-        if (isInList(this.editor) && this.editor.isActive("table")) {
+        if (isInList(this.editor) && this.editor.isActive('table')) {
           if (handleListOutdent(this.editor)) {
             return true;
           }
@@ -130,11 +135,11 @@ export const CustomTable = Table.extend({
     const originalRender = this.parent?.({ node, HTMLAttributes });
     const widthMode = normalizeTableWidthMode(node.attrs.widthMode);
     const wrapper: DOMOutputSpec = [
-      "div",
+      'div',
       {
         class: `tableWrapper blockWidthWrapper ${getTableWidthModeClass(widthMode)}`,
-        "data-block-width-mode": widthMode,
-        "data-table-width-mode": widthMode,
+        'data-block-width-mode': widthMode,
+        'data-table-width-mode': widthMode,
       },
       originalRender,
     ];

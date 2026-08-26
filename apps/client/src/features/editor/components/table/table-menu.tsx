@@ -1,4 +1,4 @@
-import { posToDOMRect, findParentNode } from "@tiptap/react";
+import { posToDOMRect, findParentNode, useEditorState } from "@tiptap/react";
 import { Node as PMNode } from "@tiptap/pm/model";
 import React, { useCallback } from "react";
 import {
@@ -10,6 +10,8 @@ import {
   IconColumnInsertLeft,
   IconColumnInsertRight,
   IconColumnRemove,
+  IconArrowLeft,
+  IconArrowRight,
   IconRowInsertBottom,
   IconRowInsertTop,
   IconRowRemove,
@@ -25,6 +27,13 @@ import { TableWidthModeSelector } from "./table-width-mode";
 export const TableMenu = React.memo(
   ({ editor }: EditorMenuProps): JSX.Element => {
     const { t } = useTranslation();
+    const columnMoveState = useEditorState({
+      editor,
+      selector: ({ editor: currentEditor }) => ({
+        canMoveLeft: currentEditor?.can().moveColumnLeft() ?? false,
+        canMoveRight: currentEditor?.can().moveColumnRight() ?? false,
+      }),
+    });
     const shouldShow = useCallback(
       ({ state }: ShouldShowProps) => {
         if (!state) {
@@ -33,7 +42,7 @@ export const TableMenu = React.memo(
 
         return editor.isActive("table") && !isCellSelection(state.selection);
       },
-      [editor]
+      [editor],
     );
 
     const getReferencedVirtualElement = useCallback(() => {
@@ -75,6 +84,14 @@ export const TableMenu = React.memo(
 
     const deleteColumn = useCallback(() => {
       editor.chain().focus().deleteColumn().run();
+    }, [editor]);
+
+    const moveColumnLeft = useCallback(() => {
+      editor.chain().focus().moveColumnLeft().run();
+    }, [editor]);
+
+    const moveColumnRight = useCallback(() => {
+      editor.chain().focus().moveColumnRight().run();
     }, [editor]);
 
     const addRowAbove = useCallback(() => {
@@ -153,6 +170,30 @@ export const TableMenu = React.memo(
             </ActionIcon>
           </Tooltip>
 
+          <Tooltip position="top" label={t("Move column left")}>
+            <ActionIcon
+              onClick={moveColumnLeft}
+              variant="default"
+              size="lg"
+              disabled={!columnMoveState.canMoveLeft}
+              aria-label={t("Move column left")}
+            >
+              <IconArrowLeft size={18} />
+            </ActionIcon>
+          </Tooltip>
+
+          <Tooltip position="top" label={t("Move column right")}>
+            <ActionIcon
+              onClick={moveColumnRight}
+              variant="default"
+              size="lg"
+              disabled={!columnMoveState.canMoveRight}
+              aria-label={t("Move column right")}
+            >
+              <IconArrowRight size={18} />
+            </ActionIcon>
+          </Tooltip>
+
           <Tooltip position="top" label={t("Add row above")}>
             <ActionIcon
               onClick={addRowAbove}
@@ -224,7 +265,7 @@ export const TableMenu = React.memo(
         </ActionIcon.Group>
       </BubbleMenu>
     );
-  }
+  },
 );
 
 export default TableMenu;

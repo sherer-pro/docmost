@@ -43,7 +43,6 @@ import {
   TableDndExtension,
   TablePaste,
   TableReadonlySort,
-  TableView,
   Subpages,
   Heading,
   HeadingNumbering,
@@ -209,12 +208,15 @@ export const mainExtensions = [
   CustomTable.configure({
     allowTableNodeSelection: true,
     resizable: false,
-    View: TableView,
+    cellMinWidth: 48,
   }),
   TableRow,
   TableCell,
   TableHeader,
-  TableDndExtension,
+  TableDndExtension.configure({
+    getLabel: (key) =>
+      key === "moveColumn" ? i18n.t("Move column") : i18n.t("Move row"),
+  }),
   TablePaste,
   TableReadonlySort.configure({
     getLabel: (key) => {
