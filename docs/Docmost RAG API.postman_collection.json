@@ -163,7 +163,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["rag", "scope"]
             },
-            "description": "Returns the workspace and space resolved from the RAG key, the non-secret Open WebUI sync target configured in space AI settings, and the effective AI/RAG exclusion fingerprint and excluded backing page ids."
+            "description": "Returns RAG scope schemaVersion 3: workspace/space, non-secret Open WebUI target, ragSearchDoneOnly, explicit excludedPageIds, statusBlockedPageIds, and the effective fingerprint."
           },
           "response": []
         },
@@ -198,7 +198,7 @@
                 }
               ]
             },
-            "description": "Opaque feed of backing page IDs that left the effective synchronization scope."
+            "description": "Opaque feed of backing page IDs outside the effective synchronization scope because of ACL, explicit exclusion, or the Done-only status policy."
           },
           "response": []
         },
@@ -257,7 +257,7 @@
                 }
               ]
             },
-            "description": "Full list of active page|database in the scoped space."
+            "description": "Full list of active page|database in scope. Database entries include documentEligible; false keeps structural row traversal available while the database document itself must not be indexed."
           },
           "response": []
         },
@@ -310,7 +310,7 @@
                 }
               ]
             },
-            "description": "Incremental updates in one fixed cursor-v2 snapshot. Keep the original updatedSince while following nextCursor; maxUpdatedAtMs is saved only on the terminal hasMore=false page."
+            "description": "Incremental updates in one fixed cursor-v2 snapshot. Database items include documentEligible. Keep the original updatedSince while following nextCursor; maxUpdatedAtMs is saved only on the terminal hasMore=false page."
           },
           "response": []
         },
@@ -547,7 +547,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["rag", "databases", "{{databaseIdOrPageSlug}}", "rows"]
             },
-            "description": "Returns all active rows in the database."
+            "description": "Returns active rows eligible under their own page status. A Done row remains available when the database document has documentEligible=false."
           },
           "response": []
         },
