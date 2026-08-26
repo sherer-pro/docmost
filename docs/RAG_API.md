@@ -80,6 +80,16 @@ applies to pages, databases, rows, attachments, detail routes, and exports by
 their backing `pageId`. Deleted feeds remain unfiltered so consumers can remove
 objects that were indexed before a rule changed.
 
+The independent `ragSearchDoneOnly` policy defaults to `false`. When enabled,
+page-backed sources require their own canonical status to equal `DONE`; a
+missing, `null`, or unknown status is blocked. Pages, database containers, and
+database rows are evaluated independently. A `DONE` row therefore remains
+exportable when its database container is not `DONE`; the container schema is
+service context, not an eligible database document. Attachments inherit the
+owner page's status, while dictionary terms are not status-filtered. Manual AI
+context, editor actions, Agent/MCP, and regular Docmost search are outside this
+switch.
+
 ## 3. Error model
 
 Common status codes:
@@ -181,7 +191,7 @@ Returns the current effective indexing scope:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "projectionVersion": 1,
   "workspaceId": "<workspace-uuid>",
   "spaceId": "<space-uuid>",
@@ -191,7 +201,9 @@ Returns the current effective indexing scope:
     "knowledgeId": "<knowledge-id>"
   },
   "fingerprint": "<sha256>",
-  "excludedPageIds": ["<page-uuid>"]
+  "ragSearchDoneOnly": true,
+  "excludedPageIds": ["<explicitly-excluded-page-uuid>"],
+  "statusBlockedPageIds": ["<non-done-page-uuid>"]
 }
 ```
 
@@ -204,18 +216,20 @@ space in AI settings, or `null` when the space does not use the
 `open-webui-knowledge-v1` retrieval adapter. Credentials are never returned.
 
 The fingerprint is based on the workspace and space identifiers, the effective
-content policy, the sorted set of pages currently readable by the key creator,
+explicit policy, `ragSearchDoneOnly`, the sorted `statusBlockedPageIds`, the
+sorted set of pages currently readable by the key creator,
 `projectionVersion`, the enabled document-field mask, and the dictionary
 switch. A key-scope, ACL, group-membership, space-role, exclusion, projection,
-document-field, or dictionary-switch change therefore invalidates an external
-sync. The legacy `excludedPageIds` field remains for one compatibility
-transition.
+document-field, dictionary-switch, or `DONE` boundary change therefore
+invalidates an external sync. `excludedPageIds` contains only explicit
+exclusions; `statusBlockedPageIds` contains status-derived blocks.
 
 ### 5.0.1 `GET /api/rag/scope/blocked`
 
 Returns a paginated opaque list of `{ "pageId": "<uuid>" }` records for live
 pages that the key creator cannot currently read or that the AI content policy
-excludes. No title, slug, hierarchy, or content metadata is returned.
+excludes explicitly or by status. No title, slug, hierarchy, or content
+metadata is returned.
 
 ### 5.1 `GET /api/rag/pages`
 
@@ -231,7 +245,9 @@ Query:
 `contentMarkdown` and `descriptionMarkdown` are returned only when
 `includeContent=true`. Page/database entries also expose structured
 `customFields`, `projectionUpdatedAt`, and canonical `knowledgeMarkdown` when
-content is requested.
+content is requested. Database entries always include `documentEligible`.
+When it is `false`, the database remains present only so a consumer can traverse
+eligible rows; its own content fields are omitted and must not be indexed.
 
 ### 5.2 `GET /api/rag/updates`
 
@@ -261,6 +277,10 @@ Database delta includes changes from:
 only the base entity write. A property rename therefore replays the database
 and every row. Detail responses expose the same derived time as
 `projectionUpdatedAt`.
+
+Every database update includes `documentEligible`. A `false` value means to
+delete or skip only the database document and continue fetching eligible rows.
+Explicit exclusion or deletion still removes the database and its rows.
 
 ### 5.3 `GET /api/rag/deleted`
 
@@ -515,6 +535,9 @@ mapping rules. One Knowledge Base maps to one Docmost space. The module:
   restores mappings from Open WebUI metadata,
   purges inaccessible mappings, resets the live update checkpoints to `0`, and
   stores the new fingerprint only after a successful reindex cycle;
+- combines explicit and status-derived blocked page IDs for page, row, and
+  attachment cleanup. A status-blocked database removes only its document;
+  explicit exclusion or deletion removes the database and its rows;
 - deletes an existing attachment mapping when the file becomes too large or
   its extension is no longer allowed, while retaining mappings on transient
   remote/read errors for a later retry.
@@ -536,15 +559,16 @@ key, per-space env variable, JSON file, standalone process, or Compose profile
 for the built-in writer. A Knowledge Base must be created in advance; Docmost
 never creates or deletes the Knowledge Base itself.
 
-The built-in index contains every page allowed by the space AI content policy,
-not only pages readable by the administrator who configured the binding. Direct
+The built-in index contains every page allowed by the space AI content policy
+and, when enabled, by the page's own `DONE` status, not only pages readable by
+the administrator who configured the binding. Direct
 user access to that Open WebUI Knowledge Base can therefore expose content beyond
 the user's Docmost ACL. Keep Knowledge Base access restricted and keep the
 query-time credential separate from the writer key.
 
 External indexers may continue to implement the initial and incremental flows
-below through `/api/rag/*`; none of their routes or DTOs are changed by the
-built-in writer.
+below through `/api/rag/*`. Schema version 3 adds the status-policy fields and
+database `documentEligible` contract described above.
 
 ### 7.1 Initial sync
 
@@ -556,7 +580,12 @@ built-in writer.
    until `hasMore=false`.
 4. For each document:
    - `type=page` -> index as page
-   - `type=database` -> call `GET /api/rag/databases/:databaseIdOrPageSlug`
+   - `type=database` and `documentEligible=true` -> call
+     `GET /api/rag/databases/:databaseIdOrPageSlug` and index the database
+     document
+   - `type=database` -> always page through
+     `GET /api/rag/databases/:databaseIdOrPageSlug/rows`; only eligible rows are
+     returned
 5. For pages with attachments:
    - call `GET /api/rag/pages/:id/attachments`
    - download binaries through `downloadUrl` or `/api/rag/attachments/:fileId/:fileName`
@@ -579,7 +608,10 @@ built-in writer.
 2. `GET /api/rag/updates?updatedSince=<lastUpdatedCheckpoint>&limit=500`
 3. Upsert updated documents:
    - `type=page` -> `GET /api/rag/pages/:id?includeContent=true`
-   - `type=database` -> `GET /api/rag/databases/:databaseIdOrPageSlug`
+   - `type=database` and `documentEligible=true` ->
+     `GET /api/rag/databases/:databaseIdOrPageSlug`
+   - `type=database` and `documentEligible=false` -> delete only the database
+     document mapping; continue synchronizing its eligible rows
 4. Follow `nextCursor` while `hasMore=true`, always repeating the original
    `updatedSince`/`deletedSince` value for that snapshot
 5. Process `/api/rag/attachments/updates` using its own checkpoint

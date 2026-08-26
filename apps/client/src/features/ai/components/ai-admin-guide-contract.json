@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "anchors": [
     "assistant",
     "retrieval",
@@ -35,10 +35,22 @@
       "id": "rag-sync-target-mismatch",
       "key": "troubleshooting.rows.targetMismatch.signal",
       "needles": ["rag_sync_target_mismatch"]
+    },
+    {
+      "id": "rag-search-done-only-policy",
+      "key": "knowledgeAccessDoneOnly",
+      "needles": [
+        "ragSearchDoneOnly",
+        "schemaVersion: 3",
+        "statusBlockedPageIds",
+        "documentEligible: false",
+        "dictionary_term"
+      ]
     }
   ],
   "requiredKeys": [
     "description",
+    "knowledgeAccessDoneOnly",
     "diagram.expand",
     "diagram.invalid",
     "diagram.mcp.caption",

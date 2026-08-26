@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 15 -->
+<!-- ai-admin-guide-contract-version: 16 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -96,27 +96,27 @@ queue is not a state store.
 
 The main components are:
 
-| Component                                | Responsibility                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `AiConversationService`                  | private user conversations in page context, messages, and drafts                            |
-| `AiAssistantProfileService`              | space-owned profile CRUD, effective resolution, immutable snapshots, and Agent verification |
-| `AiContextService`                       | versioned conversation context and source-access validation                                 |
-| `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API          |
-| `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence       |
-| `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results                 |
-| `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback                 |
-| `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                |
-| `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                           |
-| `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history     |
+| Component                                | Responsibility                                                                                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `AiConversationService`                  | private user conversations in page context, messages, and drafts                                                       |
+| `AiAssistantProfileService`              | space-owned profile CRUD, effective resolution, immutable snapshots, and Agent verification                            |
+| `AiContextService`                       | versioned conversation context and source-access validation                                                            |
+| `AiContentPolicyService`                 | shared space exclusions for AI context, editor actions, retrieval, and the RAG API                                     |
+| `AiRunService` / `AiRunExecutionService` | immutable attempts, limits, idempotency, execution, and streamed response persistence                                  |
+| `AiPromptBuilderService`                 | bounded prompt assembly from history, context, files, and retrieval results                                            |
+| `AiCitationService`                      | source-marker registration, validation, normalization, and context fallback                                            |
+| `OpenAiCompatibleProviderService`        | requests and streaming against an OpenAI-compatible provider                                                           |
+| `AiRetrievalService`                     | safe query-time retrieval and reauthorization of returned sources                                                      |
+| `AiSourceAccessService`                  | shared live source, ACL, workspace/space, and exclusion guard for retrieval and history                                |
 | `KnowledgeProjectionService`             | canonical document fields, member names, database schema/cells, dictionary Markdown/search, and projection fingerprint |
-| `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                 |
-| `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms            |
-| `AiTextGenerationService`                | narrow provider session facade exported through `AI_TEXT_GENERATION_PORT`                   |
-| `DictionaryWordFormService`              | bounded structured word-form generation through the narrow generation port                  |
-| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                       |
-| `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots             |
-| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                |
-| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                           |
+| `AiFileService`                          | uploads, text extraction, images, tombstone deletion, and chat-file cleanup                                            |
+| `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms                                       |
+| `AiTextGenerationService`                | narrow provider session facade exported through `AI_TEXT_GENERATION_PORT`                                              |
+| `DictionaryWordFormService`              | bounded structured word-form generation through the narrow generation port                                             |
+| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                                                  |
+| `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots                                        |
+| `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                                           |
+| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                                                      |
 
 Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
 atomically claims a specific `ai_runs` row from `queued` to `running`; a
@@ -558,6 +558,19 @@ these rules in the dedicated **Knowledge access** section. Adding and removing
 rules persists immediately and is intentionally separate from the section Save
 button used by provider and behavior configuration.
 
+The same **Knowledge access** section also stores the independent
+`ragSearchDoneOnly` switch. It defaults to `false`. When enabled, query-time AI
+retrieval, the RAG API, and built-in RAG Sync accept a page-backed source only
+when that source's own `PageCustomFieldStatus` is the canonical `DONE` value;
+missing, `null`, and unknown values fail closed. A page, database container,
+and database row are evaluated independently, so an eligible row remains
+available when its database container is not `DONE`. The database schema may
+still be read as service context for those rows, but the database document is
+not indexed. Attachments inherit their owner page's eligibility. Dictionary
+terms are never status-filtered. The switch does not change current/manual chat
+context, editor actions, Agent/MCP, explicit exclusion semantics, or regular
+Docmost search.
+
 When the policy changes, affected active contexts are reconciled, their
 revision is incremented, and `ai:content-policy.updated` is emitted. Old
 messages and snapshots remain visible, but `prompt_history_cutoff_at` prevents
@@ -581,6 +594,11 @@ database, workspace, space, deletion state, current page ACL, and content
 policy before its excerpt enters the prompt or becomes a citation. An external
 index is therefore never an authorization authority and cannot expand user
 access.
+
+When `ragSearchDoneOnly` is enabled, both the pre-request allowlist and the
+post-result authorization pass apply the status rule. The external request
+therefore stops receiving non-`DONE` page IDs immediately, even while an
+asynchronous external index is still converging after a status transition.
 
 The source-access guard computes the full allowed set before an outbound
 retrieval call, then rechecks only returned identities after the call and just
@@ -835,7 +853,8 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260811T190000-rag-sync-target-verification.ts`](../apps/server/src/database/migrations/20260811T190000-rag-sync-target-verification.ts)                     | Adds nullable `last_tested_at` evidence for the current Open WebUI target and writer credential. Existing bindings remain unverified and must pass Test before a later Enable.                                                                                                                     | Removes target-test evidence; use `RAG_SYNC_ENABLED=false` for operational rollback instead of removing the column.                                                                            |
 | [`20260807T140000-search-guillemet-indexing.ts`](../apps/server/src/database/migrations/20260807T140000-search-guillemet-indexing.ts)                           | Rebuilds page and attachment search vectors after removing guillemet delimiters before `f_unaccent`, preserving the enclosed searchable terms for AI context and ordinary search.                                                                                                                  | Restores the prior trigger expressions and rebuilds both vectors; words enclosed in guillemets may again disappear from search.                                                                |
 | [`20260820T130000-knowledge-projection-dictionary-search.ts`](../apps/server/src/database/migrations/20260820T130000-knowledge-projection-dictionary-search.ts) | Extends only the persisted AI source-type constraint with `dictionary_term`; it performs no index build or table rewrite.                                                                                                                                                                          | Deletes persisted `dictionary_term` citations before restoring the old source-type constraint. Those citation rows are intentionally not recoverable by `down`.                                |
-| [`20260820T140000-search-dictionary-database-projection.ts`](../apps/server/src/database/migrations/20260820T140000-search-dictionary-database-projection.ts) | Builds trigram expression indexes for dictionary terms, definitions, and normalized aliases; adds the database search projection columns/trigger; rewrites existing `pages` rows; and builds the partial database-projection GIN index.                                                            | Drops the database-projection index, trigger, function, and columns, then drops the three dictionary trigram indexes.                                                                           |
+| [`20260820T140000-search-dictionary-database-projection.ts`](../apps/server/src/database/migrations/20260820T140000-search-dictionary-database-projection.ts)   | Builds trigram expression indexes for dictionary terms, definitions, and normalized aliases; adds the database search projection columns/trigger; rewrites existing `pages` rows; and builds the partial database-projection GIN index.                                                            | Drops the database-projection index, trigger, function, and columns, then drops the three dictionary trigram indexes.                                                                          |
+| [`20260827T010000-ai-rag-search-done-filter.ts`](../apps/server/src/database/migrations/20260827T010000-ai-rag-search-done-filter.ts)                           | Adds the disabled-by-default `rag_search_done_only` space policy and a partial workspace/space/status index for active page-backed RAG sources. Existing spaces preserve their current output.                                                                                                     | Drops the status index and policy column; the runtime again uses the broad explicit-exclusion policy only.                                                                                     |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -891,7 +910,11 @@ Space and workspace deletion fail closed while an active or cleanup-required
 binding exists.
 
 The source exporter uses every live non-template page in the space except pages
-excluded by `AiContentPolicyService`. Template catalog entries are not indexed;
+excluded by `AiContentPolicyService`. With `ragSearchDoneOnly`, the database
+document and every row are filtered independently by their own status. A
+status-blocked database document is removed while eligible rows continue to be
+projected with the database schema as service context. Attachments follow the
+owner page and dictionary terms remain independent. Template catalog entries are not indexed;
 pages created from regular or synchronized templates are ordinary materialized
 pages and are indexed normally. This intentionally differs from `/api/rag/*`,
 where the key creator's current page ACL remains part of the scope. Query-time
@@ -902,15 +925,17 @@ space scope.
 
 All page/database/row Markdown is produced by `KnowledgeProjectionService`.
 The scope/feed fingerprint contains projection version `1`, the enabled
-document-field mask, and the dictionary switch. A change resets the applicable
+document-field mask, the dictionary switch, `ragSearchDoneOnly`, explicit
+exclusions, and `statusBlockedPageIds`. A change resets the applicable
 update checkpoints, reconciles stale remote mappings, and reprojects existing
 documents without relying on an event being delivered. Entity changes,
 referenced member display-name changes, database schema/cell/row changes, and
 dictionary mutations wake the supervisor only after commit; business writes do
 not wait for Open WebUI and delivery remains at least once.
 
-Moving a page across an excluded subtree boundary and moving a page tree to the
-trash wake the matching space binding immediately after commit. Restoring a
+Moving a page across an excluded subtree boundary, crossing the `DONE` status
+boundary, and moving a page tree to the trash wake the matching space binding
+immediately after commit. Restoring a
 page tree also refreshes the projection timestamps of every restored page and
 its live attachments before waking the binding. The update and attachment
 feeds can therefore upload a restored source even when its earlier deletion
@@ -1178,7 +1203,7 @@ described in JSON Schema.
 
 | Tool                         | Main inputs                                           | Result and bounds                                                                                                            |
 | ---------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `search`                     | `query`, optional `limit`                             | accessible pages/database rows enriched with document fields plus enabled dictionary terms; shared default 10, maximum 20   |
+| `search`                     | `query`, optional `limit`                             | accessible pages/database rows enriched with document fields plus enabled dictionary terms; shared default 10, maximum 20    |
 | `getTree`                    | none                                                  | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
 | `getPageContext`             | `pageId`                                              | page metadata and server-resolved document fields, visible allowed breadcrumbs, and up to 50 readable direct children        |
 | `getPage`                    | `pageId`                                              | title, document fields, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                |
@@ -1188,7 +1213,7 @@ described in JSON Schema.
 | `getWorkspaceContext`        | none                                                  | curated workspace identity and actor role; never raw workspace settings                                                      |
 | `getSpaceContext`            | none                                                  | current-space metadata, explicit `spaceRole`, workspace role, and safe actor capability flags                                |
 | `getDatabaseContext`         | `databaseId`                                          | database document fields, normalized property schema/options, and compact views                                              |
-| `listDatabaseRows`           | `databaseId`, optional `limit`, `cursor`              | readable row pages, their document fields, and named/explicit cells; default 20, maximum 50                                 |
+| `listDatabaseRows`           | `databaseId`, optional `limit`, `cursor`              | readable row pages, their document fields, and named/explicit cells; default 20, maximum 50                                  |
 | `getDatabaseRowContext`      | `pageId`                                              | readable row fields, database root, schema/options, and named/explicit cells                                                 |
 | `getTable`                   | `pageId`, `tableRef`                                  | bounded text/cell-ID matrices for one structural table                                                                       |
 | `listComments`               | `pageId`, optional `limit`, `cursor`                  | active comments, parent/resolution state, compact content, and safe actors; maximum 50                                       |
@@ -1613,14 +1638,14 @@ fields are joined when RAG or safe retrieval reads the attachment.
 
 | Path                                                            | Data                                                               |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `GET /api/rag/scope`                                            | schema-v2 policy and readable-page fingerprint                     |
+| `GET /api/rag/scope`                                            | schema-v3 policy and readable-page fingerprint                     |
 | `GET /api/rag/scope/blocked?limit=&cursor=`                     | opaque IDs currently outside effective sync scope                  |
 | `GET /api/rag/pages?includeContent=&limit=&cursor=`             | active page/database list with optional SQL-backed pagination      |
-| `GET /api/rag/updates?updatedSince=&limit=&cursor=`             | changed pages and databases                                        |
+| `GET /api/rag/updates?updatedSince=&limit=&cursor=`             | changed pages and databases with database `documentEligible`       |
 | `GET /api/rag/deleted?deletedSince=&limit=&cursor=`             | page/database/database-row tombstones                              |
 | `GET /api/rag/attachments/updates?updatedSince=&limit=&cursor=` | changed attachments                                                |
 | `GET /api/rag/attachments/deleted?deletedSince=&limit=&cursor=` | attachment tombstones                                              |
-| `GET /api/rag/dictionary/terms?limit=&cursor=`                  | active dictionary term projections                                |
+| `GET /api/rag/dictionary/terms?limit=&cursor=`                  | active dictionary term projections                                 |
 | `GET /api/rag/dictionary/terms/:termId`                         | one active term projection                                         |
 | `GET /api/rag/dictionary/updates?updatedSince=&limit=&cursor=`  | dictionary changes                                                 |
 | `GET /api/rag/dictionary/deleted?deletedSince=&limit=&cursor=`  | dictionary tombstones                                              |

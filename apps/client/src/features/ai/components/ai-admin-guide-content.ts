@@ -85,6 +85,7 @@ export type AiAdminGuideScenario = {
   diagram: "rag" | "mcp" | null;
   controls: readonly AiAdminGuideCopyValue[];
   stepKeys?: readonly string[];
+  showKnowledgeAccessPolicy?: boolean;
 };
 
 export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
@@ -103,6 +104,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     contentKey: "ai.adminGuide.scenario.retrieval",
     settingsPath: "/settings/ai/spaces",
     diagram: "rag",
+    showKnowledgeAccessPolicy: true,
     controls: [{ kind: "environment", value: "AI_RETRIEVAL_ALLOWED_ORIGINS" }],
   },
   {
@@ -111,6 +113,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     contentKey: "ai.adminGuide.scenario.ragApi",
     settingsPath: "/settings/keys/rag",
     diagram: "rag",
+    showKnowledgeAccessPolicy: true,
     controls: [{ kind: "route", value: "/api/rag/*" }],
   },
   {
@@ -119,6 +122,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     contentKey: "ai.adminGuide.scenario.ragSync",
     settingsPath: "/settings/ai/spaces",
     diagram: "rag",
+    showKnowledgeAccessPolicy: true,
     controls: [
       { kind: "environment", value: "RAG_SYNC_ENABLED" },
       { kind: "environment", value: "RAG_SYNC_ALLOWED_ORIGINS" },

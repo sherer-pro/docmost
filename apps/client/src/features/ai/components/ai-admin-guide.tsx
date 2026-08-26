@@ -233,6 +233,11 @@ function ScenarioPanel({
             </Accordion.Control>
             <Accordion.Panel>
               <Text size="sm">{t(`${key}.technical`)}</Text>
+              {scenario.showKnowledgeAccessPolicy && (
+                <Text size="sm" mt="sm">
+                  {t("ai.adminGuide.knowledgeAccessDoneOnly")}
+                </Text>
+              )}
               <CopyValues values={scenario.controls} />
             </Accordion.Panel>
           </Accordion.Item>
