@@ -1,5 +1,6 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 import { PageService } from './page.service';
+import { EventName } from '../../../common/events/event.contants';
 
 describe('PageService custom fields history', () => {
   const pageRepo = {
@@ -24,6 +25,9 @@ describe('PageService custom fields history', () => {
   const queue = {
     add: jest.fn().mockResolvedValue(undefined),
   };
+  const eventEmitter = {
+    emit: jest.fn(),
+  };
 
   const service = new PageService(
     pageRepo as any,
@@ -33,7 +37,7 @@ describe('PageService custom fields history', () => {
     queue as any,
     queue as any,
     queue as any,
-    {} as any,
+    eventEmitter as any,
     {} as any,
     {} as any,
     recipientResolverService as any,
@@ -103,6 +107,10 @@ describe('PageService custom fields history', () => {
         changeType: 'page.custom-fields.updated',
       }),
     );
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      EventName.RAG_SYNC_SCOPE_CHANGED,
+      { spaceId: 'space-1' },
+    );
   });
 
   it('does not record custom field history when field is disabled in space settings', async () => {
@@ -131,6 +139,10 @@ describe('PageService custom fields history', () => {
     );
 
     expect(pageHistoryRecorder.enqueuePageEvent).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      EventName.RAG_SYNC_SCOPE_CHANGED,
+      { spaceId: 'space-1' },
+    );
   });
 
   it('records normalized AI role changes when the field is enabled', async () => {
@@ -172,6 +184,10 @@ describe('PageService custom fields history', () => {
           ],
         }),
       }),
+    );
+    expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+      EventName.RAG_SYNC_SCOPE_CHANGED,
+      expect.anything(),
     );
   });
 

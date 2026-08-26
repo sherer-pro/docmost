@@ -8,7 +8,11 @@ import { createHash } from 'node:crypto';
 import { InjectKysely } from 'nestjs-kysely';
 import { Kysely, sql } from 'kysely';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { AiContextSource, AiSpaceContentPolicy } from '@docmost/api-contract';
+import {
+  AiContextSource,
+  AiSpaceContentPolicy,
+  PAGE_CUSTOM_FIELD_STATUS,
+} from '@docmost/api-contract';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { MAX_PAGE_TREE_DEPTH } from '../../common/config/page-tree.constants';
@@ -23,10 +27,16 @@ import {
 
 type Db = Kysely<any>;
 
-interface EffectivePolicy {
+export interface EffectivePolicy {
   revision: number;
   fingerprint: string;
+  ragSearchDoneOnly: boolean;
   excludedPageIds: string[];
+}
+
+export interface RagSearchPolicy extends EffectivePolicy {
+  ragSearchFingerprint: string;
+  statusBlockedPageIds: string[];
 }
 
 @Injectable()
@@ -57,6 +67,44 @@ export class AiContentPolicyService {
     return new Set(
       (await this.getEffectivePolicy(spaceId, workspaceId)).excludedPageIds,
     );
+  }
+
+  async getRagSearchPolicy(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<RagSearchPolicy> {
+    const db = this.db as unknown as Db;
+    const policy = await this.getEffectivePolicyWithDb(
+      db,
+      spaceId,
+      workspaceId,
+    );
+    const statusBlockedPageIds = policy.ragSearchDoneOnly
+      ? (
+          await db
+            .selectFrom('pages')
+            .select('id')
+            .where('spaceId', '=', spaceId)
+            .where('workspaceId', '=', workspaceId)
+            .where('deletedAt', 'is', null)
+            .where('templateKind', 'is', null)
+            .where(
+              sql<boolean>`coalesce(settings ->> 'status', '') <> ${sql.lit(PAGE_CUSTOM_FIELD_STATUS.DONE)}`,
+            )
+            .orderBy('id', 'asc')
+            .execute()
+        ).map((page) => page.id)
+      : [];
+
+    return {
+      ...policy,
+      ragSearchFingerprint: this.fingerprint({
+        ragSearchDoneOnly: policy.ragSearchDoneOnly,
+        excludedPageIds: policy.excludedPageIds,
+        statusBlockedPageIds,
+      }),
+      statusBlockedPageIds,
+    };
   }
 
   async isPageExcluded(
@@ -111,6 +159,7 @@ export class AiContentPolicyService {
       spaceId,
       revision: policy.revision,
       fingerprint: policy.fingerprint,
+      ragSearchDoneOnly: policy.ragSearchDoneOnly,
       exclusions: rows.map((row) => ({
         pageId: row.pageId,
         title: row.title?.trim() || '',
@@ -176,6 +225,7 @@ export class AiContentPolicyService {
           workspaceId: workspace.id,
           revision: 0,
           fingerprint: this.fingerprint([]),
+          ragSearchDoneOnly: false,
         })
         .onConflict((oc) => oc.column('spaceId').doNothing())
         .execute();
@@ -222,6 +272,7 @@ export class AiContentPolicyService {
         .set({
           revision,
           fingerprint: effective.fingerprint,
+          ragSearchDoneOnly: dto.ragSearchDoneOnly,
           updatedAt: new Date(),
         })
         .where('spaceId', '=', spaceId)
@@ -369,13 +420,14 @@ export class AiContentPolicyService {
     const excludedPageIds = rows.rows.map((row) => row.id);
     const policy = await db
       .selectFrom('aiSpaceContentPolicies')
-      .select(['revision'])
+      .select(['revision', 'ragSearchDoneOnly'])
       .where('spaceId', '=', spaceId)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
     return {
       revision: policy?.revision ?? 0,
       fingerprint: this.fingerprint(excludedPageIds),
+      ragSearchDoneOnly: policy?.ragSearchDoneOnly ?? false,
       excludedPageIds,
     };
   }

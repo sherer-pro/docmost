@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "O seletor `ragSearchDoneOnly` em Knowledge access limita a busca de IA no momento da consulta, RAG API schemaVersion: 3 e RAG Sync a páginas, bancos de dados e linhas cujo estado canônico próprio seja `DONE`; estados ausentes ou desconhecidos são bloqueados. `statusBlockedPageIds` permanece separado das exclusões explícitas. Um documento de banco bloqueado usa `documentEligible: false`, mas as linhas elegíveis continuam. Anexos herdam o estado da página; `dictionary_term`, contexto manual do chat, Agent/MCP, ações do editor e a busca normal do Docmost não mudam.",
       "tab": "Guia",
       "title": "Como funcionam AI, RAG e MCP",
       "description": "Guia operacional do assistente de AI, da busca externa, da sincronização e dos limites de segurança do MCP.",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "Usar somente itens marcados como Concluído",
+      "ragSearchDoneOnlyDescription": "Quando ativado, a busca por IA, a API RAG e a sincronização RAG usam somente páginas, bancos de dados e linhas cujo próprio status seja Concluído. Itens sem status são excluídos. Anexos seguem o status da página; termos do dicionário não são filtrados.",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

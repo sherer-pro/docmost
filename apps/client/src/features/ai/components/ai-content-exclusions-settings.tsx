@@ -11,6 +11,7 @@ import {
   ScrollArea,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
 } from "@mantine/core";
@@ -62,12 +63,14 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
     transform: (
       current: AiSpaceContentPolicy["exclusions"],
     ) => AiSpaceContentPolicy["exclusions"],
+    ragSearchDoneOnly?: boolean,
   ) => {
     const policy = policyQuery.data;
     if (!policy) return;
     try {
       await updatePolicy.mutateAsync({
         expectedRevision: policy.revision,
+        ragSearchDoneOnly: ragSearchDoneOnly ?? policy.ragSearchDoneOnly,
         exclusions: transform(policy.exclusions).map((item) => ({
           pageId: item.pageId,
           includeDescendants: item.includeDescendants,
@@ -158,6 +161,20 @@ export function AiContentExclusionsSettings({ spaceId }: { spaceId: string }) {
               {policyQuery.data.exclusions.length}/100
             </Badge>
           </Group>
+
+          <Switch
+            checked={policyQuery.data.ragSearchDoneOnly}
+            disabled={updatePolicy.isPending}
+            label={t("ai.settings.ragSearchDoneOnlyTitle")}
+            description={t("ai.settings.ragSearchDoneOnlyDescription")}
+            aria-label={t("ai.settings.ragSearchDoneOnlyTitle")}
+            onChange={(event) =>
+              void persist(
+                (current) => current,
+                event.currentTarget.checked,
+              ).catch(() => undefined)
+            }
+          />
 
           {policyQuery.data.exclusions.length === 0 ? (
             <EmptyState

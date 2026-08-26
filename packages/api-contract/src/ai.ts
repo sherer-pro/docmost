@@ -714,12 +714,14 @@ export interface AiSpaceContentPolicy {
   spaceId: string;
   revision: number;
   fingerprint: string;
+  ragSearchDoneOnly: boolean;
   exclusions: AiSpaceContentExclusion[];
   updatedAt: string | null;
 }
 
 export interface UpdateAiSpaceContentPolicyRequest {
   expectedRevision: number;
+  ragSearchDoneOnly: boolean;
   exclusions: Array<{
     pageId: string;
     includeDescendants: boolean;

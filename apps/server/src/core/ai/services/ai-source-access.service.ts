@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { User } from '@docmost/db/types/entity.types';
+import { PAGE_CUSTOM_FIELD_STATUS } from '@docmost/api-contract';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiContentPolicyService } from '../../ai-content-policy/ai-content-policy.service';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -14,6 +16,15 @@ export type AiSourceAccessReference = {
   sourceType: string;
   sourceId: string;
   pageId: string | null;
+};
+
+type AiSourceAccessMode = 'default' | 'rag-search';
+
+type AiSourceAccessParams = {
+  user: User;
+  workspaceId: string;
+  spaceId: string;
+  mode?: AiSourceAccessMode;
 };
 
 export class AiSourceAccessChangedError extends Error {
@@ -34,36 +45,48 @@ export class AiSourceAccessService {
     private readonly spaceAbility: SpaceAbilityFactory,
   ) {}
 
-  async getAllowedPageIds(params: {
-    user: User;
-    workspaceId: string;
-    spaceId: string;
-  }): Promise<Set<string>> {
-    const [snapshot, excluded] = await Promise.all([
+  async getAllowedPageIds(params: AiSourceAccessParams): Promise<Set<string>> {
+    const [snapshot, policy] = await Promise.all([
       this.pageAccessService.getSidebarAccessSnapshot(
         params.user,
         params.spaceId,
       ),
-      this.contentPolicy.getExcludedPageIds(params.spaceId, params.workspaceId),
+      params.mode === 'rag-search'
+        ? this.contentPolicy.getRagSearchPolicy(
+            params.spaceId,
+            params.workspaceId,
+          )
+        : this.contentPolicy
+            .getExcludedPageIds(params.spaceId, params.workspaceId)
+            .then((excludedPageIds) => ({
+              ragSearchDoneOnly: false,
+              excludedPageIds: [...excludedPageIds],
+            })),
     ]);
+    const excluded = new Set(policy.excludedPageIds);
     const candidates = [...snapshot.readablePageIds].filter(
       (pageId) => !excluded.has(pageId),
     );
     if (candidates.length === 0) return new Set();
-    const live = await this.db
+    let liveQuery = this.db
       .selectFrom('pages')
       .select('id')
       .where('id', 'in', candidates)
       .where('workspaceId', '=', params.workspaceId)
       .where('spaceId', '=', params.spaceId)
-      .where('deletedAt', 'is', null)
-      .execute();
+      .where('deletedAt', 'is', null);
+    if (params.mode === 'rag-search' && policy.ragSearchDoneOnly) {
+      liveQuery = liveQuery.where(
+        sql<boolean>`coalesce(settings ->> 'status', '') = ${sql.lit(PAGE_CUSTOM_FIELD_STATUS.DONE)}`,
+      );
+    }
+    const live = await liveQuery.execute();
     return new Set(live.map((page) => page.id));
   }
 
   async filterAccessible<T extends AiSourceAccessReference>(
     sources: T[],
-    params: { user: User; workspaceId: string; spaceId: string },
+    params: AiSourceAccessParams,
   ): Promise<T[]> {
     if (sources.length === 0) return [];
     const allowedPageIds = await this.getAllowedPageIds(params);
@@ -184,7 +207,7 @@ export class AiSourceAccessService {
 
   async assertAccessible(
     sources: AiSourceAccessReference[],
-    params: { user: User; workspaceId: string; spaceId: string },
+    params: AiSourceAccessParams,
   ): Promise<void> {
     if (sources.length === 0) return;
     const accessible = await this.filterAccessible(sources, params);

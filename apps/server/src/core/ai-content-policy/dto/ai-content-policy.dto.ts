@@ -26,6 +26,9 @@ export class UpdateAiContentPolicyDto {
   @Min(0)
   expectedRevision: number;
 
+  @IsBoolean()
+  ragSearchDoneOnly: boolean;
+
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })

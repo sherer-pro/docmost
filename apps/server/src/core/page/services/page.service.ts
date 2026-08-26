@@ -858,6 +858,9 @@ export class PageService {
     const nextSettings = updatePageDto.toSettingsPayload(currentSettings);
     const resolvedNextSettings = (nextSettings ??
       currentSettings) as PageSettings | null;
+    const statusChanged =
+      normalizePageSettings(currentSettings).status !==
+      normalizePageSettings(resolvedNextSettings).status;
     const space = await this.spaceRepo.findById(page.spaceId, page.workspaceId);
     const documentFields = (
       space?.settings as Record<string, unknown> | null
@@ -969,6 +972,12 @@ export class PageService {
           databaseId,
           changes: changesWithDisplayNames,
         },
+      });
+    }
+
+    if (statusChanged) {
+      this.eventEmitter.emit(EventName.RAG_SYNC_SCOPE_CHANGED, {
+        spaceId: page.spaceId,
       });
     }
 

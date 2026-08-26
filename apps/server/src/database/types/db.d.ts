@@ -520,6 +520,7 @@ export interface AiSpaceContentExclusions {
 export interface AiSpaceContentPolicies {
   createdAt: Generated<Timestamp>;
   fingerprint: Generated<string>;
+  ragSearchDoneOnly: Generated<boolean>;
   revision: Generated<number>;
   spaceId: string;
   updatedAt: Generated<Timestamp>;

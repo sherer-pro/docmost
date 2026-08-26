@@ -52,19 +52,26 @@ export class AiRetrievalService {
     spaceId: string;
   }): Promise<void> {
     if (this.sourceAccess) {
-      await this.sourceAccess.assertAccessible(params.sources, params);
+      await this.sourceAccess.assertAccessible(params.sources, {
+        ...params,
+        mode: 'rag-search',
+      });
       return;
     }
     const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
       params.user,
       params.spaceId,
     );
-    const excluded = this.contentPolicy
-      ? await this.contentPolicy.getExcludedPageIds(
+    const policy = this.contentPolicy
+      ? await this.contentPolicy.getRagSearchPolicy(
           params.spaceId,
           params.workspaceId,
         )
-      : new Set<string>();
+      : null;
+    const excluded = new Set([
+      ...(policy?.excludedPageIds ?? []),
+      ...(policy?.statusBlockedPageIds ?? []),
+    ]);
     if (
       params.sources.some(
         (source) =>
@@ -162,6 +169,7 @@ export class AiRetrievalService {
           user: params.user,
           workspaceId: params.request.workspaceId,
           spaceId: params.request.spaceId,
+          mode: 'rag-search',
         });
       }
       this.metrics.observeRetrievalQuery(
@@ -200,15 +208,20 @@ export class AiRetrievalService {
         user,
         workspaceId,
         spaceId,
+        mode: 'rag-search',
       });
     }
     const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
       user,
       spaceId,
     );
-    const excluded = this.contentPolicy
-      ? await this.contentPolicy.getExcludedPageIds(spaceId, workspaceId)
-      : new Set<string>();
+    const policy = this.contentPolicy
+      ? await this.contentPolicy.getRagSearchPolicy(spaceId, workspaceId)
+      : null;
+    const excluded = new Set([
+      ...(policy?.excludedPageIds ?? []),
+      ...(policy?.statusBlockedPageIds ?? []),
+    ]);
     return new Set(
       [...snapshot.readablePageIds].filter((id) => !excluded.has(id)),
     );
