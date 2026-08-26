@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "Knowledge access의 `ragSearchDoneOnly` 스위치는 쿼리 시 AI 검색, RAG API schemaVersion: 3 및 RAG Sync를 자체 정규 상태가 `DONE`인 페이지, 데이터베이스 및 행으로 제한합니다. 상태가 없거나 알 수 없는 항목은 차단됩니다. `statusBlockedPageIds`는 명시적 제외와 별개입니다. 차단된 데이터베이스 문서는 `documentEligible: false`가 되지만 적합한 행은 계속 처리됩니다. 첨부 파일은 페이지 상태를 상속하며 `dictionary_term`, 수동 채팅 컨텍스트, Agent/MCP, 편집기 작업 및 일반 Docmost 검색은 변경되지 않습니다.",
       "tab": "가이드",
       "title": "AI, RAG 및 MCP 작동 방식",
       "description": "AI 도우미, 외부 검색, 동기화 및 MCP 보안 경계에 대한 실무 가이드입니다.",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "완료로 표시된 항목만 사용",
+      "ragSearchDoneOnlyDescription": "사용하면 AI 검색, RAG API 및 RAG 동기화에서 자체 상태가 완료인 페이지, 데이터베이스 및 행만 사용합니다. 상태가 없는 항목은 제외됩니다. 첨부 파일은 해당 페이지의 상태를 따르며 사전 용어는 필터링되지 않습니다.",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

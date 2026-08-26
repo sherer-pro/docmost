@@ -446,5 +446,12 @@ describe('AiRetrievalService', () => {
       undefined,
     );
     expect(sourceAccess.getAllowedPageIds).toHaveBeenCalledTimes(2);
+    for (const [params] of sourceAccess.getAllowedPageIds.mock.calls) {
+      expect(params).toMatchObject({ mode: 'rag-search' });
+    }
+    expect(sourceAccess.filterAccessible).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ mode: 'rag-search' }),
+    );
   });
 });

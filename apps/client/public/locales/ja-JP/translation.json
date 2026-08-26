@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "Knowledge access の `ragSearchDoneOnly` スイッチは、クエリ時の AI 検索、RAG API schemaVersion: 3、RAG Sync を、それ自体の正規ステータスが `DONE` のページ、データベース、行に限定します。ステータスがない、または不明な項目はブロックされます。`statusBlockedPageIds` は明示的な除外とは別です。ブロックされたデータベース文書は `documentEligible: false` となりますが、対象となる行は継続します。添付ファイルはページのステータスを継承し、`dictionary_term`、手動チャットコンテキスト、Agent/MCP、エディター操作、通常の Docmost 検索は変わりません。",
       "tab": "ガイド",
       "title": "AI、RAG、MCP の仕組み",
       "description": "AI アシスタント、外部検索、同期、MCP のセキュリティ境界に関する実務ガイドです。",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "完了とマークされた項目のみ使用",
+      "ragSearchDoneOnlyDescription": "有効にすると、AI 検索、RAG API、RAG 同期では、それ自体のステータスが「完了」のページ、データベース、行のみが使用されます。ステータスのない項目は除外されます。添付ファイルはページのステータスに従い、辞書用語はフィルタリングされません。",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

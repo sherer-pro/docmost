@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "Knowledge access 中的 `ragSearchDoneOnly` 开关会将查询时 AI 搜索、RAG API schemaVersion: 3 和 RAG Sync 限制为自身规范状态为 `DONE` 的页面、数据库和行；缺失或未知状态会被阻止。`statusBlockedPageIds` 与显式排除保持分离。被阻止的数据库文档使用 `documentEligible: false`，但符合条件的行会继续处理。附件继承页面状态；`dictionary_term`、手动聊天上下文、Agent/MCP、编辑器操作和普通 Docmost 搜索不变。",
       "tab": "指南",
       "title": "AI、RAG 和 MCP 的工作方式",
       "description": "关于 AI 助手、外部搜索、同步以及 MCP 安全边界的实用指南。",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "仅使用标记为“已完成”的项目",
+      "ragSearchDoneOnlyDescription": "启用后，AI 搜索、RAG API 和 RAG 同步仅使用自身状态为“已完成”的页面、数据库和行。没有状态的项目会被排除。附件遵循所属页面的状态；词典术语不受筛选影响。",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

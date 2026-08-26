@@ -64,6 +64,26 @@ describe('AiContentPolicyService', () => {
     expect(recursive).toContain('order by id');
   });
 
+  it('treats every missing, null, unknown, or non-DONE status as blocked', async () => {
+    jest
+      .spyOn(service as any, 'getEffectivePolicyWithDb')
+      .mockResolvedValueOnce({
+        revision: 1,
+        fingerprint: 'policy-fingerprint',
+        ragSearchDoneOnly: true,
+        excludedPageIds: [],
+      });
+    await service.getRagSearchPolicy('space', 'workspace');
+
+    const statusQuery = queries.find((query) =>
+      query.includes("coalesce(settings ->> 'status', '') <> 'DONE'"),
+    );
+    expect(statusQuery).toBeDefined();
+    expect(statusQuery).toContain('"deleted_at" is null');
+    expect(statusQuery).toContain('"template_kind" is null');
+    expect(statusQuery).toContain('order by "id" asc');
+  });
+
   it('deduplicates rules by page id and enforces the 100-rule limit', () => {
     expect(
       (service as any).normalizeExclusions({

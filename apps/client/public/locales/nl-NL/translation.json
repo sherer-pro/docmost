@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "De schakelaar `ragSearchDoneOnly` onder Knowledge access beperkt AI-zoeken tijdens de aanvraag, RAG API schemaVersion: 3 en RAG Sync tot pagina’s, databases en rijen met de eigen canonieke status `DONE`; ontbrekende of onbekende statussen worden geblokkeerd. `statusBlockedPageIds` blijft gescheiden van expliciete uitsluitingen. Een geblokkeerd databasedocument krijgt `documentEligible: false`, terwijl geschikte rijen doorgaan. Bijlagen nemen de paginastatus over; `dictionary_term`, handmatige chatcontext, Agent/MCP, editoracties en normaal zoeken in Docmost blijven ongewijzigd.",
       "tab": "Handleiding",
       "title": "Hoe AI, RAG en MCP werken",
       "description": "Een operationele handleiding voor de assistent, extern zoeken, synchronisatie en de beveiligingsgrenzen van MCP.",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "Alleen als Gereed gemarkeerde items gebruiken",
+      "ragSearchDoneOnlyDescription": "Wanneer ingeschakeld gebruiken AI-zoeken, de RAG-API en RAG-synchronisatie alleen pagina’s, databases en rijen met de eigen status Gereed. Items zonder status worden uitgesloten. Bijlagen volgen de status van hun pagina; woordenboektermen worden niet gefilterd.",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

@@ -1564,6 +1564,7 @@
       }
     },
     "adminGuide": {
+      "knowledgeAccessDoneOnly": "The `ragSearchDoneOnly` Knowledge access switch limits query-time AI retrieval, RAG API schemaVersion: 3, and RAG Sync to pages, databases, and rows whose own canonical status is `DONE`; missing or unknown statuses are blocked. `statusBlockedPageIds` remains separate from explicit exclusions. A blocked database document sets `documentEligible: false` while eligible rows continue. Attachments inherit their page; `dictionary_term`, manual chat context, Agent/MCP, editor actions, and regular Docmost search are unchanged.",
       "tab": "Guide",
       "title": "How AI, RAG, and MCP work",
       "description": "An operational guide to the assistant, external search, synchronization, and MCP security boundaries.",
@@ -2113,6 +2114,8 @@
       "agentTestSucceeded": "Tool calling succeeded. You can now enable the agent and save.",
       "agentTestFailed": "Tool calling failed. The agent remains disabled.",
       "exclusionsTitle": "Excluded from RAG and AI search",
+      "ragSearchDoneOnlyTitle": "Only use items marked Done",
+      "ragSearchDoneOnlyDescription": "When enabled, AI search, the RAG API, and RAG Sync use only pages, databases, and rows whose own status is Done. Items without a status are excluded. Attachments follow their page; dictionary terms are unaffected.",
       "exclusionsDescription": "These documents are not used by AI, manual context, editor actions, or external RAG indexing. Regular Docmost search is unchanged.",
       "exclusionsLoadFailed": "Failed to load AI content exclusions.",
       "exclusionsEmpty": "No documents are excluded.",

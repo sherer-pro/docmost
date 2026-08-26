@@ -3,13 +3,17 @@ import {
   AiSourceAccessService,
 } from './ai-source-access.service';
 
-function queryReturning(rows: unknown[]) {
+function queryReturning(rows: unknown[], doneOnlyRows = rows) {
+  let result = rows;
   const query: any = {
     select: jest.fn(() => query),
     innerJoin: jest.fn(() => query),
-    where: jest.fn(() => query),
-    execute: jest.fn(async () => rows),
-    executeTakeFirst: jest.fn(async () => rows[0]),
+    where: jest.fn((...args: unknown[]) => {
+      if (args.length === 1) result = doneOnlyRows;
+      return query;
+    }),
+    execute: jest.fn(async () => result),
+    executeTakeFirst: jest.fn(async () => result[0]),
   };
   return query;
 }
@@ -26,14 +30,17 @@ describe('AiSourceAccessService', () => {
     excluded?: string[];
     dictionaryEnabled?: boolean;
     canReadDictionary?: boolean;
+    ragSearchDoneOnly?: boolean;
   }) {
     const db = {
       selectFrom: jest.fn((table: string) => {
         if (table === 'pages') {
+          const pages = [{ id: 'page-1' }, { id: 'page-2' }].filter(
+            (page) => !options?.excluded?.includes(page.id),
+          );
           return queryReturning(
-            [{ id: 'page-1' }, { id: 'page-2' }].filter(
-              (page) => !options?.excluded?.includes(page.id),
-            ),
+            pages,
+            pages.filter((page) => page.id === 'page-1'),
           );
         }
         if (table === 'databaseRows') {
@@ -83,6 +90,14 @@ describe('AiSourceAccessService', () => {
         getExcludedPageIds: jest.fn(
           async () => new Set(options?.excluded ?? []),
         ),
+        getRagSearchPolicy: jest.fn(async () => ({
+          revision: 0,
+          fingerprint: 'policy-fingerprint',
+          ragSearchFingerprint: 'rag-search-fingerprint',
+          ragSearchDoneOnly: options?.ragSearchDoneOnly ?? false,
+          excludedPageIds: options?.excluded ?? [],
+          statusBlockedPageIds: options?.ragSearchDoneOnly ? ['page-2'] : [],
+        })),
       } as any,
       {
         createForUser: jest.fn(async () => ({
@@ -142,6 +157,17 @@ describe('AiSourceAccessService', () => {
     ).rejects.toBeInstanceOf(AiSourceAccessChangedError);
   });
 
+  it('applies the DONE boundary only in rag-search mode', async () => {
+    const service = createService({ ragSearchDoneOnly: true });
+
+    await expect(service.getAllowedPageIds(params)).resolves.toEqual(
+      new Set(['page-1', 'page-2']),
+    );
+    await expect(
+      service.getAllowedPageIds({ ...params, mode: 'rag-search' }),
+    ).resolves.toEqual(new Set(['page-1']));
+  });
+
   it('accepts only active enabled dictionary terms with null pageId and Read Page ability', async () => {
     const enabled = createService({ dictionaryEnabled: true });
     await expect(
@@ -158,7 +184,7 @@ describe('AiSourceAccessService', () => {
             pageId: 'page-1',
           },
         ],
-        params,
+        { ...params, mode: 'rag-search' },
       ),
     ).resolves.toEqual([
       { sourceType: 'dictionary_term', sourceId: 'term-1', pageId: null },
