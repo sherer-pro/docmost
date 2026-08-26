@@ -1,24 +1,49 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { TableMap } from '@tiptap/pm/tables';
 import type { NodeView, ViewMutationRecord } from '@tiptap/pm/view';
+
+import {
+  allocateTableColumnWidths,
+  type TableColumnDemand,
+} from './utils/column-layout';
 import {
   getTableWidthModeClass,
   normalizeTableWidthMode,
 } from './utils/width-mode';
 
+const DEFAULT_CELL_MIN_WIDTH = 48;
+
 export function updateColumns(
-  _node: ProseMirrorNode,
-  colgroup: HTMLElement,
+  node: ProseMirrorNode,
+  colgroup: HTMLTableColElement,
   table: HTMLTableElement,
-  _cellMinWidth: number,
-  _overrideCol?: number,
-  _overrideValue?: number,
+  cellMinWidth: number,
+  widths?: readonly number[],
 ) {
-  while (colgroup.firstChild) {
-    colgroup.firstChild.remove();
+  const columnCount = TableMap.get(node).width;
+  const fallbackWidth = Math.max(cellMinWidth, DEFAULT_CELL_MIN_WIDTH);
+  const appliedWidths =
+    widths?.length === columnCount
+      ? widths
+      : Array<number>(columnCount).fill(fallbackWidth);
+
+  while (colgroup.children.length < columnCount) {
+    colgroup.appendChild(document.createElement('col'));
+  }
+  while (colgroup.children.length > columnCount) {
+    colgroup.lastElementChild?.remove();
   }
 
-  table.style.width = '100%';
-  table.style.minWidth = '';
+  appliedWidths.forEach((width, index) => {
+    const col = colgroup.children[index] as HTMLTableColElement;
+    col.style.width = `${width}px`;
+    col.style.minWidth = `${fallbackWidth}px`;
+  });
+
+  const tableWidth = appliedWidths.reduce((total, width) => total + width, 0);
+  table.style.tableLayout = 'fixed';
+  table.style.width = `${tableWidth}px`;
+  table.style.minWidth = `${tableWidth}px`;
 }
 
 export class TableView implements NodeView {
@@ -28,31 +53,81 @@ export class TableView implements NodeView {
 
   table: HTMLTableElement;
 
+  colgroup: HTMLTableColElement;
+
   contentDOM: HTMLTableSectionElement;
 
-  constructor(node: ProseMirrorNode, _cellMinWidth?: number) {
+  private readonly cellMinWidth: number;
+
+  private readonly measureRoot: HTMLDivElement;
+
+  private readonly measuredWidths = new WeakMap<ProseMirrorNode, number>();
+
+  private resizeObserver?: ResizeObserver;
+
+  private animationFrame?: number;
+
+  private destroyed = false;
+
+  constructor(node: ProseMirrorNode, cellMinWidth = DEFAULT_CELL_MIN_WIDTH) {
     this.node = node;
+    this.cellMinWidth = Math.max(cellMinWidth, DEFAULT_CELL_MIN_WIDTH);
     this.dom = document.createElement('div');
     this.table = this.dom.appendChild(document.createElement('table'));
+    this.colgroup = this.table.appendChild(document.createElement('colgroup'));
+    this.contentDOM = this.table.appendChild(document.createElement('tbody'));
+    this.measureRoot = this.dom.appendChild(document.createElement('div'));
+    this.measureRoot.className = 'tableColumnMeasureRoot';
+    this.measureRoot.setAttribute('aria-hidden', 'true');
+
     this.updateWidthMode();
     this.updateTableStyle();
-    this.contentDOM = this.table.appendChild(document.createElement('tbody'));
+    updateColumns(this.node, this.colgroup, this.table, this.cellMinWidth);
+    this.observeResize();
+    this.scheduleLayout();
   }
 
   update(node: ProseMirrorNode) {
     if (node.type !== this.node.type) return false;
 
+    const currentWidths = Array.from(this.colgroup.children, (column) =>
+      Number.parseFloat((column as HTMLTableColElement).style.width),
+    );
     this.node = node;
     this.updateWidthMode();
     this.updateTableStyle();
+    updateColumns(
+      this.node,
+      this.colgroup,
+      this.table,
+      this.cellMinWidth,
+      currentWidths,
+    );
+    this.scheduleLayout();
 
     return true;
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.resizeObserver?.disconnect();
+
+    const ownerWindow = this.dom.ownerDocument.defaultView;
+    if (this.animationFrame != null && ownerWindow?.cancelAnimationFrame) {
+      ownerWindow.cancelAnimationFrame(this.animationFrame);
+    }
   }
 
   updateWidthMode() {
     const widthMode = normalizeTableWidthMode(this.node.attrs.widthMode);
 
-    this.dom.className = `tableWrapper blockWidthWrapper ${getTableWidthModeClass(widthMode)}`;
+    this.dom.classList.add('tableWrapper', 'blockWidthWrapper');
+    this.dom.classList.remove(
+      getTableWidthModeClass('normal'),
+      getTableWidthModeClass('wide'),
+      getTableWidthModeClass('full'),
+    );
+    this.dom.classList.add(getTableWidthModeClass(widthMode));
     this.dom.setAttribute('data-block-width-mode', widthMode);
     this.dom.setAttribute('data-table-width-mode', widthMode);
     this.table.setAttribute('data-table-width-mode', widthMode);
@@ -65,8 +140,7 @@ export class TableView implements NodeView {
       this.table.removeAttribute('style');
     }
 
-    this.table.style.width = '100%';
-    this.table.style.minWidth = '';
+    this.table.style.tableLayout = 'fixed';
   }
 
   ignoreMutation(mutation: ViewMutationRecord) {
@@ -75,13 +149,7 @@ export class TableView implements NodeView {
     const isInsideContent = this.contentDOM.contains(target);
 
     if (isInsideWrapper && !isInsideContent) {
-      if (
-        mutation.type === 'attributes' ||
-        mutation.type === 'childList' ||
-        mutation.type === 'characterData'
-      ) {
-        return true;
-      }
+      return true;
     }
 
     if (mutation.target instanceof Element) {
@@ -94,7 +162,6 @@ export class TableView implements NodeView {
       }
     }
 
-    // Chevron span (.tableReadonlySortChevron) added/removed by sort plugin.
     if (mutation.type === 'childList') {
       const nodes = [
         ...Array.from(mutation.addedNodes),
@@ -102,9 +169,9 @@ export class TableView implements NodeView {
       ];
       if (
         nodes.some(
-          (n) =>
-            n instanceof Element &&
-            n.classList.contains('tableReadonlySortChevron'),
+          (changedNode) =>
+            changedNode instanceof Element &&
+            changedNode.classList.contains('tableReadonlySortChevron'),
         )
       ) {
         return true;
@@ -112,5 +179,141 @@ export class TableView implements NodeView {
     }
 
     return false;
+  }
+
+  private observeResize() {
+    const ResizeObserverConstructor =
+      this.dom.ownerDocument.defaultView?.ResizeObserver;
+
+    if (!ResizeObserverConstructor) return;
+
+    this.resizeObserver = new ResizeObserverConstructor(() => {
+      this.scheduleLayout();
+    });
+    this.resizeObserver.observe(this.dom);
+  }
+
+  private scheduleLayout() {
+    if (this.destroyed || this.animationFrame != null) return;
+
+    const ownerWindow = this.dom.ownerDocument.defaultView;
+    if (ownerWindow?.requestAnimationFrame) {
+      this.animationFrame = ownerWindow.requestAnimationFrame(() => {
+        this.animationFrame = undefined;
+        this.layoutColumns();
+      });
+      return;
+    }
+
+    queueMicrotask(() => this.layoutColumns());
+  }
+
+  private layoutColumns() {
+    if (this.destroyed) return;
+
+    const map = TableMap.get(this.node);
+    const containerWidth =
+      this.dom.clientWidth || this.dom.getBoundingClientRect().width;
+    const demands = this.measureDemands(map);
+    const widths = allocateTableColumnWidths({
+      columnCount: map.width,
+      containerWidth,
+      minColumnWidth: this.cellMinWidth,
+      demands,
+    });
+
+    updateColumns(
+      this.node,
+      this.colgroup,
+      this.table,
+      this.cellMinWidth,
+      widths,
+    );
+  }
+
+  private measureDemands(map: TableMap): TableColumnDemand[] {
+    const cellElements = Array.from(
+      this.contentDOM.querySelectorAll<HTMLTableCellElement>('th, td'),
+    );
+    const cellNodes: Array<{ node: ProseMirrorNode; pos: number }> = [];
+
+    this.node.descendants((node, pos) => {
+      if (
+        node.type.spec.tableRole === 'cell' ||
+        node.type.spec.tableRole === 'header_cell'
+      ) {
+        cellNodes.push({ node, pos });
+        return false;
+      }
+
+      return true;
+    });
+
+    return cellNodes.flatMap(({ node, pos }, index) => {
+      const cellElement = cellElements[index];
+      if (!cellElement) return [];
+
+      const rect = map.findCell(pos);
+      return [
+        {
+          start: rect.left,
+          span: rect.right - rect.left,
+          width: this.measureCell(node, cellElement),
+        },
+      ];
+    });
+  }
+
+  private measureCell(
+    node: ProseMirrorNode,
+    cellElement: HTMLTableCellElement,
+  ): number {
+    const cachedWidth = this.measuredWidths.get(node);
+    if (cachedWidth != null) return cachedWidth;
+
+    const styles = getComputedStyle(cellElement);
+    const measure = document.createElement('div');
+    measure.append(
+      ...Array.from(cellElement.childNodes, (child) => child.cloneNode(true)),
+    );
+    measure.querySelectorAll('.tableReadonlySortChevron').forEach((element) => {
+      element.remove();
+    });
+    Object.assign(measure.style, {
+      boxSizing: styles.boxSizing,
+      display: 'inline-block',
+      width: 'max-content',
+      minWidth: '0',
+      maxWidth: 'none',
+      padding: styles.padding,
+      borderLeftWidth: styles.borderLeftWidth,
+      borderRightWidth: styles.borderRightWidth,
+      borderLeftStyle: styles.borderLeftStyle,
+      borderRightStyle: styles.borderRightStyle,
+      font: styles.font,
+      fontFamily: styles.fontFamily,
+      fontSize: styles.fontSize,
+      fontWeight: styles.fontWeight,
+      letterSpacing: styles.letterSpacing,
+      whiteSpace: 'nowrap',
+      overflowWrap: 'normal',
+      wordBreak: 'normal',
+    });
+    measure.querySelectorAll<HTMLElement>('*').forEach((element) => {
+      element.style.width = 'max-content';
+      element.style.maxWidth = 'none';
+      element.style.whiteSpace = 'nowrap';
+      element.style.overflowWrap = 'normal';
+      element.style.wordBreak = 'normal';
+    });
+
+    this.measureRoot.appendChild(measure);
+    const width = Math.ceil(
+      Math.max(measure.scrollWidth, measure.getBoundingClientRect().width),
+    );
+    measure.remove();
+    this.measuredWidths.set(node, width);
+
+    return width;
   }
 }

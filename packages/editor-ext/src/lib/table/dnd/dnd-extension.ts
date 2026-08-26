@@ -1,21 +1,40 @@
-import { Editor, Extension } from "@tiptap/core";
-import { PluginKey, Plugin, PluginSpec } from "@tiptap/pm/state";
-import { EditorProps, EditorView } from "@tiptap/pm/view";
+import { Editor, Extension } from '@tiptap/core';
+import { PluginKey, Plugin, PluginSpec } from '@tiptap/pm/state';
+import { EditorProps, EditorView } from '@tiptap/pm/view';
 import {
   DraggingDOMs,
   getDndRelatedDOMs,
   getHoveringCell,
   HoveringCellInfo,
-} from "./utils";
-import { getDragOverColumn, getDragOverRow } from "./calc-drag-over";
-import { moveColumn, moveRow } from "../utils";
-import { PreviewController } from "./preview/preview-controller";
-import { DropIndicatorController } from "./preview/drop-indicator-controller";
-import { DragHandleController } from "./handle/drag-handle-controller";
-import { EmptyImageController } from "./handle/empty-image-controller";
-import { AutoScrollController } from "./auto-scroll-controller";
+} from './utils';
+import { getDragOverColumn, getDragOverRow } from './calc-drag-over';
+import {
+  getColumnRangeAt,
+  getRowRangeAt,
+  moveColumn,
+  moveRow,
+  moveSelectedColumn,
+} from '../utils';
+import { PreviewController } from './preview/preview-controller';
+import { DropIndicatorController } from './preview/drop-indicator-controller';
+import { DragHandleController } from './handle/drag-handle-controller';
+import { EmptyImageController } from './handle/empty-image-controller';
+import { AutoScrollController } from './auto-scroll-controller';
 
-export const TableDndKey = new PluginKey("table-drag-and-drop");
+export interface TableDndOptions {
+  getLabel: (key: 'moveColumn' | 'moveRow') => string;
+}
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    tableDragAndDrop: {
+      moveColumnLeft: () => ReturnType;
+      moveColumnRight: () => ReturnType;
+    };
+  }
+}
+
+export const TableDndKey = new PluginKey('table-drag-and-drop');
 
 class TableDragHandlePluginSpec implements PluginSpec<void> {
   key = TableDndKey;
@@ -27,9 +46,11 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _disposables: (() => void)[] = [];
   private _draggingCoords: { x: number; y: number } = { x: 0, y: 0 };
   private _dragging = false;
-  private _draggingDirection: "col" | "row" = "col";
+  private _draggingDirection: 'col' | 'row' = 'col';
   private _draggingIndex = -1;
   private _droppingIndex = -1;
+  private _draggingCellPos?: number;
+  private _draggingRange?: readonly number[];
   private _draggingDOMs?: DraggingDOMs | undefined;
   private _startCoords: { x: number; y: number } = { x: 0, y: 0 };
   private _previewController: PreviewController;
@@ -38,14 +59,17 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _emptyImageController: EmptyImageController;
   private _autoScrollController: AutoScrollController;
 
-  constructor(public editor: Editor) {
+  constructor(
+    public editor: Editor,
+    options: TableDndOptions,
+  ) {
     this.props = {
       handleDOMEvents: {
         pointerover: this._pointerOver,
       },
     };
 
-    this._dragHandleController = new DragHandleController();
+    this._dragHandleController = new DragHandleController(options.getLabel);
     this._colDragHandle = this._dragHandleController.colDragHandle;
     this._rowDragHandle = this._dragHandleController.rowDragHandle;
 
@@ -75,10 +99,13 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     };
   };
 
-  update = () => {};
+  update = () => {
+    if (!this.editor.isEditable) {
+      this._dragHandleController.hide();
+    }
+  };
 
   destroy = () => {
-    if (!this.editor.isDestroyed) return;
     this._dragHandleController.destroy();
     this._emptyImageController.destroy();
     this._previewController.destroy();
@@ -91,8 +118,11 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _pointerOver = (view: EditorView, event: PointerEvent) => {
     if (this._dragging) return;
 
-    // Don't show drag handles in readonly mode
-    if (!this.editor.isEditable) {
+    if (
+      !this.editor.isEditable ||
+      view.dom.ownerDocument.defaultView?.matchMedia('(max-width: 600px)')
+        .matches
+    ) {
       this._dragHandleController.hide();
       return;
     }
@@ -107,7 +137,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _onDragColStart = (event: DragEvent) => {
-    this._onDragStart(event, "col");
+    this._onDragStart(event, 'col');
   };
 
   private _onDraggingCol = (event: DragEvent) => {
@@ -119,26 +149,31 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       draggingDOMs,
       this._draggingCoords.x,
       this._draggingCoords.y,
-      "col",
+      'col',
     );
 
     this._autoScrollController.checkXAutoScroll(event.clientX, draggingDOMs);
 
-    const direction =
-      this._startCoords.x > this._draggingCoords.x ? "left" : "right";
     const dragOverColumn = getDragOverColumn(
       draggingDOMs.table,
       this._draggingCoords.x,
     );
-    if (!dragOverColumn) return;
+    if (!dragOverColumn) {
+      this._droppingIndex = -1;
+      this._dropIndicatorController.hide();
+      return;
+    }
 
     const [col, index] = dragOverColumn;
     this._droppingIndex = index;
-    this._dropIndicatorController.onDragging(col, direction, "col");
+    const rect = col.getBoundingClientRect();
+    const direction =
+      this._draggingCoords.x < rect.left + rect.width / 2 ? 'left' : 'right';
+    this._dropIndicatorController.onDragging(col, direction, 'col');
   };
 
   private _onDragRowStart = (event: DragEvent) => {
-    this._onDragStart(event, "row");
+    this._onDragStart(event, 'row');
   };
 
   private _onDraggingRow = (event: DragEvent) => {
@@ -150,28 +185,35 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       draggingDOMs,
       this._draggingCoords.x,
       this._draggingCoords.y,
-      "row",
+      'row',
     );
 
     this._autoScrollController.checkYAutoScroll(event.clientY);
 
     const direction =
-      this._startCoords.y > this._draggingCoords.y ? "up" : "down";
+      this._startCoords.y > this._draggingCoords.y ? 'up' : 'down';
     const dragOverRow = getDragOverRow(
       draggingDOMs.table,
       this._draggingCoords.y,
     );
-    if (!dragOverRow) return;
+    if (!dragOverRow) {
+      this._droppingIndex = -1;
+      this._dropIndicatorController.hide();
+      return;
+    }
 
     const [row, index] = dragOverRow;
     this._droppingIndex = index;
-    this._dropIndicatorController.onDragging(row, direction, "row");
+    this._dropIndicatorController.onDragging(row, direction, 'row');
   };
 
   private _onDragEnd = () => {
     this._dragging = false;
     this._draggingIndex = -1;
     this._droppingIndex = -1;
+    this._draggingCellPos = undefined;
+    this._draggingRange = undefined;
+    this._draggingDOMs = undefined;
     this._startCoords = { x: 0, y: 0 };
     this._autoScrollController.stop();
     this._dropIndicatorController.onDragEnd();
@@ -179,30 +221,30 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _bindDragEvents = () => {
-    this._colDragHandle.addEventListener("dragstart", this._onDragColStart);
+    this._colDragHandle.addEventListener('dragstart', this._onDragColStart);
     this._disposables.push(() => {
       this._colDragHandle.removeEventListener(
-        "dragstart",
+        'dragstart',
         this._onDragColStart,
       );
     });
 
-    this._colDragHandle.addEventListener("dragend", this._onDragEnd);
+    this._colDragHandle.addEventListener('dragend', this._onDragEnd);
     this._disposables.push(() => {
-      this._colDragHandle.removeEventListener("dragend", this._onDragEnd);
+      this._colDragHandle.removeEventListener('dragend', this._onDragEnd);
     });
 
-    this._rowDragHandle.addEventListener("dragstart", this._onDragRowStart);
+    this._rowDragHandle.addEventListener('dragstart', this._onDragRowStart);
     this._disposables.push(() => {
       this._rowDragHandle.removeEventListener(
-        "dragstart",
+        'dragstart',
         this._onDragRowStart,
       );
     });
 
-    this._rowDragHandle.addEventListener("dragend", this._onDragEnd);
+    this._rowDragHandle.addEventListener('dragend', this._onDragEnd);
     this._disposables.push(() => {
-      this._rowDragHandle.removeEventListener("dragend", this._onDragEnd);
+      this._rowDragHandle.removeEventListener('dragend', this._onDragEnd);
     });
 
     const ownerDocument = this.editor.view.dom?.ownerDocument;
@@ -211,43 +253,63 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       // `dragover` event for drop zone. Here we set the whole document as the
       // drop zone so that even the mouse moves outside the editor, the `drop`
       // event will still be triggered.
-      ownerDocument.addEventListener("drop", this._onDrop);
-      ownerDocument.addEventListener("dragover", this._onDrag);
+      ownerDocument.addEventListener('drop', this._onDrop);
+      ownerDocument.addEventListener('dragover', this._onDrag);
       this._disposables.push(() => {
-        ownerDocument.removeEventListener("drop", this._onDrop);
-        ownerDocument.removeEventListener("dragover", this._onDrag);
+        ownerDocument.removeEventListener('drop', this._onDrop);
+        ownerDocument.removeEventListener('dragover', this._onDrag);
       });
     }
   };
 
-  private _onDragStart = (event: DragEvent, type: "col" | "row") => {
+  private _onDragStart = (event: DragEvent, type: 'col' | 'row') => {
+    const hoveringCell = this._hoveringCell;
+    if (!hoveringCell) {
+      event.preventDefault();
+      return;
+    }
+
     const dataTransfer = event.dataTransfer;
     if (dataTransfer) {
-      dataTransfer.effectAllowed = "move";
+      dataTransfer.effectAllowed = 'move';
       this._emptyImageController.hideDragImage(dataTransfer);
     }
     this._dragging = true;
     this._draggingDirection = type;
     this._startCoords = { x: event.clientX, y: event.clientY };
     const draggingIndex =
-      (type === "col"
-        ? this._hoveringCell?.colIndex
-        : this._hoveringCell?.rowIndex) ?? 0;
+      type === 'col' ? hoveringCell.colIndex : hoveringCell.rowIndex;
 
     this._draggingIndex = draggingIndex;
+    this._draggingCellPos = hoveringCell.cellPos;
+    this._draggingRange =
+      type === 'col'
+        ? getColumnRangeAt(
+            this.editor.state.tr,
+            draggingIndex,
+            hoveringCell.cellPos,
+          )
+        : getRowRangeAt(
+            this.editor.state.tr,
+            draggingIndex,
+            hoveringCell.cellPos,
+          );
 
     const relatedDoms = getDndRelatedDOMs(
       this.editor.view,
-      this._hoveringCell?.cellPos,
+      hoveringCell.cellPos,
       draggingIndex,
       type,
     );
+    if (!relatedDoms || !this._draggingRange?.length) {
+      event.preventDefault();
+      this._onDragEnd();
+      return;
+    }
     this._draggingDOMs = relatedDoms;
 
     const index =
-      type === "col"
-        ? this._hoveringCell?.colIndex
-        : this._hoveringCell?.rowIndex;
+      type === 'col' ? hoveringCell.colIndex : hoveringCell.rowIndex;
 
     this._previewController.onDragStart(relatedDoms, index, type);
     this._dropIndicatorController.onDragStart(relatedDoms, type);
@@ -256,59 +318,96 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _onDrag = (event: DragEvent) => {
     event.preventDefault();
     if (!this._dragging) return;
-    if (this._draggingDirection === "col") {
+    if (this._draggingDirection === 'col') {
       this._onDraggingCol(event);
     } else {
       this._onDraggingRow(event);
     }
   };
 
-  private _onDrop = () => {
+  private _onDrop = (event: DragEvent) => {
     if (!this._dragging) return;
-    const direction = this._draggingDirection;
-    const from = this._draggingIndex;
-    const to = this._droppingIndex;
-    const tr = this.editor.state.tr;
-    const pos = this.editor.state.selection.from;
+    event.preventDefault();
 
-    if (direction === "col") {
-      const canMove = moveColumn({
-        tr,
-        originIndex: from,
-        targetIndex: to,
-        select: true,
-        pos,
-      });
-      if (canMove) {
-        this.editor.view.dispatch(tr);
+    try {
+      const direction = this._draggingDirection;
+      const from = this._draggingIndex;
+      const to = this._droppingIndex;
+      const pos = this._draggingCellPos;
+      const originIndexes = this._draggingRange;
+      if (from < 0 || to < 0 || pos == null || !originIndexes?.length) return;
+
+      const tr = this.editor.state.tr;
+
+      if (direction === 'col') {
+        const canMove = moveColumn({
+          tr,
+          originIndex: from,
+          targetIndex: to,
+          select: true,
+          pos,
+          originIndexes,
+        });
+        if (canMove) {
+          this.editor.view.dispatch(tr);
+        }
+
+        return;
       }
 
-      return;
-    }
-
-    if (direction === "row") {
-      const canMove = moveRow({
-        tr,
-        originIndex: from,
-        targetIndex: to,
-        select: true,
-        pos,
-      });
-      if (canMove) {
-        this.editor.view.dispatch(tr);
+      if (direction === 'row') {
+        const canMove = moveRow({
+          tr,
+          originIndex: from,
+          targetIndex: to,
+          select: true,
+          pos,
+          originIndexes,
+        });
+        if (canMove) {
+          this.editor.view.dispatch(tr);
+        }
       }
-
-      return;
+    } finally {
+      this._onDragEnd();
     }
   };
 }
 
-export const TableDndExtension = Extension.create({
-  name: "table-drag-and-drop",
+export const TableDndExtension = Extension.create<TableDndOptions>({
+  name: 'table-drag-and-drop',
+  addOptions() {
+    return {
+      getLabel: (key) => (key === 'moveColumn' ? 'Move column' : 'Move row'),
+    };
+  },
+  addCommands() {
+    return {
+      moveColumnLeft:
+        () =>
+        ({ tr, state }) =>
+          moveSelectedColumn({
+            tr,
+            pos: state.selection.from,
+            direction: -1,
+          }),
+      moveColumnRight:
+        () =>
+        ({ tr, state }) =>
+          moveSelectedColumn({
+            tr,
+            pos: state.selection.from,
+            direction: 1,
+          }),
+    };
+  },
   addProseMirrorPlugins() {
     const editor = this.editor;
 
-    const dragHandlePluginSpec = new TableDragHandlePluginSpec(editor);
+    const dragHandlePluginSpec = new TableDragHandlePluginSpec(
+      editor,
+      this.options,
+    );
     const dragHandlePlugin = new Plugin(dragHandlePluginSpec);
 
     return [dragHandlePlugin];
