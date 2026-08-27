@@ -316,7 +316,20 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _onPointerMove = (event: PointerEvent) => {
-    if (!this._dragPending || event.buttons !== 1) return;
+    if (event.buttons !== 1) return;
+
+    if (this._pointerDragging) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this._draggingDirection === 'col') {
+        this._onDraggingCol(event);
+      } else {
+        this._onDraggingRow(event);
+      }
+      return;
+    }
+
+    if (!this._dragPending) return;
 
     const distance = Math.hypot(
       event.clientX - this._startCoords.x,
