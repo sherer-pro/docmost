@@ -255,22 +255,12 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       );
     });
 
-    this._colDragHandle.addEventListener('dragend', this._onDragEnd);
-    this._disposables.push(() => {
-      this._colDragHandle.removeEventListener('dragend', this._onDragEnd);
-    });
-
     this._rowDragHandle.addEventListener('dragstart', this._onDragRowStart);
     this._disposables.push(() => {
       this._rowDragHandle.removeEventListener(
         'dragstart',
         this._onDragRowStart,
       );
-    });
-
-    this._rowDragHandle.addEventListener('dragend', this._onDragEnd);
-    this._disposables.push(() => {
-      this._rowDragHandle.removeEventListener('dragend', this._onDragEnd);
     });
 
     const ownerDocument = this.editor.view.dom?.ownerDocument;
@@ -288,6 +278,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       // event will still be triggered.
       ownerDocument.addEventListener('drop', this._onDrop, true);
       ownerDocument.addEventListener('dragover', this._onDrag, true);
+      ownerDocument.addEventListener('dragend', this._onNativeDragEnd, true);
       this._disposables.push(() => {
         ownerDocument.removeEventListener(
           'pointermove',
@@ -302,6 +293,11 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
         );
         ownerDocument.removeEventListener('drop', this._onDrop, true);
         ownerDocument.removeEventListener('dragover', this._onDrag, true);
+        ownerDocument.removeEventListener(
+          'dragend',
+          this._onNativeDragEnd,
+          true,
+        );
       });
     }
   };
@@ -469,6 +465,30 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     event.stopPropagation();
 
     this._commitDrop();
+  };
+
+  private _onNativeDragEnd = (event: DragEvent) => {
+    if (!this._nativeDragging || !this._dragging) {
+      this._onDragEnd();
+      return;
+    }
+
+    // Firefox may finish a native drag without dispatching `drop`, even after
+    // a valid `dragover`. Re-evaluate the final pointer position and commit the
+    // captured range so the operation does not depend on browser drop quirks.
+    if (event.clientX || event.clientY) {
+      if (this._draggingDirection === 'col') {
+        this._onDraggingCol(event);
+      } else {
+        this._onDraggingRow(event);
+      }
+    }
+
+    if (this._droppingIndex >= 0) {
+      this._commitDrop();
+    } else {
+      this._onDragEnd();
+    }
   };
 
   private _commitDrop = () => {
