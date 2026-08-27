@@ -124,6 +124,29 @@ describe("TransclusionContent", () => {
     );
   });
 
+  it("isolates mousedown before the host editor handles it", async () => {
+    await act(async () => {
+      root.render(
+        <div data-host-editor>
+          <TestTransclusionContent content={content} />
+        </div>,
+      );
+    });
+
+    const host = container.querySelector("[data-host-editor]")!;
+    const onHostMouseDown = vi.fn();
+    host.addEventListener("mousedown", onHostMouseDown);
+
+    container.querySelector(".ProseMirror p")!.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(onHostMouseDown).not.toHaveBeenCalled();
+  });
+
   it("lets editor drags bubble but isolates file drops", () => {
     const onDragOver = vi.fn();
     act(() => {
