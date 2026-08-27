@@ -52,7 +52,10 @@ export class DragHandleController {
   private _createDragHandleDom = (type: 'col' | 'row', label: string) => {
     const dragHandle = document.createElement('div');
     dragHandle.classList.add('drag-handle');
-    dragHandle.setAttribute('draggable', 'true');
+    // Keep table reordering on the pointer lifecycle. Firefox can omit both
+    // `drop` and `dragend` for native HTML drags inside the editor, leaving the
+    // preview active without committing the captured row or column range.
+    dragHandle.draggable = false;
     dragHandle.setAttribute('role', 'button');
     dragHandle.setAttribute('tabindex', '-1');
     dragHandle.setAttribute('aria-label', label);

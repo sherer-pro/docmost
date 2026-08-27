@@ -263,12 +263,22 @@ describe('table column moves', () => {
     const handle = editor.options.element.querySelector<HTMLElement>(
       '.drag-handle[data-direction="horizontal"]',
     );
+    expect(handle?.draggable).toBe(false);
     handle?.dispatchEvent(
       new MouseEvent('pointerdown', {
         bubbles: true,
         cancelable: true,
         button: 0,
         clientX: 20,
+        clientY: 30,
+      }),
+    );
+    document.dispatchEvent(
+      new MouseEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        buttons: 1,
+        clientX: 25,
         clientY: 30,
       }),
     );
