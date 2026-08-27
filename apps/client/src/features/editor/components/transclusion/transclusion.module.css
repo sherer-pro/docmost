@@ -146,12 +146,22 @@
   );
 }
 
+.includeWrap,
+.transclusionContent,
+.transclusionContent :global(.ProseMirror) {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 .transclusionContent :global(.ProseMirror) {
   padding-left: 0;
   padding-right: 0;
   background: transparent;
-  user-select: text;
-  -webkit-user-select: text;
+}
+
+:global(.react-renderer.node-transclusionReference) {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .includeControls {

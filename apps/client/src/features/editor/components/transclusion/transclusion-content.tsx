@@ -35,8 +35,8 @@ function TransclusionContent({
   }, [renderEditor]);
 
   // Isolate the nested read-only editor's events from the host editor:
-  // - mousedown/click would otherwise make the host node-select the atom
-  //   wrapper, blocking native text selection inside.
+  // - the mouse selection lifecycle would otherwise reach the host editor,
+  //   node-select the atom wrapper, and clear native text selection inside.
   // - dragstart from the nested view must not initiate a host block drag
   // - external file dragover/drop must stay isolated to avoid duplicate
   //   uploads, while ProseMirror block drags must reach the host editor.
@@ -51,6 +51,10 @@ function TransclusionContent({
       }
       onMouseDownCapture={stopPropagation}
       onMouseDown={stopPropagation}
+      onMouseMoveCapture={stopPropagation}
+      onMouseMove={stopPropagation}
+      onMouseUpCapture={stopPropagation}
+      onMouseUp={stopPropagation}
       onClick={stopPropagation}
       onDragStart={stopPropagation}
       onDragOver={stopFileDropPropagation}
