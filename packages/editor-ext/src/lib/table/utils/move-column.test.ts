@@ -129,6 +129,11 @@ describe('table column moves', () => {
       expect.any(Function),
       true,
     );
+    expect(addEventListener).toHaveBeenCalledWith(
+      'dragend',
+      expect.any(Function),
+      true,
+    );
 
     editor.destroy();
 
@@ -139,6 +144,11 @@ describe('table column moves', () => {
     );
     expect(removeEventListener).toHaveBeenCalledWith(
       'drop',
+      expect.any(Function),
+      true,
+    );
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'dragend',
       expect.any(Function),
       true,
     );
@@ -280,6 +290,66 @@ describe('table column moves', () => {
         clientY: 30,
       }),
     );
+
+    expect(rowTexts(editor)).toEqual([
+      ['B', 'C', 'A'],
+      ['B2', 'C2', 'A2'],
+    ]);
+  });
+
+  it('commits a valid native drag from dragend when Firefox omits drop', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    });
+    const editor = createEditor(tableContent());
+    const firstCellPos = cellPos(editor, 0, 0);
+    const firstRowCells = Array.from(
+      editor.view.dom.querySelectorAll<HTMLElement>('tr:first-child > th'),
+    );
+    firstRowCells.forEach((cellElement, index) => {
+      vi.spyOn(cellElement, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(index * 100, 20, 100, 40),
+      );
+    });
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({
+      pos: firstCellPos + 1,
+      inside: firstCellPos,
+    });
+
+    firstRowCells[0].dispatchEvent(
+      new MouseEvent('pointerover', {
+        bubbles: true,
+        clientX: 20,
+        clientY: 30,
+      }),
+    );
+    const handle = editor.options.element.querySelector<HTMLElement>(
+      '.drag-handle[data-direction="horizontal"]',
+    );
+    const createDragEvent = (type: string, clientX: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        clientX: { value: clientX },
+        clientY: { value: 30 },
+        dataTransfer: {
+          value: { effectAllowed: 'uninitialized', setData: vi.fn() },
+        },
+      });
+      return event;
+    };
+
+    handle?.dispatchEvent(
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        clientX: 20,
+        clientY: 30,
+      }),
+    );
+    handle?.dispatchEvent(createDragEvent('dragstart', 20));
+    document.dispatchEvent(createDragEvent('dragover', 250));
+    document.dispatchEvent(createDragEvent('dragend', 250));
 
     expect(rowTexts(editor)).toEqual([
       ['B', 'C', 'A'],
