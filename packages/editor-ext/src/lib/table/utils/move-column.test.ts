@@ -122,18 +122,25 @@ describe('table column moves', () => {
     expect(addEventListener).toHaveBeenCalledWith(
       'dragover',
       expect.any(Function),
+      true,
     );
-    expect(addEventListener).toHaveBeenCalledWith('drop', expect.any(Function));
+    expect(addEventListener).toHaveBeenCalledWith(
+      'drop',
+      expect.any(Function),
+      true,
+    );
 
     editor.destroy();
 
     expect(removeEventListener).toHaveBeenCalledWith(
       'dragover',
       expect.any(Function),
+      true,
     );
     expect(removeEventListener).toHaveBeenCalledWith(
       'drop',
       expect.any(Function),
+      true,
     );
   });
 
