@@ -29,7 +29,7 @@ describe('transclusion node schema', () => {
     expect(editor.schema.nodes.transclusionSource.spec.selectable).toBe(true);
     expect(editor.schema.nodes.transclusionSource.spec.draggable).toBe(true);
     expect(editor.schema.nodes.transclusionReference.spec.selectable).toBe(
-      true,
+      false,
     );
     expect(editor.schema.nodes.transclusionReference.spec.draggable).toBe(
       false,
