@@ -48,6 +48,8 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _disposables: (() => void)[] = [];
   private _draggingCoords: { x: number; y: number } = { x: 0, y: 0 };
   private _dragPending = false;
+  private _pointerDragging = false;
+  private _nativeDragging = false;
   private _dragging = false;
   private _draggingDirection: 'col' | 'row' = 'col';
   private _draggingIndex = -1;
@@ -142,7 +144,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     this._onDragStart(event, 'col');
   };
 
-  private _onDraggingCol = (event: DragEvent) => {
+  private _onDraggingCol = (event: MouseEvent) => {
     const draggingDOMs = this._draggingDOMs;
     if (!draggingDOMs) return;
 
@@ -178,7 +180,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     this._onDragStart(event, 'row');
   };
 
-  private _onDraggingRow = (event: DragEvent) => {
+  private _onDraggingRow = (event: MouseEvent) => {
     const draggingDOMs = this._draggingDOMs;
     if (!draggingDOMs) return;
 
@@ -211,6 +213,8 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
 
   private _onDragEnd = () => {
     this._dragPending = false;
+    this._pointerDragging = false;
+    this._nativeDragging = false;
     this._dragging = false;
     this._draggingIndex = -1;
     this._droppingIndex = -1;
@@ -224,21 +228,23 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _bindDragEvents = () => {
-    const onPointerDown = () => {
-      // Freeze the hovered cell before the browser starts its native drag.
-      // Otherwise pointerover can move the absolutely positioned handle away
-      // from under the pressed pointer and Chromium cancels dragstart.
-      this._dragPending = true;
-    };
-    const onPointerRelease = () => {
-      if (!this._dragging) this._dragPending = false;
-    };
-
-    this._colDragHandle.addEventListener('pointerdown', onPointerDown);
-    this._rowDragHandle.addEventListener('pointerdown', onPointerDown);
+    this._colDragHandle.addEventListener(
+      'pointerdown',
+      this._onPointerColDown,
+    );
+    this._rowDragHandle.addEventListener(
+      'pointerdown',
+      this._onPointerRowDown,
+    );
     this._disposables.push(() => {
-      this._colDragHandle.removeEventListener('pointerdown', onPointerDown);
-      this._rowDragHandle.removeEventListener('pointerdown', onPointerDown);
+      this._colDragHandle.removeEventListener(
+        'pointerdown',
+        this._onPointerColDown,
+      );
+      this._rowDragHandle.removeEventListener(
+        'pointerdown',
+        this._onPointerRowDown,
+      );
     });
 
     this._colDragHandle.addEventListener('dragstart', this._onDragColStart);
@@ -269,8 +275,13 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
 
     const ownerDocument = this.editor.view.dom?.ownerDocument;
     if (ownerDocument) {
-      ownerDocument.addEventListener('pointerup', onPointerRelease, true);
-      ownerDocument.addEventListener('pointercancel', onPointerRelease, true);
+      ownerDocument.addEventListener('pointermove', this._onPointerMove, true);
+      ownerDocument.addEventListener('pointerup', this._onPointerUp, true);
+      ownerDocument.addEventListener(
+        'pointercancel',
+        this._onPointerCancel,
+        true,
+      );
       // To make `drop` event work, we need to prevent the default behavior of the
       // `dragover` event for drop zone. Here we set the whole document as the
       // drop zone so that even the mouse moves outside the editor, the `drop`
@@ -278,10 +289,15 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       ownerDocument.addEventListener('drop', this._onDrop, true);
       ownerDocument.addEventListener('dragover', this._onDrag, true);
       this._disposables.push(() => {
-        ownerDocument.removeEventListener('pointerup', onPointerRelease, true);
+        ownerDocument.removeEventListener(
+          'pointermove',
+          this._onPointerMove,
+          true,
+        );
+        ownerDocument.removeEventListener('pointerup', this._onPointerUp, true);
         ownerDocument.removeEventListener(
           'pointercancel',
-          onPointerRelease,
+          this._onPointerCancel,
           true,
         );
         ownerDocument.removeEventListener('drop', this._onDrop, true);
@@ -290,23 +306,104 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     }
   };
 
+  private _onPointerColDown = (event: PointerEvent) => {
+    this._onPointerDown(event, 'col');
+  };
+
+  private _onPointerRowDown = (event: PointerEvent) => {
+    this._onPointerDown(event, 'row');
+  };
+
+  private _onPointerDown = (event: PointerEvent, type: 'col' | 'row') => {
+    if (event.button !== 0) return;
+    this._dragPending = this._prepareDrag(type, event.clientX, event.clientY);
+  };
+
+  private _onPointerMove = (event: PointerEvent) => {
+    if (!this._dragPending || event.buttons !== 1) return;
+
+    const distance = Math.hypot(
+      event.clientX - this._startCoords.x,
+      event.clientY - this._startCoords.y,
+    );
+    if (distance < 4) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this._dragPending = false;
+    this._pointerDragging = this._activateDrag();
+    if (!this._pointerDragging) {
+      this._onDragEnd();
+      return;
+    }
+
+    if (this._draggingDirection === 'col') {
+      this._onDraggingCol(event);
+    } else {
+      this._onDraggingRow(event);
+    }
+  };
+
+  private _onPointerUp = (event: PointerEvent) => {
+    if (this._pointerDragging) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._commitDrop();
+      return;
+    }
+    if (!this._dragging) this._onDragEnd();
+  };
+
+  private _onPointerCancel = () => {
+    // Chromium emits pointercancel when a native HTML drag takes ownership.
+    // Keep the captured table state until the matching drop/dragend event.
+    if (
+      !this._nativeDragging &&
+      (this._dragPending || this._pointerDragging)
+    ) {
+      this._onDragEnd();
+    }
+  };
+
   private _onDragStart = (event: DragEvent, type: 'col' | 'row') => {
-    const hoveringCell = this._hoveringCell;
-    if (!hoveringCell) {
+    if (
+      !this._dragPending &&
+      !this._prepareDrag(type, event.clientX, event.clientY)
+    ) {
       event.preventDefault();
       return;
     }
 
     const dataTransfer = event.dataTransfer;
     if (dataTransfer) {
-      dataTransfer.setData(TABLE_DND_MIME_TYPE, type);
-      dataTransfer.effectAllowed = 'move';
-      this._emptyImageController.hideDragImage(dataTransfer);
+      try {
+        dataTransfer.setData(TABLE_DND_MIME_TYPE, type);
+        dataTransfer.effectAllowed = 'move';
+        this._emptyImageController.hideDragImage(dataTransfer);
+      } catch {
+        // Some browsers reject a detached custom drag image. The drag itself
+        // remains valid, so fall back to the native preview.
+      }
     }
     this._dragPending = false;
-    this._dragging = true;
+    this._nativeDragging = true;
+    const activated = this._activateDrag();
+    if (!activated) {
+      event.preventDefault();
+      this._onDragEnd();
+    }
+  };
+
+  private _prepareDrag = (
+    type: 'col' | 'row',
+    clientX: number,
+    clientY: number,
+  ): boolean => {
+    const hoveringCell = this._hoveringCell;
+    if (!hoveringCell) return false;
+
     this._draggingDirection = type;
-    this._startCoords = { x: event.clientX, y: event.clientY };
+    this._startCoords = { x: clientX, y: clientY };
     const draggingIndex =
       type === 'col' ? hoveringCell.colIndex : hoveringCell.rowIndex;
 
@@ -330,22 +427,32 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       hoveringCell.cellPos,
       draggingIndex,
       type,
+      hoveringCell.table,
     );
     if (!relatedDoms || !this._draggingRange?.length) {
-      event.preventDefault();
-      this._onDragEnd();
-      return;
+      return false;
     }
     this._draggingDOMs = relatedDoms;
 
-    const index =
-      type === 'col' ? hoveringCell.colIndex : hoveringCell.rowIndex;
+    return true;
+  };
+
+  private _activateDrag = (): boolean => {
+    const relatedDoms = this._draggingDOMs;
+    if (!relatedDoms || this._draggingIndex < 0) return false;
+
+    this._dragging = true;
+
+    const type = this._draggingDirection;
+    const index = this._draggingIndex;
 
     this._previewController.onDragStart(relatedDoms, index, type);
     this._dropIndicatorController.onDragStart(relatedDoms, type);
+
+    return true;
   };
 
-  private _onDrag = (event: DragEvent) => {
+  private _onDrag = (event: DragEvent | PointerEvent) => {
     if (!this._dragging) return;
     event.preventDefault();
     event.stopPropagation();
@@ -361,6 +468,10 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     event.preventDefault();
     event.stopPropagation();
 
+    this._commitDrop();
+  };
+
+  private _commitDrop = () => {
     try {
       const direction = this._draggingDirection;
       const from = this._draggingIndex;

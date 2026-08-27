@@ -22,6 +22,8 @@ export function getHoveringCell(
   if (!$cellPos) return;
 
   const map = TableMap.get($cellPos.node(-1));
+  const table = domCell.closest('table');
+  if (!table) return;
   const tableStart = $cellPos.start(-1);
   const cellRect = map.findCell($cellPos.pos - tableStart);
   const rowIndex = cellRect.top;
@@ -31,6 +33,7 @@ export function getHoveringCell(
     rowIndex,
     colIndex,
     cellPos: $cellPos.pos,
+    table,
     rowFirstCellPos: getCellPos(map, tableStart, rowIndex, 0),
     colFirstCellPos: getCellPos(map, tableStart, 0, colIndex),
   };
@@ -49,6 +52,7 @@ export interface HoveringCellInfo {
   rowIndex: number;
   colIndex: number;
   cellPos: number;
+  table: HTMLTableElement;
   rowFirstCellPos: number;
   colFirstCellPos: number;
 }
@@ -126,9 +130,10 @@ export function getDndRelatedDOMs(
   cellPos: number | undefined,
   draggingIndex: number,
   direction: 'row' | 'col',
+  capturedTable?: HTMLTableElement,
 ): DraggingDOMs | undefined {
   if (cellPos == null) return;
-  const table = getTableDOMByPos(view, cellPos);
+  const table = capturedTable ?? getTableDOMByPos(view, cellPos);
   if (!table) return;
   const cell = getTargetFirstCellDOM(table, draggingIndex, direction);
   if (!cell) return;
