@@ -254,11 +254,11 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       // `dragover` event for drop zone. Here we set the whole document as the
       // drop zone so that even the mouse moves outside the editor, the `drop`
       // event will still be triggered.
-      ownerDocument.addEventListener('drop', this._onDrop);
-      ownerDocument.addEventListener('dragover', this._onDrag);
+      ownerDocument.addEventListener('drop', this._onDrop, true);
+      ownerDocument.addEventListener('dragover', this._onDrag, true);
       this._disposables.push(() => {
-        ownerDocument.removeEventListener('drop', this._onDrop);
-        ownerDocument.removeEventListener('dragover', this._onDrag);
+        ownerDocument.removeEventListener('drop', this._onDrop, true);
+        ownerDocument.removeEventListener('dragover', this._onDrag, true);
       });
     }
   };
@@ -318,8 +318,9 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _onDrag = (event: DragEvent) => {
-    event.preventDefault();
     if (!this._dragging) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (this._draggingDirection === 'col') {
       this._onDraggingCol(event);
     } else {
@@ -330,6 +331,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _onDrop = (event: DragEvent) => {
     if (!this._dragging) return;
     event.preventDefault();
+    event.stopPropagation();
 
     try {
       const direction = this._draggingDirection;
