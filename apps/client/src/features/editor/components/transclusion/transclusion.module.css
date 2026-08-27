@@ -150,6 +150,8 @@
   padding-left: 0;
   padding-right: 0;
   background: transparent;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .includeControls {
