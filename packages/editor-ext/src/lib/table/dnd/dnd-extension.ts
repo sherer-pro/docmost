@@ -36,6 +36,8 @@ declare module '@tiptap/core' {
 
 export const TableDndKey = new PluginKey('table-drag-and-drop');
 
+const TABLE_DND_MIME_TYPE = 'application/x-docmost-table-dnd';
+
 class TableDragHandlePluginSpec implements PluginSpec<void> {
   key = TableDndKey;
   props: EditorProps<Plugin<void>>;
@@ -78,8 +80,6 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     this._emptyImageController = new EmptyImageController();
 
     this._autoScrollController = new AutoScrollController();
-
-    this._bindDragEvents();
   }
 
   view = () => {
@@ -92,6 +92,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
     wrapper.appendChild(this._previewController.previewRoot);
     //@ts-ignore
     wrapper.appendChild(this._dropIndicatorController.dropIndicatorRoot);
+    this._bindDragEvents();
 
     return {
       update: this.update,
@@ -271,6 +272,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
 
     const dataTransfer = event.dataTransfer;
     if (dataTransfer) {
+      dataTransfer.setData(TABLE_DND_MIME_TYPE, type);
       dataTransfer.effectAllowed = 'move';
       this._emptyImageController.hideDragImage(dataTransfer);
     }

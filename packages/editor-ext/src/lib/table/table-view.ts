@@ -13,6 +13,33 @@ import {
 
 const DEFAULT_CELL_MIN_WIDTH = 48;
 
+export function getTableContentWidth(
+  table: HTMLTableElement,
+  containerWidth: number,
+): number {
+  if (getComputedStyle(table).borderCollapse !== 'collapse') {
+    return containerWidth;
+  }
+
+  const firstRow = table.rows[0];
+  const firstCell = firstRow?.cells[0];
+  const lastCell = firstRow?.cells[firstRow.cells.length - 1];
+  if (!firstCell || !lastCell) return containerWidth;
+
+  const leftBorder = Number.parseFloat(
+    getComputedStyle(firstCell).borderLeftWidth,
+  );
+  const rightBorder = Number.parseFloat(
+    getComputedStyle(lastCell).borderRightWidth,
+  );
+  const outerBorderWidth =
+    ((Number.isFinite(leftBorder) ? leftBorder : 0) +
+      (Number.isFinite(rightBorder) ? rightBorder : 0)) /
+    2;
+
+  return Math.max(0, containerWidth - outerBorderWidth);
+}
+
 export function updateColumns(
   node: ProseMirrorNode,
   colgroup: HTMLTableColElement,
@@ -214,10 +241,11 @@ export class TableView implements NodeView {
     const map = TableMap.get(this.node);
     const containerWidth =
       this.dom.clientWidth || this.dom.getBoundingClientRect().width;
+    const contentWidth = getTableContentWidth(this.table, containerWidth);
     const demands = this.measureDemands(map);
     const widths = allocateTableColumnWidths({
       columnCount: map.width,
-      containerWidth,
+      containerWidth: contentWidth,
       minColumnWidth: this.cellMinWidth,
       demands,
     });

@@ -5,7 +5,7 @@ import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { TextSelection } from '@tiptap/pm/state';
 import { TableMap } from '@tiptap/pm/tables';
 import { StarterKit } from '@tiptap/starter-kit';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TableDndExtension } from '../dnd';
 import { CustomTable } from '../table';
@@ -110,9 +110,100 @@ function rowTexts(editor: Editor): string[][] {
 
 afterEach(() => {
   while (editors.length) editors.pop()?.destroy();
+  vi.restoreAllMocks();
 });
 
 describe('table column moves', () => {
+  it('binds and removes the document drag lifecycle with the plugin view', () => {
+    const addEventListener = vi.spyOn(document, 'addEventListener');
+    const removeEventListener = vi.spyOn(document, 'removeEventListener');
+    const editor = createEditor(tableContent());
+
+    expect(addEventListener).toHaveBeenCalledWith(
+      'dragover',
+      expect.any(Function),
+    );
+    expect(addEventListener).toHaveBeenCalledWith('drop', expect.any(Function));
+
+    editor.destroy();
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'dragover',
+      expect.any(Function),
+    );
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'drop',
+      expect.any(Function),
+    );
+  });
+
+  it('moves a column through the native drag lifecycle', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    });
+    const editor = createEditor(tableContent());
+    const firstCellPos = cellPos(editor, 0, 0);
+    const firstRowCells = Array.from(
+      editor.view.dom.querySelectorAll<HTMLElement>('tr:first-child > th'),
+    );
+    firstRowCells.forEach((cellElement, index) => {
+      vi.spyOn(cellElement, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(index * 100, 20, 100, 40),
+      );
+    });
+    const firstCell = firstRowCells[0];
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({
+      pos: firstCellPos + 1,
+      inside: firstCellPos,
+    });
+
+    firstCell.dispatchEvent(
+      new MouseEvent('pointerover', {
+        bubbles: true,
+        clientX: 20,
+        clientY: 30,
+      }),
+    );
+
+    const handle = editor.options.element.querySelector<HTMLElement>(
+      '.drag-handle[data-direction="horizontal"]',
+    );
+    const setData = vi.fn();
+    const setDragImage = vi.fn();
+    const dataTransfer = {
+      effectAllowed: 'uninitialized',
+      setData,
+      setDragImage,
+    };
+    const createDragEvent = (type: string, clientX: number) => {
+      const event = new Event(type, {
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperties(event, {
+        clientX: { value: clientX },
+        clientY: { value: 30 },
+        dataTransfer: { value: dataTransfer },
+      });
+      return event;
+    };
+
+    handle?.dispatchEvent(createDragEvent('dragstart', 20));
+    document.dispatchEvent(createDragEvent('dragover', 250));
+    document.dispatchEvent(createDragEvent('drop', 250));
+
+    expect(setData).toHaveBeenCalledWith(
+      'application/x-docmost-table-dnd',
+      'col',
+    );
+    expect(setDragImage).toHaveBeenCalled();
+    expect(rowTexts(editor)).toEqual([
+      ['B', 'C', 'A'],
+      ['B2', 'C2', 'A2'],
+    ]);
+  });
+
   it('uses the captured table position when the current selection is outside', () => {
     const editor = createEditor(tableContent());
     const capturedPos = cellPos(editor, 0, 0);
