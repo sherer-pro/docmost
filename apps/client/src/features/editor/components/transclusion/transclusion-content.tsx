@@ -49,6 +49,7 @@ function TransclusionContent({
           ? undefined
           : { height: measuredHeight ?? 24, overflow: "hidden" }
       }
+      onMouseDownCapture={stopPropagation}
       onMouseDown={stopPropagation}
       onClick={stopPropagation}
       onDragStart={stopPropagation}
