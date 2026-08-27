@@ -197,7 +197,6 @@
       "exports|packages/editor-ext/src/lib/callout/callout.ts|inputRegex",
       "exports|packages/editor-ext/src/lib/math/math-block.ts|inputRegex",
       "exports|packages/editor-ext/src/lib/math/math-inline.ts|inputRegex",
-      "exports|packages/editor-ext/src/lib/table/utils/query.ts|findCellPos",
       "exports|packages/editor-ext/src/lib/table/utils/query.ts|findCellRange",
       "exports|packages/editor-ext/src/lib/table/utils/query.ts|findParentNode",
       "types|apps/client/src/components/ui/emoji-picker.tsx|EmojiPickerInterface",
