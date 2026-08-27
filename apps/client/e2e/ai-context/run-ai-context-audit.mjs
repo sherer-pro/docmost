@@ -550,20 +550,37 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       "The synchronized page editor is not editable",
     );
     const marker = editorLocator.getByText("CURRENT_PAGE_MARKER_A11C", { exact: true }).first();
-    // The marker heading carries an inline copy-link widget right after its text
-    // and stretches to the content width, so a default click targets the block
-    // centre. Wherever the text renders narrow enough that the centre falls on
-    // that widget, the click copies the heading link and leaves the editor
-    // unfocused instead of selecting anything. Click near the start of the text
-    // instead, and reissue it because a collaborative re-render can drop a
-    // selection made moments earlier.
-    const markerBox = await marker.boundingBox();
+    // The heading stretches to the content width and has controls on both sides:
+    // an inline copy-link widget after the text and the editor drag handle near
+    // its start. Resolve the text node's own rectangle so the triple-click cannot
+    // land on either control. Reissue it because a collaborative re-render can
+    // drop a selection made moments earlier.
+    const markerTextPosition = await marker.evaluate((element) => {
+      const expectedText = "CURRENT_PAGE_MARKER_A11C";
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      while (textNode) {
+        const text = textNode.textContent ?? "";
+        const markerStart = text.indexOf(expectedText);
+        if (markerStart >= 0) {
+          const range = document.createRange();
+          range.setStart(textNode, markerStart);
+          range.setEnd(textNode, markerStart + expectedText.length);
+          const textBox = range.getBoundingClientRect();
+          const elementBox = element.getBoundingClientRect();
+          return {
+            x: Math.round(textBox.left - elementBox.left + textBox.width / 2),
+            y: Math.round(textBox.top - elementBox.top + textBox.height / 2),
+          };
+        }
+        textNode = walker.nextNode();
+      }
+      return null;
+    });
+    assert(markerTextPosition, "The current-page marker text node was not found");
     const markerClick = {
       clickCount: 3,
-      position: {
-        x: 8,
-        y: Math.max(2, Math.round((markerBox?.height ?? 24) / 2)),
-      },
+      position: markerTextPosition,
     };
     try {
       await waitFor(
