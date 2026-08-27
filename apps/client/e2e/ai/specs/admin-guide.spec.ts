@@ -84,7 +84,10 @@ test("administrator AI guide is a separate localized release surface", async ({
     await page.goto(`/settings/ai/guide#${anchor}`);
     await page.getByRole("button", { name: copy.technical }).click();
     await expect(
-      page.getByText("dictionary_term", { exact: false }),
+      page
+        .locator(`#${anchor}`)
+        .getByText("dictionary_term", { exact: false })
+        .first(),
     ).toBeVisible();
   }
 
