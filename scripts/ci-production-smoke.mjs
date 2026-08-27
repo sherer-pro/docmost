@@ -257,6 +257,7 @@ await api(`api/spaces/${primarySpace.id}/ai/exclusions`, {
   method: "PUT",
   body: {
     expectedRevision: revision,
+    ragSearchDoneOnly: Boolean(policy?.ragSearchDoneOnly),
     exclusions: [{ pageId: excludedPage.id, includeDescendants: true }],
   },
 });
