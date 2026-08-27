@@ -124,7 +124,7 @@ describe("TransclusionContent", () => {
     );
   });
 
-  it("isolates mousedown before the host editor handles it", async () => {
+  it("isolates the mouse selection lifecycle from the host editor", async () => {
     await act(async () => {
       root.render(
         <div data-host-editor>
@@ -135,16 +135,25 @@ describe("TransclusionContent", () => {
 
     const host = container.querySelector("[data-host-editor]")!;
     const onHostMouseDown = vi.fn();
+    const onHostMouseMove = vi.fn();
+    const onHostMouseUp = vi.fn();
     host.addEventListener("mousedown", onHostMouseDown);
+    host.addEventListener("mousemove", onHostMouseMove);
+    host.addEventListener("mouseup", onHostMouseUp);
 
-    container.querySelector(".ProseMirror p")!.dispatchEvent(
-      new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+    const paragraph = container.querySelector(".ProseMirror p")!;
+    for (const type of ["mousedown", "mousemove", "mouseup"]) {
+      paragraph.dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
 
     expect(onHostMouseDown).not.toHaveBeenCalled();
+    expect(onHostMouseMove).not.toHaveBeenCalled();
+    expect(onHostMouseUp).not.toHaveBeenCalled();
   });
 
   it("lets editor drags bubble but isolates file drops", () => {
