@@ -47,6 +47,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   private _hoveringCell?: HoveringCellInfo;
   private _disposables: (() => void)[] = [];
   private _draggingCoords: { x: number; y: number } = { x: 0, y: 0 };
+  private _dragPending = false;
   private _dragging = false;
   private _draggingDirection: 'col' | 'row' = 'col';
   private _draggingIndex = -1;
@@ -117,7 +118,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _pointerOver = (view: EditorView, event: PointerEvent) => {
-    if (this._dragging) return;
+    if (this._dragPending || this._dragging) return;
 
     if (
       !this.editor.isEditable ||
@@ -209,6 +210,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _onDragEnd = () => {
+    this._dragPending = false;
     this._dragging = false;
     this._draggingIndex = -1;
     this._droppingIndex = -1;
@@ -222,6 +224,23 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
   };
 
   private _bindDragEvents = () => {
+    const onPointerDown = () => {
+      // Freeze the hovered cell before the browser starts its native drag.
+      // Otherwise pointerover can move the absolutely positioned handle away
+      // from under the pressed pointer and Chromium cancels dragstart.
+      this._dragPending = true;
+    };
+    const onPointerRelease = () => {
+      if (!this._dragging) this._dragPending = false;
+    };
+
+    this._colDragHandle.addEventListener('pointerdown', onPointerDown);
+    this._rowDragHandle.addEventListener('pointerdown', onPointerDown);
+    this._disposables.push(() => {
+      this._colDragHandle.removeEventListener('pointerdown', onPointerDown);
+      this._rowDragHandle.removeEventListener('pointerdown', onPointerDown);
+    });
+
     this._colDragHandle.addEventListener('dragstart', this._onDragColStart);
     this._disposables.push(() => {
       this._colDragHandle.removeEventListener(
@@ -250,6 +269,8 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
 
     const ownerDocument = this.editor.view.dom?.ownerDocument;
     if (ownerDocument) {
+      ownerDocument.addEventListener('pointerup', onPointerRelease, true);
+      ownerDocument.addEventListener('pointercancel', onPointerRelease, true);
       // To make `drop` event work, we need to prevent the default behavior of the
       // `dragover` event for drop zone. Here we set the whole document as the
       // drop zone so that even the mouse moves outside the editor, the `drop`
@@ -257,6 +278,12 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       ownerDocument.addEventListener('drop', this._onDrop, true);
       ownerDocument.addEventListener('dragover', this._onDrag, true);
       this._disposables.push(() => {
+        ownerDocument.removeEventListener('pointerup', onPointerRelease, true);
+        ownerDocument.removeEventListener(
+          'pointercancel',
+          onPointerRelease,
+          true,
+        );
         ownerDocument.removeEventListener('drop', this._onDrop, true);
         ownerDocument.removeEventListener('dragover', this._onDrag, true);
       });
@@ -276,6 +303,7 @@ class TableDragHandlePluginSpec implements PluginSpec<void> {
       dataTransfer.effectAllowed = 'move';
       this._emptyImageController.hideDragImage(dataTransfer);
     }
+    this._dragPending = false;
     this._dragging = true;
     this._draggingDirection = type;
     this._startCoords = { x: event.clientX, y: event.clientY };

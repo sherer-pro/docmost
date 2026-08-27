@@ -36,7 +36,7 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
 
   group: 'block',
   atom: true,
-  selectable: true,
+  selectable: false,
   // The reference renders read-only text. Keeping the atom permanently
   // draggable makes browsers start a node drag instead of text selection.
   // The editor's global drag handle still provides explicit block movement.

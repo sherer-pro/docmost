@@ -160,9 +160,10 @@ describe('table column moves', () => {
       );
     });
     const firstCell = firstRowCells[0];
-    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({
-      pos: firstCellPos + 1,
-      inside: firstCellPos,
+    const secondCellPos = cellPos(editor, 0, 1);
+    vi.spyOn(editor.view, 'posAtCoords').mockImplementation(({ left }) => {
+      const pos = left < 100 ? firstCellPos : secondCellPos;
+      return { pos: pos + 1, inside: pos };
     });
 
     firstCell.dispatchEvent(
@@ -196,6 +197,16 @@ describe('table column moves', () => {
       return event;
     };
 
+    handle?.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, cancelable: true }),
+    );
+    firstRowCells[1].dispatchEvent(
+      new MouseEvent('pointerover', {
+        bubbles: true,
+        clientX: 150,
+        clientY: 30,
+      }),
+    );
     handle?.dispatchEvent(createDragEvent('dragstart', 20));
     document.dispatchEvent(createDragEvent('dragover', 250));
     document.dispatchEvent(createDragEvent('drop', 250));
