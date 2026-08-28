@@ -1,3 +1,40 @@
+# Design QA: edge-to-edge AI composer
+
+## Comparison target
+
+- Source visual truth:
+  - `C:/Users/Pavel/AppData/Local/Temp/codex-clipboard-6a4d11b3-984b-4bb0-b058-2bf0d2125c5f.png` — 799 x 444 pixels.
+  - `C:/Users/Pavel/AppData/Local/Temp/codex-clipboard-b8c27e77-f68c-417f-a399-87798aa66b50.png` — 53 x 335 pixels.
+- Browser-rendered implementation: `C:/Users/Pavel/.codex/visualizations/2026/08/27/01a04554-34ec-7751-996f-83660ac4efe4/ai-composer-edge-to-edge-full.png` — 1265 x 712 pixels.
+- Runtime: authenticated local Docmost at `http://localhost:5173/s/refix/p/2026-07-16-konczepcziya-WRMWs5wbCY`.
+- Browser state: editable document, new AI chat, empty composer with current-document context, light theme.
+- Browser viewport: 1280 x 720 CSS pixels, `devicePixelRatio=1.5`.
+
+The source files are cropped annotations rather than a complete same-viewport frame, so no false pixel-for-pixel viewport normalization was applied. The source and implementation were opened together for the visual comparison; the requested relative geometry was additionally checked from the rendered DOM.
+
+## Findings
+
+- No actionable P0, P1, or P2 mismatch remains for the requested change.
+- Spacing and layout rhythm: the outer composer has `0px` padding, no background image, and a transparent background. The history region, composer wrapper, and composer card each measured `487.33px` wide; horizontal overflow measured `0px`.
+- Colors and visual tokens: the white gradient behind the composer is absent. The existing card surface, radius, and accessible focus treatment remain unchanged.
+- Fonts and typography: unchanged from the existing Docmost Assistant typography; the layout change introduced no wrapping or truncation regression in the visible composer controls.
+- Image and icon fidelity: no raster assets, icons, or illustrations were changed.
+- Copy and content: no user-facing text changed.
+
+## Interaction and console coverage
+
+- Switched the document from read mode to edit mode and confirmed that the empty AI composer rendered with the current-document chip and persistent footer controls.
+- The browser console contains the pre-existing editor `flushSync` warning from `DictionaryHighlightLayer`; no new warning or error points to the AI composer or this CSS change.
+- A separate focused crop was not required because the full-view implementation keeps the composer controls readable and the exact width, padding, background, and overflow values were measured directly.
+
+## Comparison history
+
+- First post-fix comparison: no actionable P0, P1, or P2 issue was found, so no additional visual-fix iteration was required.
+
+final result: passed
+
+---
+
 # Design QA - Page templates
 
 ## Reference and implementation
