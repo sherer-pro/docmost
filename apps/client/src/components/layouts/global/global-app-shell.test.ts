@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getAiFocusAsideLayout,
   getAsidePresentationMode,
   getShellVisibilityState,
 } from "@/components/layouts/global/global-app-shell.utils";
@@ -77,5 +78,47 @@ describe("getAsidePresentationMode", () => {
         isSidebarVisible: true,
       }),
     ).toBe("docked");
+  });
+
+  it("switches a 600 pixel panel to overlay until the editor has room", () => {
+    expect(
+      getAsidePresentationMode({
+        viewportWidth: 1600,
+        sidebarWidth: 300,
+        asideWidth: 600,
+        isSidebarVisible: true,
+      }),
+    ).toBe("overlay");
+    expect(
+      getAsidePresentationMode({
+        viewportWidth: 1620,
+        sidebarWidth: 300,
+        asideWidth: 600,
+        isSidebarVisible: true,
+      }),
+    ).toBe("docked");
+  });
+});
+
+describe("getAiFocusAsideLayout", () => {
+  it("keeps focus mode docked only when the document retains 720 pixels", () => {
+    expect(
+      getAiFocusAsideLayout({
+        viewportWidth: 1920,
+        sidebarWidth: 300,
+        isSidebarVisible: true,
+      }),
+    ).toEqual({ width: 760, mode: "docked" });
+  });
+
+  it("promotes focus mode to fullscreen on narrower desktop layouts", () => {
+    const layout = getAiFocusAsideLayout({
+      viewportWidth: 1440,
+      sidebarWidth: 300,
+      isSidebarVisible: true,
+    });
+
+    expect(layout.width).toBeCloseTo(691.2);
+    expect(layout.mode).toBe("fullscreen");
   });
 });

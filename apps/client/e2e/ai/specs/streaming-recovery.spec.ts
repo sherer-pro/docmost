@@ -7,11 +7,11 @@ import {
   test,
 } from "../support";
 
-const composerWidths = [360, 400, 520] as const;
+const composerWidths = [360, 400, 520, 600] as const;
 
 async function setAiPanelWidth(page: Page, targetWidth: number) {
   const resizeHandle = page.locator(
-    '[role="separator"][aria-valuemin="360"][aria-valuemax="520"]',
+    '[role="separator"][aria-valuemin="360"][aria-valuemax="600"]',
   );
   let currentWidth = Number(await resizeHandle.getAttribute("aria-valuenow"));
 
@@ -71,13 +71,41 @@ test("streaming survives reload and a delayed run can be stopped", async ({
   const state = await loadState();
   await openAssistant(page, state);
   const resizeHandle = page.locator(
-    '[role="separator"][aria-valuemin="360"][aria-valuemax="520"]',
+    '[role="separator"][aria-valuemin="360"][aria-valuemax="600"]',
   );
   await expect(resizeHandle).toBeVisible();
   const originalWidth = Number(
     await resizeHandle.getAttribute("aria-valuenow"),
   );
   const composer = messageComposer(page);
+  await setAiPanelWidth(page, 400);
+  await composer.fill("RESIZE_DRAFT");
+  const handleBounds = await resizeHandle.boundingBox();
+  if (!handleBounds) throw new Error("AI panel resize handle is not visible");
+  await page.mouse.move(
+    handleBounds.x + handleBounds.width / 2,
+    handleBounds.y + 80,
+  );
+  await page.mouse.down();
+  await page.mouse.move(1000, handleBounds.y + 80, { steps: 8 });
+  await page.mouse.up();
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "600");
+  await expect(page.locator("#docmost-context-aside")).toHaveAttribute(
+    "data-presentation-mode",
+    "overlay",
+  );
+  await expect(composer).toContainText("RESIZE_DRAFT");
+  await resizeHandle.press("Home");
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "360");
+  await resizeHandle.press("End");
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "600");
+  await page.waitForTimeout(650);
+  await page.reload();
+  await openAssistant(page, state);
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "600");
+  await setAiPanelWidth(page, originalWidth);
+  await page.waitForTimeout(650);
+
   await composer.fill("AUDIT_DELAY");
   await composer.press("Enter");
   const footer = page.getByTestId("ai-composer-footer");
@@ -139,7 +167,11 @@ test("streaming survives reload and a delayed run can be stopped", async ({
     await profileSelector.focus();
     await expect(profileSelector).toBeFocused();
     await profileSelector.press("Enter");
-    await expect(page.locator('[role="menu"]')).toBeVisible();
+    const menu = page.locator('[role="menu"]');
+    await expect(menu).toBeVisible();
+    expect(
+      await menu.getByTestId("ai-profile-option-description").count(),
+    ).toBeGreaterThan(1);
     await page.keyboard.press("Escape");
     await expect(profileSelector).toBeFocused();
   }
