@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AI_LEGACY_SPACE_PROFILE_VALUE,
+  matchesAiComposerProfileOption,
   resolveActiveAiComposerProfileOptionLabel,
+  resolveAiComposerProfileDescription,
   resolveAiComposerProfileLabel,
   shouldShowHiddenActiveAiComposerProfileOption,
   shouldShowUnavailableAiComposerProfileOption,
@@ -84,6 +86,30 @@ describe("resolveActiveAiComposerProfileOptionLabel", () => {
         { name: "Reviewer renamed", version: 11 },
       ),
     ).toBe("Reviewer · v9");
+  });
+});
+
+describe("AI composer profile descriptions", () => {
+  it("uses the configured description and falls back for blank values", () => {
+    expect(
+      resolveAiComposerProfileDescription("  Reviews product copy.  ", "None"),
+    ).toBe("Reviews product copy.");
+    expect(resolveAiComposerProfileDescription("   ", "None")).toBe("None");
+    expect(resolveAiComposerProfileDescription(null, "None")).toBe("None");
+  });
+
+  it("matches profile search against labels and descriptions", () => {
+    const option = {
+      value: "profile-1",
+      label: "Pumpkin · v2",
+      description: "Reviews product strategy",
+    };
+
+    expect(matchesAiComposerProfileOption(option, "pumpkin", "en")).toBe(true);
+    expect(matchesAiComposerProfileOption(option, "strategy", "en")).toBe(true);
+    expect(matchesAiComposerProfileOption(option, "translate", "en")).toBe(
+      false,
+    );
   });
 });
 

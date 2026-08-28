@@ -12,6 +12,7 @@ import {
   getAiDeltaSequenceDecision,
   getAiErrorTranslationKey,
   getAiPanelPreferencePayload,
+  getAiPanelWidthForKey,
   getPersistedActiveRun,
   getLatestAiConversation,
   shouldShowAiRetrievalUi,
@@ -146,7 +147,7 @@ describe("AI apply policy", () => {
 describe("AI panel preferences", () => {
   it("clamps width and builds a stable profile payload", () => {
     assert.equal(clampAiPanelWidth(250), 360);
-    assert.equal(clampAiPanelWidth(700), 520);
+    assert.equal(clampAiPanelWidth(700), 600);
     assert.equal(clampAiPanelWidth(Number.NaN), 400);
     assert.deepEqual(
       getAiPanelPreferencePayload({
@@ -157,9 +158,19 @@ describe("AI panel preferences", () => {
       {
         aiPanelOpen: true,
         aiPanelTab: "ai",
-        aiPanelWidth: 520,
+        aiPanelWidth: 600,
       },
     );
+  });
+
+  it("resizes by keyboard without crossing the configured bounds", () => {
+    assert.equal(getAiPanelWidthForKey(400, "ArrowLeft"), 410);
+    assert.equal(getAiPanelWidthForKey(400, "ArrowRight"), 390);
+    assert.equal(getAiPanelWidthForKey(600, "ArrowLeft"), 600);
+    assert.equal(getAiPanelWidthForKey(360, "ArrowRight"), 360);
+    assert.equal(getAiPanelWidthForKey(480, "Home"), 360);
+    assert.equal(getAiPanelWidthForKey(480, "End"), 600);
+    assert.equal(getAiPanelWidthForKey(480, "Enter"), null);
   });
 });
 
