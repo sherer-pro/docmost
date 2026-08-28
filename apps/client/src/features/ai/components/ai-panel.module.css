@@ -135,12 +135,8 @@
 .composer {
   flex: 0 0 auto;
   min-width: 0;
-  padding: 4px var(--mantine-spacing-sm) var(--mantine-spacing-sm);
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    light-dark(rgba(255, 255, 255, 0.97), rgba(26, 27, 30, 0.97)) 18%
-  );
+  padding: 0;
+  background: transparent;
   container-type: inline-size;
   container-name: ai-composer;
 }
