@@ -1369,7 +1369,31 @@
         "briefcase": "Valigetta",
         "code": "Codice",
         "language": "Lingua",
-        "search": "Ricerca"
+        "search": "Ricerca",
+        "messages": "Conversazioni",
+        "pencil": "Scrittura",
+        "bulb": "Idee",
+        "school": "Formazione",
+        "microscope": "Ricerca scientifica",
+        "chart": "Analisi",
+        "calculator": "Calcoli",
+        "palette": "Progettazione",
+        "camera": "Fotografia",
+        "music": "Musica",
+        "heart": "Assistenza",
+        "shield": "Sicurezza",
+        "scale": "Diritto",
+        "building": "Impresa",
+        "stethoscope": "Medicina",
+        "leaf": "Natura",
+        "world": "Mondo",
+        "rocket": "Lancio",
+        "target": "Obiettivi",
+        "puzzle": "Risoluzione dei problemi",
+        "database": "Dati",
+        "document": "Documenti",
+        "calendar": "Pianificazione",
+        "mail": "Comunicazione"
       },
       "section": {
         "basics": "Generale",
@@ -1614,7 +1638,7 @@
           },
           "success": "Viene completata una risposta di prova; Agent elenca solo gli strumenti consentiti e chiede prima della scrittura",
           "rollback": "Disattiva Agent o il modello spaziale, quindi ripristina le ultime impostazioni funzionanti",
-          "technical": "L’assistente integrato esegue chat private associate alle pagine tramite il provider configurato per ogni spazio. Le impostazioni dello spazio mostrano l’utilizzo di richieste e token per oggi e per gli ultimi 7 giorni. La modalità Agent può richiamare strumenti Docmost approvati e applica le modifiche alle pagine solo dopo la conferma dell’utente che le ha avviate. Subito prima di applicare una modifica, il server ricontrolla l’accesso in scrittura alla pagina corrente e le policy degli strumenti ai livelli deployment, workspace, space, profile e group. L’editor dei profili dello spazio mostra nomi degli strumenti localizzati e riceve la policy effettiva per gli override del modello tramite l’elenco dei profili dello spazio; solo gli amministratori dell’area di lavoro possono modificare gli interruttori principali. La proiezione di conoscenza condivisa arricchisce la ricerca AI e il contesto degli strumenti con campi documento e personalizzati abilitati, proprietà e celle di database con nome e termini attivi del dizionario (`dictionary_term`)."
+          "technical": "L’assistente integrato esegue chat private associate alle pagine tramite il provider configurato per ogni spazio. Le impostazioni dello spazio mostrano l’utilizzo di richieste e token per oggi e per gli ultimi 7 giorni. La modalità Agent può richiamare strumenti Docmost approvati e applica le modifiche alle pagine solo dopo la conferma dell’utente che le ha avviate. Subito prima di applicare una modifica, il server ricontrolla l’accesso in scrittura alla pagina corrente e le policy degli strumenti ai livelli deployment, workspace, space, profile e group. L’editor dei profili dello spazio mostra nomi degli strumenti localizzati e riceve la policy effettiva per gli override del modello tramite l’elenco dei profili dello spazio; solo gli amministratori dell’area di lavoro possono modificare gli interruttori principali. La proiezione di conoscenza condivisa arricchisce la ricerca AI e il contesto degli strumenti con campi documento e personalizzati abilitati, proprietà e celle di database con nome e termini attivi del dizionario (`dictionary_term`). Il contratto selezionato `AI_ASSISTANT_PROFILE_ICONS` offre {{profileIconCount}} opzioni di icona localizzate, visualizzate in modo coerente nell’editor del profilo e nel pannello chat."
         },
         "retrieval": {
           "description": "La ricerca nello spazio viene eseguita durante la generazione di una risposta.",

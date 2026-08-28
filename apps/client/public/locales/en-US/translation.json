@@ -1369,7 +1369,31 @@
         "briefcase": "Briefcase",
         "code": "Code",
         "language": "Language",
-        "search": "Search"
+        "search": "Search",
+        "messages": "Chat",
+        "pencil": "Writing",
+        "bulb": "Ideas",
+        "school": "Education",
+        "microscope": "Research",
+        "chart": "Analytics",
+        "calculator": "Calculations",
+        "palette": "Design",
+        "camera": "Photography",
+        "music": "Music",
+        "heart": "Care",
+        "shield": "Security",
+        "scale": "Legal",
+        "building": "Business",
+        "stethoscope": "Medicine",
+        "leaf": "Nature",
+        "world": "World",
+        "rocket": "Launch",
+        "target": "Goals",
+        "puzzle": "Problem solving",
+        "database": "Data",
+        "document": "Documents",
+        "calendar": "Planning",
+        "mail": "Communication"
       },
       "section": {
         "basics": "Basics",
@@ -1614,7 +1638,7 @@
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
-          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`)."
+          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel."
         },
         "retrieval": {
           "description": "Space search runs while an answer is generated.",

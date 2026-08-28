@@ -1369,7 +1369,31 @@
         "briefcase": "Aktetas",
         "code": "Programmeercode",
         "language": "Taal",
-        "search": "Zoeken"
+        "search": "Zoeken",
+        "messages": "Gesprekken",
+        "pencil": "Schrijven",
+        "bulb": "Ideeën",
+        "school": "Onderwijs",
+        "microscope": "Onderzoek",
+        "chart": "Analyse",
+        "calculator": "Berekeningen",
+        "palette": "Vormgeving",
+        "camera": "Fotografie",
+        "music": "Muziek",
+        "heart": "Zorg",
+        "shield": "Beveiliging",
+        "scale": "Recht",
+        "building": "Bedrijf",
+        "stethoscope": "Geneeskunde",
+        "leaf": "Natuur",
+        "world": "Wereld",
+        "rocket": "Lancering",
+        "target": "Doelen",
+        "puzzle": "Probleemoplossing",
+        "database": "Gegevens",
+        "document": "Documenten",
+        "calendar": "Plannen",
+        "mail": "Communicatie"
       },
       "section": {
         "basics": "Algemeen",
@@ -1614,7 +1638,7 @@
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
-          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext."
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven."
         },
         "retrieval": {
           "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",

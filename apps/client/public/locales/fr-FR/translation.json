@@ -1369,7 +1369,31 @@
         "briefcase": "Mallette",
         "code": "Programmation",
         "language": "Langue",
-        "search": "Recherche"
+        "search": "Recherche",
+        "messages": "Conversations",
+        "pencil": "Rédaction",
+        "bulb": "Idées",
+        "school": "Éducation",
+        "microscope": "Études",
+        "chart": "Analyse",
+        "calculator": "Calculs",
+        "palette": "Création visuelle",
+        "camera": "Photographie",
+        "music": "Musique",
+        "heart": "Accompagnement",
+        "shield": "Sécurité",
+        "scale": "Droit",
+        "building": "Entreprise",
+        "stethoscope": "Médecine",
+        "leaf": "Environnement",
+        "world": "Monde",
+        "rocket": "Lancement",
+        "target": "Objectifs",
+        "puzzle": "Résolution de problèmes",
+        "database": "Données",
+        "document": "Fichiers",
+        "calendar": "Planification",
+        "mail": "Échanges"
       },
       "section": {
         "basics": "Général",
@@ -1614,7 +1638,7 @@
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",
-          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`)."
+          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`). Le contrat sélectionné `AI_ASSISTANT_PROFILE_ICONS` propose {{profileIconCount}} choix d’icônes localisés, affichés de manière cohérente dans l’éditeur de profil et le panneau de discussion."
         },
         "retrieval": {
           "description": "La recherche dans l’espace s’exécute pendant la génération d’une réponse.",

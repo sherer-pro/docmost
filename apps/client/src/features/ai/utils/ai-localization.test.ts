@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { AI_ERROR_CODES } from "@docmost/api-contract";
+import {
+  AI_ASSISTANT_PROFILE_ICONS,
+  AI_ERROR_CODES,
+} from "@docmost/api-contract";
 import {
   getAiErrorTranslationKey,
   resolveAiErrorMessage,
@@ -202,7 +205,11 @@ describe("AI localization contract", () => {
       "integrations.section.profiles",
       ...PROFILE_ERROR_REASON_KEYS,
     ];
-    expect(profileKeys).toHaveLength(122);
+    expect(profileKeys).toHaveLength(148);
+    expect(AI_ASSISTANT_PROFILE_ICONS).toHaveLength(32);
+    for (const icon of AI_ASSISTANT_PROFILE_ICONS) {
+      expect(english[`profiles.iconName.${icon}`]).toBeTruthy();
+    }
 
     for (const locale of LOCALES.filter((value) => value !== "en-US")) {
       const localized = flatten(readAiLocale(locale));

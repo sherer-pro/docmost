@@ -232,7 +232,11 @@ function ScenarioPanel({
               {t("ai.adminGuide.labels.technicalDetails")}
             </Accordion.Control>
             <Accordion.Panel>
-              <Text size="sm">{t(`${key}.technical`)}</Text>
+              <Text size="sm">
+                {t(`${key}.technical`, {
+                  profileIconCount: scenario.profileIconCount,
+                })}
+              </Text>
               {scenario.showKnowledgeAccessPolicy && (
                 <Text size="sm" mt="sm">
                   {t("ai.adminGuide.knowledgeAccessDoneOnly")}

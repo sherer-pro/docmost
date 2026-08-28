@@ -36,17 +36,12 @@ import { notifications } from "@mantine/notifications";
 import {
   IconArrowDown,
   IconArrowUp,
-  IconBook,
-  IconBrain,
-  IconBriefcase,
   IconCheck,
   IconCircle,
-  IconCode,
   IconDatabase,
   IconEdit,
   IconFileText,
   IconHistory,
-  IconLanguage,
   IconLink,
   IconMessages,
   IconPaperclip,
@@ -88,6 +83,7 @@ import {
   buildAiAssistantProfileCapabilityOptions,
   normalizeAiAssistantProfileQuickCommands,
 } from "@/features/ai/utils/ai-assistant-profile-form.ts";
+import { AiAssistantProfileIcon as AssistantProfileIcon } from "./ai-assistant-profile-icon.tsx";
 import styles from "./ai-assistant-profiles-settings.module.css";
 
 type ProfileSection =
@@ -109,17 +105,6 @@ const PROFILE_SECTIONS: Array<{
   { value: "access", icon: IconUsers },
   { value: "launch", icon: IconPlayerPlay },
 ];
-
-const PROFILE_ICON_COMPONENTS: Record<AiAssistantProfileIcon, TablerIcon> = {
-  sparkles: IconSparkles,
-  robot: IconRobot,
-  brain: IconBrain,
-  book: IconBook,
-  briefcase: IconBriefcase,
-  code: IconCode,
-  language: IconLanguage,
-  search: IconSearch,
-};
 
 const TOOL_CATEGORY_ICONS: Record<AiBuiltinToolCategory, TablerIcon> = {
   search: IconSearch,
@@ -359,7 +344,6 @@ export function AiAssistantProfilesSettings({
     PROFILE_SECTIONS.find((section) => section.value === activeSection) ??
     PROFILE_SECTIONS[0];
   const ActiveSectionIcon = activeSectionConfig.icon;
-  const SelectedProfileIcon = PROFILE_ICON_COMPONENTS[form.values.icon];
 
   if (profilesQuery.isLoading || policyQuery.isLoading)
     return <Loader size="sm" />;
@@ -554,7 +538,7 @@ export function AiAssistantProfilesSettings({
                 <Stack className={styles.profilePreview} gap="sm">
                   <Group wrap="nowrap" align="flex-start">
                     <div className={styles.profileAvatar}>
-                      <SelectedProfileIcon size={30} aria-hidden />
+                      <AssistantProfileIcon icon={form.values.icon} size={30} />
                     </div>
                     <div className={styles.profileName}>
                       <Text fw={600} truncate>
@@ -640,7 +624,6 @@ export function AiAssistantProfilesSettings({
                   </Text>
                   <div className={styles.iconGrid}>
                     {AI_ASSISTANT_PROFILE_ICONS.map((icon) => {
-                      const ProfileIcon = PROFILE_ICON_COMPONENTS[icon];
                       const label = t(`ai.profiles.iconName.${icon}`);
                       return (
                         <Tooltip key={icon} label={label} withArrow>
@@ -654,7 +637,7 @@ export function AiAssistantProfilesSettings({
                             aria-pressed={form.values.icon === icon}
                             onClick={() => form.setFieldValue("icon", icon)}
                           >
-                            <ProfileIcon size={22} aria-hidden />
+                            <AssistantProfileIcon icon={icon} size={22} />
                           </UnstyledButton>
                         </Tooltip>
                       );
@@ -726,7 +709,6 @@ export function AiAssistantProfilesSettings({
                           </Text>
                           <div className={styles.iconGrid}>
                             {AI_ASSISTANT_PROFILE_ICONS.map((icon) => {
-                              const ProfileIcon = PROFILE_ICON_COMPONENTS[icon];
                               const label = t(`ai.profiles.iconName.${icon}`);
                               return (
                                 <Tooltip key={icon} label={label} withArrow>
@@ -742,7 +724,10 @@ export function AiAssistantProfilesSettings({
                                       form.setFieldValue("icon", icon)
                                     }
                                   >
-                                    <ProfileIcon size={20} aria-hidden />
+                                    <AssistantProfileIcon
+                                      icon={icon}
+                                      size={20}
+                                    />
                                   </UnstyledButton>
                                 </Tooltip>
                               );

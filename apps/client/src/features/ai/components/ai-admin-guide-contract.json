@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "anchors": [
     "assistant",
     "retrieval",
@@ -15,6 +15,11 @@
       "id": "knowledge-projection-dictionary-source",
       "key": "scenario.assistant.technical",
       "needles": ["dictionary_term"]
+    },
+    {
+      "id": "assistant-profile-icon-count",
+      "key": "scenario.assistant.technical",
+      "needles": ["AI_ASSISTANT_PROFILE_ICONS", "profileIconCount"]
     },
     {
       "id": "knowledge-projection-version",
