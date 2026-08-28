@@ -42,3 +42,26 @@ export function getAsidePresentationMode({
 
   return availableDocumentWidth >= 720 ? "docked" : "overlay";
 }
+
+export function getAiFocusAsideLayout({
+  viewportWidth,
+  sidebarWidth,
+  isSidebarVisible,
+}: {
+  viewportWidth: number;
+  sidebarWidth: number;
+  isSidebarVisible: boolean;
+}): { width: number; mode: AsidePresentationMode } {
+  const width = Math.min(760, Math.max(640, viewportWidth * 0.48));
+  const baseMode = getAsidePresentationMode({
+    viewportWidth,
+    sidebarWidth,
+    asideWidth: width,
+    isSidebarVisible,
+  });
+
+  return {
+    width,
+    mode: baseMode === "docked" ? "docked" : "fullscreen",
+  };
+}

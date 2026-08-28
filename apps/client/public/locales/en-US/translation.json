@@ -1328,6 +1328,8 @@
       "description": "Create space-owned assistant behaviors with frozen instructions, models, and exact tool access.",
       "selectorLabel": "Assistant profile",
       "spaceAssistant": "Space assistant",
+      "spaceAssistantDescription": "Uses the space-wide assistant instructions and model settings.",
+      "noDescription": "No description provided.",
       "preferences": "Profile preferences",
       "makePreferred": "Use by default",
       "clearPreferred": "Clear preferred profile",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "AI assistant",
+    "enterFocusMode": "Enter focus mode",
+    "exitFocusMode": "Exit focus mode",
     "titleNamed": {
       "masculine": "Assistant “{{assistantName}}”",
       "feminine": "Assistant “{{assistantName}}”"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Translate",
     "generationFailed": "AI generation failed",
     "composer": {
+      "genericPlaceholder": "Ask AI anything…",
+      "add": "Add",
+      "addToMessage": "Add to message",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

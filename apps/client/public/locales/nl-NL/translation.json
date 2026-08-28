@@ -1328,6 +1328,8 @@
       "description": "Maak assistentgedrag voor deze ruimte met vastgelegde instructies, modellen en exact bepaalde toegang tot hulpmiddelen.",
       "selectorLabel": "Assistentprofiel",
       "spaceAssistant": "Ruimteassistent",
+      "spaceAssistantDescription": "Gebruikt de algemene assistentinstructies en modelinstellingen van de ruimte.",
+      "noDescription": "Geen beschrijving opgegeven.",
       "preferences": "Profielvoorkeuren",
       "makePreferred": "Standaard gebruiken",
       "clearPreferred": "Voorkeursprofiel wissen",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "AI-assistent",
+    "enterFocusMode": "Focusmodus openen",
+    "exitFocusMode": "Focusmodus sluiten",
     "titleNamed": {
       "masculine": "Assistent ‘{{assistantName}}’",
       "feminine": "Assistent ‘{{assistantName}}’"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Vertalen",
     "generationFailed": "Het genereren van AI is mislukt",
     "composer": {
+      "genericPlaceholder": "Vraag AI wat je wilt…",
+      "add": "Toevoegen",
+      "addToMessage": "Aan bericht toevoegen",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

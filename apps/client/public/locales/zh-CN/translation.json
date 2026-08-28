@@ -1328,6 +1328,8 @@
       "description": "创建属于空间的助手行为，并固定其指令、模型和精确的工具访问权限。",
       "selectorLabel": "助手配置文件",
       "spaceAssistant": "空间助手",
+      "spaceAssistantDescription": "使用空间级助手指令和模型设置。",
+      "noDescription": "未提供描述。",
       "preferences": "配置文件偏好",
       "makePreferred": "设为默认",
       "clearPreferred": "清除首选配置文件",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "人工智能助手",
+    "enterFocusMode": "进入专注模式",
+    "exitFocusMode": "退出专注模式",
     "titleNamed": {
       "masculine": "助手“{{assistantName}}”",
       "feminine": "助手“{{assistantName}}”"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "翻译",
     "generationFailed": "AI生成失败",
     "composer": {
+      "genericPlaceholder": "向 AI 询问任何问题…",
+      "add": "添加",
+      "addToMessage": "添加到消息",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

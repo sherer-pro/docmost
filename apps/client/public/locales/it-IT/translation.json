@@ -1328,6 +1328,8 @@
       "description": "Crea comportamenti dell’assistente propri dello spazio con istruzioni, modelli e accesso esatto agli strumenti bloccati.",
       "selectorLabel": "Profilo dell’assistente",
       "spaceAssistant": "Assistente dello spazio",
+      "spaceAssistantDescription": "Usa le istruzioni e le impostazioni del modello dell'assistente dello spazio.",
+      "noDescription": "Nessuna descrizione fornita.",
       "preferences": "Preferenze dei profili",
       "makePreferred": "Usa come predefinito",
       "clearPreferred": "Reimposta il profilo preferito",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "Assistente AI",
+    "enterFocusMode": "Attiva modalità focus",
+    "exitFocusMode": "Esci dalla modalità focus",
     "titleNamed": {
       "masculine": "Assistente «{{assistantName}}»",
       "feminine": "Assistente «{{assistantName}}»"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Traduci",
     "generationFailed": "La generazione dell'IA è fallita",
     "composer": {
+      "genericPlaceholder": "Chiedi qualsiasi cosa all’AI…",
+      "add": "Aggiungi",
+      "addToMessage": "Aggiungi al messaggio",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

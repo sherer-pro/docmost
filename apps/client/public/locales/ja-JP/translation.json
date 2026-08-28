@@ -1328,6 +1328,8 @@
       "description": "スペースに属するアシスタントの動作を、固定された指示、モデル、厳密なツールアクセスとともに作成します。",
       "selectorLabel": "アシスタントプロファイル",
       "spaceAssistant": "スペースアシスタント",
+      "spaceAssistantDescription": "スペース共通のアシスタント指示とモデル設定を使用します。",
+      "noDescription": "説明は設定されていません。",
       "preferences": "プロファイル設定",
       "makePreferred": "既定で使用",
       "clearPreferred": "優先プロファイルを解除",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "AIアシスタント",
+    "enterFocusMode": "フォーカスモードに切り替える",
+    "exitFocusMode": "フォーカスモードを終了する",
     "titleNamed": {
       "masculine": "アシスタント「{{assistantName}}」",
       "feminine": "アシスタント「{{assistantName}}」"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "翻訳する",
     "generationFailed": "AI生成に失敗しました",
     "composer": {
+      "genericPlaceholder": "AI に何でも質問…",
+      "add": "追加",
+      "addToMessage": "メッセージに追加",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

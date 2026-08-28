@@ -28,7 +28,14 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -70,6 +77,8 @@ interface AiContextPickerProps {
   loadingFiles: boolean;
   saving: boolean;
   saveFailed: boolean;
+  showTrigger?: boolean;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   opened?: boolean;
   onOpenedChange?: (opened: boolean) => void;
   pendingSource?: AiContextSource | null;
@@ -170,7 +179,9 @@ export function AiContextPicker(props: AiContextPickerProps) {
     scopeTarget?.cancel?.();
     resetNavigation();
     props.onOpenedChange?.(false);
-    window.requestAnimationFrame(() => contextButtonRef.current?.focus());
+    window.requestAnimationFrame(() =>
+      (props.returnFocusRef?.current ?? contextButtonRef.current)?.focus(),
+    );
   };
 
   const openManager = () => {
@@ -280,24 +291,26 @@ export function AiContextPicker(props: AiContextPickerProps) {
 
   return (
     <>
-      <Button
-        ref={contextButtonRef}
-        variant="subtle"
-        size="compact-sm"
-        leftSection={<IconPaperclip size={16} />}
-        className={classes.contextButton}
-        aria-label={t("ai.context.triggerLabel", { count: selectedCount })}
-        onClick={openManager}
-      >
-        <span className={classes.contextButtonLabel}>
-          <span className={classes.contextButtonFullLabel}>
-            {t("ai.context.trigger", { count: selectedCount })}
+      {props.showTrigger !== false && (
+        <Button
+          ref={contextButtonRef}
+          variant="subtle"
+          size="compact-sm"
+          leftSection={<IconPaperclip size={16} />}
+          className={classes.contextButton}
+          aria-label={t("ai.context.triggerLabel", { count: selectedCount })}
+          onClick={openManager}
+        >
+          <span className={classes.contextButtonLabel}>
+            <span className={classes.contextButtonFullLabel}>
+              {t("ai.context.trigger", { count: selectedCount })}
+            </span>
+            <span className={classes.contextButtonShortLabel} aria-hidden>
+              {selectedCount}
+            </span>
           </span>
-          <span className={classes.contextButtonShortLabel} aria-hidden>
-            {selectedCount}
-          </span>
-        </span>
-      </Button>
+        </Button>
+      )}
 
       <Modal
         opened={opened}
@@ -1129,10 +1142,9 @@ function DescendantRow({
             onClick={() => setExpanded((value) => !value)}
           >
             expanded ? (
-              <IconChevronDown size={14} />
+            <IconChevronDown size={14} />
             ) : (
-              <IconChevronRight size={14} />
-            )
+            <IconChevronRight size={14} />)
           </AccessibleActionIcon>
         ) : (
           <Box className={classes.contextDescendantToggleSpacer} aria-hidden />

@@ -43,8 +43,21 @@
 }
 
 .conversationBar,
-.conversationSelect {
+.conversationHistoryButton {
   min-width: 0;
+}
+
+.conversationHistoryButton {
+  overflow: hidden;
+  color: var(--mantine-color-text);
+}
+
+.conversationHistoryButton :global(.mantine-Button-label) {
+  min-width: 0;
+}
+
+.conversationHistoryMenu {
+  width: min(360px, calc(100vw - 24px));
 }
 
 .conversationOption {
@@ -61,10 +74,6 @@
   min-width: 0;
 }
 
-.conversationSelect :global(.mantine-Select-input) {
-  text-overflow: ellipsis;
-}
-
 .messagesRegion {
   flex: 1;
   min-height: 0;
@@ -78,9 +87,40 @@
   min-width: 0;
 }
 
-.profileStartButton {
-  flex: 0 0 auto;
-  min-height: 32px;
+.emptyState {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  padding-inline: var(--mantine-spacing-md);
+}
+
+.emptyProfileIcon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-radius: 16px;
+  color: light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3));
+  background: light-dark(
+    var(--mantine-color-blue-0),
+    color-mix(in srgb, var(--mantine-color-blue-9) 28%, transparent)
+  );
+}
+
+.emptyQuickCommands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mantine-spacing-xs);
+  width: 100%;
+  margin-top: var(--mantine-spacing-sm);
+}
+
+.emptyQuickCommand {
+  min-width: 0;
+  height: auto;
+  min-height: 42px;
 }
 
 .jumpToLatest {
@@ -95,26 +135,30 @@
 .composer {
   flex: 0 0 auto;
   min-width: 0;
-  border-top: 1px solid
-    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
-  padding: var(--mantine-spacing-sm);
-  background: light-dark(rgba(255, 255, 255, 0.94), rgba(26, 27, 30, 0.94));
-  backdrop-filter: blur(10px);
+  padding: 4px var(--mantine-spacing-sm) var(--mantine-spacing-sm);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    light-dark(rgba(255, 255, 255, 0.97), rgba(26, 27, 30, 0.97)) 18%
+  );
   container-type: inline-size;
   container-name: ai-composer;
 }
 
 .composerCard {
   min-width: 0;
-  overflow: hidden;
+  position: relative;
+  overflow: visible;
   border: 1px solid
     light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-  border-radius: var(--mantine-radius-md);
+  border-radius: 18px;
   background: light-dark(
     var(--mantine-color-white),
     var(--mantine-color-dark-6)
   );
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 12px 30px rgba(0, 0, 0, 0.06);
   transition:
     border-color 120ms ease,
     box-shadow 120ms ease;
@@ -132,19 +176,34 @@
     );
 }
 
-.composerToolbar {
+.composerContextRail {
   min-width: 0;
-  min-height: 44px;
-  padding: 6px 8px;
-  background: light-dark(
-    color-mix(in srgb, var(--mantine-color-gray-0) 72%, transparent),
-    color-mix(in srgb, var(--mantine-color-dark-7) 70%, transparent)
-  );
+  padding: 10px 10px 0;
 }
 
-.composerToolbarStart {
-  flex: 1 1 auto;
+.contextChipRow {
   min-width: 0;
+  overflow: hidden;
+}
+
+.contextChip,
+.contextOverflowChip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  border-radius: var(--mantine-radius-xl);
+}
+
+.contextChip :global(.mantine-Button-label),
+.contextChipLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextOverflowChip {
+  flex: 0 0 auto;
 }
 
 .contextButton {
@@ -218,6 +277,10 @@
   min-width: 220px;
 }
 
+.composerAddMenu {
+  min-width: 244px;
+}
+
 .quickCommandsMenu {
   max-height: min(360px, 50vh);
   overflow-y: auto;
@@ -230,15 +293,13 @@
 
 .composerEditor {
   min-width: 0;
-  border-block: 1px solid
-    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
 }
 
 .markdownComposer :global(.ProseMirror) {
-  min-height: 72px;
-  max-height: 220px;
+  min-height: 88px;
+  max-height: min(280px, 38dvh);
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 14px 16px 10px;
   outline: none;
   color: var(--mantine-color-text);
   font-size: var(--mantine-font-size-sm);
@@ -374,18 +435,58 @@
 
 .composerFooter {
   min-width: 0;
-  min-height: 48px;
-  padding: 6px 8px;
+  min-height: 52px;
+  padding: 6px 10px 8px;
 }
 
-.composerFooter[data-busy="true"] {
-  justify-content: space-between;
+.composerAddButton,
+.composerModeButton {
+  flex: 0 0 auto;
+}
+
+.composerAddButton {
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+}
+
+.composerModeButton {
+  min-height: 32px;
+  padding-inline: 8px;
+  color: var(--mantine-color-dimmed);
+}
+
+.slashPalette {
+  position: absolute;
+  z-index: 12;
+  inset-inline: 8px;
+  inset-block-end: calc(100% + 8px);
+  display: grid;
+  gap: 2px;
+  max-height: min(360px, 50dvh);
+  overflow-y: auto;
+  border-radius: var(--mantine-radius-lg);
+  padding: 6px;
+  background: light-dark(
+    var(--mantine-color-white),
+    var(--mantine-color-dark-7)
+  );
+}
+
+.slashCommand {
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  padding-block: 6px;
+}
+
+.slashCommand :global(.mantine-Button-inner),
+.slashCommand :global(.mantine-Button-label) {
+  width: 100%;
 }
 
 .composerProfileGroup {
-  flex: 1 1 auto;
+  flex: 1 1 220px;
   min-width: 0;
-  max-width: 180px;
+  max-width: 280px;
 }
 
 .composerProfileButton {
@@ -393,7 +494,7 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 32px;
-  max-width: 180px;
+  max-width: 280px;
   padding-inline: 10px;
   background: light-dark(
     var(--mantine-color-gray-0),
@@ -413,10 +514,39 @@
 }
 
 .composerProfileMenu {
-  min-width: 260px;
-  max-width: min(320px, calc(100vw - 24px));
-  max-height: min(360px, 50vh);
+  width: min(360px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(480px, 60vh);
   overflow-y: auto;
+}
+
+.composerProfileMenuItem {
+  min-height: 58px;
+  align-items: flex-start;
+}
+
+.composerProfileMenuItem :global(.mantine-Menu-itemSection) {
+  align-self: flex-start;
+  margin-top: 3px;
+}
+
+.composerProfileOptionContent {
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+  white-space: normal;
+}
+
+.mobileProfileOptionButton {
+  height: auto;
+  min-height: 58px;
+  padding-block: 8px;
+}
+
+.mobileProfileOptionButton :global(.mantine-Button-inner),
+.mobileProfileOptionButton :global(.mantine-Button-label) {
+  width: 100%;
+  min-width: 0;
 }
 
 .composerProfileMenuItem[data-selected="true"] {
@@ -427,11 +557,6 @@
   );
 }
 
-.composerFooterButton {
-  flex: 0 0 auto;
-  min-height: 32px;
-}
-
 .composerRunStatus {
   flex: 1 1 auto;
   min-width: 0;
@@ -440,15 +565,11 @@
   white-space: nowrap;
 }
 
-.composerStopButton {
-  flex: 0 0 auto;
-  min-height: 32px;
-  white-space: nowrap;
-}
-
 .composerStatus {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 40%;
+  margin-inline-start: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -887,37 +1008,9 @@
 }
 
 @container ai-composer (max-width: 420px) {
-  .composerToolbar,
   .composerFooter {
     gap: 6px;
     padding-inline: 6px;
-  }
-
-  .composerToolbarStart {
-    flex: 1 1 auto;
-    gap: 4px;
-  }
-
-  .composerToolbar {
-    flex-wrap: wrap !important;
-  }
-
-  .composerToolbarEnd {
-    display: contents;
-  }
-
-  .contextButton {
-    min-width: 44px;
-    min-height: 44px;
-    max-width: 88px;
-  }
-
-  .contextButtonFullLabel {
-    display: none;
-  }
-
-  .contextButtonShortLabel {
-    display: inline;
   }
 
   .sendShortcutFull,
@@ -925,9 +1018,8 @@
     display: none;
   }
 
-  .composerSearchSwitch,
-  .composerInlineAction,
-  .composerFooterButton,
+  .composerAddButton,
+  .composerModeButton,
   .sendButton {
     min-width: 44px;
     min-height: 44px;
@@ -936,7 +1028,7 @@
   .composerProfileButton {
     min-width: 44px;
     min-height: 44px;
-    max-width: 140px;
+    max-width: 128px;
   }
 
   .composerProfileButton
@@ -944,20 +1036,8 @@
     display: none;
   }
 
-  .composerFooterButton
-    :global(.mantine-Button-section[data-position="right"]) {
+  .composerModeButton :global(.mantine-Button-section[data-position="right"]) {
     display: none;
-  }
-
-  .composerModeControl {
-    order: -1;
-    flex: 1 0 100%;
-    width: 100%;
-  }
-
-  .composerModeControl :global(.mantine-SegmentedControl-control) {
-    flex: 1 1 50%;
-    min-height: 44px;
   }
 
   .composerStatus {
@@ -966,34 +1046,28 @@
 }
 
 @container ai-composer (max-width: 520px) {
-  .composerFooterButton .composerResponsiveLabel,
   .sendShortcutFull,
   .sendShortcutShort {
     display: none;
   }
+}
 
-  .composerFooterButton {
-    width: 32px;
-    min-width: 32px;
-    padding-inline: 0;
+@container ai-composer (min-width: 620px) {
+  .markdownComposer :global(.ProseMirror) {
+    min-height: 112px;
+    max-height: min(360px, 44dvh);
+    font-size: var(--mantine-font-size-md);
   }
 
-  .composerFooterButton :global(.mantine-Button-section[data-position="left"]) {
-    margin-inline-end: 0;
-  }
-
-  .composerFooterButton
-    :global(.mantine-Button-section[data-position="right"]) {
-    display: none;
+  .contextChip {
+    max-width: 240px;
   }
 }
 
 @media (pointer: coarse) {
-  .composerSearchSwitch,
-  .composerInlineAction,
   .composerProfileButton,
-  .composerFooterButton,
-  .composerStopButton,
+  .composerAddButton,
+  .composerModeButton,
   .sendButton {
     min-width: 44px;
     min-height: 44px;
@@ -1006,21 +1080,15 @@
   }
 
   .conversationBar > button,
-  .composerSearchSwitch,
-  .composerFooterButton,
-  .composerStopButton,
+  .composerAddButton,
+  .composerModeButton,
   .sendButton {
     min-width: 44px;
     min-height: 44px;
   }
 
-  .composerInlineAction {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .contextButton {
-    min-height: 44px;
+  .emptyQuickCommands {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

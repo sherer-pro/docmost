@@ -29,6 +29,10 @@ export const aiLastEditorContextAtom = atom<
 
 export const aiUnreadRunsAtom = atom<Record<string, number>>({});
 
+// Focus mode is intentionally session-only. Leaving the panel restores the
+// user's persisted docked width instead of replacing that preference.
+export const aiFocusModeAtom = atom(false);
+
 export const aiActivityAtom = atom<Record<string, AiActivityItem>>({});
 
 export const aiActiveConversationByPageAtom = atom<
