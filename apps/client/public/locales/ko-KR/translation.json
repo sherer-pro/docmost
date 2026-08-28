@@ -1328,6 +1328,8 @@
       "description": "고정된 지침, 모델 및 정확한 도구 접근 권한으로 이 공간에 속한 어시스턴트 동작을 만드세요.",
       "selectorLabel": "어시스턴트 프로필",
       "spaceAssistant": "공간 어시스턴트",
+      "spaceAssistantDescription": "스페이스 공통 어시스턴트 지침과 모델 설정을 사용합니다.",
+      "noDescription": "설명이 없습니다.",
       "preferences": "프로필 환경설정",
       "makePreferred": "기본값으로 사용",
       "clearPreferred": "선호 프로필 해제",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "AI 비서",
+    "enterFocusMode": "집중 모드로 전환",
+    "exitFocusMode": "집중 모드 종료",
     "titleNamed": {
       "masculine": "어시스턴트 ‘{{assistantName}}’",
       "feminine": "어시스턴트 ‘{{assistantName}}’"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "번역하다",
     "generationFailed": "AI 생성 실패",
     "composer": {
+      "genericPlaceholder": "AI에게 무엇이든 물어보세요…",
+      "add": "추가",
+      "addToMessage": "메시지에 추가",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

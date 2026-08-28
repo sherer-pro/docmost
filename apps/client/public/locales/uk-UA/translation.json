@@ -1328,6 +1328,8 @@
       "description": "Створюйте належні простору варіанти поведінки помічника із зафіксованими інструкціями, моделями й точним доступом до інструментів.",
       "selectorLabel": "Профіль помічника",
       "spaceAssistant": "Помічник простору",
+      "spaceAssistantDescription": "Використовує спільні інструкції помічника та налаштування моделі простору.",
+      "noDescription": "Опис не задано.",
       "preferences": "Налаштування профілів",
       "makePreferred": "Використовувати за замовчуванням",
       "clearPreferred": "Скинути бажаний профіль",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "ШІ помічник",
+    "enterFocusMode": "Перейти в режим фокусування",
+    "exitFocusMode": "Вийти з режиму фокусування",
     "titleNamed": {
       "masculine": "Помічник «{{assistantName}}»",
       "feminine": "Помічниця «{{assistantName}}»"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Перекласти",
     "generationFailed": "Генерація ШІ не вдалася",
     "composer": {
+      "genericPlaceholder": "Запитайте AI про що завгодно…",
+      "add": "Додати",
+      "addToMessage": "Додати до повідомлення",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

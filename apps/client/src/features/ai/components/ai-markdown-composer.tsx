@@ -17,6 +17,7 @@ export function AiMarkdownComposer({
   value,
   onChange,
   onSubmit,
+  onKeyDown,
   onEditorChange,
   ariaLabel,
   placeholder,
@@ -24,12 +25,14 @@ export function AiMarkdownComposer({
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onKeyDown?: (event: KeyboardEvent) => boolean;
   onEditorChange?: (editor: Editor | null) => void;
   ariaLabel: string;
   placeholder: string;
 }) {
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
+  const onKeyDownRef = useRef(onKeyDown);
   const lastValueRef = useRef(value);
 
   useEffect(() => {
@@ -39,6 +42,10 @@ export function AiMarkdownComposer({
   useEffect(() => {
     onSubmitRef.current = onSubmit;
   }, [onSubmit]);
+
+  useEffect(() => {
+    onKeyDownRef.current = onKeyDown;
+  }, [onKeyDown]);
 
   const editor = useEditor({
     extensions: createAiMarkdownComposerExtensions(placeholder),
@@ -60,6 +67,10 @@ export function AiMarkdownComposer({
         return insertMarkdownAtSelection(view, text);
       },
       handleKeyDown: (_view, event) => {
+        if (onKeyDownRef.current?.(event)) {
+          return true;
+        }
+
         if (shouldSubmitAiComposer(event)) {
           event.preventDefault();
           onSubmitRef.current();

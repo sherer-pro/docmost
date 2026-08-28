@@ -1,6 +1,8 @@
 export type AiComposerProfileOption = {
   value: string;
   label: string;
+  description?: string | null;
+  disabled?: boolean;
 };
 
 export type AiConversationProfileDisplay = {
@@ -19,6 +21,26 @@ type ResolveAiComposerProfileLabelOptions = {
 };
 
 export const AI_LEGACY_SPACE_PROFILE_VALUE = "__legacy_space__";
+
+export function resolveAiComposerProfileDescription(
+  description: string | null | undefined,
+  fallback: string,
+): string {
+  return description?.trim() || fallback;
+}
+
+export function matchesAiComposerProfileOption(
+  option: AiComposerProfileOption,
+  query: string,
+  locale: string,
+): boolean {
+  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
+  if (!normalizedQuery) return true;
+
+  return `${option.label} ${option.description ?? ""}`
+    .toLocaleLowerCase(locale)
+    .includes(normalizedQuery);
+}
 
 export function resolveActiveAiComposerProfileOptionLabel(
   activeProfile: { name?: string | null; version?: number | null },

@@ -17,6 +17,7 @@ import Aside from "@/components/layouts/global/aside.tsx";
 import classes from "./app-shell.module.css";
 import { PageFrame } from "@/components/ui/page-frame.tsx";
 import {
+  getAiFocusAsideLayout,
   getAsidePresentationMode,
   getShellVisibilityState,
 } from "@/components/layouts/global/global-app-shell.utils.ts";
@@ -28,6 +29,13 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 import { useModalBackgroundInert } from "@/components/ui/use-modal-background-inert.ts";
+import { aiFocusModeAtom } from "@/features/ai/atoms/ai-atoms.ts";
+import {
+  AI_PANEL_MAX_WIDTH,
+  AI_PANEL_MIN_WIDTH,
+  clampAiPanelWidth,
+  getAiPanelWidthForKey,
+} from "@/features/ai/utils/ai-policies.ts";
 
 export default function GlobalAppShell({
   children,
@@ -43,6 +51,7 @@ export default function GlobalAppShell({
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const [asideState] = useAtom(asideStateAtom);
   const setAsideState = useSetAtom(asideStateAtom);
+  const [aiFocusMode, setAiFocusMode] = useAtom(aiFocusModeAtom);
   const { isAsideOpen } = asideState;
   const fullscreenAsideTitle =
     asideState.tab === "comments"
@@ -54,6 +63,7 @@ export default function GlobalAppShell({
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
   const [isAsideResizing, setIsAsideResizing] = useState(false);
+  const isAsideResizingRef = useRef(false);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
   const isMobileViewport = useMediaQuery("(max-width: 48em)");
@@ -67,17 +77,15 @@ export default function GlobalAppShell({
 
   const stopResizing = React.useCallback(() => {
     setIsResizing(false);
+    isAsideResizingRef.current = false;
     setIsAsideResizing(false);
   }, []);
 
   const resize = React.useCallback(
     (mouseMoveEvent) => {
-      if (isAsideResizing) {
+      if (isAsideResizingRef.current) {
         setAsideWidth(
-          Math.min(
-            520,
-            Math.max(360, window.innerWidth - mouseMoveEvent.clientX),
-          ),
+          clampAiPanelWidth(window.innerWidth - mouseMoveEvent.clientX),
         );
         return;
       }
@@ -101,13 +109,68 @@ export default function GlobalAppShell({
         setSidebarWidth(newWidth);
       }
     },
-    [isAsideResizing, isResizing, setAsideWidth],
+    [isResizing, setAsideWidth, setSidebarWidth],
   );
 
-  const startAsideResizing = React.useCallback((mouseDownEvent) => {
-    mouseDownEvent.preventDefault();
-    setIsAsideResizing(true);
-  }, []);
+  const startAsideResizing = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      isAsideResizingRef.current = true;
+      setIsAsideResizing(true);
+    },
+    [],
+  );
+
+  const startAsideMouseResizing = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      isAsideResizingRef.current = true;
+      setIsAsideResizing(true);
+    },
+    [],
+  );
+
+  const resizeAside = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      setAsideWidth(clampAiPanelWidth(window.innerWidth - event.clientX));
+    },
+    [setAsideWidth],
+  );
+
+  const stopAsideResizing = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      isAsideResizingRef.current = false;
+      setIsAsideResizing(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isAsideResizing) {
+      return;
+    }
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [isAsideResizing]);
 
   useEffect(() => {
     //https://codesandbox.io/p/sandbox/kz9de
@@ -140,17 +203,46 @@ export default function GlobalAppShell({
   const hideSidebar = isHomeRoute || isSpacesRoute;
   const isDesktopSidebarVisible =
     !isMobileViewport && desktopOpened && !hideSidebar;
-  const asideMode = getAsidePresentationMode({
+  const isAiFocusMode = aiFocusMode && asideState.tab === "ai";
+  const focusLayout = getAiFocusAsideLayout({
     viewportWidth,
     sidebarWidth: isSpaceRoute ? sidebarWidth : 300,
-    asideWidth,
     isSidebarVisible: isDesktopSidebarVisible,
   });
+  const renderedAsideWidth = isAiFocusMode ? focusLayout.width : asideWidth;
+  const asideMode = isAiFocusMode
+    ? focusLayout.mode
+    : getAsidePresentationMode({
+        viewportWidth,
+        sidebarWidth: isSpaceRoute ? sidebarWidth : 300,
+        asideWidth,
+        isSidebarVisible: isDesktopSidebarVisible,
+      });
   const isDockedAside = asideMode === "docked";
   const isOverlayAside = asideMode === "overlay";
   useModalBackgroundInert(
     shouldShowAside && asideMode === "fullscreen" && isAsideOpen,
   );
+
+  useEffect(() => {
+    if (!isAsideOpen || asideState.tab !== "ai") {
+      setAiFocusMode(false);
+    }
+  }, [asideState.tab, isAsideOpen, setAiFocusMode]);
+
+  useEffect(() => {
+    if (!isAiFocusMode || asideMode !== "docked") {
+      return;
+    }
+
+    const exitFocusMode = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        setAiFocusMode(false);
+      }
+    };
+    window.addEventListener("keydown", exitFocusMode);
+    return () => window.removeEventListener("keydown", exitFocusMode);
+  }, [asideMode, isAiFocusMode, setAiFocusMode]);
   const { isNavbarHidden, isAsideHidden } = getShellVisibilityState({
     isMobileViewport: Boolean(isMobileViewport),
     mobileOpened,
@@ -204,7 +296,7 @@ export default function GlobalAppShell({
         aside={
           shouldShowAside &&
           isDockedAside && {
-            width: asideWidth,
+            width: renderedAsideWidth,
             breakpoint: "sm",
             collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
           }
@@ -251,57 +343,68 @@ export default function GlobalAppShell({
           )}
         </AppShell.Main>
 
-        {shouldShowAside && isDockedAside && (
+        {shouldShowAside && asideMode !== "fullscreen" && (
           <AppShell.Aside
             id="docmost-context-aside"
-            className={classes.aside}
+            className={isOverlayAside ? classes.overlayAside : classes.aside}
             p={0}
             withBorder={false}
             ref={asideRef}
             aria-hidden={isAsideHidden || undefined}
+            data-presentation-mode={asideMode}
+            data-resizing={isAsideResizing || undefined}
+            style={
+              isOverlayAside
+                ? {
+                    width: `${asideWidth}px`,
+                    transform: isAsideOpen
+                      ? "translateX(0)"
+                      : "translateX(100%)",
+                  }
+                : undefined
+            }
           >
-            <div
-              className={classes.asideResizeHandle}
-              onMouseDown={startAsideResizing}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t("ai.resizePanel")}
-              aria-valuemin={360}
-              aria-valuemax={520}
-              aria-valuenow={asideWidth}
-              tabIndex={0}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") {
-                  setAsideWidth(Math.min(520, asideWidth + 10));
-                }
-                if (event.key === "ArrowRight") {
-                  setAsideWidth(Math.max(360, asideWidth - 10));
-                }
-              }}
-            />
+            {!isAiFocusMode && (
+              <div
+                className={classes.asideResizeHandle}
+                onPointerDown={startAsideResizing}
+                onPointerMove={resizeAside}
+                onPointerUp={stopAsideResizing}
+                onPointerCancel={stopAsideResizing}
+                onMouseDown={startAsideMouseResizing}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("ai.resizePanel")}
+                aria-valuemin={AI_PANEL_MIN_WIDTH}
+                aria-valuemax={AI_PANEL_MAX_WIDTH}
+                aria-valuenow={asideWidth}
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  const nextWidth = getAiPanelWidthForKey(
+                    asideWidth,
+                    event.key,
+                  );
+                  if (nextWidth !== null) {
+                    event.preventDefault();
+                    setAsideWidth(nextWidth);
+                  }
+                }}
+              />
+            )}
             <Aside />
           </AppShell.Aside>
-        )}
-
-        {shouldShowAside && isOverlayAside && (
-          <aside
-            id="docmost-context-aside"
-            className={classes.overlayAside}
-            aria-hidden={!isAsideOpen || undefined}
-            style={{
-              width: "clamp(360px, 42vw, 480px)",
-              transform: isAsideOpen ? "translateX(0)" : "translateX(100%)",
-            }}
-            ref={asideRef}
-          >
-            <Aside />
-          </aside>
         )}
 
         {shouldShowAside && asideMode === "fullscreen" && (
           <Drawer
             opened={isAsideOpen}
-            onClose={() => setAsideState({ ...asideState, isAsideOpen: false })}
+            onClose={() => {
+              if (isAiFocusMode) {
+                setAiFocusMode(false);
+                return;
+              }
+              setAsideState({ ...asideState, isAsideOpen: false });
+            }}
             position="right"
             size="100%"
             withCloseButton={false}

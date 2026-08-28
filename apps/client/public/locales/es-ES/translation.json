@@ -1328,6 +1328,8 @@
       "description": "Crea comportamientos del asistente propios del espacio con instrucciones, modelos y acceso exacto a herramientas fijados.",
       "selectorLabel": "Perfil del asistente",
       "spaceAssistant": "Asistente del espacio",
+      "spaceAssistantDescription": "Usa las instrucciones y la configuración del modelo del asistente del espacio.",
+      "noDescription": "No se proporcionó una descripción.",
       "preferences": "Preferencias de perfiles",
       "makePreferred": "Usar de forma predeterminada",
       "clearPreferred": "Restablecer el perfil preferido",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "asistente de IA",
+    "enterFocusMode": "Entrar en modo de enfoque",
+    "exitFocusMode": "Salir del modo de enfoque",
     "titleNamed": {
       "masculine": "El asistente «{{assistantName}}»",
       "feminine": "La asistente «{{assistantName}}»"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Traducir",
     "generationFailed": "La generación de IA falló",
     "composer": {
+      "genericPlaceholder": "Pregunta cualquier cosa a la IA…",
+      "add": "Añadir",
+      "addToMessage": "Añadir al mensaje",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",

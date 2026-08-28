@@ -1328,6 +1328,8 @@
       "description": "Создавайте принадлежащие пространству варианты поведения помощника с зафиксированными инструкциями, моделями и точным доступом к инструментам.",
       "selectorLabel": "Профиль помощника",
       "spaceAssistant": "Помощник пространства",
+      "spaceAssistantDescription": "Использует общие инструкции и настройки модели пространства.",
+      "noDescription": "Описание не задано.",
       "preferences": "Настройки профилей",
       "makePreferred": "Использовать по умолчанию",
       "clearPreferred": "Сбросить предпочтительный профиль",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Пространство не найдено"
     },
     "title": "ИИ-помощник",
+    "enterFocusMode": "Перейти в фокус-режим",
+    "exitFocusMode": "Выйти из фокус-режима",
     "titleNamed": {
       "masculine": "Помощник «{{assistantName}}»",
       "feminine": "Помощница «{{assistantName}}»"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Перевести",
     "generationFailed": "Не удалось создать ответ",
     "composer": {
+      "genericPlaceholder": "Спросите AI о чём угодно…",
+      "add": "Добавить",
+      "addToMessage": "Добавить к сообщению",
       "spaceSearchShort": "Поиск",
       "sendShortcut": "Enter — отправить · Shift+Enter — новая строка",
       "sendShortcutShort": "Enter — отправить",

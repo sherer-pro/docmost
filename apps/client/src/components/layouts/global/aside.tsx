@@ -10,12 +10,18 @@ import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { AiPanel } from "@/features/ai/components/ai-panel.tsx";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 import classes from "./app-shell.module.css";
+import { aiFocusModeAtom } from "@/features/ai/atoms/ai-atoms.ts";
+import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon.tsx";
+import { IconArrowsMaximize, IconArrowsMinimize } from "@tabler/icons-react";
+import { useMediaQuery } from "@mantine/hooks";
 
 export default function Aside() {
   const [{ tab }, setAsideState] = useAtom(asideStateAtom);
+  const [aiFocusMode, setAiFocusMode] = useAtom(aiFocusModeAtom);
   const { t } = useTranslation();
   const assistantIdentity = useAiAssistantIdentity();
   const pageEditor = useAtomValue(pageEditorAtom);
+  const isMobileViewport = useMediaQuery("(max-width: 48em)");
 
   let title: string;
   let component: ReactNode;
@@ -54,12 +60,32 @@ export default function Aside() {
             <Text fw={500} truncate title={title} style={{ minWidth: 0 }}>
               {title}
             </Text>
-            <CloseButton
-              aria-label={t("Close panel")}
-              size="md"
-              className={classes.panelClose}
-              onClick={() => setAsideState({ tab, isAsideOpen: false })}
-            />
+            <Group gap={4} wrap="nowrap">
+              {tab === "ai" && !isMobileViewport && (
+                <AccessibleActionIcon
+                  label={t(
+                    aiFocusMode ? "ai.exitFocusMode" : "ai.enterFocusMode",
+                  )}
+                  variant="subtle"
+                  onClick={() => setAiFocusMode((current) => !current)}
+                >
+                  {aiFocusMode ? (
+                    <IconArrowsMinimize size={18} />
+                  ) : (
+                    <IconArrowsMaximize size={18} />
+                  )}
+                </AccessibleActionIcon>
+              )}
+              <CloseButton
+                aria-label={t("Close panel")}
+                size="md"
+                className={classes.panelClose}
+                onClick={() => {
+                  setAiFocusMode(false);
+                  setAsideState({ tab, isAsideOpen: false });
+                }}
+              />
+            </Group>
           </Group>
 
           <Box

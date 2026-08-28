@@ -76,7 +76,8 @@ const AI_ERROR_TRANSLATION_KEYS: Record<string, string> = {
   external_mcp_unavailable: "ai.errorReason.externalMcpUnavailable",
   external_mcp_timeout: "ai.errorReason.externalMcpTimeout",
   external_mcp_invalid_response: "ai.errorReason.externalMcpInvalidResponse",
-  external_mcp_namespace_conflict: "ai.errorReason.externalMcpNamespaceConflict",
+  external_mcp_namespace_conflict:
+    "ai.errorReason.externalMcpNamespaceConflict",
   external_mcp_headers_conflict: "ai.errorReason.externalMcpHeadersConflict",
   external_mcp_tool_not_approved: "ai.errorReason.externalMcpToolNotApproved",
   external_mcp_not_opted_in: "ai.errorReason.externalMcpNotOptedIn",
@@ -201,11 +202,34 @@ export function getAiApplyPolicy(
   };
 }
 
+export const AI_PANEL_MIN_WIDTH = 360;
+export const AI_PANEL_MAX_WIDTH = 600;
+export const AI_PANEL_RESIZE_STEP = 10;
+
 export function clampAiPanelWidth(value: unknown, fallback = 400): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
   }
-  return Math.min(520, Math.max(360, value));
+  return Math.min(AI_PANEL_MAX_WIDTH, Math.max(AI_PANEL_MIN_WIDTH, value));
+}
+
+export function getAiPanelWidthForKey(
+  currentWidth: number,
+  key: string,
+): number | null {
+  if (key === "ArrowLeft") {
+    return clampAiPanelWidth(currentWidth + AI_PANEL_RESIZE_STEP);
+  }
+  if (key === "ArrowRight") {
+    return clampAiPanelWidth(currentWidth - AI_PANEL_RESIZE_STEP);
+  }
+  if (key === "Home") {
+    return AI_PANEL_MIN_WIDTH;
+  }
+  if (key === "End") {
+    return AI_PANEL_MAX_WIDTH;
+  }
+  return null;
 }
 
 export interface AiPanelProfilePreference {

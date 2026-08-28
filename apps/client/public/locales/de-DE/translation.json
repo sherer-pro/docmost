@@ -1328,6 +1328,8 @@
       "description": "Erstellen Sie raumeigene Assistentenverhalten mit festgelegten Anweisungen, Modellen und genau definiertem Werkzeugzugriff.",
       "selectorLabel": "Assistentenprofil",
       "spaceAssistant": "Raumassistent",
+      "spaceAssistantDescription": "Verwendet die allgemeinen Assistentenanweisungen und Modelleinstellungen des Bereichs.",
+      "noDescription": "Keine Beschreibung angegeben.",
       "preferences": "Profileinstellungen",
       "makePreferred": "Standardmäßig verwenden",
       "clearPreferred": "Bevorzugtes Profil zurücksetzen",
@@ -1880,6 +1882,8 @@
       "spaceNotFound": "Space not found"
     },
     "title": "KI-Assistent",
+    "enterFocusMode": "Fokusmodus öffnen",
+    "exitFocusMode": "Fokusmodus verlassen",
     "titleNamed": {
       "masculine": "Assistent „{{assistantName}}“",
       "feminine": "Assistentin „{{assistantName}}“"
@@ -1979,6 +1983,9 @@
     "commandTranslate": "Übersetzen",
     "generationFailed": "Die KI-Generierung ist fehlgeschlagen",
     "composer": {
+      "genericPlaceholder": "Frage die KI nach etwas…",
+      "add": "Hinzufügen",
+      "addToMessage": "Zur Nachricht hinzufügen",
       "spaceSearchShort": "Search",
       "sendShortcut": "Enter to send · Shift+Enter for a new line",
       "sendShortcutShort": "Enter to send",
