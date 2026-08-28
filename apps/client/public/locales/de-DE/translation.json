@@ -1369,7 +1369,31 @@
         "briefcase": "Aktentasche",
         "code": "Programmcode",
         "language": "Sprache",
-        "search": "Suche"
+        "search": "Suche",
+        "messages": "Unterhaltungen",
+        "pencil": "Schreiben",
+        "bulb": "Ideen",
+        "school": "Bildung",
+        "microscope": "Forschung",
+        "chart": "Analyse",
+        "calculator": "Berechnungen",
+        "palette": "Gestaltung",
+        "camera": "Fotografie",
+        "music": "Musik",
+        "heart": "Fürsorge",
+        "shield": "Sicherheit",
+        "scale": "Recht",
+        "building": "Unternehmen",
+        "stethoscope": "Medizin",
+        "leaf": "Natur",
+        "world": "Welt",
+        "rocket": "Start",
+        "target": "Ziele",
+        "puzzle": "Problemlösung",
+        "database": "Daten",
+        "document": "Dokumente",
+        "calendar": "Planung",
+        "mail": "Kommunikation"
       },
       "section": {
         "basics": "Allgemein",
@@ -1614,7 +1638,7 @@
           },
           "success": "Eine Testantwort wird abgeschlossen; Agent listet nur zulässige Tools auf und fragt vor dem Schreiben",
           "rollback": "Deaktivieren Sie Agent oder das Weltraummodell und stellen Sie dann die letzten als funktionierend bekannten Einstellungen wieder her",
-          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern. Die gemeinsame Wissensprojektion ergänzt AI-Suche und Werkzeugkontext um aktivierte Dokument- und benutzerdefinierte Felder, benannte Datenbankeigenschaften und -zellen sowie aktive Wörterbuchbegriffe (`dictionary_term`)."
+          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern. Die gemeinsame Wissensprojektion ergänzt AI-Suche und Werkzeugkontext um aktivierte Dokument- und benutzerdefinierte Felder, benannte Datenbankeigenschaften und -zellen sowie aktive Wörterbuchbegriffe (`dictionary_term`). Der kuratierte Vertrag `AI_ASSISTANT_PROFILE_ICONS` bietet {{profileIconCount}} lokalisierte Symboloptionen, die im Profil-Editor und Chatbereich einheitlich dargestellt werden."
         },
         "retrieval": {
           "description": "Die Bereichssuche wird während der Generierung einer Antwort ausgeführt.",

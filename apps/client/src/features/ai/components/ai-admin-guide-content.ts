@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { AI_ASSISTANT_PROFILE_ICONS } from "@docmost/api-contract";
 import guideContract from "./ai-admin-guide-contract.json";
 
 export const AI_ADMIN_GUIDE_CONTRACT_VERSION = guideContract.version;
@@ -86,6 +87,7 @@ export type AiAdminGuideScenario = {
   controls: readonly AiAdminGuideCopyValue[];
   stepKeys?: readonly string[];
   showKnowledgeAccessPolicy?: boolean;
+  profileIconCount?: number;
 };
 
 export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
@@ -97,6 +99,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     diagram: null,
     controls: [{ kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" }],
     stepKeys: ["step1", "step2", "step3", "step4"],
+    profileIconCount: AI_ASSISTANT_PROFILE_ICONS.length,
   },
   {
     anchor: "retrieval",

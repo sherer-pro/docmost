@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 16 -->
+<!-- ai-admin-guide-contract-version: 17 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -259,15 +259,18 @@ origin, credential, headers, retrieval configuration, retention rule, context
 window, or usage limit. The current encrypted space credential is used only
 when the frozen provider origin still equals the current configured origin.
 
-Each profile has a stable ID, version, curated icon, name, description,
-required instructions, optional quick-command replacement, optional provider
-overrides, exact built-in capability IDs, exact external `bindingId + toolName`
-rows, group availability/narrowing, `autoStart`, and an optional visible launch
-message. `quickCommands=null` inherits space custom commands; an array replaces
-them, while built-ins remain available. No external rows means no external MCP
-for that profile. Names are unique case-insensitively among non-deleted profiles
-in one space, at most fifty active rows are allowed, updates require
-`expectedVersion`, and normal deletion is soft.
+Each profile has a stable ID, version, one of the 32 curated icons declared by
+`AI_ASSISTANT_PROFILE_ICONS`, name, description, required instructions,
+optional quick-command replacement, optional provider overrides, exact built-in
+capability IDs, exact external `bindingId + toolName` rows, group
+availability/narrowing, `autoStart`, and an optional visible launch message.
+Icon identifiers are stable wire/storage values; the editor and chat panel use
+one shared renderer, while accessible icon names are localized. Existing icon
+identifiers remain valid. `quickCommands=null` inherits space custom commands;
+an array replaces them, while built-ins remain available. No external rows
+means no external MCP for that profile. Names are unique case-insensitively
+among non-deleted profiles in one space, at most fifty active rows are allowed,
+updates require `expectedVersion`, and normal deletion is soft.
 
 The space-scoped profile-list response includes the effective
 `modelOverridesEnabled` policy. This lets a space manager edit overrides that

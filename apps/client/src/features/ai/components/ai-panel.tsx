@@ -23,15 +23,12 @@ import {
   IconAlertTriangle,
   IconArrowDown,
   IconBook,
-  IconBrain,
-  IconBriefcase,
   IconCheck,
   IconChevronDown,
   IconCode,
   IconDots,
   IconEye,
   IconEyeOff,
-  IconLanguage,
   IconFileText,
   IconMessageCircle,
   IconMessagePlus,
@@ -96,7 +93,6 @@ import {
 } from "@/features/ai/queries/ai-query.ts";
 import {
   AiConversation,
-  AiAssistantProfileIcon,
   AiConversationContext,
   AiContextSource,
   AiDescendantSelection,
@@ -105,6 +101,7 @@ import {
 } from "@/features/ai/types/ai.types.ts";
 import { captureAiEditorContext } from "@/features/ai/utils/editor-context.ts";
 import { AiMessageCard } from "./ai-message-card.tsx";
+import { AiAssistantProfileIcon as AssistantProfileIcon } from "./ai-assistant-profile-icon.tsx";
 import { AiMarkdownComposer } from "./ai-markdown-composer.tsx";
 import { insertMarkdownAtSelection } from "./ai-markdown-composer.extensions.ts";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
@@ -3241,34 +3238,6 @@ export function AiPanel() {
       </Drawer>
     </Stack>
   );
-}
-
-function AssistantProfileIcon({
-  icon,
-  size,
-}: {
-  icon: AiAssistantProfileIcon;
-  size: number;
-}) {
-  const props = { size, "aria-hidden": true } as const;
-  switch (icon) {
-    case "robot":
-      return <IconRobot {...props} />;
-    case "brain":
-      return <IconBrain {...props} />;
-    case "book":
-      return <IconBook {...props} />;
-    case "briefcase":
-      return <IconBriefcase {...props} />;
-    case "code":
-      return <IconCode {...props} />;
-    case "language":
-      return <IconLanguage {...props} />;
-    case "search":
-      return <IconSearch {...props} />;
-    default:
-      return <IconSparkles {...props} />;
-  }
 }
 
 function AiStreamingPlaceholder({

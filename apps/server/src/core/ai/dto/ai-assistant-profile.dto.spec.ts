@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { AI_ASSISTANT_PROFILE_ICONS } from '@docmost/api-contract';
 import {
   CreateAiAssistantProfileDto,
   UpdateAiAssistantProfileDto,
@@ -22,6 +23,22 @@ describe('assistant profile DTOs', () => {
   it('accepts a bounded exact-tool profile', async () => {
     const dto = plainToInstance(CreateAiAssistantProfileDto, validProfile);
     await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it('accepts all 32 curated profile icons', async () => {
+    expect(AI_ASSISTANT_PROFILE_ICONS).toHaveLength(32);
+    await expect(
+      Promise.all(
+        AI_ASSISTANT_PROFILE_ICONS.map((icon) =>
+          validate(
+            plainToInstance(CreateAiAssistantProfileDto, {
+              ...validProfile,
+              icon,
+            }),
+          ),
+        ),
+      ),
+    ).resolves.toEqual(AI_ASSISTANT_PROFILE_ICONS.map(() => []));
   });
 
   it('accepts Unicode at the documented string boundaries', async () => {
