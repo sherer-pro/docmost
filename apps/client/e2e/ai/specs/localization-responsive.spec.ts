@@ -20,36 +20,83 @@ test("localized assistant remains operable at desktop, mobile and narrow widths"
     page.getByRole("button", { name: expectedNewChat, exact: true }),
   ).toBeVisible();
 
-  const search = page.getByRole("switch", {
-    name: english
-      ? "Include space search"
-      : "Использовать поиск по пространству",
+  const compactMobile = ["pixel-7", "mobile-webkit"].includes(
+    testInfo.project.name,
+  );
+  const addLabel = english ? "Add" : "Добавить";
+  const addToMessageLabel = english ? "Add to message" : "Добавить к сообщению";
+  const closeLabel = english ? "Close" : "Закрыть";
+  const searchLabel = english ? "Search this space" : "Искать по пространству";
+  const add = page.getByRole("button", { name: addLabel, exact: true });
+  const searchChip = page
+    .getByRole("button", { name: searchLabel, exact: true })
+    .and(page.locator('[aria-pressed="true"]'));
+  const searchWasEnabled = await searchChip.isVisible().catch(() => false);
+
+  const toggleSpaceSearch = async () => {
+    await add.click();
+    if (compactMobile) {
+      const drawer = page.getByRole("dialog", {
+        name: addToMessageLabel,
+        exact: true,
+      });
+      await drawer
+        .getByRole("button", { name: searchLabel, exact: true })
+        .click();
+      await drawer
+        .getByRole("button", { name: closeLabel, exact: true })
+        .click();
+      return;
+    }
+
+    await page
+      .getByRole("menuitem", { name: searchLabel, exact: true })
+      .click();
+  };
+
+  await toggleSpaceSearch();
+  if (searchWasEnabled) {
+    await expect(searchChip).toHaveCount(0);
+  } else {
+    await expect(searchChip).toBeVisible();
+  }
+  await toggleSpaceSearch();
+  if (searchWasEnabled) {
+    await expect(searchChip).toBeVisible();
+  } else {
+    await expect(searchChip).toHaveCount(0);
+  }
+
+  const mode = page.getByRole("button", {
+    name: english ? "Mode" : "Режим",
     exact: true,
   });
-  await expect(search).toBeVisible();
-  const searchWasChecked = await search.isChecked();
-  await search.click();
-  await expect(search).toBeEnabled();
-  await expect(search).toBeChecked({ checked: !searchWasChecked });
-  await search.click();
-  await expect(search).toBeEnabled();
-  await expect(search).toBeChecked({ checked: searchWasChecked });
-
-  const mode = page.getByTestId("ai-composer-mode");
+  await expect(mode).toBeVisible();
+  await mode.click();
   await expect(
-    mode.getByText(english ? "Chat" : "Чат", { exact: true }),
+    page.getByRole("menuitem", {
+      name: english ? "Chat" : "Чат",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    mode.getByText(english ? "Agent" : "Агент", { exact: true }),
+    page.getByRole("menuitem", {
+      name: english ? "Agent" : "Агент",
+      exact: true,
+    }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
 
-  if (["pixel-7", "mobile-webkit"].includes(testInfo.project.name)) {
-    const toolbar = page.getByTestId("ai-composer-toolbar");
-    const modeBox = await mode.boundingBox();
-    const toolbarBox = await toolbar.boundingBox();
-    expect(modeBox?.width).toBeGreaterThanOrEqual(
-      (toolbarBox?.width ?? 0) - 16,
-    );
+  if (compactMobile) {
+    const send = page.getByRole("button", {
+      name: english ? "Send" : "Отправить",
+      exact: true,
+    });
+    for (const control of [add, mode, send]) {
+      const box = await control.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
 
     const footerFits = await page
       .getByTestId("ai-composer-footer")

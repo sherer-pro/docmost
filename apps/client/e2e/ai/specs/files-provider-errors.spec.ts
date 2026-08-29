@@ -11,12 +11,17 @@ test("supported image and unsupported file are handled without leaking state", a
 }) => {
   const state = await loadState();
   await openAssistant(page, state);
-  const contextButton = page.getByRole("button", {
-    name: /Message context|Контекст сообщения/i,
+  const add = page.getByRole("button", { name: /^(Add|Добавить)$/i });
+  const attachFiles = page.getByRole("menuitem", {
+    name: /Attach files|Добавить файлы/i,
   });
-  await contextButton.click();
-  const input = page.locator('input[type="file"]').last();
-  await input.setInputFiles({
+
+  await add.click();
+  await expect(attachFiles).toBeVisible();
+  const imageChooserPromise = page.waitForEvent("filechooser");
+  await attachFiles.click();
+  const imageChooser = await imageChooserPromise;
+  await imageChooser.setFiles({
     name: "audit-image.png",
     mimeType: "image/png",
     buffer: Buffer.from(
@@ -27,7 +32,13 @@ test("supported image and unsupported file are handled without leaking state", a
   await expect(
     page.getByText("audit-image.png", { exact: false }),
   ).toBeVisible();
-  await input.setInputFiles({
+
+  await add.click();
+  await expect(attachFiles).toBeVisible();
+  const unsupportedChooserPromise = page.waitForEvent("filechooser");
+  await attachFiles.click();
+  const unsupportedChooser = await unsupportedChooserPromise;
+  await unsupportedChooser.setFiles({
     name: "unsupported.exe",
     mimeType: "application/x-msdownload",
     buffer: Buffer.from("not-an-executable"),

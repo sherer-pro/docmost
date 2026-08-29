@@ -45,21 +45,18 @@ async function expectFooterToFit(footer: Locator, busy: boolean) {
         const rect = child.getBoundingClientRect();
         return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
       }),
-      buttonCount: element.querySelectorAll("button").length,
-      statusFits: (() => {
-        const status = element.querySelector('[role="status"]');
-        return !status || status.scrollWidth <= status.clientWidth;
-      })(),
+      enabledButtonCount: Array.from(
+        element.querySelectorAll<HTMLButtonElement>("button"),
+      ).filter((button) => !button.disabled).length,
     };
   });
 
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
   expect(metrics.childrenInside).toBe(true);
   if (busy) {
-    expect(metrics.buttonCount).toBe(1);
-    expect(metrics.statusFits).toBe(true);
+    expect(metrics.enabledButtonCount).toBe(1);
   } else {
-    expect(metrics.buttonCount).toBeGreaterThan(1);
+    expect(metrics.enabledButtonCount).toBeGreaterThan(1);
   }
 }
 
@@ -111,7 +108,7 @@ test("streaming survives reload and a delayed run can be stopped", async ({
   const footer = page.getByTestId("ai-composer-footer");
   const runStatus = page.getByTestId("ai-composer-run-status");
   const stop = page.getByRole("button", { name: /Stop|Остановить/i });
-  await expect(runStatus).toBeVisible();
+  await expect(runStatus).toBeAttached();
   await expect(runStatus).toHaveAttribute("role", "status");
   await expect(runStatus).toHaveAttribute("aria-live", "polite");
   await expect(stop).toBeVisible();
@@ -119,7 +116,7 @@ test("streaming survives reload and a delayed run can be stopped", async ({
   for (const width of composerWidths) {
     await setAiPanelWidth(page, width);
     await expectFooterToFit(footer, true);
-    await expect(runStatus).toBeVisible();
+    await expect(runStatus).toBeAttached();
     await expect(stop).toBeVisible();
   }
 
@@ -131,34 +128,29 @@ test("streaming survives reload and a delayed run can be stopped", async ({
     await expectFooterToFit(footer, false);
   }
 
-  const templates = footer.locator(
-    'button[aria-label="Templates"], button[aria-label="Шаблоны"]',
-  );
+  const add = footer.getByRole("button", { name: /^(Add|Добавить)$/i });
   await setAiPanelWidth(page, 520);
-  await expect(templates).toBeVisible();
-  expect((await templates.boundingBox())?.width).toBeLessThanOrEqual(44);
-  await templates.focus();
-  await expect(templates).toBeFocused();
-  await templates.hover();
-  await expect(
-    page.getByRole("tooltip").filter({ hasText: /Templates|Шаблоны/i }),
-  ).toBeVisible();
-  await templates.press("Enter");
+  await expect(add).toBeVisible();
+  expect((await add.boundingBox())?.width).toBeLessThanOrEqual(44);
+  await add.focus();
+  await expect(add).toBeFocused();
+  await add.press("Enter");
   await expect(page.locator('[role="menu"]')).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: /Templates|Шаблоны/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", {
+      name: /Markdown formatting|Форматирование Markdown/i,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", {
+      name: /Search this space|Искать по пространству/i,
+    }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(templates).toBeFocused();
-
-  const search = page.locator("button[aria-pressed][aria-label]");
-  if ((await search.count()) > 0) {
-    const searchLabel = await search.getAttribute("aria-label");
-    if (!searchLabel) throw new Error("Search toggle has no accessible name");
-    await expect(search).toBeVisible();
-    expect((await search.boundingBox())?.width).toBeLessThanOrEqual(44);
-    await search.hover();
-    await expect(
-      page.getByRole("tooltip").filter({ hasText: searchLabel }),
-    ).toBeVisible();
-  }
+  await expect(add).toBeFocused();
 
   const profileSelector = footer.locator(
     'button[aria-label="Assistant profile"], button[aria-label="Профиль помощника"]',
