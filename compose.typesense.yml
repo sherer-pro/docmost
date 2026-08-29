@@ -8,6 +8,7 @@ services:
         --data-dir=/data
         --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
         --enable-cors=false
+        --thread-pool-size=8
     secrets:
       - docmost_typesense_api_key
     volumes:
