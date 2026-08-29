@@ -6,14 +6,18 @@ services:
       - >-
         exec /opt/typesense-server
         --data-dir=/data
+        --api-port=8108
         --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
         --enable-cors=false
+        --disk-used-max-percentage=90
         --thread-pool-size=8
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
     volumes:
       - typesense_data:/data
     restart: unless-stopped
+    init: true
     read_only: true
     tmpfs:
       - /tmp
@@ -42,17 +46,21 @@ services:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
   collab:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
 volumes:
   typesense_data:
+    external: true
+    name: "${TYPESENSE_VOLUME_NAME:-docmost_typesense_data}"
 
 secrets:
-  docmost_typesense_api_key:
-    environment: TYPESENSE_API_KEY
+  docmost_typesense_api_key_file:
+    file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"
