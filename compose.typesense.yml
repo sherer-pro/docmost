@@ -1,0 +1,57 @@
+services:
+  typesense:
+    image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        exec /opt/typesense-server
+        --data-dir=/data
+        --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
+        --enable-cors=false
+    secrets:
+      - docmost_typesense_api_key
+    volumes:
+      - typesense_data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: "1.0"
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  docmost:
+    depends_on:
+      typesense:
+        condition: service_healthy
+    environment:
+      TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
+    secrets:
+      - docmost_typesense_api_key
+
+  collab:
+    environment:
+      TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
+    secrets:
+      - docmost_typesense_api_key
+
+volumes:
+  typesense_data:
+
+secrets:
+  docmost_typesense_api_key:
+    environment: TYPESENSE_API_KEY

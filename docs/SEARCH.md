@@ -58,8 +58,14 @@ TYPESENSE_API_KEY=<long-random-key>
 TYPESENSE_LOCALE=en
 ```
 
-Create a non-versioned `docker-compose.override.yml` beside the base Compose
-file. The pinned image is the same generation exercised by CI:
+Production uses the checked-in `compose.typesense.yml` overlay together with
+`compose.production.yml`. The pinned image is the same generation exercised by
+CI. The overlay keeps port `8108` private, runs with a read-only root
+filesystem, drops all capabilities, rotates logs, and caps Typesense at 512 MiB,
+one CPU, and 256 processes. Do not force an arbitrary numeric UID until the
+official image has been tested against the real data volume.
+
+The canonical overlay contains:
 
 ```yaml
 services:
@@ -82,6 +88,16 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: "1.0"
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108'"]
       interval: 10s
@@ -107,12 +123,19 @@ volumes:
   typesense_data:
 ```
 
-Start and verify the sidecar before recreating the application processes:
+Render the complete production topology, then start and verify the sidecar
+before recreating the application processes:
 
 ```bash
-docker compose up -d typesense
-docker compose ps typesense
-docker compose up -d --build docmost collab
+docker compose \
+  --env-file /etc/docmost/docmost.env \
+  --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml \
+  -f compose.typesense.yml \
+  config --quiet
+docker compose -f compose.production.yml -f compose.typesense.yml up -d typesense
+docker compose -f compose.production.yml -f compose.typesense.yml ps typesense
+docker compose -f compose.production.yml -f compose.typesense.yml up -d docmost collab
 ```
 
 Then queue the initial projection rebuild with the command in the Reindex
@@ -124,6 +147,7 @@ docker compose \
   --env-file /etc/docmost/docmost.env \
   --env-file /var/lib/docmost/deployment/postgres.env \
   -f compose.production.yml \
+  -f compose.typesense.yml \
   exec docmost node \
   apps/server/dist/apps/server/src/cli/search-reindex.js \
   --workspace=all \
