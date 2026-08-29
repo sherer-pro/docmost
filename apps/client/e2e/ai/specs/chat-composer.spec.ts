@@ -5,6 +5,14 @@ import {
   openAssistant,
   test,
 } from "../support";
+import type { Page } from "@playwright/test";
+
+async function openComposerSubmenu(page: Page, name: RegExp) {
+  await page.getByRole("button", { name: /^(Add|Добавить)$/i }).click();
+  const submenu = page.getByRole("menuitem", { name });
+  await expect(submenu).toBeVisible();
+  await submenu.hover();
+}
 
 test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", async ({
   page,
@@ -38,13 +46,8 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
     .getByRole("button", { name: /Save|Сохранить/i })
     .click();
   await expect(
-    page.getByRole("textbox", { name: /Chat history|История чатов/i }),
-  ).toHaveValue(/.+/);
-
-  await page.getByRole("button", { name: /Templates|Шаблоны/i }).click();
-  await expect(
-    page.getByPlaceholder(/Search commands|Поиск команд/i),
-  ).toBeVisible();
+    page.getByRole("button", { name: /Chat history|История чатов/i }),
+  ).toContainText(`Audit chat ${state.runId}`);
 
   let sentTemplateRequests = 0;
   page.on("request", (request) => {
@@ -63,11 +66,8 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
   for (let index = 0; index < "after".length; index += 1) {
     await composer.press("ArrowLeft");
   }
-  await page.getByRole("button", { name: /Templates|Шаблоны/i }).click();
-  await page
-    .getByRole("menuitem")
-    .filter({ hasText: /Summarize|Резюмировать/i })
-    .click();
+  await openComposerSubmenu(page, /Templates|Шаблоны/i);
+  await page.getByRole("menuitem", { name: /Summarize|Резюмировать/i }).click();
 
   const draftWithTemplate = await composer.innerText();
   const insertedPrompt = draftWithTemplate.match(
@@ -99,11 +99,10 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
   for (const [label, selector] of formattingCases) {
     await composer.fill("format");
     await composer.press("ControlOrMeta+a");
-    await page
-      .getByRole("button", {
-        name: /Markdown formatting|Форматирование Markdown/i,
-      })
-      .click();
+    await openComposerSubmenu(
+      page,
+      /Markdown formatting|Форматирование Markdown/i,
+    );
     await page.getByRole("menuitem", { name: label }).click();
     await expect(composer.locator(selector)).toContainText("format");
   }
@@ -111,23 +110,19 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
   // The previous case intentionally leaves the editor in a code block, where
   // inline marks are not allowed. Restore a paragraph before testing links.
   await composer.press("ControlOrMeta+a");
-  await page
-    .getByRole("button", {
-      name: /Markdown formatting|Форматирование Markdown/i,
-    })
-    .click();
-  await page
-    .getByRole("menuitem", { name: /Code block|Блок кода/i })
-    .click();
+  await openComposerSubmenu(
+    page,
+    /Markdown formatting|Форматирование Markdown/i,
+  );
+  await page.getByRole("menuitem", { name: /Code block|Блок кода/i }).click();
   await expect(composer.locator("p")).toContainText("format");
 
   await composer.fill("format");
   await composer.press("ControlOrMeta+a");
-  await page
-    .getByRole("button", {
-      name: /Markdown formatting|Форматирование Markdown/i,
-    })
-    .click();
+  await openComposerSubmenu(
+    page,
+    /Markdown formatting|Форматирование Markdown/i,
+  );
   await page
     .getByRole("menuitem", { name: /Add link|Добавить ссылку/i })
     .click();
@@ -190,12 +185,14 @@ test("chat can be searched and deleted without corrupting the remaining list", a
     .getByRole("dialog")
     .getByRole("button", { name: /Save|Сохранить/i })
     .click();
-  const history = page.getByRole("textbox", {
-    name: /Chat history|История чатов/i,
-  });
-  await history.click();
-  await history.fill("Audit chat");
-  await expect(page.getByRole("option").first()).toBeVisible();
+  await page
+    .getByRole("button", { name: /Chat history|История чатов/i })
+    .click();
+  const historySearch = page.getByPlaceholder(/Chat history|История чатов/i);
+  await historySearch.fill("Audit chat");
+  await expect(
+    page.getByRole("menuitem").filter({ hasText: `Audit chat ${state.runId}` }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: /Chat actions|Действия с чатом/i })

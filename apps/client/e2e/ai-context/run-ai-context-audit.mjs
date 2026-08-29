@@ -419,7 +419,14 @@ async function browserEvidence(storageState, state, citedCase) {
       await mobilePage.getByRole("button", { name: /Открыть ИИ-помощника|Open AI assistant/i }).click();
     }
     await mobileComposer.waitFor({ state: "visible" });
-    await mobilePage.getByRole("button", { name: /Контекст сообщения|Message context/i }).click();
+    await mobilePage.getByRole("button", { name: /^(Добавить|Add)$/i }).click();
+    await mobilePage
+      .getByRole("dialog", { name: /Добавить к сообщению|Add to message/i })
+      .getByRole("button", { name: /^(Контекст|Context)$/i })
+      .click();
+    await mobilePage
+      .getByRole("dialog", { name: /^(Контекст|Context)$/i })
+      .waitFor({ state: "visible" });
     await mobilePage.screenshot({ path: path.join(auditRoot, "screenshots", "mobile-context-picker.png"), fullPage: true });
     await mobile.close();
 
@@ -674,10 +681,10 @@ async function browserEvidenceV2(storageState, state, citedCase) {
     });
 
     const composer = await ensureAssistantOpen(page);
-    const historyInput = page.getByLabel(/История чатов|Chat history/i).first();
-    await historyInput.waitFor({ state: "visible" });
+    const historyButton = page.getByRole("button", { name: /История чатов|Chat history/i }).first();
+    await historyButton.waitFor({ state: "visible" });
     assert(
-      (await historyInput.inputValue()) === `Context case ${citedCase.caseId}`,
+      (await historyButton.textContent())?.includes(`Context case ${citedCase.caseId}`),
       "The browser did not restore the expected citation conversation",
     );
     await page
@@ -711,9 +718,10 @@ async function browserEvidenceV2(storageState, state, citedCase) {
     let reloadedComposer = await ensureAssistantOpen(page);
     await page.reload();
     reloadedComposer = await ensureAssistantOpen(page);
+    const reloadedHistoryButton = page.getByRole("button", { name: /История чатов|Chat history/i }).first();
+    await reloadedHistoryButton.waitFor({ state: "visible" });
     assert(
-      (await page.getByLabel(/История чатов|Chat history/i).first().inputValue()) ===
-        `Context case ${citedCase.caseId}`,
+      (await reloadedHistoryButton.textContent())?.includes(`Context case ${citedCase.caseId}`),
       "The citation conversation was not preserved after reload",
     );
 
@@ -734,9 +742,14 @@ async function browserEvidenceV2(storageState, state, citedCase) {
     const mobilePage = await mobile.newPage();
     await mobilePage.goto(pageUrl);
     await ensureAssistantOpen(mobilePage);
+    await mobilePage.getByRole("button", { name: /^(Добавить|Add)$/i }).click();
     await mobilePage
-      .getByRole("button", { name: /Контекст сообщения|Message context/i })
+      .getByRole("dialog", { name: /Добавить к сообщению|Add to message/i })
+      .getByRole("button", { name: /^(Контекст|Context)$/i })
       .click();
+    await mobilePage
+      .getByRole("dialog", { name: /^(Контекст|Context)$/i })
+      .waitFor({ state: "visible" });
     await mobilePage.screenshot({
       path: path.join(auditRoot, "screenshots", "mobile-context-picker.png"),
       fullPage: true,

@@ -399,7 +399,11 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
     const page = await createPage(admin, space.id, "Agent complex document", complex);
     const url = pageUrl(space, page);
     await openAssistant(adminPage, url);
-    await expect(adminPage.getByRole("radio", { name: /^Agent$/i })).toHaveCount(0);
+    const modeButton = () =>
+      adminPage
+        .locator("#docmost-context-aside")
+        .getByRole("button", { name: /^(Mode|Режим)$/i });
+    await expect(modeButton()).toHaveCount(0);
     await api(admin, "POST", `/api/spaces/${space.id}/ai/config/actions/test-agent`, {});
     await api(admin, "PATCH", `/api/spaces/${space.id}/ai/config`, { agentEnabled: true });
 
@@ -408,7 +412,12 @@ test("bounded agent mode lifecycle, concurrency, recovery, policies, limits and 
       openAssistant(adminPage, url),
       memberContext.newPage().then((memberPage) => memberPage.goto(url)),
     ]);
-    await expect(adminPage.getByRole("radio", { name: /^Agent$/i })).toBeEnabled();
+    await expect(modeButton()).toBeEnabled();
+    await modeButton().click();
+    await expect(
+      adminPage.getByRole("menuitem", { name: /^(Agent|Агент)$/i }),
+    ).toBeEnabled();
+    await adminPage.keyboard.press("Escape");
     const liveEditor = adminPage
       .locator('.ProseMirror[aria-label="Editor"], .ProseMirror[aria-label="Редактор"]')
       .first();
