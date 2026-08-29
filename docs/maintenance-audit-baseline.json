@@ -206,7 +206,6 @@
       "types|apps/client/src/features/ai-external-mcp/types/ai-external-mcp.types.ts|AiExternalMcpTestStatus",
       "types|apps/client/src/features/ai-external-mcp/types/ai-external-mcp.types.ts|AiExternalMcpToolApprovalInput",
       "types|apps/client/src/features/ai-external-mcp/types/ai-external-mcp.types.ts|AiExternalMcpTransport",
-      "types|apps/client/src/features/ai/components/ai-profile-display.ts|AiComposerProfileOption",
       "types|apps/client/src/features/ai/components/ai-profile-display.ts|AiConversationProfileDisplay",
       "types|apps/client/src/features/ai/types/ai.types.ts|AiAssistantProfileAgentStatus",
       "types|apps/client/src/features/ai/types/ai.types.ts|AiAssistantProfileConversationSummary",

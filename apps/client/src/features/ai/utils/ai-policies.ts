@@ -204,7 +204,7 @@ export function getAiApplyPolicy(
 
 export const AI_PANEL_MIN_WIDTH = 360;
 export const AI_PANEL_MAX_WIDTH = 600;
-export const AI_PANEL_RESIZE_STEP = 10;
+const AI_PANEL_RESIZE_STEP = 10;
 
 export function clampAiPanelWidth(value: unknown, fallback = 400): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {

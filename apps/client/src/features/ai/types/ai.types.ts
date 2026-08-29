@@ -21,7 +21,6 @@ export type {
   AiAssistantProfileTestResult,
   AiAssistantProfileVerificationStatus,
   AiAssistantProfileWorkspacePolicy,
-  AiAssistantProfileIcon,
   AiAvailability,
   AiChatFile,
   AiChatFileStatus,
