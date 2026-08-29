@@ -62,8 +62,9 @@ Production uses the checked-in `compose.typesense.yml` overlay together with
 `compose.production.yml`. The pinned image is the same generation exercised by
 CI. The overlay keeps port `8108` private, runs with a read-only root
 filesystem, drops all capabilities, rotates logs, and caps Typesense at 512 MiB,
-one CPU, and 256 processes. Do not force an arbitrary numeric UID until the
-official image has been tested against the real data volume.
+one CPU, and 256 processes. The explicit eight-thread pool keeps that PID cap
+portable to hosts with a high visible CPU count. Do not force an arbitrary
+numeric UID until the official image has been tested against the real data volume.
 
 The canonical overlay contains:
 
@@ -78,6 +79,7 @@ services:
         --data-dir=/data
         --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
         --enable-cors=false
+        --thread-pool-size=8
     secrets:
       - docmost_typesense_api_key
     volumes:

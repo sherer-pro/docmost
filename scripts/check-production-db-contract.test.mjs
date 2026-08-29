@@ -60,10 +60,15 @@ test("requires the hardened private Typesense production overlay", async () => {
   const input = await fixture();
   input.typesenseCompose = input.typesenseCompose
     .replace("mem_limit: 512m", "mem_limit: 2g")
-    .replace("    cap_drop:\n      - ALL\n", "")
-    .replace("    healthcheck:\n", "    ports:\n      - \"8108:8108\"\n    healthcheck:\n");
+    .replace("--thread-pool-size=8", "")
+    .replace(/    cap_drop:\r?\n      - ALL\r?\n/u, "")
+    .replace(
+      /    healthcheck:\r?\n/u,
+      "    ports:\n      - \"8108:8108\"\n    healthcheck:\n",
+    );
   const errors = validateProductionDatabaseContract(input);
   assert.ok(errors.some((error) => error.includes("mem_limit: 512m")));
+  assert.ok(errors.some((error) => error.includes("--thread-pool-size=8")));
   assert.ok(errors.some((error) => error.includes("cap_drop:")));
   assert.ok(errors.some((error) => error.includes("must not publish port")));
 });

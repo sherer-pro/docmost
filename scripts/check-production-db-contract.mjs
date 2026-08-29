@@ -170,6 +170,7 @@ export function validateProductionDatabaseContract({
     "mem_limit: 512m",
     'cpus: "1.0"',
     "pids_limit: 256",
+    "--thread-pool-size=8",
     'max-size: "10m"',
     'max-file: "5"',
     "TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key",
