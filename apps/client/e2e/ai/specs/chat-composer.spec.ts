@@ -191,7 +191,10 @@ test("chat can be searched and deleted without corrupting the remaining list", a
   const historySearch = page.getByPlaceholder(/Chat history|История чатов/i);
   await historySearch.fill("Audit chat");
   await expect(
-    page.getByRole("menuitem").filter({ hasText: `Audit chat ${state.runId}` }),
+    page
+      .getByRole("menuitem")
+      .filter({ hasText: `Audit chat ${state.runId}` })
+      .first(),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await page
