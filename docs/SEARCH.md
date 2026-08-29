@@ -47,14 +47,15 @@ and reconciliation count mismatches.
 
 Run Typesense as a separate container on the same private Compose network, not
 inside the Docmost application container. Keep port `8108` private unless an
-operator explicitly needs host access. Put a long random `TYPESENSE_API_KEY` in
-the same `.env` file used as the source of the existing
-`docmost_typesense_api_key` Compose secret, then set:
+operator explicitly needs host access. Put a long random key in a root-owned
+file below a root-owned mode `0700` directory, make it readable by the
+non-root container process without making that directory traversable to host
+users, point `TYPESENSE_SECRET_FILE` at its absolute host path, and set:
 
 ```dotenv
 SEARCH_DRIVER=typesense
 TYPESENSE_URL=http://typesense:8108
-TYPESENSE_API_KEY=<long-random-key>
+TYPESENSE_SECRET_FILE=/etc/docmost/typesense-api-key
 TYPESENSE_LOCALE=en
 ```
 
@@ -77,14 +78,18 @@ services:
       - >-
         exec /opt/typesense-server
         --data-dir=/data
+        --api-port=8108
         --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
         --enable-cors=false
+        --disk-used-max-percentage=90
         --thread-pool-size=8
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
     volumes:
       - typesense_data:/data
     restart: unless-stopped
+    init: true
     read_only: true
     tmpfs:
       - /tmp
@@ -113,16 +118,24 @@ services:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
   collab:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
 volumes:
   typesense_data:
+    external: true
+    name: "${TYPESENSE_VOLUME_NAME:-docmost_typesense_data}"
+
+secrets:
+  docmost_typesense_api_key_file:
+    file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"
 ```
 
 Render the complete production topology, then start and verify the sidecar
@@ -135,9 +148,12 @@ docker compose \
   -f compose.production.yml \
   -f compose.typesense.yml \
   config --quiet
-docker compose -f compose.production.yml -f compose.typesense.yml up -d typesense
-docker compose -f compose.production.yml -f compose.typesense.yml ps typesense
-docker compose -f compose.production.yml -f compose.typesense.yml up -d docmost collab
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml up -d typesense
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml ps typesense
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml up -d docmost collab
 ```
 
 Then queue the initial projection rebuild with the command in the Reindex

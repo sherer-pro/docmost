@@ -170,11 +170,17 @@ export function validateProductionDatabaseContract({
     "mem_limit: 512m",
     'cpus: "1.0"',
     "pids_limit: 256",
+    "init: true",
+    "--api-port=8108",
+    "--disk-used-max-percentage=90",
     "--thread-pool-size=8",
     'max-size: "10m"',
     'max-file: "5"',
     "TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key",
-    "environment: TYPESENSE_API_KEY",
+    "source: docmost_typesense_api_key_file",
+    'file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"',
+    "external: true",
+    'name: "${TYPESENSE_VOLUME_NAME:-docmost_typesense_data}"',
     "condition: service_healthy",
   ]) {
     requireText(

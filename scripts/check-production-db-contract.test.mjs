@@ -61,6 +61,11 @@ test("requires the hardened private Typesense production overlay", async () => {
   input.typesenseCompose = input.typesenseCompose
     .replace("mem_limit: 512m", "mem_limit: 2g")
     .replace("--thread-pool-size=8", "")
+    .replace(
+      'file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"',
+      "environment: TYPESENSE_API_KEY",
+    )
+    .replace("    external: true\n", "")
     .replace(/    cap_drop:\r?\n      - ALL\r?\n/u, "")
     .replace(
       /    healthcheck:\r?\n/u,
@@ -69,6 +74,8 @@ test("requires the hardened private Typesense production overlay", async () => {
   const errors = validateProductionDatabaseContract(input);
   assert.ok(errors.some((error) => error.includes("mem_limit: 512m")));
   assert.ok(errors.some((error) => error.includes("--thread-pool-size=8")));
+  assert.ok(errors.some((error) => error.includes("TYPESENSE_SECRET_FILE")));
+  assert.ok(errors.some((error) => error.includes("external: true")));
   assert.ok(errors.some((error) => error.includes("cap_drop:")));
   assert.ok(errors.some((error) => error.includes("must not publish port")));
 });
