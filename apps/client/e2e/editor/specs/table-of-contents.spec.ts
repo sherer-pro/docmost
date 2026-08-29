@@ -29,11 +29,8 @@ async function assertStableTocNavigation(
 
   const aside = page.locator("#docmost-context-aside");
   await expect(aside).toBeVisible();
-  if (expectedMode === "docked") {
-    await expect(aside.getByRole("separator")).toBeVisible();
-  } else {
-    await expect(aside.getByRole("separator")).toHaveCount(0);
-  }
+  await expect(aside).toHaveAttribute("data-presentation-mode", expectedMode);
+  await expect(aside.getByRole("separator")).toBeVisible();
 
   await aside.getByRole("button").filter({ hasText: target }).click();
   const targetHeading = page.getByRole("heading", {
