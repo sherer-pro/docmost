@@ -73,7 +73,10 @@ export async function openAssistant(
   page: Page,
   state: AuditState,
 ): Promise<void> {
-  await page.goto(pageUrl(state));
+  const targetPath = pageUrl(state);
+  if (new URL(page.url()).pathname !== targetPath) {
+    await page.goto(targetPath);
+  }
   const composer = messageComposer(page);
   const openButton = page.getByRole("button", {
     name: /Open AI assistant|Открыть (?:AI|ИИ)-помощника/i,

@@ -2466,11 +2466,73 @@ export function AiPanel() {
                       <Menu.Item
                         onClick={() =>
                           runComposerCommand((editor) =>
+                            editor.chain().focus().toggleItalic().run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.italic")}
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
+                            editor.chain().focus().toggleStrike().run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.strikethrough")}
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
+                            editor.chain().focus().toggleCode().run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.inlineCode")}
+                      </Menu.Item>
+                      <Menu.Item onClick={openMarkdownLink}>
+                        {t("ai.composer.addLink")}
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
+                            editor
+                              .chain()
+                              .focus()
+                              .toggleHeading({ level: 1 })
+                              .run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.heading")}
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
                             editor.chain().focus().toggleBulletList().run(),
                           )
                         }
                       >
                         {t("ai.composer.bulletList")}
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
+                            editor.chain().focus().toggleOrderedList().run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.orderedList")}
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          runComposerCommand((editor) =>
+                            editor.chain().focus().toggleTaskList().run(),
+                          )
+                        }
+                      >
+                        {t("ai.composer.taskList")}
                       </Menu.Item>
                       <Menu.Item
                         onClick={() =>
@@ -2489,9 +2551,6 @@ export function AiPanel() {
                         }
                       >
                         {t("ai.composer.codeBlock")}
-                      </Menu.Item>
-                      <Menu.Item onClick={openMarkdownLink}>
-                        {t("ai.composer.addLink")}
                       </Menu.Item>
                     </Menu.Sub.Dropdown>
                   </Menu.Sub>
