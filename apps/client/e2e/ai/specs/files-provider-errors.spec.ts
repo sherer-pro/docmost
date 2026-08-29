@@ -21,6 +21,15 @@ test("supported image and unsupported file are handled without leaking state", a
   const imageChooserPromise = page.waitForEvent("filechooser");
   await attachFiles.click();
   const imageChooser = await imageChooserPromise;
+  const uploadResponsePromise = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      /\/api\/ai\/conversations\/[^/]+\/files$/.test(
+        new URL(response.url()).pathname,
+      )
+    );
+  });
   await imageChooser.setFiles({
     name: "audit-image.png",
     mimeType: "image/png",
@@ -29,9 +38,9 @@ test("supported image and unsupported file are handled without leaking state", a
       "base64",
     ),
   });
-  await expect(
-    page.getByText("audit-image.png", { exact: false }),
-  ).toBeVisible();
+  const uploadResponse = await uploadResponsePromise;
+  expect(uploadResponse.ok()).toBe(true);
+  expect(await uploadResponse.text()).toContain("audit-image.png");
 
   await add.click();
   await expect(attachFiles).toBeVisible();
