@@ -2,7 +2,7 @@
 
 This is the canonical deployment entry point for the Docmost fork. The root
 `docker-compose.yml` is for local development only. Production deployments use
-`compose.production.yml`, an application image pinned by registry digest,
+`compose.production.yml`, the optional checked-in `compose.typesense.yml`, an application image pinned by registry digest,
 external PostgreSQL and file-storage volumes, and an external ingress network.
 
 Use this guide together with:
@@ -209,7 +209,13 @@ After `accept`, automatic volume rollback is forbidden because the old database
 does not contain newly accepted writes. Use a planned forward migration or a
 DBA-approved recovery procedure instead.
 
-## Host-specific overlays
+## Canonical Typesense overlay and host-specific overlays
+
+When `SEARCH_DRIVER=typesense`, always include the repository-owned
+`compose.typesense.yml` in every `config`, `up`, `exec`, and `ps` command. It is
+the canonical production definition for the Typesense service and its
+application secret mount, limits, healthcheck, security controls, and log
+rotation. The detailed operating procedure is in the search runbook.
 
 Resource-limit, proxy, and monitoring overlays are deployment-owned files, not
 generic release artifacts. If a host requires an additional Compose file, keep
