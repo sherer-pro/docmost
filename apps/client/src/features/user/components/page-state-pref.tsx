@@ -117,6 +117,7 @@ export function PageStateSegmentedControl({
     <SegmentedControl
       size={size}
       className={compact ? classes.compactControl : undefined}
+      data-testid="page-state-segmented-control"
       value={value}
       onChange={handleChange}
       aria-busy={isSaving}

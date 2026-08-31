@@ -170,6 +170,7 @@ export default function ShareModal({
           tooltipProps={{ openDelay: 250, withArrow: true }}
           variant="subtle"
           color="dark"
+          data-page-header-action="share"
         >
           <Indicator
             color="green"

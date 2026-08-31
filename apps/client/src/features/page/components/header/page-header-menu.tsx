@@ -141,6 +141,7 @@ export default function PageHeaderMenu({
             tooltip={false}
             variant="subtle"
             color="dark"
+            data-page-header-action="ai"
             onClick={() => toggleAside("ai")}
           >
             <IconSparkles size={20} stroke={2} />
@@ -148,39 +149,37 @@ export default function PageHeaderMenu({
         </Tooltip>
       )}
 
-      <PageFavoriteAction readOnly={isReadOnly} />
+      <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
+        <AccessibleActionIcon
+          label={t("Table of contents")}
+          tooltip={false}
+          variant="subtle"
+          color="dark"
+          data-page-header-action="toc"
+          onClick={() => toggleAside("toc")}
+        >
+          <IconList size={20} stroke={2} />
+        </AccessibleActionIcon>
+      </Tooltip>
+
+      <Tooltip label={t("Comments")} openDelay={250} withArrow>
+        <AccessibleActionIcon
+          label={t("Comments")}
+          tooltip={false}
+          variant="subtle"
+          color="dark"
+          data-page-header-action="comments"
+          onClick={() => toggleAside("comments")}
+        >
+          <IconMessage size={20} stroke={2} />
+        </AccessibleActionIcon>
+      </Tooltip>
+
+      {!isMobileViewport && <PageFavoriteAction readOnly={isReadOnly} />}
 
       <ShareModal readOnly={!canMoveDeleteSharePage} />
 
       {!isMobileViewport && <PageDetailsAction readOnly={isReadOnly} />}
-
-      {!isMobileViewport && (
-        <Tooltip label={t("Comments")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Comments")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={() => toggleAside("comments")}
-          >
-            <IconMessage size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {!isMobileViewport && (
-        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Table of contents")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={() => toggleAside("toc")}
-          >
-            <IconList size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
 
       <PageActionMenu
         readOnly={isReadOnly}
@@ -191,7 +190,12 @@ export default function PageHeaderMenu({
   );
 }
 
-function PageFavoriteAction({ readOnly }: PageHeaderMenuProps) {
+function PageFavoriteAction({
+  readOnly,
+  presentation = "action-icon",
+}: PageHeaderMenuProps & {
+  presentation?: "action-icon" | "menu-item";
+}) {
   const { pageSlug } = useParams();
   const { data: page } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
@@ -201,7 +205,14 @@ function PageFavoriteAction({ readOnly }: PageHeaderMenuProps) {
     return null;
   }
 
-  return <FavoriteButton type="page" id={page.id} spaceId={page.spaceId} />;
+  return (
+    <FavoriteButton
+      type="page"
+      id={page.id}
+      spaceId={page.spaceId}
+      presentation={presentation}
+    />
+  );
 }
 
 function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
@@ -224,6 +235,7 @@ function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
           tooltip={false}
           variant="subtle"
           color="dark"
+          data-page-header-action="details"
           onClick={open}
         >
           <IconInfoCircle size={20} stroke={2} />
@@ -279,7 +291,6 @@ function PageActionMenu({
   mobile = false,
 }: PageActionMenuProps) {
   const { t } = useTranslation();
-  const toggleAside = useToggleAside();
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const clipboard = useClipboard({ timeout: 500 });
   const { pageSlug, spaceSlug } = useParams();
@@ -579,6 +590,7 @@ function PageActionMenu({
             label={t("Open menu")}
             variant="subtle"
             color="dark"
+            data-page-header-action="menu"
           >
             <IconDots size={20} />
           </AccessibleActionIcon>
@@ -587,23 +599,16 @@ function PageActionMenu({
         <Menu.Dropdown>
           {mobile && page?.id && (
             <>
+              <PageFavoriteAction
+                readOnly={readOnly}
+                presentation="menu-item"
+              />
               <Menu.Item
                 leftSection={<IconInfoCircle size={16} />}
                 onClick={openDetails}
+                data-page-header-menu-action="details"
               >
                 {t("Page details")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconMessage size={16} />}
-                onClick={() => toggleAside("comments")}
-              >
-                {t("Comments")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconList size={16} />}
-                onClick={() => toggleAside("toc")}
-              >
-                {t("Table of contents")}
               </Menu.Item>
               <Menu.Divider />
             </>
