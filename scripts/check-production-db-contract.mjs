@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { POSTGRES_IMAGE } from "./production-db.mjs";
 
 const POSTGRES_REFERENCE = /postgres:18(?:-alpine)?@sha256:[0-9a-f]{64}/gu;
+const TYPESENSE_IMAGE =
+  "typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110";
 
 function imageReferences(source) {
   return source.match(POSTGRES_REFERENCE) ?? [];
@@ -33,6 +35,7 @@ function serviceBlock(source, service) {
 export function validateProductionDatabaseContract({
   localCompose,
   productionCompose,
+  typesenseCompose,
   ciSource,
   operatorImage = POSTGRES_IMAGE,
 }) {
@@ -158,18 +161,54 @@ export function validateProductionDatabaseContract({
     errors.push("API must wait for a healthy collaboration service");
   }
 
+  for (const requiredTypesenseContract of [
+    `image: ${TYPESENSE_IMAGE}`,
+    "read_only: true",
+    "cap_drop:",
+    "- ALL",
+    "no-new-privileges:true",
+    "mem_limit: 512m",
+    'cpus: "1.0"',
+    "pids_limit: 256",
+    "init: true",
+    "--api-port=8108",
+    "--disk-used-max-percentage=90",
+    "--thread-pool-size=8",
+    'max-size: "10m"',
+    'max-file: "5"',
+    "TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key",
+    "source: docmost_typesense_api_key_file",
+    'file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"',
+    "external: true",
+    'name: "${TYPESENSE_VOLUME_NAME:-docmost_typesense_data}"',
+    "condition: service_healthy",
+  ]) {
+    requireText(
+      errors,
+      typesenseCompose,
+      requiredTypesenseContract,
+      "production Typesense overlay",
+    );
+  }
+  if (/^\s+ports:\s*$/mu.test(serviceBlock(typesenseCompose, "typesense"))) {
+    errors.push("production Typesense overlay must not publish port 8108");
+  }
+
   return [...new Set(errors)];
 }
 
 async function main() {
-  const [localCompose, productionCompose, ciSource] = await Promise.all([
+  const [localCompose, productionCompose, typesenseCompose, ciSource] =
+    await Promise.all([
     readFile("docker-compose.yml", "utf8"),
     readFile("compose.production.yml", "utf8"),
+    readFile("compose.typesense.yml", "utf8"),
     readFile(".github/workflows/ci.yml", "utf8"),
-  ]);
+    ]);
   const errors = validateProductionDatabaseContract({
     localCompose,
     productionCompose,
+    typesenseCompose,
     ciSource,
   });
   if (errors.length > 0) {

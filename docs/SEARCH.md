@@ -47,19 +47,27 @@ and reconciliation count mismatches.
 
 Run Typesense as a separate container on the same private Compose network, not
 inside the Docmost application container. Keep port `8108` private unless an
-operator explicitly needs host access. Put a long random `TYPESENSE_API_KEY` in
-the same `.env` file used as the source of the existing
-`docmost_typesense_api_key` Compose secret, then set:
+operator explicitly needs host access. Put a long random key in a root-owned
+file below a root-owned mode `0700` directory, make it readable by the
+non-root container process without making that directory traversable to host
+users, point `TYPESENSE_SECRET_FILE` at its absolute host path, and set:
 
 ```dotenv
 SEARCH_DRIVER=typesense
 TYPESENSE_URL=http://typesense:8108
-TYPESENSE_API_KEY=<long-random-key>
+TYPESENSE_SECRET_FILE=/etc/docmost/typesense-api-key
 TYPESENSE_LOCALE=en
 ```
 
-Create a non-versioned `docker-compose.override.yml` beside the base Compose
-file. The pinned image is the same generation exercised by CI:
+Production uses the checked-in `compose.typesense.yml` overlay together with
+`compose.production.yml`. The pinned image is the same generation exercised by
+CI. The overlay keeps port `8108` private, runs with a read-only root
+filesystem, drops all capabilities, rotates logs, and caps Typesense at 512 MiB,
+one CPU, and 256 processes. The explicit eight-thread pool keeps that PID cap
+portable to hosts with a high visible CPU count. Do not force an arbitrary
+numeric UID until the official image has been tested against the real data volume.
+
+The canonical overlay contains:
 
 ```yaml
 services:
@@ -70,18 +78,33 @@ services:
       - >-
         exec /opt/typesense-server
         --data-dir=/data
+        --api-port=8108
         --api-key="$$(cat /run/secrets/docmost_typesense_api_key)"
         --enable-cors=false
+        --disk-used-max-percentage=90
+        --thread-pool-size=8
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
     volumes:
       - typesense_data:/data
     restart: unless-stopped
+    init: true
     read_only: true
     tmpfs:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: "1.0"
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108'"]
       interval: 10s
@@ -95,24 +118,42 @@ services:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
   collab:
     environment:
       TYPESENSE_API_KEY_FILE: /run/secrets/docmost_typesense_api_key
     secrets:
-      - docmost_typesense_api_key
+      - source: docmost_typesense_api_key_file
+        target: docmost_typesense_api_key
 
 volumes:
   typesense_data:
+    external: true
+    name: "${TYPESENSE_VOLUME_NAME:-docmost_typesense_data}"
+
+secrets:
+  docmost_typesense_api_key_file:
+    file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"
 ```
 
-Start and verify the sidecar before recreating the application processes:
+Render the complete production topology, then start and verify the sidecar
+before recreating the application processes:
 
 ```bash
-docker compose up -d typesense
-docker compose ps typesense
-docker compose up -d --build docmost collab
+docker compose \
+  --env-file /etc/docmost/docmost.env \
+  --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml \
+  -f compose.typesense.yml \
+  config --quiet
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml up -d typesense
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml ps typesense
+docker compose --env-file /etc/docmost/docmost.env --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml -f compose.typesense.yml up -d docmost collab
 ```
 
 Then queue the initial projection rebuild with the command in the Reindex
@@ -124,6 +165,7 @@ docker compose \
   --env-file /etc/docmost/docmost.env \
   --env-file /var/lib/docmost/deployment/postgres.env \
   -f compose.production.yml \
+  -f compose.typesense.yml \
   exec docmost node \
   apps/server/dist/apps/server/src/cli/search-reindex.js \
   --workspace=all \
