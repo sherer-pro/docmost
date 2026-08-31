@@ -1,0 +1,7 @@
+:root[data-mantine-color-scheme="light"] {
+  color-scheme: only light;
+}
+
+:root[data-mantine-color-scheme="dark"] {
+  color-scheme: only dark;
+}

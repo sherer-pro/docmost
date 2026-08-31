@@ -2,6 +2,7 @@ import "@mantine/core/styles.css";
 import "@mantine/spotlight/styles.css";
 import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
+import "@/styles/theme-color-scheme.css";
 import "@/features/dictionary/styles/dictionary-highlight.css";
 import "@/styles/accessibility.css";
 
