@@ -125,17 +125,27 @@ async function expectMobileOverflowActions(page: PlaywrightPage) {
 }
 
 async function expectMobileHeaderActionsOpen(page: PlaywrightPage) {
-  const aside = page.locator("#docmost-context-aside");
-
   await page.locator('[data-page-header-action="toc"]').click();
-  await expect(aside).toBeVisible();
-  await aside.getByRole("button", { name: "Close panel" }).click();
-  await expect(aside).toBeHidden();
+  const tocDialog = page.getByRole("dialog", {
+    name: "Table of contents",
+    exact: true,
+  });
+  await expect(tocDialog).toBeVisible();
+  await tocDialog
+    .getByRole("button", { name: "Close panel", exact: true })
+    .click();
+  await expect(tocDialog).toBeHidden();
 
   await page.locator('[data-page-header-action="comments"]').click();
-  await expect(aside).toBeVisible();
-  await aside.getByRole("button", { name: "Close panel" }).click();
-  await expect(aside).toBeHidden();
+  const commentsDialog = page.getByRole("dialog", {
+    name: "Comments",
+    exact: true,
+  });
+  await expect(commentsDialog).toBeVisible();
+  await commentsDialog
+    .getByRole("button", { name: "Close panel", exact: true })
+    .click();
+  await expect(commentsDialog).toBeHidden();
 
   await page.getByRole("button", { name: "Open menu", exact: true }).click();
   await page.locator('[data-page-header-menu-action="details"]').click();
