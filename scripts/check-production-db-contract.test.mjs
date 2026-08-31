@@ -65,7 +65,7 @@ test("requires the hardened private Typesense production overlay", async () => {
       'file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"',
       "environment: TYPESENSE_API_KEY",
     )
-    .replace("    external: true\n", "")
+    .replace(/    external: true\r?\n/u, "")
     .replace(/    cap_drop:\r?\n      - ALL\r?\n/u, "")
     .replace(
       /    healthcheck:\r?\n/u,
