@@ -138,7 +138,7 @@ test("adapts table widths and reorders logical columns", async ({
       0,
     );
 
-    await page.keyboard.type("W".repeat(45));
+    await page.keyboard.type("W".repeat(30));
     await settleLayout(page);
     const afterLongInput = await geometry();
     expect(afterLongInput.columnWidths[0]).toBeGreaterThan(
