@@ -19,6 +19,26 @@ const heading = (text: string) => ({
   content: [{ type: "text", text }],
 });
 
+async function expectDesktopHeaderActionOrder(
+  page: import("@playwright/test").Page,
+) {
+  const order = await page
+    .getByTestId("page-header-actions")
+    .locator("[data-page-header-action]")
+    .evaluateAll((elements) =>
+      elements.map((element) =>
+        element.getAttribute("data-page-header-action"),
+      ),
+    );
+  const expected = ["ai", "toc", "comments", "favorite"];
+  if (order.includes("share")) {
+    expected.push("share");
+  }
+  expected.push("details", "menu");
+
+  expect(order).toEqual(expected);
+}
+
 async function assertStableTocNavigation(
   page: import("@playwright/test").Page,
   target: string,
@@ -109,6 +129,7 @@ test("keeps TOC targets visible after closing docked and overlay panels", async 
     await expect(
       page.getByRole("heading", { name: middleHeading }),
     ).toBeVisible();
+    await expectDesktopHeaderActionOrder(page);
 
     await assertStableTocNavigation(page, middleHeading, "docked");
 
@@ -118,6 +139,49 @@ test("keeps TOC targets visible after closing docked and overlay panels", async 
     await apiPost(api, "/api/users/update", { locale: originalLocale }).catch(
       () => undefined,
     );
+    await api.dispose();
+  }
+});
+
+test("keeps the desktop action order for database and row headers", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium-desktop",
+    "Desktop header order coverage runs once in Chromium",
+  );
+
+  const api = await createAdminApi();
+  const state = await loadAuditState();
+  const suffix = `${testInfo.project.name}-${Date.now()}`;
+
+  try {
+    const database = await apiPost<any>(api, "/api/databases", {
+      spaceId: state.spaceId,
+      name: `Desktop header database ${suffix}`,
+    });
+    const databasePage = await apiGet<any>(
+      api,
+      `/api/pages/info?pageId=${database.pageId}`,
+    );
+    const row = await apiPost<any>(api, `/api/databases/${database.id}/rows`, {
+      title: `Desktop header row ${suffix}`,
+      parentPageId: database.pageId,
+    });
+    const rowPage = await apiGet<any>(
+      api,
+      `/api/pages/info?pageId=${row.pageId}`,
+    );
+
+    await page.setViewportSize({ width: 1700, height: 900 });
+    await page.goto(`/s/${state.spaceSlug}/db/${databasePage.slugId}`);
+    await expect(page.getByTestId("page-header-actions")).toBeVisible();
+    await expectDesktopHeaderActionOrder(page);
+
+    await page.goto(pageUrl(state, rowPage));
+    await expect(page.getByTestId("page-header-actions")).toBeVisible();
+    await expectDesktopHeaderActionOrder(page);
+  } finally {
     await api.dispose();
   }
 });

@@ -37,13 +37,15 @@ vi.mock("@mantine/core", () => ({
     disabled,
     onChange,
     value,
+    "data-testid": testId,
   }: {
     data: Array<{ label: React.ReactNode; value: string }>;
     disabled?: boolean;
     onChange: (value: string) => void;
     value: string;
+    "data-testid"?: string;
   }) => (
-    <div data-testid="segmented-control" data-value={value}>
+    <div data-testid={testId} data-value={value}>
       {data.map((item) => (
         <button
           disabled={disabled}
@@ -192,6 +194,9 @@ describe("PageStateSegmentedControl", () => {
 
     expect(container.querySelector('[data-testid="edit-icon"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="read-icon"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="page-state-segmented-control"]'),
+    ).not.toBeNull();
     expect(container.textContent).toContain("Edit");
     expect(container.textContent).toContain("Read");
   });

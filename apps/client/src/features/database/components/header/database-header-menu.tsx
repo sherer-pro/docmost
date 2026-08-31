@@ -73,6 +73,7 @@ import { queryClient } from "@/lib/query-client.ts";
 import { useNavigate } from "react-router-dom";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
+import FavoriteButton from "@/features/favorite/components/favorite-button";
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -400,7 +401,7 @@ export default function DatabaseHeaderMenu({
         />
       )}
 
-      {isMobileViewport && !readOnly && hasDatabasePage && (
+      {!readOnly && hasDatabasePage && (
         <Tooltip
           label={assistantIdentity.text("openPanel")}
           openDelay={250}
@@ -411,12 +412,54 @@ export default function DatabaseHeaderMenu({
             tooltip={false}
             variant="subtle"
             color="dark"
+            data-page-header-action="ai"
             onClick={() => toggleAside("ai")}
           >
             <IconSparkles size={20} stroke={2} />
           </AccessibleActionIcon>
         </Tooltip>
       )}
+
+      {hasDatabasePage && (
+        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Table of contents")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            data-page-header-action="toc"
+            onClick={handleOpenTableOfContents}
+          >
+            <IconList size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {hasDatabasePage && (
+        <Tooltip label={t("Comments")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            label={t("Comments")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            data-page-header-action="comments"
+            onClick={handleOpenCommentsAside}
+          >
+            <IconMessage size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
+
+      {!isMobileViewport &&
+        !readOnly &&
+        resolvedDatabasePageId &&
+        (database?.spaceId ?? space?.id) && (
+          <FavoriteButton
+            type="page"
+            id={resolvedDatabasePageId}
+            spaceId={database?.spaceId ?? space?.id}
+          />
+        )}
 
       {hasDatabasePage && (
         <ShareModal
@@ -432,55 +475,10 @@ export default function DatabaseHeaderMenu({
             tooltip={false}
             variant="subtle"
             color="dark"
+            data-page-header-action="details"
             onClick={openDetailsModal}
           >
             <IconInfoCircle size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {!isMobileViewport && hasDatabasePage && (
-        <Tooltip label={t("Comments")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Comments")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={handleOpenCommentsAside}
-          >
-            <IconMessage size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {!isMobileViewport && !readOnly && hasDatabasePage && (
-        <Tooltip
-          label={assistantIdentity.text("openPanel")}
-          openDelay={250}
-          withArrow
-        >
-          <AccessibleActionIcon
-            label={assistantIdentity.text("openPanel")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={() => toggleAside("ai")}
-          >
-            <IconSparkles size={20} stroke={2} />
-          </AccessibleActionIcon>
-        </Tooltip>
-      )}
-
-      {!isMobileViewport && (
-        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-          <AccessibleActionIcon
-            label={t("Table of contents")}
-            tooltip={false}
-            variant="subtle"
-            color="dark"
-            onClick={handleOpenTableOfContents}
-          >
-            <IconList size={20} stroke={2} />
           </AccessibleActionIcon>
         </Tooltip>
       )}
@@ -498,6 +496,7 @@ export default function DatabaseHeaderMenu({
             label={t("Open menu")}
             variant="subtle"
             color="dark"
+            data-page-header-action="menu"
           >
             <IconDots size={20} />
           </AccessibleActionIcon>
@@ -506,23 +505,22 @@ export default function DatabaseHeaderMenu({
         <Menu.Dropdown>
           {isMobileViewport && hasDatabasePage && (
             <>
+              {!readOnly &&
+                resolvedDatabasePageId &&
+                (database?.spaceId ?? space?.id) && (
+                  <FavoriteButton
+                    type="page"
+                    id={resolvedDatabasePageId}
+                    spaceId={database?.spaceId ?? space?.id}
+                    presentation="menu-item"
+                  />
+                )}
               <Menu.Item
                 leftSection={<IconInfoCircle size={16} />}
                 onClick={openDetailsModal}
+                data-page-header-menu-action="details"
               >
                 {t("Page details")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconMessage size={16} />}
-                onClick={handleOpenCommentsAside}
-              >
-                {t("Comments")}
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconList size={16} />}
-                onClick={handleOpenTableOfContents}
-              >
-                {t("Table of contents")}
               </Menu.Item>
               <Menu.Divider />
             </>

@@ -3,19 +3,29 @@
 }
 
 .compactControl :global(.mantine-SegmentedControl-control) {
+  flex: 0 0 32px;
+  width: 32px;
   min-width: 32px;
 }
 
 .compactControl :global(.mantine-SegmentedControl-label) {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
   min-height: 32px;
-  padding-inline: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .compactLabel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+}
+
+.compactLabel > svg {
+  display: block;
 }
