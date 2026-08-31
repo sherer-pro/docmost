@@ -5,12 +5,14 @@ import { validateProductionDatabaseContract } from "./check-production-db-contra
 import { POSTGRES_IMAGE } from "./production-db.mjs";
 
 async function fixture() {
-  const [localCompose, productionCompose, ciSource] = await Promise.all([
+  const [localCompose, productionCompose, typesenseCompose, ciSource] =
+    await Promise.all([
     readFile("docker-compose.yml", "utf8"),
     readFile("compose.production.yml", "utf8"),
+    readFile("compose.typesense.yml", "utf8"),
     readFile(".github/workflows/ci.yml", "utf8"),
-  ]);
-  return { localCompose, productionCompose, ciSource };
+    ]);
+  return { localCompose, productionCompose, typesenseCompose, ciSource };
 }
 
 test("checked-in production database contract is valid", async () => {
@@ -52,4 +54,28 @@ test("requires the recorded PostgreSQL image rollback override", async () => {
       error.includes("rollback PostgreSQL image"),
     ),
   );
+});
+
+test("requires the hardened private Typesense production overlay", async () => {
+  const input = await fixture();
+  input.typesenseCompose = input.typesenseCompose
+    .replace("mem_limit: 512m", "mem_limit: 2g")
+    .replace("--thread-pool-size=8", "")
+    .replace(
+      'file: "${TYPESENSE_SECRET_FILE:?Set TYPESENSE_SECRET_FILE to an absolute host path}"',
+      "environment: TYPESENSE_API_KEY",
+    )
+    .replace(/    external: true\r?\n/u, "")
+    .replace(/    cap_drop:\r?\n      - ALL\r?\n/u, "")
+    .replace(
+      /    healthcheck:\r?\n/u,
+      "    ports:\n      - \"8108:8108\"\n    healthcheck:\n",
+    );
+  const errors = validateProductionDatabaseContract(input);
+  assert.ok(errors.some((error) => error.includes("mem_limit: 512m")));
+  assert.ok(errors.some((error) => error.includes("--thread-pool-size=8")));
+  assert.ok(errors.some((error) => error.includes("TYPESENSE_SECRET_FILE")));
+  assert.ok(errors.some((error) => error.includes("external: true")));
+  assert.ok(errors.some((error) => error.includes("cap_drop:")));
+  assert.ok(errors.some((error) => error.includes("must not publish port")));
 });

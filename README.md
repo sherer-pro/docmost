@@ -785,6 +785,7 @@ the [production deployment guide](./docs/DEPLOYMENT.md) for prerequisites,
 immutable image selection, host configuration, external volumes and ingress,
 clean installation, health verification, upgrades, and rollback. Production
 uses the separate [`compose.production.yml`](./compose.production.yml), the
+optional repository-owned [`compose.typesense.yml`](./compose.typesense.yml), the
 [`env` template](./.env.production.example), immutable application and
 PostgreSQL image digests, external database/file volumes, an external one-shot
 schema migration, and fail-closed startup checks.
@@ -799,8 +800,9 @@ legacy archive boundary and separate-secret requirement, follow the
 are `corepack pnpm backup -- create|verify|restore`; restore never reuses Redis
 or a partially restored database volume.
 
-Typesense is a rebuildable projection and is not part of the required archive;
-rebuild it after restore using the [search runbook](./docs/SEARCH.md).
+Typesense is a rebuildable projection and is not part of the required archive.
+Production deployments that enable it must include the checked-in hardened
+overlay and rebuild it after restore using the [search runbook](./docs/SEARCH.md).
 
 `pnpm dev` starts the frontend, API, and collaboration process separately.
 `COLLAB_URL` is the browser-visible collaboration origin, while
