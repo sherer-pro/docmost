@@ -12,7 +12,51 @@ import {
   runAxe,
   test,
 } from "../support/audit-test";
-import type { Page as PlaywrightPage } from "@playwright/test";
+import type { Locator, Page as PlaywrightPage } from "@playwright/test";
+
+async function settleTableLayout(page: PlaywrightPage) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+
+async function getTableOverflowGeometry(wrapper: Locator, marker: string) {
+  return wrapper.evaluate((element, markerText) => {
+    const table = element.querySelector("table")!;
+    const textWalker = document.createTreeWalker(table, NodeFilter.SHOW_TEXT);
+    let markerLineCount: number | null = null;
+    let textNode = textWalker.nextNode();
+
+    while (textNode) {
+      const start = textNode.textContent?.indexOf(markerText) ?? -1;
+      if (start >= 0) {
+        const range = document.createRange();
+        range.setStart(textNode, start);
+        range.setEnd(textNode, start + markerText.length);
+        markerLineCount = range.getClientRects().length;
+        break;
+      }
+      textNode = textWalker.nextNode();
+    }
+
+    return {
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      scrollLeft: element.scrollLeft,
+      tableWidth: table.getBoundingClientRect().width,
+      columnWidths: Array.from(
+        table.querySelectorAll(":scope > colgroup > col"),
+        (column) => column.getBoundingClientRect().width,
+      ),
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      markerLineCount,
+    };
+  }, marker);
+}
 
 async function getVisibleHeaderActionOrder(page: PlaywrightPage) {
   return page
@@ -234,7 +278,61 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     await expectMobileHeaderActionsOpen(page);
     await expectMobileFavoriteToggle(page);
 
-    await expect(page.locator(".tableWrapper")).toBeVisible();
+    const tableWrapper = page.locator(".tableWrapper").first();
+    await expect(tableWrapper).toBeVisible();
+
+    await editMode.click();
+    await expect(editMode).toBeChecked();
+    await expect(mainEditor(page)).toHaveAttribute("contenteditable", "true");
+    const longWord = "W".repeat(100);
+    const tableCell = mainEditor(page)
+      .locator("table")
+      .first()
+      .locator("tr")
+      .nth(1)
+      .locator("td, th")
+      .nth(1)
+      .locator("p");
+    await tableCell.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(` ${longWord}`);
+    await expect(mainEditor(page)).toContainText(longWord);
+
+    for (const width of [320, 360, 412]) {
+      await page.setViewportSize({ width, height: 820 });
+      await settleTableLayout(page);
+      const geometry = await getTableOverflowGeometry(tableWrapper, longWord);
+
+      expect(geometry.scrollWidth).toBeGreaterThan(geometry.clientWidth + 100);
+      expect(geometry.tableWidth).toBeGreaterThan(geometry.clientWidth + 100);
+      expect(
+        Math.max(...geometry.columnWidths) - Math.min(...geometry.columnWidths),
+      ).toBeGreaterThan(100);
+      expect(geometry.markerLineCount).toBe(1);
+      expect(geometry.documentWidth).toBeLessThanOrEqual(
+        geometry.viewportWidth + 2,
+      );
+
+      const scrollLeft = await tableWrapper.evaluate((element) => {
+        element.scrollLeft = element.scrollWidth;
+        return element.scrollLeft;
+      });
+      expect(scrollLeft).toBeGreaterThan(0);
+    }
+
+    await readMode.click();
+    await expect(readMode).toBeChecked();
+    await expect(mainEditor(page)).toHaveAttribute("contenteditable", "false");
+    await expect(mainEditor(page)).toContainText(longWord);
+    await settleTableLayout(page);
+    const readGeometry = await getTableOverflowGeometry(tableWrapper, longWord);
+    expect(readGeometry.scrollWidth).toBeGreaterThan(
+      readGeometry.clientWidth + 100,
+    );
+    expect(readGeometry.documentWidth).toBeLessThanOrEqual(
+      readGeometry.viewportWidth + 2,
+    );
+
     await page.getByAltText("Editor audit image alt text").tap();
     await expect(
       page.getByRole("dialog").filter({

@@ -13,6 +13,11 @@ import {
 
 const DEFAULT_CELL_MIN_WIDTH = 48;
 
+interface TableCellWidthMeasurement {
+  minimumWidth: number;
+  preferredWidth: number;
+}
+
 export function getTableContentWidth(
   table: HTMLTableElement,
   containerWidth: number,
@@ -88,7 +93,10 @@ export class TableView implements NodeView {
 
   private readonly measureRoot: HTMLDivElement;
 
-  private readonly measuredWidths = new WeakMap<ProseMirrorNode, number>();
+  private readonly measuredWidths = new WeakMap<
+    ProseMirrorNode,
+    TableCellWidthMeasurement
+  >();
 
   private resizeObserver?: ResizeObserver;
 
@@ -282,11 +290,12 @@ export class TableView implements NodeView {
       if (!cellElement) return [];
 
       const rect = map.findCell(pos);
+      const measurement = this.measureCell(node, cellElement);
       return [
         {
           start: rect.left,
           span: rect.right - rect.left,
-          width: this.measureCell(node, cellElement),
+          ...measurement,
         },
       ];
     });
@@ -295,9 +304,9 @@ export class TableView implements NodeView {
   private measureCell(
     node: ProseMirrorNode,
     cellElement: HTMLTableCellElement,
-  ): number {
-    const cachedWidth = this.measuredWidths.get(node);
-    if (cachedWidth != null) return cachedWidth;
+  ): TableCellWidthMeasurement {
+    const cachedWidths = this.measuredWidths.get(node);
+    if (cachedWidths != null) return cachedWidths;
 
     const styles = getComputedStyle(cellElement);
     const measure = document.createElement('div');
@@ -310,7 +319,6 @@ export class TableView implements NodeView {
     Object.assign(measure.style, {
       boxSizing: styles.boxSizing,
       display: 'inline-block',
-      width: 'max-content',
       minWidth: '0',
       maxWidth: 'none',
       padding: styles.padding,
@@ -323,11 +331,38 @@ export class TableView implements NodeView {
       fontSize: styles.fontSize,
       fontWeight: styles.fontWeight,
       letterSpacing: styles.letterSpacing,
-      whiteSpace: 'nowrap',
+      lineHeight: styles.lineHeight,
+      hyphens: 'none',
       overflowWrap: 'normal',
       wordBreak: 'normal',
     });
-    measure.querySelectorAll<HTMLElement>('*').forEach((element) => {
+
+    const descendants = measure.querySelectorAll<HTMLElement>('*');
+    Object.assign(measure.style, {
+      width: 'min-content',
+      whiteSpace: 'normal',
+    });
+    descendants.forEach((element) => {
+      element.style.maxWidth = 'none';
+      element.style.whiteSpace = 'normal';
+      element.style.hyphens = 'none';
+      element.style.overflowWrap = 'normal';
+      element.style.wordBreak = 'normal';
+    });
+
+    const readWidth = () =>
+      Math.ceil(
+        Math.max(measure.scrollWidth, measure.getBoundingClientRect().width),
+      );
+
+    this.measureRoot.appendChild(measure);
+    const minimumWidth = readWidth();
+
+    Object.assign(measure.style, {
+      width: 'max-content',
+      whiteSpace: 'nowrap',
+    });
+    descendants.forEach((element) => {
       element.style.width = 'max-content';
       element.style.maxWidth = 'none';
       element.style.whiteSpace = 'nowrap';
@@ -335,13 +370,11 @@ export class TableView implements NodeView {
       element.style.wordBreak = 'normal';
     });
 
-    this.measureRoot.appendChild(measure);
-    const width = Math.ceil(
-      Math.max(measure.scrollWidth, measure.getBoundingClientRect().width),
-    );
+    const preferredWidth = Math.max(minimumWidth, readWidth());
     measure.remove();
-    this.measuredWidths.set(node, width);
+    const measurement = { minimumWidth, preferredWidth };
+    this.measuredWidths.set(node, measurement);
 
-    return width;
+    return measurement;
   }
 }
