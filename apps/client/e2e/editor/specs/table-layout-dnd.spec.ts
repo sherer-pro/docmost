@@ -60,6 +60,7 @@ test("adapts table widths and reorders logical columns", async ({
     `${testInfo.project.name} table layout and dnd`,
     content,
   );
+  const persistedOverflowMarker = "W".repeat(180);
 
   const setMode = async (mode: "read" | "edit") => {
     await apiPost(api, "/api/users/update", {
@@ -241,7 +242,7 @@ test("adapts table widths and reorders logical columns", async ({
 
     await firstCell.locator("p").click();
     await page.keyboard.press("End");
-    await page.keyboard.type(` ${"W".repeat(180)}`);
+    await page.keyboard.type(` ${persistedOverflowMarker}`);
     await settleLayout(page);
     const afterReorderOverflow = await geometry();
     expect(afterReorderOverflow.wrapperScrollWidth).toBeGreaterThan(
@@ -254,12 +255,31 @@ test("adapts table widths and reorders logical columns", async ({
 
     await setMode("read");
     await page.reload();
-    await expect(page.locator(".drag-handle")).toHaveCount(0);
+    await expect(editor).toHaveAttribute("contenteditable", "false", {
+      timeout: 20_000,
+    });
+    await expect(editor).toContainText(persistedOverflowMarker, {
+      timeout: 20_000,
+    });
+    await expect(table).toBeVisible();
+    await expect(
+      page.locator('.drag-handle[data-direction]:visible'),
+    ).toHaveCount(0);
     await settleLayout(page);
+    await expect
+      .poll(
+        async () => {
+          const currentGeometry = await geometry();
+          return (
+            currentGeometry.wrapperScrollWidth -
+            currentGeometry.wrapperClientWidth
+          );
+        },
+        { timeout: 20_000 },
+      )
+      .toBeGreaterThan(100);
     const readGeometry = await geometry();
-    expect(readGeometry.wrapperScrollWidth).toBeGreaterThan(
-      readGeometry.wrapperClientWidth + 100,
-    );
+    expect(readGeometry.longWordLineCount).toBe(1);
     expect(readGeometry.documentWidth).toBeLessThanOrEqual(
       readGeometry.viewportWidth + 2,
     );
@@ -267,6 +287,14 @@ test("adapts table widths and reorders logical columns", async ({
     await setMode("edit");
     await page.setViewportSize({ width: 600, height: 900 });
     await page.reload();
+    await expect(editor).toHaveAttribute("contenteditable", "true", {
+      timeout: 20_000,
+    });
+    await expect(editor).toContainText(persistedOverflowMarker, {
+      timeout: 20_000,
+    });
+    await expect(table).toBeVisible();
+    await settleLayout(page);
     const narrowTableCell = mainEditor(page)
       .locator("table")
       .first()

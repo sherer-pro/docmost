@@ -23,6 +23,23 @@ async function settleTableLayout(page: PlaywrightPage) {
   );
 }
 
+async function setPageEditMode(
+  page: PlaywrightPage,
+  mode: "Edit" | "Read",
+) {
+  const modeRadio = page
+    .getByRole("radiogroup")
+    .getByRole("radio", { name: mode, exact: true });
+  const modeLabel = modeRadio.locator("xpath=following-sibling::label");
+  await expect(modeLabel).toBeVisible();
+  await modeLabel.click();
+  await expect(modeRadio).toBeChecked();
+  await expect(mainEditor(page)).toHaveAttribute(
+    "contenteditable",
+    mode === "Edit" ? "true" : "false",
+  );
+}
+
 async function getTableOverflowGeometry(wrapper: Locator, marker: string) {
   return wrapper.evaluate((element, markerText) => {
     const table = element.querySelector("table")!;
@@ -47,9 +64,8 @@ async function getTableOverflowGeometry(wrapper: Locator, marker: string) {
       scrollWidth: element.scrollWidth,
       scrollLeft: element.scrollLeft,
       tableWidth: table.getBoundingClientRect().width,
-      columnWidths: Array.from(
-        table.querySelectorAll(":scope > colgroup > col"),
-        (column) => column.getBoundingClientRect().width,
+      columnWidths: Array.from(table.rows[0]?.cells ?? [], (cell) =>
+        cell.getBoundingClientRect().width,
       ),
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: document.documentElement.clientWidth,
@@ -291,9 +307,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
     const tableWrapper = page.locator(".tableWrapper").first();
     await expect(tableWrapper).toBeVisible();
 
-    await editMode.click();
-    await expect(editMode).toBeChecked();
-    await expect(mainEditor(page)).toHaveAttribute("contenteditable", "true");
+    await setPageEditMode(page, "Edit");
     const longWord = "W".repeat(100);
     const tableCell = mainEditor(page)
       .locator("table")
@@ -330,9 +344,7 @@ test("mobile and touch rendering reflows without document-level horizontal overf
       expect(scrollLeft).toBeGreaterThan(0);
     }
 
-    await readMode.click();
-    await expect(readMode).toBeChecked();
-    await expect(mainEditor(page)).toHaveAttribute("contenteditable", "false");
+    await setPageEditMode(page, "Read");
     await expect(mainEditor(page)).toContainText(longWord);
     await settleTableLayout(page);
     const readGeometry = await getTableOverflowGeometry(tableWrapper, longWord);
