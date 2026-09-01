@@ -182,6 +182,7 @@
       "@tiptap/extension-unique-id": "3.17.1",
       "@tiptap/extensions": "3.17.1",
       "axios": "1.18.0",
+      "browserslist": "4.28.7",
       "dompurify": "3.4.13",
       "engine.io": "6.6.9",
       "fast-xml-parser": "5.8.0",
