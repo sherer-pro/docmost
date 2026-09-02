@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCapacityPlan,
   buildMigrationFailureReport,
+  candidateVolumeName,
   commandState,
   compareInventories,
   composeServiceLookupArgs,
@@ -16,6 +17,30 @@ import {
   serializeEnvFile,
   storageArchiveDockerArgs,
 } from "./production-db.mjs";
+
+test("keeps the legacy candidate volume name while it fits", () => {
+  assert.equal(
+    candidateVolumeName("docmost_db_data", "20260902031100000"),
+    "docmost_db_data-candidate-20260902031100000",
+  );
+});
+
+test("bounds chained candidate volume names deterministically", () => {
+  const source =
+    "docmost_db_data-candidate-20260816123444838-candidate-20260823112737921-candidate-20260824170929900-candidate-20260829183514966";
+  const migrationId = "20260902031100000";
+  const candidate = candidateVolumeName(source, migrationId);
+
+  assert.equal(candidate.length, 128);
+  assert.match(candidate, /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u);
+  assert.match(candidate, /-[0-9a-f]{16}-candidate-20260902031100000$/u);
+  assert.equal(candidateVolumeName(source, migrationId), candidate);
+  assert.notEqual(candidateVolumeName(`${source}x`, migrationId), candidate);
+
+  const nextCandidate = candidateVolumeName(candidate, "20260903031100000");
+  assert.equal(nextCandidate.length, 128);
+  assert.match(nextCandidate, /-[0-9a-f]{16}-candidate-20260903031100000$/u);
+});
 
 test("includes stopped API container only when rollback provenance needs it", () => {
   assert.deepEqual(previousApplicationContainerLookupArgs(), [

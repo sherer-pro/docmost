@@ -26,6 +26,8 @@ const DEFAULT_ENV_FILE = "/etc/docmost/docmost.env";
 const DEFAULT_STATE_FILE = "/var/lib/docmost/deployment/postgres.env";
 const DEFAULT_BACKUP_DIR = "/var/backups/docmost/postgres";
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const SAFE_NAME_MAX_LENGTH = 128;
+const VOLUME_NAME_FINGERPRINT_LENGTH = 16;
 const SAFE_DATABASE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]{0,62}$/u;
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/u;
 const ACCEPTANCE_PHASE = "acceptance";
@@ -137,6 +139,29 @@ function assertSafeName(value, label) {
   if (!SAFE_NAME.test(value || "")) {
     throw new Error(`${label} must be a simple Docker resource name`);
   }
+}
+
+export function candidateVolumeName(sourceVolume, migrationId) {
+  assertSafeName(sourceVolume, "Source volume");
+  assertSafeName(migrationId, "Migration ID");
+
+  const suffix = `-candidate-${migrationId}`;
+  const directName = `${sourceVolume}${suffix}`;
+  if (directName.length <= SAFE_NAME_MAX_LENGTH) return directName;
+
+  const fingerprint = createHash("sha256")
+    .update(sourceVolume)
+    .digest("hex")
+    .slice(0, VOLUME_NAME_FINGERPRINT_LENGTH);
+  const compactSuffix = `-${fingerprint}${suffix}`;
+  const prefixLength = SAFE_NAME_MAX_LENGTH - compactSuffix.length;
+  if (prefixLength < 1) {
+    throw new Error("Migration ID is too long for a candidate volume name");
+  }
+
+  const compactName = `${sourceVolume.slice(0, prefixLength)}${compactSuffix}`;
+  assertSafeName(compactName, "Candidate volume");
+  return compactName;
 }
 
 function assertDatabaseIdentifier(value, label) {
@@ -1044,7 +1069,7 @@ async function migrate(context) {
   mkdirSync(migrationDir, { recursive: true, mode: 0o700 });
 
   const sourceVolume = context.effective.POSTGRES_VOLUME_NAME;
-  const candidateVolume = `${sourceVolume}-candidate-${migrationId}`;
+  const candidateVolume = candidateVolumeName(sourceVolume, migrationId);
   const candidateContainer = `${context.effective.COMPOSE_PROJECT_NAME || "docmost"}-db-candidate-${migrationId}`;
   assertSafeName(candidateVolume, "Candidate volume");
   assertSafeName(candidateContainer, "Candidate container");
