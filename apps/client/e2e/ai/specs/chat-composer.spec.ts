@@ -62,10 +62,27 @@ test("chat lifecycle, Markdown composer, shortcuts, draft and quick commands", a
 
   await page.keyboard.press("Escape");
   await composer.fill("beforeafter");
-  await composer.press("End");
-  for (let index = 0; index < "after".length; index += 1) {
-    await composer.press("ArrowLeft");
-  }
+  // Set the fixture caret explicitly: rich-text decorations can change native
+  // arrow navigation after fill without changing the underlying text.
+  await composer.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && node.textContent !== "beforeafter") node = walker.nextNode();
+    if (!node) throw new Error("Template insertion fixture text is missing");
+    window.getSelection()?.collapse(node, "before".length);
+  });
+  await expect
+    .poll(() =>
+      composer.evaluate((element) => {
+        const selection = window.getSelection();
+        if (!selection?.anchorNode) return null;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.setEnd(selection.anchorNode, selection.anchorOffset);
+        return range.toString();
+      }),
+    )
+    .toBe("before");
   await openComposerSubmenu(page, /Templates|Шаблоны/i);
   await page.getByRole("menuitem", { name: /Summarize|Резюмировать/i }).click();
 

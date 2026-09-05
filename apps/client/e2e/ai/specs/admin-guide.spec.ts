@@ -23,7 +23,7 @@ test("administrator AI guide is a separate localized release surface", async ({
         overview: "Choose what you need to set up",
         navigation: "AI guide sections",
         technical: "Technical details",
-        projection: "projectionVersion: 1",
+        projection: "projectionVersion: 2",
       }
     : {
         tab: "Справка",
@@ -31,7 +31,7 @@ test("administrator AI guide is a separate localized release surface", async ({
         overview: "Выберите нужный контур",
         navigation: "Разделы справки об ИИ",
         technical: "Технические подробности",
-        projection: "projectionVersion: 1",
+        projection: "projectionVersion: 2",
       };
 
   await page.goto("/settings/ai/guide");
