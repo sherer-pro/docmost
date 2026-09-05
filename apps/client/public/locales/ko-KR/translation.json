@@ -1590,7 +1590,7 @@
       }
     },
     "adminGuide": {
-      "knowledgeAccessDoneOnly": "Knowledge access의 `ragSearchDoneOnly` 스위치는 쿼리 시 AI 검색, RAG API schemaVersion: 3 및 RAG Sync를 자체 정규 상태가 `DONE`인 페이지, 데이터베이스 및 행으로 제한합니다. 상태가 없거나 알 수 없는 항목은 차단됩니다. `statusBlockedPageIds`는 명시적 제외와 별개입니다. 차단된 데이터베이스 문서는 `documentEligible: false`가 되지만 적합한 행은 계속 처리됩니다. 첨부 파일은 페이지 상태를 상속하며 `dictionary_term`, 수동 채팅 컨텍스트, Agent/MCP, 편집기 작업 및 일반 Docmost 검색은 변경되지 않습니다.",
+      "knowledgeAccessDoneOnly": "Knowledge access의 `ragSearchDoneOnly` 스위치는 쿼리 시 AI 검색, RAG API schemaVersion: 4 및 RAG Sync를 자체 정규 상태가 `DONE`인 페이지, 데이터베이스 및 행으로 제한합니다. 상태가 없거나 알 수 없는 항목은 차단됩니다. `statusBlockedPageIds`는 명시적 제외와 별개입니다. 차단된 데이터베이스 문서는 `documentEligible: false`가 되지만 적합한 행은 계속 처리됩니다. 첨부 파일은 페이지 상태를 상속하며 `dictionary_term`, 수동 채팅 컨텍스트, Agent/MCP, 편집기 작업 및 일반 Docmost 검색은 변경되지 않습니다. RAG scope schemaVersion: 4는 contentPolicyVersion과 contentCapabilities도 제공하며 RAG에는 `.md`와 `.txt` 첨부 파일만 활성화됩니다.",
       "tab": "가이드",
       "title": "AI, RAG 및 MCP 작동 방식",
       "description": "AI 도우미, 외부 검색, 동기화 및 MCP 보안 경계에 대한 실무 가이드입니다.",
@@ -1652,7 +1652,7 @@
           },
           "success": "테스트는 후보를 반환하고 답변은 읽을 수 있고 제외되지 않은 소스만 유지합니다.",
           "rollback": "외부 검색을 비활성화합니다. Chat가 검색 없이 계속됩니다.",
-          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다."
+          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다. Open WebUI는 `vector`와 `hybrid_with_vector_fallback`을 지원합니다. `retrievalFollowUpRewriteEnabled`가 켜지면 안전한 사용자 기록과 현재 읽을 수 있는 인용 제목만으로 검색 쿼리를 다시 작성하며, 어시스턴트 본문이나 페이지·파일 내용은 포함하지 않습니다. rewrite 제한은 30000 ms이고 실패하면 원래 쿼리로 돌아가 생성은 계속됩니다."
         },
         "ragApi": {
           "description": "읽기 전용 /api/rag/* API는 전체 및 증분 피드를 외부 인덱서로 내보내고 인증 후 보호된 첨부 파일 스트림을 반환할 수 있습니다.",
@@ -1666,13 +1666,13 @@
           },
           "success": "응답은 200, 안정적인 커서 및 키 작성자의 실시간 읽기 가능 범위만 반환합니다.",
           "rollback": "키를 취소하고 인덱서를 중지합니다. 복구를 위한 새 키 생성",
-          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다. 프로젝션 v1(`projectionVersion: 1`)은 활성화된 문서 필드, 이름이 있는 데이터베이스 셀, 활성화된 사전을 독립적인 페이지네이션 피드로 내보냅니다."
+          "technical": "인바운드 /mcp와 /api/rag/*는 각각 고유한 키 유형만 허용하며 사용자 세션과 다른 키 유형은 거부합니다. 키는 생성자의 현재 스페이스 접근 권한과 페이지 가시성 범위를 넘지 않습니다. 대상 스페이스를 보관하면 해당 키가 즉시 무효화됩니다. 토큰은 생성 시에만 반환되며 키 유형, 스페이스, 생성자 및 만료일은 변경할 수 없습니다. 프로젝션 v1(`projectionVersion: 2`)은 활성화된 문서 필드, 이름이 있는 데이터베이스 셀, 활성화된 사전을 독립적인 페이지네이션 피드로 내보냅니다. Scope schemaVersion: 4와 projectionVersion: 2는 contentPolicyVersion과 contentCapabilities를 제공하며 RAG에서는 공지된 `.md`와 `.txt` 첨부만 나열하거나 다운로드할 수 있습니다."
         },
         "ragSync": {
           "description": "내장된 Open WebUI RAG 동기화는 Docmost 내부에서 실행되고, Docmost 서비스를 통해 직접 PostgreSQL를 읽고, Redis와 조정하고, 별도의 암호화된 공간별 자격 증명으로 씁니다.",
           "owner": "배치 운영자 및 공간 관리자",
           "prerequisite": "RAG_SYNC_ENABLED, 허용되는 Open WebUI 원본, Knowledge ID 및 작성자 키",
-          "result": "Docmost는 선택된 Open WebUI Knowledge Base의 페이지, 데이터베이스 행 및 활성 사전 용어를 점진적으로 유지합니다. 첨부 파일 중에서는 PDF, DOCX, TXT 및 Markdown만 이식 가능한 인덱스에 추가됩니다.",
+          "result": "Docmost는 선택한 Open WebUI Knowledge Base에서 페이지, 데이터베이스 행, 활성 사전 용어 및 허용된 TXT/Markdown 첨부를 점진적으로 관리합니다.",
           "steps": {
             "step1": "대상과 writer 자격 증명 저장",
             "step2": "writer 확인: 읽기 전용 preflight 후 테스트 마커 업로드, 처리 및 삭제",
@@ -1680,7 +1680,7 @@
           },
           "success": "마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.",
           "rollback": "바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요.",
-          "technical": "내장 동기화는 Docmost 내부 서비스를 통해 읽고 /api/rag/*를 호출하지 않습니다. 페이지, 데이터베이스 행 및 활성 사전 용어는 별도로 관리되며 사전 용어는 `dictionary_term` 소스 유형을 사용합니다. 각 피드는 고정된 데이터베이스 스냅샷에 연결된 불투명 커서를 사용합니다. hasMore=false까지 시작 워터마크를 유지하고 마지막 페이지에서만 체크포인트를 진행하며 재시도는 멱등성을 유지해야 합니다. 피드는 최소 한 번 전달됩니다. 리스 또는 슬롯 손실은 현재 외부 요청을 중단하고 새 작업을 막으며, 취소가 도착하기 전에 완료된 부수 효과는 조정 과정에서 처리됩니다. 로컬 인덱싱이 준비된 PDF 및 DOCX에는 Docmost가 추출된 텍스트의 Markdown 프로젝션을 사용합니다. 원격 첨부 파일 이름에는 Docmost 첨부 파일 ID가 포함되므로 동일한 Knowledge Base에서 같은 이름의 파일이 충돌하지 않습니다. upstream 파일 해시는 소스 작업 범위로 제한되고 서명된 ownership metadata는 소스 콘텐츠 해시를 유지합니다."
+          "technical": "내장 동기화는 Docmost 내부 서비스를 통해 읽고 /api/rag/*를 호출하지 않습니다. 페이지, 행, `dictionary_term`은 structured-knowledge-v2를 사용하고 `.md`와 `.txt` 첨부만 `attachment-text-v1`을 사용합니다. PDF, DOCX, 이미지, 오디오 processor는 비활성 상태입니다. reader는 metadata schema v1, 서명된 v2, 서명된 schema v3를 읽고, 쓰기 기본값은 v2이며 multipart에는 v3가 필요하고 upstream file_hash=operationId입니다. query와 writer 자격 증명은 분리되고 feed는 at-least-once이며 lease 손실 뒤 unfenced 쓰기는 금지됩니다."
         },
         "inboundMcp": {
           "description": "외부 보조자는 범위가 지정된 MCP 키를 사용하여 루트 /mcp 엔드포인트에 연결합니다.",
@@ -2227,6 +2227,13 @@
       "retrievalApiKey": "검색 API 키",
       "retrievalTimeout": "검색 시간 초과(ms)",
       "retrievalMaxResults": "최대 결과",
+      "retrievalQueryMode": "Open WebUI 쿼리 모드",
+      "retrievalQueryModeDescription": "하이브리드 검색은 일시적인 외부 서비스 오류에서만 벡터 검색으로 대체됩니다.",
+      "retrievalQueryModeVector": "벡터 검색",
+      "retrievalQueryModeHybrid": "벡터 대체가 있는 하이브리드",
+      "followUpRewrite": "대화 맥락으로 후속 검색 다시 쓰기",
+      "followUpRewriteDescription": "이전 사용자 메시지 최대 3개와 계속 접근 가능한 인용 제목을 사용합니다. 원본 메시지는 변경되지 않습니다.",
+      "ragSupportedContent": "현재 RAG는 페이지, 데이터베이스, 문서 필드, 사전 용어 및 .md/.txt 첨부 파일을 색인화합니다. PDF, DOCX, 이미지 및 오디오는 Docmost에서 계속 사용할 수 있지만 RAG에서는 제외됩니다.",
       "testRetrieval": "테스트 검색",
       "retrievalTestSucceeded": "검색 연결에 성공했습니다.",
       "retrievalTestFailed": "검색 연결에 실패했습니다.",

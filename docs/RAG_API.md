@@ -191,8 +191,30 @@ Returns the current effective indexing scope:
 
 ```json
 {
-  "schemaVersion": 3,
-  "projectionVersion": 1,
+  "schemaVersion": 4,
+  "projectionVersion": 2,
+  "contentPolicyVersion": 1,
+  "contentCapabilities": [
+    {
+      "processorId": "structured-knowledge-v2",
+      "state": "enabled",
+      "sourceType": "structured",
+      "extensions": [".md"],
+      "mimeTypes": ["text/markdown"]
+    },
+    {
+      "processorId": "attachment-text-v1",
+      "state": "enabled",
+      "sourceType": "attachment",
+      "extensions": [".md", ".txt"],
+      "mimeTypes": [
+        "application/octet-stream",
+        "text/markdown",
+        "text/plain",
+        "text/x-markdown"
+      ]
+    }
+  ],
   "workspaceId": "<workspace-uuid>",
   "spaceId": "<space-uuid>",
   "syncTarget": {
@@ -218,9 +240,10 @@ space in AI settings, or `null` when the space does not use the
 The fingerprint is based on the workspace and space identifiers, the effective
 explicit policy, `ragSearchDoneOnly`, the sorted `statusBlockedPageIds`, the
 sorted set of pages currently readable by the key creator,
-`projectionVersion`, the enabled document-field mask, and the dictionary
-switch. A key-scope, ACL, group-membership, space-role, exclusion, projection,
-document-field, dictionary-switch, or `DONE` boundary change therefore
+`projectionVersion`, `contentPolicyVersion`, the ordered content-capability
+registry, the enabled document-field mask, and the dictionary switch. A
+key-scope, ACL, group-membership, space-role, exclusion, projection,
+content-policy/capability, document-field, dictionary-switch, or `DONE` boundary change therefore
 invalidates an external sync. `excludedPageIds` contains only explicit
 exclusions; `statusBlockedPageIds` contains status-derived blocks.
 
@@ -313,6 +336,9 @@ Query:
 Items include `fileId`, file metadata, owning `pageId`, `updatedAtMs`, and an
 API-key-authenticated `downloadUrl`. At read time they also include the current
 parent-page `customFields`. Changing a page field does not re-upload the binary.
+Only `.md` and `.txt` files whose extension and MIME type match the advertised
+`attachment-text-v1` capability are returned. PDF, DOCX, image, and audio
+attachments are excluded from this feed.
 
 ### 5.5 `GET /api/rag/attachments/deleted`
 
@@ -366,6 +392,7 @@ Query:
 ### 5.9 `GET /api/rag/pages/:pageIdOrSlug/attachments`
 
 Attachment metadata list for the page, including ready-to-use `downloadUrl`.
+The same content-capability filter as the attachment updates feed applies.
 
 ### 5.10 `GET /api/rag/attachments/:fileId/:fileName`
 
@@ -379,6 +406,8 @@ Response headers:
 - `Cache-Control: private, max-age=3600`
 
 The owning page and its ACL are checked again immediately before download.
+Unsupported attachment types return `404` even when the file remains available
+through Docmost's ordinary attachment, search, or AI-context features.
 
 ### 5.11 `GET /api/rag/pages/:pageIdOrSlug/comments`
 
@@ -505,6 +534,21 @@ highest score. Timeout, oversized payload, `401`, `429`, `5xx`, or no readable
 results degrades safely to document/file context and never invokes the model
 inside the retrieval adapter.
 
+For Open WebUI, the per-space query mode is `vector` or
+`hybrid_with_vector_fallback`. Hybrid mode has a six-second total budget, a
+three-second hybrid attempt, and a reserved one-second vector fallback. Only
+timeout, `429`, `5xx`, malformed transport output, and hybrid/reranker failures
+fall back. A valid empty result and abort, URL/redirect, size, `400/401/403/404`,
+target, or metadata compatibility errors do not. Open WebUI ordering is kept,
+first-seen identities win, and one logical source contributes at most two
+parts.
+
+Optional contextual follow-up rewrite changes only the adapter query. It uses
+the current question, up to three prior user messages after the conversation's
+history cutoff, and titles of live readable citations; it never uses assistant
+prose/reasoning or page/file bodies. The 30 second bounded provider call falls
+back to the original query on every failure and generation continues.
+
 The chat's external retrieval source types are `page`, `database_row`,
 `attachment`, and `dictionary_term`. The request includes `dictionary_term`
 only while `space.settings.dictionary.enabled` is true. A dictionary candidate
@@ -528,7 +572,9 @@ mapping rules. One Knowledge Base maps to one Docmost space. The module:
   mapping and deleting the previous file;
 - reconstructs lost Redis mappings from `meta.data.docmost`, removes duplicate
   superseded files, and ignores foreign workspace/space metadata;
-- supports page, database-row, dictionary-term, PDF, DOCX, TXT, and MD sources;
+- supports page, database-row, dictionary-term, TXT, and Markdown sources;
+  PDF, DOCX, images, and audio have reserved disabled processor IDs but are not
+  exported, synchronized, or hydrated into query-time retrieval;
 - logs only low-cardinality states, counters, reason codes, lag, and durations;
   stable binding, space, source, checkpoint, and fingerprint IDs are excluded;
 - reads the internal policy scope before each cycle; on fingerprint change it
@@ -559,6 +605,12 @@ key, per-space env variable, JSON file, standalone process, or Compose profile
 for the built-in writer. A Knowledge Base must be created in advance; Docmost
 never creates or deletes the Knowledge Base itself.
 
+Ownership readers accept metadata schema v1, signed v2, and signed v3. Writers
+default to v2 through `RAG_SYNC_METADATA_WRITE_VERSION=2`. Version 3 adds stable
+projector, projection-version, part, and source-locator fields; multipart output
+is rejected unless v3 writing is explicitly enabled. Upstream `file_hash`
+remains the deterministic Docmost `operationId`.
+
 The built-in index contains every page allowed by the space AI content policy
 and, when enabled, by the page's own `DONE` status, not only pages readable by
 the administrator who configured the binding. Direct
@@ -567,8 +619,9 @@ the user's Docmost ACL. Keep Knowledge Base access restricted and keep the
 query-time credential separate from the writer key.
 
 External indexers may continue to implement the initial and incremental flows
-below through `/api/rag/*`. Schema version 3 adds the status-policy fields and
-database `documentEligible` contract described above.
+below through `/api/rag/*`. Scope schema version 4 adds the content-policy and
+capability contract; prior status-policy and database `documentEligible` fields
+remain unchanged. Legacy feed cursors are rejected with `400`.
 
 ### 7.1 Initial sync
 
@@ -588,7 +641,8 @@ database `documentEligible` contract described above.
      returned
 5. For pages with attachments:
    - call `GET /api/rag/pages/:id/attachments`
-   - download binaries through `downloadUrl` or `/api/rag/attachments/:fileId/:fileName`
+   - download only advertised `.md`/`.txt` items through `downloadUrl` or
+     `/api/rag/attachments/:fileId/:fileName`
 6. If the dictionary is enabled, page through
    `GET /api/rag/dictionary/terms?limit=500` and upsert one source per term.
 7. Initialize checkpoints:

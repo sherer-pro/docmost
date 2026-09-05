@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 20,
   "anchors": [
     "assistant",
     "retrieval",
@@ -24,12 +24,27 @@
     {
       "id": "knowledge-projection-version",
       "key": "scenario.ragApi.technical",
-      "needles": ["projectionVersion: 1"]
+      "needles": ["projectionVersion: 2", "schemaVersion: 4"]
+    },
+    {
+      "id": "retrieval-hybrid-follow-up-rewrite",
+      "key": "scenario.retrieval.technical",
+      "needles": [
+        "hybrid_with_vector_fallback",
+        "retrievalFollowUpRewriteEnabled",
+        "30000 ms"
+      ]
     },
     {
       "id": "rag-sync-source-union",
       "key": "scenario.ragSync.technical",
-      "needles": ["/api/rag/*", "dictionary_term"]
+      "needles": [
+        "/api/rag/*",
+        "dictionary_term",
+        "attachment-text-v1",
+        "schema v3",
+        "file_hash=operationId"
+      ]
     },
     {
       "id": "rag-sync-source-removal",
@@ -46,7 +61,7 @@
       "key": "knowledgeAccessDoneOnly",
       "needles": [
         "ragSearchDoneOnly",
-        "schemaVersion: 3",
+        "schemaVersion: 4",
         "statusBlockedPageIds",
         "documentEligible: false",
         "dictionary_term"

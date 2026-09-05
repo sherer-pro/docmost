@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import {
   RAG_SYNC_ERROR_CODES,
   RAG_SYNC_HEALTH_STATES,
+  RAG_CONTENT_PROCESSOR_IDS,
 } from '@docmost/api-contract';
 import {
   RagSyncOperationLock,
@@ -477,9 +478,7 @@ export class RagSyncStateStore
   }
 
   async hasUploadIntents(lease: RagSyncLease): Promise<boolean> {
-    return (
-      (await this.redis.hlen(this.stateKey(lease, 'upload-intents'))) > 0
-    );
+    return (await this.redis.hlen(this.stateKey(lease, 'upload-intents'))) > 0;
   }
 
   async scanUploadIntents(
@@ -1457,7 +1456,7 @@ function isUploadIntent(value: unknown): value is RagSyncUploadIntent {
     ) &&
     typeof value.sourceId === 'string' &&
     isKeyPart(value.sourceId) &&
-    value.identity === `${sourceType}:${value.sourceId}` &&
+    isMappingIdentity(value, sourceType) &&
     isSourcePageId(value.sourceType, value.pageId) &&
     (value.databaseId === undefined ||
       (typeof value.databaseId === 'string' && isKeyPart(value.databaseId))) &&
@@ -1486,6 +1485,39 @@ function isUploadIntent(value: unknown): value is RagSyncUploadIntent {
       (typeof value.firstPassDigest === 'string' &&
         /^[0-9a-f]{64}$/.test(value.firstPassDigest)))
   );
+}
+
+function isMappingIdentity(
+  value: Record<string, any>,
+  sourceType: string,
+): boolean {
+  const logicalIdentity = `${sourceType}:${value.sourceId}`;
+  const hasProjection =
+    value.projectorId !== undefined ||
+    value.projectionVersion !== undefined ||
+    value.partId !== undefined ||
+    value.partIndex !== undefined ||
+    value.partCount !== undefined;
+  if (!hasProjection) return value.identity === logicalIdentity;
+  if (
+    !RAG_CONTENT_PROCESSOR_IDS.includes(value.projectorId) ||
+    !isNonNegativeInteger(value.projectionVersion) ||
+    value.projectionVersion < 1 ||
+    typeof value.partId !== 'string' ||
+    !value.partId ||
+    value.partId.length > 128 ||
+    !isNonNegativeInteger(value.partIndex) ||
+    !isNonNegativeInteger(value.partCount) ||
+    value.partCount < 1 ||
+    value.partIndex >= value.partCount
+  ) {
+    return false;
+  }
+  const expectedIdentity =
+    value.partCount > 1
+      ? `${logicalIdentity}:${value.projectorId}:${encodeURIComponent(value.partId)}`
+      : logicalIdentity;
+  return value.identity === expectedIdentity;
 }
 
 function isRemoteScanProgress(

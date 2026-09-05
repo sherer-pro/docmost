@@ -14,6 +14,7 @@ export interface RagSyncRuntimeConfig {
   shutdownTimeoutMs: number;
   redisPrefix: string;
   leaseTtlMs: number;
+  metadataWriteVersion: 2 | 3;
 }
 
 export function loadRagSyncRuntimeConfig(
@@ -100,6 +101,9 @@ export function loadRagSyncRuntimeConfig(
     ),
     redisPrefix,
     leaseTtlMs: Math.max(30_000, Math.min(300_000, pollIntervalMs * 3)),
+    metadataWriteVersion: metadataWriteVersion(
+      environment.RAG_SYNC_METADATA_WRITE_VERSION,
+    ),
   };
 }
 
@@ -118,10 +122,17 @@ export class RagSyncRuntimeConfigService implements RagSyncRuntimeConfig {
   readonly shutdownTimeoutMs: number;
   readonly redisPrefix: string;
   readonly leaseTtlMs: number;
+  readonly metadataWriteVersion: 2 | 3;
 
   constructor() {
     Object.assign(this, loadRagSyncRuntimeConfig());
   }
+}
+
+function metadataWriteVersion(value: unknown): 2 | 3 {
+  if (value === undefined || value === '' || value === '2') return 2;
+  if (value === '3') return 3;
+  throw new Error('RAG_SYNC_METADATA_WRITE_VERSION must be 2 or 3');
 }
 
 function optionalString(value: unknown): string | undefined {

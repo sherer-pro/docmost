@@ -64,9 +64,7 @@ export class AiRetrievalHttpClient {
     const timeout = setTimeout(
       () =>
         abort(
-          new GatewayTimeoutException(
-            'Retrieval provider request timed out',
-          ),
+          new GatewayTimeoutException('Retrieval provider request timed out'),
         ),
       options.timeoutMs,
     );
@@ -77,9 +75,7 @@ export class AiRetrievalHttpClient {
         this.urlPolicy.resolveAllowed(options.url),
         deadline,
       ]);
-      pinnedDispatcher = createAiPinnedDispatcher(
-        resolvedTarget.addresses,
-      );
+      pinnedDispatcher = createAiPinnedDispatcher(resolvedTarget.addresses);
       const response = await Promise.race([
         fetch(resolvedTarget.url, {
           method: options.method ?? 'GET',
@@ -119,8 +115,7 @@ export class AiRetrievalHttpClient {
         return JSON.parse(raw) as T;
       } catch {
         throw new BadGatewayException({
-          code:
-            options.invalidResponseCode ?? 'retrieval_invalid_response',
+          code: options.invalidResponseCode ?? 'retrieval_invalid_response',
           message: 'Retrieval provider returned invalid JSON',
         });
       }
@@ -129,11 +124,12 @@ export class AiRetrievalHttpClient {
         if (abortReason instanceof GatewayTimeoutException) {
           throw abortReason;
         }
-        throw new GatewayTimeoutException(
-          'Retrieval provider request timed out',
-        );
+        throw abortReason;
       }
       if ((error as Error)?.name === 'AbortError') {
+        if (options.signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
         throw new GatewayTimeoutException(
           'Retrieval provider request timed out',
         );
@@ -167,7 +163,7 @@ export class AiRetrievalHttpClient {
       if (bytes > maxBytes) {
         await reader.cancel();
         throw new BadGatewayException({
-          code: 'retrieval_invalid_response',
+          code: 'retrieval_response_too_large',
           message: 'Retrieval provider response exceeds the allowed size',
         });
       }

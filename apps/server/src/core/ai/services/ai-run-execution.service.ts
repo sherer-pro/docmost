@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { AiRun, AiRunStep, User } from '@docmost/db/types/entity.types';
@@ -48,6 +48,10 @@ import {
 } from '../mcp/ai-mcp.constants';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
 import { AiSourceAccessChangedError } from './ai-source-access.service';
+import {
+  AiQueryRewriteResult,
+  AiQueryRewriteService,
+} from '../retrieval/ai-query-rewrite.service';
 
 class AiRunCancelledError extends Error {}
 
@@ -96,6 +100,8 @@ export class AiRunExecutionService {
     private readonly mcpPolicy: AiMcpPolicyService,
     private readonly mcpCalls: AiMcpToolCallService,
     private readonly profiles: AiAssistantProfileService,
+    @Optional()
+    private readonly queryRewrite?: AiQueryRewriteService,
   ) {}
 
   /**
@@ -283,8 +289,25 @@ export class AiRunExecutionService {
           ),
         },
       );
+      const retrievalConfig = this.configs.toRetrievalConfig(config);
+      const rewrite = this.queryRewrite
+        ? await this.queryRewrite.rewrite({
+            run,
+            user: user as User,
+            currentQuery: userMessage.content,
+            requested: run.useSpaceSearch,
+            enabled:
+              retrievalConfig.adapter !== 'none' &&
+              retrievalConfig.followUpRewriteEnabled,
+            providerConfig,
+          })
+        : this.disabledRewrite(userMessage.content, run.useSpaceSearch);
+      const retrievalDeadlineAtMs =
+        retrievalConfig.queryMode === 'hybrid_with_vector_fallback'
+          ? Date.now() + 6_000
+          : undefined;
       const retrievalOutcome = await this.retrieval.retrieveSafe({
-        config: this.configs.toRetrievalConfig(config),
+        config: retrievalConfig,
         user: user as User,
         requested: run.useSpaceSearch,
         request: {
@@ -293,11 +316,12 @@ export class AiRunExecutionService {
           workspaceId: run.workspaceId,
           spaceId: run.spaceId,
           pageId: run.pageId,
-          query: userMessage.content,
+          query: rewrite.query,
           allowedPageIds: [],
           sourceTypes: ['page', 'database_row', 'attachment'],
           limit: config.retrievalMaxResults,
           candidateLimit: AI_RETRIEVAL_DEFAULTS.candidateLimit,
+          deadlineAtMs: retrievalDeadlineAtMs,
         },
       });
       await this.db
@@ -305,6 +329,12 @@ export class AiRunExecutionService {
         .set({
           retrievalOutcome: retrievalOutcome.status,
           retrievalErrorCode: retrievalOutcome.errorCode ?? null,
+          retrievalQuery: rewrite.query,
+          retrievalRewriteOutcome: rewrite.outcome,
+          retrievalRewriteErrorCode: rewrite.errorCode,
+          retrievalRewriteLatencyMs: rewrite.latencyMs,
+          retrievalRewriteInputTokens: rewrite.usage.inputTokens,
+          retrievalRewriteOutputTokens: rewrite.usage.outputTokens,
           updatedAt: new Date(),
         })
         .where('id', '=', run.id)
@@ -317,7 +347,12 @@ export class AiRunExecutionService {
         ...fileContext.citations,
       ];
       await this.recordSourceDependencies(run, fileContext.citations);
-      await this.assertRunSourceAccess(run, user as User, protectedSources);
+      await this.assertRunSourceAccess(
+        run,
+        user as User,
+        protectedSources,
+        retrievalOutcome.sources,
+      );
 
       const buildMessages = (contextWindow: number, maxOutputTokens: number) =>
         this.promptBuilder.build({
@@ -352,6 +387,7 @@ export class AiRunExecutionService {
           retrievalOutcome,
           userContent: userMessage.content,
           providerConfig,
+          rewriteUsage: rewrite.usage,
         });
         return;
       }
@@ -376,7 +412,12 @@ export class AiRunExecutionService {
         ) {
           return;
         }
-        await this.assertRunSourceAccess(run, user as User, protectedSources);
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          protectedSources,
+          retrievalOutcome.sources,
+        );
         const delta = pendingDelta;
         const reasoningDelta = pendingReasoningDelta;
         pendingDelta = '';
@@ -419,7 +460,12 @@ export class AiRunExecutionService {
         providerMessages: AiProviderMessage[],
         maxOutputTokens: number,
       ) => {
-        await this.assertRunSourceAccess(run, user as User, protectedSources);
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          protectedSources,
+          retrievalOutcome.sources,
+        );
         await this.profiles.assertRunProfileCurrent(run);
         const result = await this.provider.stream(
           {
@@ -445,7 +491,12 @@ export class AiRunExecutionService {
           },
         );
         await this.profiles.assertRunProfileCurrent(run);
-        await this.assertRunSourceAccess(run, user as User, protectedSources);
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          protectedSources,
+          retrievalOutcome.sources,
+        );
         return result;
       };
       let usage: AiProviderUsage;
@@ -463,6 +514,7 @@ export class AiRunExecutionService {
         );
         usage = await stream(prompt.messages, fallback.maxOutputTokens);
       }
+      usage = this.addUsage(usage, rewrite.usage);
       await flush(true);
       if (await this.isCancelled(run.id)) {
         await this.cancel(run, content, reasoning);
@@ -471,13 +523,23 @@ export class AiRunExecutionService {
 
       sequence += 1;
       const completedAt = new Date();
-      await this.assertRunSourceAccess(run, user as User, protectedSources);
+      await this.assertRunSourceAccess(
+        run,
+        user as User,
+        protectedSources,
+        retrievalOutcome.sources,
+      );
       const finalized = this.citations.finalize(
         content,
         prompt.citationCandidates,
       );
       const completion = await this.db.transaction().execute(async (trx) => {
-        await this.assertRunSourceAccess(run, user as User, protectedSources);
+        await this.assertRunSourceAccess(
+          run,
+          user as User,
+          protectedSources,
+          retrievalOutcome.sources,
+        );
         const updated = await trx
           .updateTable('aiRuns')
           .set({
@@ -591,6 +653,7 @@ export class AiRunExecutionService {
     };
     userContent: string;
     providerConfig: AiProviderConfig;
+    rewriteUsage: AiProviderUsage;
   }): Promise<void> {
     const {
       run,
@@ -602,6 +665,7 @@ export class AiRunExecutionService {
       userContent,
       citationCandidates,
       providerConfig,
+      rewriteUsage,
     } = params;
     const mcpSnapshot = this.mcpPolicy.readRunSnapshot(run);
     // One merged list, and one lookup source built from it. Resolving a call
@@ -611,10 +675,12 @@ export class AiRunExecutionService {
       ...(await this.assertCurrentBuiltinPolicy(run)),
       ...this.mcpCalls.listSnapshotDefinitions(mcpSnapshot),
     ];
-    await this.assertRunSourceAccess(run, user, [
-      ...retrievalOutcome.sources,
-      ...fileCitations,
-    ]);
+    await this.assertRunSourceAccess(
+      run,
+      user,
+      [...retrievalOutcome.sources, ...fileCitations],
+      retrievalOutcome.sources,
+    );
     if (definitions.length > AI_AGENT_MAX_TOOL_DEFINITIONS) {
       throw new AiAgentExecutionError(
         'agent_mcp_tool_definition_limit',
@@ -674,6 +740,9 @@ export class AiRunExecutionService {
       previousSteps.length > 0
         ? Math.max(...previousSteps.map((step) => step.modelStep)) + 1
         : 0;
+    if (previousSteps.length === 0) {
+      usage = this.addUsage(usage, rewriteUsage);
+    }
     let segmentModelStep = segmentSteps.length
       ? modelStep - Math.min(...segmentSteps.map((step) => step.modelStep))
       : 0;
@@ -1189,6 +1258,11 @@ export class AiRunExecutionService {
       sourceId: string;
       pageId: string | null;
     }> = [],
+    ragSources: Array<{
+      sourceType: string;
+      sourceId: string;
+      pageId: string | null;
+    }> = [],
   ): Promise<void> {
     const chatFileIds = [
       ...new Set(
@@ -1230,7 +1304,17 @@ export class AiRunExecutionService {
       user,
       workspaceId: run.workspaceId,
       spaceId: run.spaceId,
+      mode: 'default',
     });
+    if (ragSources.length > 0) {
+      await this.retrieval.assertSourcesAccessible({
+        sources: ragSources,
+        user,
+        workspaceId: run.workspaceId,
+        spaceId: run.spaceId,
+        mode: 'rag-search',
+      });
+    }
   }
 
   /**
@@ -1498,20 +1582,24 @@ export class AiRunExecutionService {
     citationCandidates: AiCitationCandidate[];
     user: User;
   }): Promise<void> {
-    await this.assertRunSourceAccess(params.run, params.user, [
-      ...params.retrievalOutcome.sources,
-      ...params.fileCitations,
-    ]);
+    await this.assertRunSourceAccess(
+      params.run,
+      params.user,
+      [...params.retrievalOutcome.sources, ...params.fileCitations],
+      params.retrievalOutcome.sources,
+    );
     const completedAt = new Date();
     const finalized = this.citations.finalize(
       params.content,
       params.citationCandidates,
     );
     const completion = await this.db.transaction().execute(async (trx) => {
-      await this.assertRunSourceAccess(params.run, params.user, [
-        ...params.retrievalOutcome.sources,
-        ...params.fileCitations,
-      ]);
+      await this.assertRunSourceAccess(
+        params.run,
+        params.user,
+        [...params.retrievalOutcome.sources, ...params.fileCitations],
+        params.retrievalOutcome.sources,
+      );
       const updated = await trx
         .updateTable('aiRuns')
         .set({
@@ -1602,6 +1690,29 @@ export class AiRunExecutionService {
       (error as Error)?.message ??
       'Tool execution failed';
     return String(message).slice(0, 500);
+  }
+
+  private disabledRewrite(
+    query: string,
+    requested: boolean,
+  ): AiQueryRewriteResult {
+    return {
+      query,
+      outcome: requested ? 'disabled' : 'not_requested',
+      errorCode: null,
+      latencyMs: null,
+      usage: { inputTokens: 0, outputTokens: 0 },
+    };
+  }
+
+  private addUsage(
+    left: AiProviderUsage,
+    right: AiProviderUsage,
+  ): AiProviderUsage {
+    return {
+      inputTokens: left.inputTokens + right.inputTokens,
+      outputTokens: left.outputTokens + right.outputTokens,
+    };
   }
 
   private async claim(runId: string): Promise<AiRun | undefined> {

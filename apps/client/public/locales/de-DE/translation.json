@@ -1590,7 +1590,7 @@
       }
     },
     "adminGuide": {
-      "knowledgeAccessDoneOnly": "Der Schalter `ragSearchDoneOnly` unter Knowledge access beschränkt die KI-Suche zur Abfragezeit, RAG API schemaVersion: 3 und RAG Sync auf Seiten, Datenbanken und Zeilen mit dem eigenen kanonischen Status `DONE`; fehlende oder unbekannte Status werden blockiert. `statusBlockedPageIds` bleibt von expliziten Ausschlüssen getrennt. Ein blockiertes Datenbankdokument erhält `documentEligible: false`, geeignete Zeilen werden jedoch weiter verarbeitet. Anhänge übernehmen den Seitenstatus; `dictionary_term`, manueller Chatkontext, Agent/MCP, Editor-Aktionen und die normale Docmost-Suche bleiben unverändert.",
+      "knowledgeAccessDoneOnly": "Der Schalter `ragSearchDoneOnly` unter Knowledge access beschränkt die KI-Suche zur Abfragezeit, RAG API schemaVersion: 4 und RAG Sync auf Seiten, Datenbanken und Zeilen mit dem eigenen kanonischen Status `DONE`; fehlende oder unbekannte Status werden blockiert. `statusBlockedPageIds` bleibt von expliziten Ausschlüssen getrennt. Ein blockiertes Datenbankdokument erhält `documentEligible: false`, geeignete Zeilen werden jedoch weiter verarbeitet. Anhänge übernehmen den Seitenstatus; `dictionary_term`, manueller Chatkontext, Agent/MCP, Editor-Aktionen und die normale Docmost-Suche bleiben unverändert. RAG scope schemaVersion: 4 veröffentlicht außerdem contentPolicyVersion und contentCapabilities; für RAG sind nur `.md`- und `.txt`-Anhänge aktiviert.",
       "tab": "Leitfaden",
       "title": "So funktionieren AI, RAG und MCP",
       "description": "Ein Betriebsleitfaden zum Assistenten, zur externen Suche, zur Synchronisierung und zu den Sicherheitsgrenzen von MCP.",
@@ -1652,7 +1652,7 @@
           },
           "success": "Der Test gibt Kandidaten zurück und die Antwort enthält nur lesbare, nicht ausgeschlossene Quellen",
           "rollback": "Externe Suche deaktivieren; Chat wird ohne Abruf fortgesetzt",
-          "technical": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt."
+          "technical": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt. Open WebUI unterstützt `vector` und `hybrid_with_vector_fallback`. Mit `retrievalFollowUpRewriteEnabled` wird nur die Suchanfrage aus sicherem Benutzerverlauf und Titeln weiterhin lesbarer Zitate umgeschrieben; Assistententext sowie Seiten- und Dateiinhalte fehlen. Das Rewrite-Limit beträgt 30000 ms, bei Fehlern wird die ursprüngliche Anfrage verwendet und die Generierung fortgesetzt."
         },
         "ragApi": {
           "description": "Die schreibgeschützte API /api/rag/* exportiert vollständige und inkrementelle Feeds an einen externen Indexer und kann nach der Autorisierung geschützte Anhangsstreams zurückgeben.",
@@ -1666,13 +1666,13 @@
           },
           "success": "Die Antworten geben 200, stabile Cursor und nur den live lesbaren Bereich des Schlüsselerstellers zurück",
           "rollback": "Widerrufen Sie den Schlüssel und stoppen Sie den Indexer. Erstellen Sie einen neuen Schlüssel für die Wiederherstellung",
-          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. Projektion v1 (`projectionVersion: 1`) exportiert aktivierte Dokumentfelder, benannte Datenbankzellen und das aktivierte Wörterbuch über unabhängige paginierte Feeds."
+          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. Projektion v1 (`projectionVersion: 2`) exportiert aktivierte Dokumentfelder, benannte Datenbankzellen und das aktivierte Wörterbuch über unabhängige paginierte Feeds. Scope schemaVersion: 4 und projectionVersion: 2 veröffentlichen contentPolicyVersion und contentCapabilities; über RAG sind nur angekündigte `.md`- und `.txt`-Anhänge verfügbar."
         },
         "ragSync": {
           "description": "Die integrierte Open WebUI RAG-Synchronisierung läuft in Docmost, liest PostgreSQL direkt über Docmost-Dienste, koordiniert mit Redis und schreibt mit separaten, verschlüsselten Anmeldeinformationen pro Space.",
           "owner": "Bereitstellungsbetreiber und Raumadministrator",
           "prerequisite": "RAG_SYNC_ENABLED, ein zulässiger Open WebUI-Ursprung, Knowledge ID und ein Writer-Schlüssel",
-          "result": "Docmost pflegt Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe inkrementell in der ausgewählten Open WebUI Knowledge Base; von den Anhängen gelangen nur PDF, DOCX, TXT und Markdown in den portablen Dokumentindex",
+          "result": "Docmost pflegt Seiten, Datenbankzeilen, aktivierte Wörterbuchbegriffe und erlaubte TXT/Markdown-Anhänge schrittweise in der ausgewählten Open WebUI Knowledge Base.",
           "steps": {
             "step1": "Speichern Sie Ziel und Writer-Zugangsdaten",
             "step2": "Prüfen Sie den Writer: schreibgeschützter Preflight, dann Testmarker hochladen, verarbeiten und löschen",
@@ -1680,7 +1680,7 @@
           },
           "success": "Der letzte Erfolg schreitet voran und es bleibt kein Bereinigungs- oder Zielinkongruenzstatus bestehen",
           "rollback": "Deaktivieren Sie die Bindung und schließen Sie die Bereinigung ab. Für ein Notfall-Rollback deaktivieren Sie RAG_SYNC_ENABLED und starten Sie neu",
-          "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft niemals /api/rag/* auf. Seiten, Datenbankzeilen und aktivierte Wörterbuchbegriffe werden getrennt verwaltet; Wörterbuchbegriffe verwenden den Quelltyp `dictionary_term`. Jeder Feed verwendet einen opaken Cursor für einen festen Datenbank-Snapshot. Der Start-Watermark bleibt bis hasMore=false unverändert; erst die letzte Seite schreibt den Checkpoint fort, und Wiederholungen müssen idempotent bleiben. Feeds werden mindestens einmal zugestellt. Der Verlust von Lease oder Slot bricht die aktuelle entfernte Anfrage ab und verhindert neue Arbeit; die Abstimmung behandelt Seiteneffekte, die vor der Abbruchübermittlung abgeschlossen wurden. Für PDF und DOCX verwendet Docmost bei fertiger lokaler Indizierung eine Markdown-Projektion des extrahierten Textes. Remote Dateinamen von Anhängen enthalten die Docmost-Anhang-ID, damit gleichnamige Dateien in einer Knowledge Base nicht kollidieren. Der Upstream-Dateihash ist auf die Quelloperation beschränkt, während signierte Ownership-Metadaten den Inhalts-Hash der Quelle bewahren."
+          "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft /api/rag/* nie auf. Seiten, Datenbankzeilen und `dictionary_term` verwenden structured-knowledge-v2; nur `.md`- und `.txt`-Anhänge verwenden `attachment-text-v1`. PDF-, DOCX-, Bild- und Audio-Prozessoren bleiben deaktiviert. Der Reader akzeptiert metadata schema v1, signiertes v2 und signiertes schema v3; v2 bleibt Schreibstandard, Multipart erfordert v3 und upstream file_hash=operationId. Abfrage- und Writer-Schlüssel bleiben getrennt, Feeds sind at-least-once und Lease-Verlust verhindert unfenced Statusschreibvorgänge."
         },
         "inboundMcp": {
           "description": "Externe Assistenten stellen mit einem bereichsbezogenen MCP-Schlüssel eine Verbindung zum Root-Endpunkt /mcp her.",
@@ -2227,6 +2227,13 @@
       "retrievalApiKey": "API-Schlüssel zum Abrufen",
       "retrievalTimeout": "Abruf-Timeout (ms)",
       "retrievalMaxResults": "Maximale Ergebnisse",
+      "retrievalQueryMode": "Open WebUI-Abfragemodus",
+      "retrievalQueryModeDescription": "Die Hybridsuche wechselt nur bei vorübergehenden Upstream-Fehlern zur Vektorsuche.",
+      "retrievalQueryModeVector": "Vektorsuche",
+      "retrievalQueryModeHybrid": "Hybrid mit Vektor-Fallback",
+      "followUpRewrite": "Folgesuchen mit Gesprächskontext umformulieren",
+      "followUpRewriteDescription": "Verwendet bis zu drei frühere Benutzernachrichten und Titel weiterhin zugänglicher Zitate. Die ursprüngliche Nachricht bleibt unverändert.",
+      "ragSupportedContent": "RAG indiziert derzeit Seiten, Datenbanken, Dokumentfelder, Wörterbucheinträge und .md/.txt-Anhänge. PDF, DOCX, Bilder und Audio bleiben in Docmost verfügbar, sind aber von RAG ausgeschlossen.",
       "testRetrieval": "Testabruf",
       "retrievalTestSucceeded": "Der Verbindungsabruf war erfolgreich.",
       "retrievalTestFailed": "Die Abrufverbindung ist fehlgeschlagen.",

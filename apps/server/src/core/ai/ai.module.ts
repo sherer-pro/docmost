@@ -64,6 +64,7 @@ import { AiAssistantProfileService } from './services/ai-assistant-profile.servi
 import { AiSourceAccessService } from './services/ai-source-access.service';
 import { AiProviderModule } from './ai-provider.module';
 import { RagModule } from '../rag/rag.module';
+import { AiQueryRewriteService } from './retrieval/ai-query-rewrite.service';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { RagModule } from '../rag/rag.module';
     AiQueueReconcilerService,
     AiRetrievalUrlPolicyService,
     AiRetrievalService,
+    AiQueryRewriteService,
     AiRetrievalHttpClient,
     AiRunExecutionService,
     AiRunEventService,

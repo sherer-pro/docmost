@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { createHmac, randomBytes } from 'node:crypto';
+import { RAG_CONTENT_PROCESSOR_IDS } from '@docmost/api-contract';
 import type { Dispatcher } from 'undici';
 import { createAiPinnedDispatcher } from '../../ai/services/ai-pinned-http.util';
 import { AiOutboundUrlPolicyService } from '../../ai/services/ai-outbound-url-policy.service';
@@ -15,8 +16,10 @@ import {
   OpenWebUiFile,
   OpenWebUiProcessingError,
   RagSyncDocmostMetadataV2,
+  RagSyncDocmostMetadataV3,
   RagSyncLegacyDocmostMetadata,
   RagSyncRemoteOwnership,
+  RagSyncSignedDocmostMetadata,
   RagSyncRuntimeBinding,
   RagSyncRuntimeError,
 } from './rag-sync-runtime.types';
@@ -67,6 +70,10 @@ export class OpenWebUiWriterService {
     @Optional() private readonly repo?: RagSyncAdminRepo,
     @Optional() private readonly environment?: EnvironmentService,
   ) {}
+
+  metadataWriteVersion(): 2 | 3 {
+    return this.config.metadataWriteVersion;
+  }
 
   async preflightTarget(
     target: {
@@ -149,7 +156,7 @@ export class OpenWebUiWriterService {
       fileName: string;
       mimeType: string;
       content: Uint8Array;
-      metadata: RagSyncDocmostMetadataV2;
+      metadata: RagSyncSignedDocmostMetadata;
     },
     signal?: AbortSignal,
   ): Promise<OpenWebUiFile> {
@@ -372,7 +379,7 @@ export class OpenWebUiWriterService {
       for (const file of result.items) {
         const ownership = this.readOwnership(file, binding);
         if (
-          ownership?.schemaVersion !== 2 ||
+          ownership?.schemaVersion === 1 ||
           ownership.metadata.marker !== 'target-test' ||
           ownership.metadata.sourceUpdatedAtMs >
             Date.now() - TARGET_TEST_TIMEOUT_MS - this.config.requestTimeoutMs
@@ -395,7 +402,8 @@ export class OpenWebUiWriterService {
     return files.find((file) => {
       const ownership = this.readOwnership(file, binding);
       return (
-        ownership?.schemaVersion === 2 &&
+        ownership !== null &&
+        ownership.schemaVersion !== 1 &&
         ownership.metadata.operationId === operationId
       );
     });
@@ -418,6 +426,26 @@ export class OpenWebUiWriterService {
       Number(candidate.sourceUpdatedAtMs) < 0
     ) {
       return null;
+    }
+    if (
+      candidate.schemaVersion === 3 &&
+      candidate.bindingId === binding.id &&
+      Number.isSafeInteger(candidate.targetVersion) &&
+      Number(candidate.targetVersion) >= 1 &&
+      typeof candidate.operationId === 'string' &&
+      /^[0-9a-f]{64}$/.test(candidate.operationId) &&
+      isV3ProjectionMetadata(candidate) &&
+      typeof candidate.ownershipMac === 'string' &&
+      /^[0-9a-f]{64}$/.test(candidate.ownershipMac) &&
+      safeStringEqual(
+        candidate.ownershipMac,
+        this.createOwnershipMac(candidate as RagSyncDocmostMetadataV3),
+      )
+    ) {
+      return {
+        schemaVersion: 3,
+        metadata: candidate as RagSyncDocmostMetadataV3,
+      };
     }
     if (
       candidate.schemaVersion === 2 &&
@@ -460,32 +488,13 @@ export class OpenWebUiWriterService {
     }
   }
 
-  private createOwnershipMac(
-    metadata: Omit<RagSyncDocmostMetadataV2, 'ownershipMac'>,
-  ): string {
+  private createOwnershipMac(metadata: RagSyncSignedDocmostMetadata): string {
     if (!this.environment) {
       throw new OpenWebUiWriterError('rag_sync_writer_key_missing', false);
     }
     return createHmac('sha256', this.environment.getAppSecret())
-      .update('docmost:rag-sync:ownership:v2\n', 'utf8')
-      .update(
-        JSON.stringify([
-          metadata.schemaVersion,
-          metadata.bindingId,
-          metadata.targetVersion,
-          metadata.workspaceId,
-          metadata.spaceId,
-          metadata.sourceType,
-          metadata.sourceId,
-          metadata.pageId,
-          metadata.databaseId ?? null,
-          metadata.sourceUpdatedAtMs,
-          metadata.contentHash,
-          metadata.operationId,
-          metadata.marker ?? null,
-        ]),
-        'utf8',
-      )
+      .update(`docmost:rag-sync:ownership:v${metadata.schemaVersion}\n`, 'utf8')
+      .update(JSON.stringify(ownershipMacPayload(metadata)), 'utf8')
       .digest('hex');
   }
 
@@ -790,6 +799,8 @@ function projectDocmostMetadata(
     ['operationId', 128],
     ['ownershipMac', 128],
     ['marker', 32],
+    ['projectorId', 64],
+    ['partId', 128],
   ] as const) {
     if (isBoundedString(value[name], maxLength)) result[name] = value[name];
   }
@@ -797,10 +808,116 @@ function projectDocmostMetadata(
     'schemaVersion',
     'targetVersion',
     'sourceUpdatedAtMs',
+    'projectionVersion',
+    'partIndex',
+    'partCount',
   ] as const) {
     if (Number.isSafeInteger(value[name])) result[name] = value[name];
   }
+  if (isRecord(value.locator)) {
+    result.locator = projectLocator(value.locator);
+  }
   return result;
+}
+
+function projectLocator(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const name of [
+    'pageId',
+    'databaseId',
+    'attachmentId',
+    'sectionId',
+  ] as const) {
+    if (value[name] === null && name === 'pageId') result[name] = null;
+    else if (isBoundedString(value[name], 200)) result[name] = value[name];
+  }
+  if (Number.isSafeInteger(value.pageNumber)) {
+    result.pageNumber = value.pageNumber;
+  }
+  if (isRecord(value.region)) {
+    const region = projectRegion(value.region);
+    if (region) result.region = region;
+  }
+  return result;
+}
+
+function projectRegion(
+  value: Record<string, unknown>,
+): { x: number; y: number; width: number; height: number } | null {
+  const numbers = ['x', 'y', 'width', 'height'].map((name) => value[name]);
+  if (
+    !numbers.every((number) => typeof number === 'number' && isFinite(number))
+  ) {
+    return null;
+  }
+  const [x, y, width, height] = numbers as number[];
+  if (width < 0 || height < 0) return null;
+  return { x, y, width, height };
+}
+
+function isV3ProjectionMetadata(value: Record<string, unknown>): boolean {
+  if (
+    !RAG_CONTENT_PROCESSOR_IDS.includes(value.projectorId as never) ||
+    !isBoundedString(value.partId, 128) ||
+    !Number.isSafeInteger(value.projectionVersion) ||
+    Number(value.projectionVersion) < 1 ||
+    !Number.isSafeInteger(value.partIndex) ||
+    Number(value.partIndex) < 0 ||
+    !Number.isSafeInteger(value.partCount) ||
+    Number(value.partCount) < 1 ||
+    Number(value.partIndex) >= Number(value.partCount) ||
+    !isRecord(value.locator)
+  ) {
+    return false;
+  }
+  const locator = value.locator;
+  return (
+    (locator.pageId === null || isBoundedString(locator.pageId, 200)) &&
+    (locator.databaseId === undefined ||
+      isBoundedString(locator.databaseId, 200)) &&
+    (locator.attachmentId === undefined ||
+      isBoundedString(locator.attachmentId, 200)) &&
+    (locator.sectionId === undefined ||
+      isBoundedString(locator.sectionId, 200)) &&
+    (locator.pageNumber === undefined ||
+      (Number.isSafeInteger(locator.pageNumber) &&
+        Number(locator.pageNumber) >= 1)) &&
+    (locator.region === undefined ||
+      (isRecord(locator.region) && projectRegion(locator.region) !== null))
+  );
+}
+
+function ownershipMacPayload(
+  metadata: RagSyncSignedDocmostMetadata,
+): unknown[] {
+  const base: unknown[] = [
+    metadata.schemaVersion,
+    metadata.bindingId,
+    metadata.targetVersion,
+    metadata.workspaceId,
+    metadata.spaceId,
+    metadata.sourceType,
+    metadata.sourceId,
+    metadata.pageId,
+    metadata.databaseId ?? null,
+    metadata.sourceUpdatedAtMs,
+    metadata.contentHash,
+    metadata.operationId,
+  ];
+  if (metadata.schemaVersion === 3) {
+    base.push(
+      metadata.projectorId,
+      metadata.projectionVersion,
+      metadata.partId,
+      metadata.partIndex,
+      metadata.partCount,
+      metadata.locator,
+    );
+  }
+  base.push(metadata.marker ?? null);
+  return base;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -62,6 +62,8 @@ export type AiRetrievalConfig = {
   openWebUiKnowledgeId?: string | null;
   timeoutMs: number;
   maxResults: number;
+  queryMode: import('@docmost/api-contract').AiRetrievalQueryMode;
+  followUpRewriteEnabled: boolean;
 };
 
 export type AiRetrievalRequest = {
@@ -77,6 +79,7 @@ export type AiRetrievalRequest = {
   >;
   limit: number;
   candidateLimit: number;
+  deadlineAtMs?: number;
 };
 
 export type AiRetrievalHit = {
@@ -85,6 +88,7 @@ export type AiRetrievalHit = {
   pageId: string | null;
   text: string;
   score?: number;
+  partKey?: string;
 };
 
 export type AiSafeRetrievalSource = {
@@ -95,6 +99,7 @@ export type AiSafeRetrievalSource = {
   sourceUrl: string | null;
   excerpt: string;
   relevanceScore: number | null;
+  partKey?: string | null;
   customFields?: import('@docmost/api-contract').RagDocumentCustomFields;
   sectionId?: string | null;
   sectionTitle?: string | null;

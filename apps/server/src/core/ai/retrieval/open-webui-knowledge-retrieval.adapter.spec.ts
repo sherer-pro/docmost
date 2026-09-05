@@ -1,4 +1,3 @@
-import { BadGatewayException } from '@nestjs/common';
 import { OpenWebUiKnowledgeRetrievalAdapter } from './open-webui-knowledge-retrieval.adapter';
 import { AiRetrievalHttpClient } from './ai-retrieval-http-client.service';
 
@@ -15,6 +14,8 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     apiKey: null,
     timeoutMs: 1000,
     maxResults: 8,
+    queryMode: 'vector' as const,
+    followUpRewriteEnabled: false,
     openWebUiBaseUrl: 'https://open-webui.example.test',
     openWebUiApiKey: 'query-key',
     openWebUiKnowledgeId: 'knowledge-1',
@@ -252,7 +253,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     ]);
   });
 
-  it('deduplicates candidates and retains the smallest distance', async () => {
+  it('deduplicates candidates while preserving upstream order', async () => {
     global.fetch = jest.fn(async () =>
       jsonResponse({
         documents: [['far', 'near']],
@@ -267,7 +268,40 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
     ) as any;
 
     await expect(adapter.retrieve(config, request)).resolves.toEqual([
-      expect.objectContaining({ text: 'near' }),
+      expect.objectContaining({ text: 'far' }),
+    ]);
+  });
+
+  it('accepts v3 multipart metadata and caps one logical source to two parts', async () => {
+    const v3 = (partId: string, partIndex: number) =>
+      thisMetadata({
+        schemaVersion: 3,
+        sourceId: pageId,
+        pageId,
+        projectorId: 'structured-knowledge-v2',
+        partId,
+        partIndex,
+        partCount: 3,
+      });
+    global.fetch = jest.fn(async () =>
+      jsonResponse({
+        documents: [['first', 'first duplicate', 'second', 'third']],
+        metadatas: [
+          [v3('page-1', 0), v3('page-1', 0), v3('page-2', 1), v3('page-3', 2)],
+        ],
+        distances: [[0.1, 0.2, 0.3, 0.4]],
+      }),
+    ) as any;
+
+    await expect(adapter.retrieve(config, request)).resolves.toEqual([
+      expect.objectContaining({
+        text: 'first',
+        partKey: 'structured-knowledge-v2:page-1',
+      }),
+      expect.objectContaining({
+        text: 'second',
+        partKey: 'structured-knowledge-v2:page-2',
+      }),
     ]);
   });
 
@@ -306,20 +340,107 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
 
       await expect(adapter.retrieve(config, request)).rejects.toMatchObject({
         response: expect.objectContaining({
-          code: 'retrieval_invalid_response',
+          code: 'retrieval_incompatible_metadata',
         }),
       });
     },
   );
 
-  it('rejects oversized response bodies without exposing them', async () => {
+  it('rejects oversized hybrid responses without vector fallback', async () => {
     global.fetch = jest.fn(
       async () => new Response('x'.repeat(256 * 1024 + 1)),
     ) as any;
 
-    await expect(adapter.retrieve(config, request)).rejects.toBeInstanceOf(
-      BadGatewayException,
-    );
+    await expect(
+      adapter.retrieve(
+        {
+          ...config,
+          timeoutMs: 6000,
+          queryMode: 'hybrid_with_vector_fallback',
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'retrieval_response_too_large',
+      }),
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to vector retrieval after a retryable hybrid failure', async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    global.fetch = jest.fn(async (_url, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      if (requestBodies.length === 1) {
+        return new Response('', { status: 503 });
+      }
+      return jsonResponse({
+        documents: [['vector result']],
+        metadatas: [[thisMetadata({ sourceId: pageId, pageId })]],
+        distances: [[0.2]],
+      });
+    }) as any;
+
+    await expect(
+      adapter.retrieve(
+        {
+          ...config,
+          timeoutMs: 6000,
+          queryMode: 'hybrid_with_vector_fallback',
+        },
+        request,
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({ text: 'vector result', sourceId: pageId }),
+    ]);
+    expect(requestBodies.map((body) => body.hybrid)).toEqual([true, false]);
+  });
+
+  it('does not fall back for a valid empty hybrid result', async () => {
+    global.fetch = jest.fn(async () =>
+      jsonResponse({ documents: [[]], metadatas: [[]], distances: [[]] }),
+    ) as any;
+
+    await expect(
+      adapter.retrieve(
+        { ...config, queryMode: 'hybrid_with_vector_fallback' },
+        request,
+      ),
+    ).resolves.toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fall back for incompatible metadata or authorization failures', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(
+      jsonResponse({
+        documents: [['foreign']],
+        metadatas: [[{}]],
+        distances: [[0.1]],
+      }),
+    ) as any;
+    await expect(
+      adapter.retrieve(
+        { ...config, queryMode: 'hybrid_with_vector_fallback' },
+        request,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'retrieval_incompatible_metadata',
+      }),
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(new Response('', { status: 403 })) as any;
+    await expect(
+      adapter.retrieve(
+        { ...config, queryMode: 'hybrid_with_vector_fallback' },
+        request,
+      ),
+    ).rejects.toMatchObject({ remoteStatus: 403 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('probes version, collection access and query for config tests', async () => {

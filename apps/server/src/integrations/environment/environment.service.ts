@@ -72,6 +72,13 @@ export class EnvironmentService {
     return this.configService.get<string>('AI_RETRIEVAL_ALLOWED_ORIGINS', '');
   }
 
+  getRagContentProcessorsEnabled(): string {
+    return this.configService.get<string>(
+      'RAG_CONTENT_PROCESSORS_ENABLED',
+      'attachment-text-v1',
+    );
+  }
+
   isAiExternalMcpEnabled(): boolean {
     return (
       this.configService

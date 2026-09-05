@@ -36,6 +36,7 @@ describe('RagService AI role custom field', () => {
             }
           : undefined,
     } as any,
+    {} as any,
   );
 
   it('includes the normalized default only when the space field is enabled', () => {

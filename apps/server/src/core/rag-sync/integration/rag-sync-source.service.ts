@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { createHash } from 'node:crypto';
-import type { RagScope, RagSyncSourceType } from '@docmost/api-contract';
+import type {
+  RagContentProcessorId,
+  RagScope,
+  RagSyncSourceType,
+} from '@docmost/api-contract';
 import type { Space, Workspace } from '@docmost/db/types/entity.types';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { StorageService } from '../../../integrations/storage/storage.service';
@@ -18,7 +22,7 @@ import {
   RagSyncDiagnosticSourceKind,
   RagSyncDiagnosticStage,
   RagSyncDatabaseWorkProgress,
-  RagSyncDocmostMetadataV2,
+  RagSyncSignedDocmostMetadata,
   RagSyncFeedKind,
   RagSyncFeedProgress,
   RagSyncQuantumContext,
@@ -32,14 +36,9 @@ import {
   RagSyncUploadIntent,
 } from '../runtime/rag-sync-runtime.types';
 import { sameOpenWebUiTarget } from '../rag-sync-target.util';
+import { RagContentProjectorService } from '../../rag/rag-content-projector.service';
+import type { RagSourceLocator } from '../../rag/rag-content-projector';
 
-const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
-  '.pdf',
-  '.docx',
-  '.txt',
-  '.md',
-]);
-const EXTRACTED_TEXT_ATTACHMENT_EXTENSIONS = new Set(['.pdf', '.docx']);
 const CHECKPOINT_SETTLE_MS = 5_000;
 const TARGET_TEST_TIMEOUT_MS = 120_000;
 
@@ -49,6 +48,12 @@ type SyncSource = {
   sourceId: string;
   pageId: string | null;
   databaseId?: string;
+  projectorId: RagContentProcessorId;
+  projectionVersion: number;
+  partId: string;
+  partIndex: number;
+  partCount: number;
+  locator: RagSourceLocator;
   updatedAtMs: number;
   fileName: string;
   mimeType: string;
@@ -168,6 +173,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     private readonly writer: OpenWebUiWriterService,
     private readonly state: RagSyncStateStore,
     private readonly memoryBudget: RagSyncMemoryBudgetService,
+    private readonly contentProjectors: RagContentProjectorService,
   ) {}
 
   async processQuantum(
@@ -278,8 +284,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     }
 
     const reconcileAt = await this.state.getReconcileAt(context.lease);
-    const hasPendingUploadIntents =
-      await this.state.hasUploadIntents(context.lease);
+    const hasPendingUploadIntents = await this.state.hasUploadIntents(
+      context.lease,
+    );
     if (
       scopeChanged ||
       reconcileAt === null ||
@@ -540,7 +547,18 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           }
           return this.upsertSource(
             session,
-            pageToSource(page, item.updatedAtMs),
+            this.structuredSource({
+              sourceType: 'page',
+              sourceId: page.id,
+              pageId: page.id,
+              updatedAtMs: item.updatedAtMs,
+              fileName: safeFileName(page.title || 'Untitled', page.id, '.md'),
+              markdown:
+                page.knowledgeMarkdown?.trim() ||
+                [`# ${page.title || 'Untitled'}`, page.contentMarkdown || '']
+                  .filter(Boolean)
+                  .join('\n\n'),
+            }),
             true,
           );
         },
@@ -627,19 +645,19 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           return false;
         }
       } else if (
-        !(await this.upsertSource(session, {
-          identity,
-          sourceType: 'page',
-          sourceId: database.id,
-          pageId: database.id,
-          databaseId: database.databaseId,
-          updatedAtMs,
-          fileName: safeFileName(database.title, database.id, '.md'),
-          mimeType: 'text/markdown',
-          content: encodeMarkdown(
-            database.knowledgeMarkdown?.trim() || `# ${database.title}`,
-          ),
-        }))
+        !(await this.upsertSource(
+          session,
+          this.structuredSource({
+            sourceType: 'page',
+            sourceId: database.id,
+            pageId: database.id,
+            databaseId: database.databaseId,
+            updatedAtMs,
+            fileName: safeFileName(database.title, database.id, '.md'),
+            markdown:
+              database.knowledgeMarkdown?.trim() || `# ${database.title}`,
+          }),
+        ))
       ) {
         return false;
       }
@@ -675,25 +693,25 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           )
           .join('\n');
         if (
-          !(await this.upsertSource(session, {
-            identity: sourceIdentity('database_row', row.id),
-            sourceType: 'database_row',
-            sourceId: row.id,
-            pageId: row.pageId,
-            databaseId: database.databaseId,
-            updatedAtMs: dateToMs(
-              row.projectionUpdatedAt ?? row.updatedAt,
-              updatedAtMs,
-            ),
-            fileName: safeFileName(title, row.id, '.md'),
-            mimeType: 'text/markdown',
-            content: encodeMarkdown(
-              row.knowledgeMarkdown?.trim() ||
+          !(await this.upsertSource(
+            session,
+            this.structuredSource({
+              sourceType: 'database_row',
+              sourceId: row.id,
+              pageId: row.pageId,
+              databaseId: database.databaseId,
+              updatedAtMs: dateToMs(
+                row.projectionUpdatedAt ?? row.updatedAt,
+                updatedAtMs,
+              ),
+              fileName: safeFileName(title, row.id, '.md'),
+              markdown:
+                row.knowledgeMarkdown?.trim() ||
                 [`# ${title}`, cells, row.rowMarkdown || '']
                   .filter(Boolean)
                   .join('\n\n'),
-            ),
-          }))
+            }),
+          ))
         )
           return false;
       }
@@ -836,16 +854,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       await this.deleteIdentity(session, identity);
       return this.requestUploadIntentCleanup(session, identity);
     }
-    return this.upsertSource(session, {
-      identity,
-      sourceType: 'dictionary_term',
-      sourceId: term.id,
-      pageId: null,
-      updatedAtMs: item.updatedAtMs || term.updatedAtMs,
-      fileName: safeFileName(term.term, term.id, '.md'),
-      mimeType: 'text/markdown',
-      content: encodeMarkdown(term.knowledgeMarkdown),
-    });
+    return this.upsertSource(
+      session,
+      this.structuredSource({
+        sourceType: 'dictionary_term',
+        sourceId: term.id,
+        pageId: null,
+        updatedAtMs: item.updatedAtMs || term.updatedAtMs,
+        fileName: safeFileName(term.term, term.id, '.md'),
+        markdown: term.knowledgeMarkdown,
+      }),
+    );
   }
 
   private async processDictionaryDeleted(
@@ -976,7 +995,6 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     item: InternalRagAttachmentItem,
   ): Promise<boolean> {
     if (!this.consumeBudget(session)) return false;
-    const extension = normalizeExtension(item.fileExt || item.fileName);
     const declaredSize = Number(item.fileSize);
     const identity = sourceIdentity('attachment', item.id);
     if (this.blockedPageIds(session).has(item.pageId)) {
@@ -984,33 +1002,12 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       return this.requestUploadIntentCleanup(session, identity);
     }
     if (
-      !SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension) ||
+      !this.contentProjectors.isAttachmentSupported(item) ||
       (Number.isFinite(declaredSize) &&
         declaredSize > session.context.maxAttachmentBytes)
     ) {
       await this.deleteIdentity(session, identity);
       return this.requestUploadIntentCleanup(session, identity);
-    }
-    if (EXTRACTED_TEXT_ATTACHMENT_EXTENSIONS.has(extension)) {
-      const extractedText = await this.getAttachmentExtractedText(
-        session,
-        item.id,
-        item.pageId,
-      );
-      if (extractedText) {
-        return this.upsertSource(session, {
-          identity,
-          sourceType: 'attachment',
-          sourceId: item.id,
-          pageId: item.pageId,
-          updatedAtMs: item.updatedAtMs,
-          fileName: safeFileName(item.fileName, item.id, '.md', item.id),
-          mimeType: 'text/markdown',
-          content: encodeMarkdown(
-            [`# ${item.fileName}`, extractedText].join('\n\n'),
-          ),
-        });
-      }
     }
     return this.memoryBudget.run(
       session.context.maxAttachmentBytes,
@@ -1032,6 +1029,20 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           session.context.maxAttachmentBytes,
           session.context.signal,
         );
+        const projection = this.contentProjectors.projectAttachmentText({
+          sourceId: item.id,
+          pageId: item.pageId,
+          fileName: safeFileName(
+            item.fileName,
+            item.id,
+            normalizeExtension(item.fileExt || item.fileName),
+            item.id,
+          ),
+          fileExt: item.fileExt,
+          mimeType: item.mimeType,
+          content,
+        });
+        const part = projection.parts[0];
         return this.upsertSource(
           session,
           {
@@ -1039,15 +1050,16 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             sourceType: 'attachment',
             sourceId: item.id,
             pageId: item.pageId,
+            projectorId: projection.projectorId,
+            projectionVersion: 1,
+            partId: part.partId,
+            partIndex: 0,
+            partCount: projection.parts.length,
+            locator: part.locator,
             updatedAtMs: item.updatedAtMs,
-            fileName: safeFileName(
-              item.fileName,
-              item.id,
-              extension,
-              item.id,
-            ),
-            mimeType: item.mimeType || 'application/octet-stream',
-            content,
+            fileName: part.fileName,
+            mimeType: part.mimeType,
+            content: part.content,
           },
           true,
         );
@@ -1055,39 +1067,21 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     );
   }
 
-  private async getAttachmentExtractedText(
-    session: QuantumSession,
-    attachmentId: string,
-    pageId: string,
-  ): Promise<string | null> {
-    const attachment = await this.db
-      .selectFrom('attachments')
-      .innerJoin(
-        'pages as attachmentPage',
-        'attachmentPage.id',
-        'attachments.pageId',
-      )
-      .select([
-        'attachments.textContent as textContent',
-        'attachments.contentIndexStatus as contentIndexStatus',
-      ])
-      .where('attachments.id', '=', attachmentId)
-      .where('attachments.pageId', '=', pageId)
-      .where('attachments.workspaceId', '=', session.binding.workspaceId)
-      .where('attachmentPage.workspaceId', '=', session.binding.workspaceId)
-      .where('attachmentPage.spaceId', '=', session.binding.spaceId)
-      .where('attachments.deletedAt', 'is', null)
-      .where('attachmentPage.deletedAt', 'is', null)
-      .executeTakeFirst();
-    if (attachment?.contentIndexStatus !== 'ready') return null;
-    return attachment.textContent?.trim() || null;
-  }
-
   private async upsertSource(
     session: QuantumSession,
     source: SyncSource,
     memoryReserved = false,
   ): Promise<boolean> {
+    const projectedIdentity = projectedSourceIdentity(
+      source.sourceType,
+      source.sourceId,
+      source.projectorId,
+      source.partId,
+      source.partCount,
+    );
+    if (source.identity !== projectedIdentity) {
+      source = { ...source, identity: projectedIdentity };
+    }
     if (!memoryReserved) {
       return this.memoryBudget.run(
         source.content.byteLength,
@@ -1117,7 +1111,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         ? this.writer.readOwnership(mapped, session.binding)
         : null;
       if (
-        ownership?.schemaVersion === 2 &&
+        ownership !== null &&
+        ownership.schemaVersion !== 1 &&
         ownership.metadata.operationId === existing.operationId &&
         remoteSourceTuple(ownership.metadata) === sourceTuple(source)
       ) {
@@ -1134,25 +1129,54 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       await this.state.deleteMapping(session.context.lease, source.identity);
       existing = null;
     }
+    if (source.partCount > 1 && this.metadataWriteVersion() < 3) {
+      throw new RagSyncRuntimeError(
+        'rag_sync_metadata_v3_required',
+        false,
+        'Multipart RAG projection requires metadata write version 3',
+      );
+    }
     const operationId = sha256(
       new TextEncoder().encode(
-        `${session.binding.id}\n${session.binding.targetVersion}\n${source.identity}\n${source.pageId}\n${source.databaseId ?? ''}\n${contentHash}`,
+        `${session.binding.id}\n${session.binding.targetVersion}\n${source.sourceType}\n${source.sourceId}\n${source.projectorId}\n${source.projectionVersion}\n${source.partId}\n${source.partIndex}\n${source.partCount}\n${source.pageId}\n${source.databaseId ?? ''}\n${source.updatedAtMs}\n${contentHash}`,
       ),
     );
-    const metadata: RagSyncDocmostMetadataV2 = {
-      schemaVersion: 2,
-      bindingId: session.binding.id,
-      targetVersion: session.binding.targetVersion,
-      workspaceId: session.binding.workspaceId,
-      spaceId: session.binding.spaceId,
-      sourceType: source.sourceType,
-      sourceId: source.sourceId,
-      pageId: source.pageId,
-      ...(source.databaseId ? { databaseId: source.databaseId } : {}),
-      sourceUpdatedAtMs: source.updatedAtMs,
-      contentHash,
-      operationId,
-    };
+    const metadata: RagSyncSignedDocmostMetadata =
+      this.metadataWriteVersion() === 3
+        ? {
+            schemaVersion: 3,
+            bindingId: session.binding.id,
+            targetVersion: session.binding.targetVersion,
+            workspaceId: session.binding.workspaceId,
+            spaceId: session.binding.spaceId,
+            sourceType: source.sourceType,
+            sourceId: source.sourceId,
+            pageId: source.pageId,
+            ...(source.databaseId ? { databaseId: source.databaseId } : {}),
+            sourceUpdatedAtMs: source.updatedAtMs,
+            contentHash,
+            operationId,
+            projectorId: source.projectorId,
+            projectionVersion: source.projectionVersion,
+            partId: source.partId,
+            partIndex: source.partIndex,
+            partCount: source.partCount,
+            locator: source.locator,
+          }
+        : {
+            schemaVersion: 2,
+            bindingId: session.binding.id,
+            targetVersion: session.binding.targetVersion,
+            workspaceId: session.binding.workspaceId,
+            spaceId: session.binding.spaceId,
+            sourceType: source.sourceType,
+            sourceId: source.sourceId,
+            pageId: source.pageId,
+            ...(source.databaseId ? { databaseId: source.databaseId } : {}),
+            sourceUpdatedAtMs: source.updatedAtMs,
+            contentHash,
+            operationId,
+          };
     const intentScanPurpose = this.intentScanPurpose(operationId);
 
     let remote: OpenWebUiFile | undefined;
@@ -1322,6 +1346,15 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       sourceId: source.sourceId,
       pageId: source.pageId,
       ...(source.databaseId ? { databaseId: source.databaseId } : {}),
+      ...(metadata.schemaVersion === 3
+        ? {
+            projectorId: source.projectorId,
+            projectionVersion: source.projectionVersion,
+            partId: source.partId,
+            partIndex: source.partIndex,
+            partCount: source.partCount,
+          }
+        : {}),
       updatedAtMs: source.updatedAtMs,
     });
     await this.state.clearRemoteScanSeen(
@@ -1333,6 +1366,36 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       await this.deleteMappedFileIfOwned(session, existing);
     }
     return true;
+  }
+
+  private structuredSource(input: {
+    sourceType: Exclude<RagSyncSourceType, 'attachment'>;
+    sourceId: string;
+    pageId: string | null;
+    databaseId?: string;
+    updatedAtMs: number;
+    fileName: string;
+    markdown: string;
+  }): SyncSource {
+    const projection = this.contentProjectors.projectStructuredKnowledge(input);
+    const part = projection.parts[0];
+    return {
+      identity: sourceIdentity(input.sourceType, input.sourceId),
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      pageId: input.pageId,
+      ...(input.databaseId ? { databaseId: input.databaseId } : {}),
+      updatedAtMs: input.updatedAtMs,
+      fileName: part.fileName,
+      mimeType: part.mimeType,
+      content: part.content,
+      projectorId: projection.projectorId,
+      projectionVersion: 2,
+      partId: part.partId,
+      partIndex: 0,
+      partCount: projection.parts.length,
+      locator: part.locator,
+    };
   }
 
   private async deleteIdentity(
@@ -1435,12 +1498,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       : null;
     if (
       !ownership ||
-      sourceIdentity(
-        ownership.metadata.sourceType,
-        ownership.metadata.sourceId,
-      ) !== mapping.identity ||
+      remoteSourceIdentity(ownership.metadata) !== mapping.identity ||
       ownership.metadata.contentHash !== mapping.contentHash ||
-      (ownership.schemaVersion === 2 &&
+      (ownership.schemaVersion !== 1 &&
         ownership.metadata.operationId !== mapping.operationId)
     ) {
       return;
@@ -1696,7 +1756,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         file.id,
         session.context.signal,
       );
-      if (ownership.schemaVersion === 2) {
+      if (ownership.schemaVersion !== 1) {
         await this.state.deleteUploadIntent(
           session.context.lease,
           ownership.metadata.operationId,
@@ -1862,6 +1922,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
               'attachments.fileExt',
               'attachments.fileName',
               'attachments.fileSize',
+              'attachments.mimeType',
             ])
             .where('attachments.workspaceId', '=', session.binding.workspaceId)
             .where('attachments.spaceId', '=', session.binding.spaceId)
@@ -1940,12 +2001,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     const liveAttachments = new Set(
       attachments
         .filter((attachment) => {
-          const extension = normalizeExtension(
-            attachment.fileExt || attachment.fileName,
-          );
           const size = Number(attachment.fileSize);
           return (
-            SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension) &&
+            this.contentProjectors.isAttachmentSupported(attachment) &&
             (!Number.isFinite(size) ||
               size <= session.context.maxAttachmentBytes)
           );
@@ -2052,7 +2110,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     const blockedPageIds = this.blockedPageIds(session);
     const candidates = new Map<
       string,
-      Array<{ file: OpenWebUiFile; metadata: RagSyncDocmostMetadataV2 }>
+      Array<{ file: OpenWebUiFile; metadata: RagSyncSignedDocmostMetadata }>
     >();
     const eligible: Array<{
       file: OpenWebUiFile;
@@ -2068,7 +2126,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       const ownership = this.writer.readOwnership(file, session.binding);
       if (!ownership) continue;
       const isTargetTestMarker =
-        ownership.schemaVersion === 2 &&
+        ownership.schemaVersion !== 1 &&
         ownership.metadata.marker === 'target-test';
       if (
         isTargetTestMarker &&
@@ -2089,7 +2147,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           file.id,
           session.context.signal,
         );
-        if (ownership.schemaVersion === 2) {
+        if (ownership.schemaVersion !== 1) {
           await this.state.deleteUploadIntent(
             session.context.lease,
             ownership.metadata.operationId,
@@ -2106,11 +2164,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       eligible.map(({ ownership }) => ownership),
     );
     for (const { file, ownership } of eligible) {
-      const identity = sourceIdentity(
-        ownership.metadata.sourceType,
-        ownership.metadata.sourceId,
-      );
-      if (ownership.schemaVersion === 2) {
+      const identity = remoteSourceIdentity(ownership.metadata);
+      if (ownership.schemaVersion !== 1) {
         const intent = await this.state.getUploadIntent(
           session.context.lease,
           ownership.metadata.operationId,
@@ -2139,7 +2194,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           session.context.signal,
         );
         await this.state.deleteMapping(session.context.lease, identity);
-        if (ownership.schemaVersion === 2) {
+        if (ownership.schemaVersion !== 1) {
           await this.state.deleteUploadIntent(
             session.context.lease,
             ownership.metadata.operationId,
@@ -2196,6 +2251,15 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         sourceId: metadata.sourceId,
         pageId: metadata.pageId,
         ...(metadata.databaseId ? { databaseId: metadata.databaseId } : {}),
+        ...(metadata.schemaVersion === 3
+          ? {
+              projectorId: metadata.projectorId,
+              projectionVersion: metadata.projectionVersion,
+              partId: metadata.partId,
+              partIndex: metadata.partIndex,
+              partCount: metadata.partCount,
+            }
+          : {}),
         updatedAtMs: metadata.sourceUpdatedAtMs,
       };
       const existing = await this.state.getMapping(
@@ -2216,7 +2280,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           ? this.writer.readOwnership(existingFile, session.binding)
           : null;
         const existingIsValid =
-          existingOwnership?.schemaVersion === 2 &&
+          existingOwnership !== null &&
+          existingOwnership.schemaVersion !== 1 &&
           existingOwnership.metadata.operationId === existing.operationId;
         const currentWins =
           !existingIsValid ||
@@ -2315,11 +2380,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         ? this.writer.readOwnership(file, session.binding)
         : null;
       const exactOwnership = Boolean(
-        ownership?.schemaVersion === 2 &&
-          sourceIdentity(
-            ownership.metadata.sourceType,
-            ownership.metadata.sourceId,
-          ) === mapping.identity &&
+        ownership !== null &&
+          ownership.schemaVersion !== 1 &&
+          remoteSourceIdentity(ownership.metadata) === mapping.identity &&
           ownership.metadata.contentHash === mapping.contentHash &&
           ownership.metadata.operationId === mapping.operationId,
       );
@@ -2486,10 +2549,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         intent.identity,
       );
       if (mapping?.operationId === intent.operationId) {
-        await this.state.deleteMapping(
-          session.context.lease,
-          intent.identity,
-        );
+        await this.state.deleteMapping(session.context.lease, intent.identity);
       }
       await this.state.deleteUploadIntent(
         session.context.lease,
@@ -2624,7 +2684,8 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           session.context.signal,
         );
         if (
-          ownership?.schemaVersion === 2 &&
+          ownership !== null &&
+          ownership.schemaVersion !== 1 &&
           /^[0-9a-f]{64}$/.test(ownership.metadata.operationId)
         ) {
           await this.state.deleteUploadIntent(
@@ -2820,6 +2881,13 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     return { kind: 'intent', operationId };
   }
 
+  private metadataWriteVersion(): 2 | 3 {
+    const writer = this.writer as OpenWebUiWriterService & {
+      metadataWriteVersion?: () => 2 | 3;
+    };
+    return writer.metadataWriteVersion?.() ?? 2;
+  }
+
   private async readAttachmentBounded(
     filePath: string,
     maxBytes: number,
@@ -2909,12 +2977,11 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     return sha256(
       new TextEncoder().encode(
         JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           serverScopeFingerprint: scope.fingerprint,
           maxAttachmentBytes,
-          supportedAttachmentExtensions: [
-            ...SUPPORTED_ATTACHMENT_EXTENSIONS,
-          ].sort(),
+          contentPolicyVersion: scope.contentPolicyVersion ?? null,
+          contentCapabilities: scope.contentCapabilities ?? [],
         }),
       ),
     );
@@ -2956,6 +3023,33 @@ export function sourceIdentity(
   return `${sourceType}:${sourceId}`;
 }
 
+function projectedSourceIdentity(
+  sourceType: RagSyncSourceType,
+  sourceId: string,
+  projectorId: RagContentProcessorId,
+  partId: string,
+  partCount: number,
+): string {
+  const logicalIdentity = sourceIdentity(sourceType, sourceId);
+  return partCount > 1
+    ? `${logicalIdentity}:${projectorId}:${encodeURIComponent(partId)}`
+    : logicalIdentity;
+}
+
+function remoteSourceIdentity(
+  metadata: RagSyncRemoteOwnership['metadata'],
+): string {
+  return metadata.schemaVersion === 3
+    ? projectedSourceIdentity(
+        metadata.sourceType,
+        metadata.sourceId,
+        metadata.projectorId,
+        metadata.partId,
+        metadata.partCount,
+      )
+    : sourceIdentity(metadata.sourceType, metadata.sourceId);
+}
+
 function remoteSourceTuple(
   metadata: RagSyncRemoteOwnership['metadata'],
 ): string {
@@ -2973,26 +3067,6 @@ function sourceTuple(
   ]);
 }
 
-function pageToSource(
-  page: InternalRagPageDetail,
-  updatedAtMs: number,
-): SyncSource {
-  const title = page.title || 'Untitled';
-  return {
-    identity: sourceIdentity('page', page.id),
-    sourceType: 'page',
-    sourceId: page.id,
-    pageId: page.id,
-    updatedAtMs,
-    fileName: safeFileName(title, page.id, '.md'),
-    mimeType: 'text/markdown',
-    content: encodeMarkdown(
-      page.knowledgeMarkdown?.trim() ||
-        [`# ${title}`, page.contentMarkdown || ''].filter(Boolean).join('\n\n'),
-    ),
-  };
-}
-
 function sha256(value: Uint8Array): string {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -3008,10 +3082,6 @@ function appendScanDigest(
     .digest('hex');
 }
 
-function encodeMarkdown(value: string): Uint8Array {
-  return new TextEncoder().encode(value);
-}
-
 function safeFileName(
   title: string,
   fallback: string,
@@ -3020,12 +3090,12 @@ function safeFileName(
 ): string {
   const sanitize = (value: string) =>
     value
-    .normalize('NFKC')
-    .split('')
-    .map((character) => (character.charCodeAt(0) <= 0x1f ? '-' : character))
-    .join('')
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .trim();
+      .normalize('NFKC')
+      .split('')
+      .map((character) => (character.charCodeAt(0) <= 0x1f ? '-' : character))
+      .join('')
+      .replace(/[<>:"/\\|?*]/g, '-')
+      .trim();
   const fallbackBase = sanitize(fallback).slice(0, 120) || 'document';
   const titleBase = sanitize(title) || fallbackBase;
   const suffix = uniqueSuffix
@@ -3084,6 +3154,11 @@ function sameMapping(
       left.sourceId === right.sourceId &&
       left.pageId === right.pageId &&
       left.databaseId === right.databaseId &&
+      left.projectorId === right.projectorId &&
+      left.projectionVersion === right.projectionVersion &&
+      left.partId === right.partId &&
+      left.partIndex === right.partIndex &&
+      left.partCount === right.partCount &&
       left.updatedAtMs === right.updatedAtMs,
   );
 }

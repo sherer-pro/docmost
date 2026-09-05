@@ -66,6 +66,8 @@ describe('HttpJsonAiRetrievalAdapter integration', () => {
     apiKey: null,
     timeoutMs: 5000,
     maxResults: 8,
+    queryMode: 'vector' as const,
+    followUpRewriteEnabled: false,
   });
 
   const request = {

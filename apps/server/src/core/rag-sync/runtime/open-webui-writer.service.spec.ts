@@ -135,6 +135,51 @@ describe('OpenWebUiWriterService', () => {
     ).toBe(1);
   });
 
+  it('recognizes signed v3 multipart ownership metadata', () => {
+    const { writer } = createWriter();
+    const metadata = signedMetadataV3();
+
+    expect(
+      writer.readOwnership(
+        { id: 'file-v3', meta: { data: { docmost: metadata } } },
+        binding,
+      ),
+    ).toEqual({ schemaVersion: 3, metadata });
+
+    expect(
+      writer.readOwnership(
+        {
+          id: 'file-forged-v3',
+          meta: {
+            data: { docmost: { ...metadata, partId: 'forged-part' } },
+          },
+        },
+        binding,
+      ),
+    ).toBeNull();
+  });
+
+  it('skips unowned files while finding an owned operation', () => {
+    const { writer } = createWriter();
+    const operationId = hex(1);
+    const owned = {
+      id: 'file-owned',
+      meta: {
+        data: {
+          docmost: signedMetadata({ operationId }),
+        },
+      },
+    };
+
+    expect(
+      writer.findOwnedFileByOperationId(
+        [{ id: 'file-unowned' }, owned],
+        binding,
+        operationId,
+      ),
+    ).toBe(owned);
+  });
+
   it('rejects metadata owned by another space', () => {
     const { writer } = createWriter();
     expect(
@@ -491,6 +536,61 @@ function signedMetadata(
         metadata.contentHash,
         metadata.operationId,
         'marker' in metadata ? metadata.marker : null,
+      ]),
+      'utf8',
+    )
+    .digest('hex');
+  return { ...metadata, ownershipMac };
+}
+
+function signedMetadataV3() {
+  const metadata = {
+    schemaVersion: 3 as const,
+    bindingId: binding.id,
+    targetVersion: binding.targetVersion,
+    workspaceId: binding.workspaceId,
+    spaceId: binding.spaceId,
+    sourceType: 'attachment' as const,
+    sourceId: 'attachment-id',
+    pageId: 'page-id',
+    sourceUpdatedAtMs: 1,
+    contentHash: hex(2),
+    operationId: hex(1),
+    projectorId: 'image-ocr-v1' as const,
+    projectionVersion: 1,
+    partId: 'page-1',
+    partIndex: 0,
+    partCount: 2,
+    locator: {
+      pageId: 'page-id',
+      attachmentId: 'attachment-id',
+      pageNumber: 1,
+      region: { x: 0, y: 0, width: 10, height: 20 },
+    },
+  };
+  const ownershipMac = createHmac('sha256', appSecret)
+    .update('docmost:rag-sync:ownership:v3\n', 'utf8')
+    .update(
+      JSON.stringify([
+        metadata.schemaVersion,
+        metadata.bindingId,
+        metadata.targetVersion,
+        metadata.workspaceId,
+        metadata.spaceId,
+        metadata.sourceType,
+        metadata.sourceId,
+        metadata.pageId,
+        null,
+        metadata.sourceUpdatedAtMs,
+        metadata.contentHash,
+        metadata.operationId,
+        metadata.projectorId,
+        metadata.projectionVersion,
+        metadata.partId,
+        metadata.partIndex,
+        metadata.partCount,
+        metadata.locator,
+        null,
       ]),
       'utf8',
     )

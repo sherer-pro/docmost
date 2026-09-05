@@ -1590,7 +1590,7 @@
       }
     },
     "adminGuide": {
-      "knowledgeAccessDoneOnly": "De schakelaar `ragSearchDoneOnly` onder Knowledge access beperkt AI-zoeken tijdens de aanvraag, RAG API schemaVersion: 3 en RAG Sync tot pagina’s, databases en rijen met de eigen canonieke status `DONE`; ontbrekende of onbekende statussen worden geblokkeerd. `statusBlockedPageIds` blijft gescheiden van expliciete uitsluitingen. Een geblokkeerd databasedocument krijgt `documentEligible: false`, terwijl geschikte rijen doorgaan. Bijlagen nemen de paginastatus over; `dictionary_term`, handmatige chatcontext, Agent/MCP, editoracties en normaal zoeken in Docmost blijven ongewijzigd.",
+      "knowledgeAccessDoneOnly": "De schakelaar `ragSearchDoneOnly` onder Knowledge access beperkt AI-zoeken tijdens de aanvraag, RAG API schemaVersion: 4 en RAG Sync tot pagina’s, databases en rijen met de eigen canonieke status `DONE`; ontbrekende of onbekende statussen worden geblokkeerd. `statusBlockedPageIds` blijft gescheiden van expliciete uitsluitingen. Een geblokkeerd databasedocument krijgt `documentEligible: false`, terwijl geschikte rijen doorgaan. Bijlagen nemen de paginastatus over; `dictionary_term`, handmatige chatcontext, Agent/MCP, editoracties en normaal zoeken in Docmost blijven ongewijzigd. RAG scope schemaVersion: 4 publiceert ook contentPolicyVersion en contentCapabilities; voor RAG zijn alleen `.md`- en `.txt`-bijlagen ingeschakeld.",
       "tab": "Handleiding",
       "title": "Hoe AI, RAG en MCP werken",
       "description": "Een operationele handleiding voor de assistent, extern zoeken, synchronisatie en de beveiligingsgrenzen van MCP.",
@@ -1652,7 +1652,7 @@
           },
           "success": "De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen",
           "rollback": "Schakel extern zoeken uit; Chat gaat verder zonder ophalen",
-          "technical": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt."
+          "technical": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt. Open WebUI ondersteunt `vector` en `hybrid_with_vector_fallback`. Met `retrievalFollowUpRewriteEnabled` wordt alleen de zoekquery herschreven vanuit veilige gebruikersgeschiedenis en titels van nog leesbare citaten; assistenttekst en pagina- of bestandsinhoud worden uitgesloten. De rewrite-limiet is 30000 ms en bij fouten wordt de oorspronkelijke query gebruikt zonder generatie te blokkeren."
         },
         "ragApi": {
           "description": "De alleen-lezen /api/rag/* API exporteert volledige en incrementele feeds naar een externe indexeerder en kan na autorisatie beveiligde bijlagestromen retourneren.",
@@ -1666,13 +1666,13 @@
           },
           "success": "Reacties retourneren 200, stabiele cursors en alleen het live leesbare bereik van de sleutelmaker",
           "rollback": "Trek de sleutel in en stop de indexer; maak een nieuwe sleutel voor herstel",
-          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. Projectie v1 (`projectionVersion: 1`) exporteert ingeschakelde documentvelden, benoemde databasecellen en het ingeschakelde woordenboek via onafhankelijke gepagineerde feeds."
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. Projectie v1 (`projectionVersion: 2`) exporteert ingeschakelde documentvelden, benoemde databasecellen en het ingeschakelde woordenboek via onafhankelijke gepagineerde feeds. Scope schemaVersion: 4 en projectionVersion: 2 publiceren contentPolicyVersion en contentCapabilities; alleen aangekondigde `.md`- en `.txt`-bijlagen zijn via RAG beschikbaar."
         },
         "ragSync": {
           "description": "Ingebouwde Open WebUI RAG Sync draait binnen Docmost, leest PostgreSQL rechtstreeks via Docmost-services, coördineert met Redis en schrijft met een afzonderlijke gecodeerde referentie per ruimte.",
           "owner": "Implementatieoperator en ruimtebeheerder",
           "prerequisite": "RAG_SYNC_ENABLED, een toegestane Open WebUI-oorsprong, Knowledge ID en schrijversleutel",
-          "result": "Docmost onderhoudt pagina’s, databaserijen en actieve woordenboektermen stapsgewijs in de geselecteerde Open WebUI Knowledge Base; van de bijlagen gaan alleen PDF, DOCX, TXT en Markdown naar de draagbare index",
+          "result": "Docmost onderhoudt pagina’s, databaserijen, actieve woordenboektermen en toegestane TXT/Markdown-bijlagen stapsgewijs in de geselecteerde Open WebUI Knowledge Base.",
           "steps": {
             "step1": "Sla het doel en de writer-referentie op",
             "step2": "Controleer de writer: alleen-lezen preflight, daarna testmarkering uploaden, verwerken en verwijderen",
@@ -1680,7 +1680,7 @@
           },
           "success": "Het laatste succes gaat vooruit en er blijft geen opschoon- of doelmismatch-status bestaan",
           "rollback": "Schakel de binding uit en voltooi het opruimen; voor noodherstel schakel de RAG_SYNC_ENABLED uit en start opnieuw op",
-          "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, databaserijen en actieve woordenboektermen worden afzonderlijk beheerd; woordenboektermen gebruiken het brontype `dictionary_term`. Elke feed gebruikt een ondoorzichtige cursor die aan één vaste database-snapshot is gebonden. Bewaar het start-watermark tot hasMore=false; alleen de laatste pagina werkt het checkpoint bij en herhalingen moeten idempotent blijven. Feeds worden ten minste één keer verwerkt. Verlies van lease of slot breekt de huidige externe aanvraag af en voorkomt nieuw werk; reconciliatie verwerkt een neveneffect dat vóór aankomst van de annulering is voltooid. Voor PDF en DOCX gebruikt Docmost een Markdown-projectie van de geëxtraheerde tekst zodra de lokale indexering gereed is. Externe bestandsnamen van bijlagen bevatten de Docmost-bijlage-ID, zodat bestanden met dezelfde naam niet botsen binnen één Knowledge Base. De upstream-bestandshash is beperkt tot de bronbewerking, terwijl ondertekende ownership-metadata de inhoudshash van de bron bewaart."
+          "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, rijen en `dictionary_term` gebruiken structured-knowledge-v2; alleen `.md`- en `.txt`-bijlagen gebruiken `attachment-text-v1`. PDF-, DOCX-, beeld- en audioprocessors blijven uitgeschakeld. De reader accepteert metadata schema v1, ondertekend v2 en ondertekend schema v3; v2 blijft de schrijfstandaard, multipart vereist v3 en upstream file_hash=operationId. Query- en writersleutels blijven gescheiden, feeds zijn at-least-once en leaseverlies voorkomt unfenced statuswrites."
         },
         "inboundMcp": {
           "description": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel.",
@@ -2227,6 +2227,13 @@
       "retrievalApiKey": "API-sleutel ophalen",
       "retrievalTimeout": "Time-out voor ophalen (ms)",
       "retrievalMaxResults": "Maximale resultaten",
+      "retrievalQueryMode": "Open WebUI-querymodus",
+      "retrievalQueryModeDescription": "Hybride zoeken valt alleen bij tijdelijke fouten van de externe service terug op vectorzoeken.",
+      "retrievalQueryModeVector": "Vectorzoeken",
+      "retrievalQueryModeHybrid": "Hybride met vectorfallback",
+      "followUpRewrite": "Vervolgzoekopdrachten herschrijven met gesprekscontext",
+      "followUpRewriteDescription": "Gebruikt maximaal drie eerdere gebruikersberichten en titels van nog toegankelijke citaten. Het oorspronkelijke bericht blijft ongewijzigd.",
+      "ragSupportedContent": "RAG indexeert momenteel pagina’s, databases, documentvelden, woordenboektermen en .md/.txt-bijlagen. PDF, DOCX, afbeeldingen en audio blijven beschikbaar in Docmost, maar zijn uitgesloten van RAG.",
       "testRetrieval": "Ophalen van testen",
       "retrievalTestSucceeded": "Ophaalverbinding gelukt.",
       "retrievalTestFailed": "Ophaalverbinding mislukt.",
