@@ -379,7 +379,8 @@ export class OpenWebUiWriterService {
       for (const file of result.items) {
         const ownership = this.readOwnership(file, binding);
         if (
-          ownership?.schemaVersion === 1 ||
+          !ownership ||
+          ownership.schemaVersion === 1 ||
           ownership.metadata.marker !== 'target-test' ||
           ownership.metadata.sourceUpdatedAtMs >
             Date.now() - TARGET_TEST_TIMEOUT_MS - this.config.requestTimeoutMs
@@ -804,6 +805,7 @@ function projectDocmostMetadata(
   ] as const) {
     if (isBoundedString(value[name], maxLength)) result[name] = value[name];
   }
+  if (value.pageId === null) result.pageId = null;
   for (const name of [
     'schemaVersion',
     'targetVersion',

@@ -1,4 +1,10 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
+// Schema/Yjs normalization is exercised by collaboration.ai-schema.spec.ts.
+jest.mock('../../../collaboration/collaboration.util', () => ({
+  ...jest.requireActual('../../../collaboration/collaboration.util'),
+  strictJsonToNode: (content: unknown) => content,
+  prosemirrorNodeToYJson: (content: unknown) => content,
+}));
 
 import {
   BadRequestException,

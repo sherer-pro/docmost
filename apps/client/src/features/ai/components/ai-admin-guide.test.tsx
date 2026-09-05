@@ -172,9 +172,12 @@ describe("AiAdminGuide", () => {
       view.querySelectorAll(
         'button[aria-label="Copy"], button[aria-label="ai.adminGuide.copy"]',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(view.textContent).toContain("RAG_SYNC_ENABLED");
     expect(view.textContent).toContain("RAG_SYNC_ALLOWED_ORIGINS");
+    expect(view.textContent).toContain(
+      "/api/spaces/:spaceId/ai/rag-sync/actions/test",
+    );
 
     const details = Array.from(view.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("ai.adminGuide.labels.technicalDetails"),

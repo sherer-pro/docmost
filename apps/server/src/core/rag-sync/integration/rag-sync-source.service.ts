@@ -294,6 +294,9 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       hasPendingUploadIntents
     ) {
       diagnostic.stage = 'reconcile';
+      if (reconcileAt !== null && reconcileAt > Date.now()) {
+        await this.state.setReconcileAt(context.lease, 0);
+      }
       const reconciliationChanged = await this.reconcile(
         session,
         effectiveFingerprint,

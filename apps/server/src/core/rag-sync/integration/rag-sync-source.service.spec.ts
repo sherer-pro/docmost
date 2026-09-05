@@ -687,6 +687,31 @@ describe('RagSyncSourceService', () => {
     expect(rag.getUpdates).not.toHaveBeenCalled();
   });
 
+  it('finishes an early reconciliation after its last upload intent is removed', async () => {
+    const { service, rag, state, writer } = setup();
+    let reconcileAt = Date.now() + 60_000;
+    state.getReconcileAt.mockImplementation(async () => reconcileAt);
+    state.setReconcileAt.mockImplementation(async (_lease, value) => {
+      reconcileAt = value;
+    });
+    state.hasUploadIntents.mockResolvedValueOnce(true).mockResolvedValue(false);
+    const failed = {
+      ...remoteFile('failed-file', { sourceId: 'page-1', pageId: 'page-1' }),
+      data: { status: 'failed' },
+    };
+    writer.readOwnership.mockImplementation((file: any) => file.ownership);
+    writer.listKnowledgeFilesPage
+      .mockResolvedValueOnce(listing([failed]))
+      .mockResolvedValue(listing([]));
+
+    await service.processQuantum(binding, context);
+    expect(state.deleteUploadIntent).toHaveBeenCalled();
+    await service.processQuantum(binding, context);
+
+    expect(writer.listKnowledgeFilesPage).toHaveBeenCalledTimes(2);
+    expect(rag.getUpdates).not.toHaveBeenCalled();
+  });
+
   it('cleans a superseded upload intent without deleting the current mapping', async () => {
     const { service, state, writer } = setup();
     const staleOperationId = hex(125);

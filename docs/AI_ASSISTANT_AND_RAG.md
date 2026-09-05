@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 20 -->
+<!-- ai-admin-guide-contract-version: 21 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -410,7 +410,14 @@ to the model as a tool result so the bounded loop can continue.
 
 Before approval is stored, safe block operations receive stable node IDs and
 the step records the expected post-apply content hash in its existing result
-JSON. The step decision and run resume are committed in one database
+JSON. That hash uses the editor schema and the Yjs representation, including
+default attributes and omission of null attributes. Approval validates the
+same normalized result before mutating the live document, so a minimal model
+node cannot be applied and then reported as failed because of serialization.
+Node operations reject `text` fields on non-text nodes before approval;
+paragraph text must use child text nodes so the preview cannot advertise
+content that the editor would silently discard.
+The step decision and run resume are committed in one database
 transaction. If a process stops after approval, the reconciler serializes
 recovery with a PostgreSQL advisory lock: it reapplies the approved operation
 only when the live hash is still the proposal base, finalizes without replay
@@ -449,6 +456,11 @@ approval step; `ai_run_steps` carries a check constraint that makes an
 `external_mcp` step with `write_class = 'write'` unrepresentable.
 
 ### Context, files, and editor actions
+
+The composer keeps its chat-file input mounted while the native file chooser
+is open. Closing the Add menu must not discard a later file selection; both
+supported uploads and unsupported-file feedback remain observable after the
+menu closes.
 
 Conversation context has a revision. The current document is stored separately
 from up to ten manual roots (`page`, `database`, or `database_row`). A page root
@@ -912,6 +924,9 @@ writer credential is encrypted with `APP_SECRET` and API responses expose only
 successful bounded probe records `rag_sync_bindings.last_tested_at`; changing
 the target or writer key clears it. Existing bindings are intentionally not
 backfilled because historical probe success cannot be reconstructed safely.
+Before uploading its probe, writer verification removes only stale, signed
+`target-test` markers owned by the current binding. Files without verifiable
+ownership are skipped without blocking verification or being deleted.
 Query-time retrieval remains independent and keeps
 its own adapter and query credential. The public `/api/rag/*` surface also
 remains independent and continues to authorize an external indexer through a
@@ -1081,7 +1096,13 @@ remains exactly that operation identity. Foreign files and whole Knowledge Base
 objects are never deleted. Deletions are scheduled ahead of updates; one feed
 page is processed per scheduling quantum so a large space cannot starve another.
 Mapping and ownership metadata use nullable `pageId` for `dictionary_term` and
-a required page UUID for page-backed sources. Dictionary update/delete
+a required page UUID for page-backed sources. Remote file listing and detail
+projections preserve explicit `pageId: null` so signed dictionary ownership
+survives reconciliation and existing files are adopted instead of duplicated.
+An early reconciliation triggered by pending upload intents remains due until
+the complete remote scan finishes, even when the last intent is removed during
+an earlier quantum. Only completion schedules the next periodic scan.
+Dictionary update/delete
 checkpoints are independent; disable drains term files and re-enable backfills
 them through fingerprint replay.
 

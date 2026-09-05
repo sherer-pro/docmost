@@ -8,6 +8,7 @@ import { Hocuspocus, Document } from '@hocuspocus/server';
 import { TiptapTransformer } from '@hocuspocus/transformer';
 import {
   prosemirrorNodeToYElement,
+  prosemirrorNodeToYJson,
   tiptapExtensions,
 } from './collaboration.util';
 import * as Y from 'yjs';
@@ -135,7 +136,10 @@ export class CollaborationHandler {
             }
             const next = applyAiPageOperation(current, operation);
             const nextNode = strictJsonToNode(next as any);
-            const afterHash = hashProseMirrorJson(next);
+            // Resolve schema defaults and Yjs serialization before mutation.
+            const afterHash = hashProseMirrorJson(
+              prosemirrorNodeToYJson(nextNode),
+            );
             if (afterHash !== expectedAfterHash) {
               throw new Error('agent_write_recovery_mismatch');
             }
