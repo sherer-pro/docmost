@@ -50,6 +50,10 @@ export class EnvironmentVariables {
   AI_RETRIEVAL_ALLOWED_ORIGINS: string;
 
   @IsOptional()
+  @IsString()
+  RAG_CONTENT_PROCESSORS_ENABLED: string;
+
+  @IsOptional()
   @IsIn(['true', 'false'])
   AI_EXTERNAL_MCP_ENABLED: string;
 
@@ -136,6 +140,10 @@ export class EnvironmentVariables {
   @IsOptional()
   @Matches(/^\d+$/)
   RAG_SYNC_SHUTDOWN_TIMEOUT_MS: string;
+
+  @IsOptional()
+  @IsIn(['2', '3'])
+  RAG_SYNC_METADATA_WRITE_VERSION: string;
 
   @IsOptional()
   @Matches(/^\d+$/)

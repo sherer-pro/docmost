@@ -172,6 +172,15 @@ const createService = (
         new Date(updatedAt),
       renderPageKnowledgeMarkdown: () => '',
     } as any,
+    {
+      policyVersion: 1,
+      getCapabilities: () => [],
+      fingerprintInput: () => ({
+        contentPolicyVersion: 1,
+        contentCapabilities: [],
+      }),
+      isAttachmentSupported: () => true,
+    } as any,
   );
 
 const feedCursor = (

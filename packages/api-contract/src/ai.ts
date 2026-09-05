@@ -46,6 +46,22 @@ export const AI_RETRIEVAL_ADAPTERS = [
 ] as const;
 export type AiRetrievalAdapter = (typeof AI_RETRIEVAL_ADAPTERS)[number];
 
+export const AI_RETRIEVAL_QUERY_MODES = [
+  "vector",
+  "hybrid_with_vector_fallback",
+] as const;
+export type AiRetrievalQueryMode = (typeof AI_RETRIEVAL_QUERY_MODES)[number];
+
+export const AI_RETRIEVAL_REWRITE_OUTCOMES = [
+  "not_requested",
+  "disabled",
+  "rewritten",
+  "unchanged",
+  "failed",
+] as const;
+export type AiRetrievalRewriteOutcome =
+  (typeof AI_RETRIEVAL_REWRITE_OUTCOMES)[number];
+
 export const AI_RETRIEVAL_OUTCOMES = [
   "not_requested",
   "disabled",
@@ -259,6 +275,8 @@ export interface AiRetrievalConfig {
   apiKeyConfigured: boolean;
   timeoutMs: number;
   maxResults: number;
+  queryMode: AiRetrievalQueryMode;
+  followUpRewriteEnabled: boolean;
   openWebUi: {
     baseUrl: string | null;
     knowledgeId: string | null;
@@ -273,6 +291,8 @@ export interface AiRetrievalConfigUpdate {
   clearApiKey?: boolean;
   timeoutMs?: number;
   maxResults?: number;
+  queryMode?: AiRetrievalQueryMode;
+  followUpRewriteEnabled?: boolean;
   openWebUi?: {
     baseUrl?: string | null;
     knowledgeId?: string | null;
@@ -525,6 +545,12 @@ export interface AiRun {
   finishReason: string | null;
   retrievalOutcome: AiRetrievalOutcome;
   retrievalErrorCode: string | null;
+  retrievalQuery: string | null;
+  retrievalRewriteOutcome: AiRetrievalRewriteOutcome;
+  retrievalRewriteErrorCode: string | null;
+  retrievalRewriteLatencyMs: number | null;
+  retrievalRewriteInputTokens: number;
+  retrievalRewriteOutputTokens: number;
   inputTokens: number;
   outputTokens: number;
   steps?: AiRunStep[];

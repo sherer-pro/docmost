@@ -40,6 +40,7 @@ import {
   AI_ASSISTANT_NAME_MAX_LENGTH,
   AI_RETRIEVAL_CONFIG_DEFAULTS,
   AI_SPACE_CONFIG_DEFAULTS,
+  type AiRetrievalQueryMode,
 } from "@docmost/api-contract";
 import {
   useAiSpaceConfigQuery,
@@ -101,6 +102,8 @@ type AiSettingsForm = {
   openWebUiApiKey: string;
   retrievalTimeoutMs: number;
   retrievalMaxResults: number;
+  retrievalQueryMode: AiRetrievalQueryMode;
+  followUpRewriteEnabled: boolean;
   quickCommands: AiQuickCommand[];
 };
 
@@ -132,6 +135,8 @@ const DEFAULT_FORM: AiSettingsForm = {
   openWebUiApiKey: "",
   retrievalTimeoutMs: AI_RETRIEVAL_CONFIG_DEFAULTS.timeoutMs,
   retrievalMaxResults: AI_RETRIEVAL_CONFIG_DEFAULTS.maxResults,
+  retrievalQueryMode: "vector",
+  followUpRewriteEnabled: false,
   quickCommands: [],
 };
 
@@ -301,6 +306,8 @@ function AiSpaceProviderSettings({
       openWebUiApiKey: "",
       retrievalTimeoutMs: config.retrieval.timeoutMs,
       retrievalMaxResults: config.retrieval.maxResults,
+      retrievalQueryMode: config.retrieval.queryMode,
+      followUpRewriteEnabled: config.retrieval.followUpRewriteEnabled,
       quickCommands: config.quickCommands ?? [],
     });
     form.resetDirty();
@@ -356,6 +363,8 @@ function AiSpaceProviderSettings({
         : {}),
     timeoutMs: values.retrievalTimeoutMs,
     maxResults: values.retrievalMaxResults,
+    queryMode: values.retrievalQueryMode,
+    followUpRewriteEnabled: values.followUpRewriteEnabled,
   });
 
   const toPayload = (
@@ -1185,8 +1194,36 @@ function AiSpaceProviderSettings({
                             : t("ai.settings.clearOpenWebUiApiKey")}
                         </Button>
                       )}
+                      <Select
+                        label={t("ai.settings.retrievalQueryMode")}
+                        description={t(
+                          "ai.settings.retrievalQueryModeDescription",
+                        )}
+                        data={[
+                          {
+                            value: "vector",
+                            label: t("ai.settings.retrievalQueryModeVector"),
+                          },
+                          {
+                            value: "hybrid_with_vector_fallback",
+                            label: t("ai.settings.retrievalQueryModeHybrid"),
+                          },
+                        ]}
+                        allowDeselect={false}
+                        {...form.getInputProps("retrievalQueryMode")}
+                      />
                     </>
                   )}
+                  <Switch
+                    label={t("ai.settings.followUpRewrite")}
+                    description={t("ai.settings.followUpRewriteDescription")}
+                    {...form.getInputProps("followUpRewriteEnabled", {
+                      type: "checkbox",
+                    })}
+                  />
+                  <Text size="xs" c="dimmed">
+                    {t("ai.settings.ragSupportedContent")}
+                  </Text>
                   <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                     <NumberInput
                       {...numberInputControlProps}

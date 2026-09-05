@@ -38,8 +38,10 @@ describe('RagSyncSourceService', () => {
     reconcileIntervalMs: 6 * 60 * 60 * 1000,
   };
   const ragScope = {
-    schemaVersion: 3,
-    projectionVersion: 1,
+    schemaVersion: 4,
+    projectionVersion: 2,
+    contentPolicyVersion: 1,
+    contentCapabilities: [],
     workspaceId: binding.workspaceId,
     spaceId: binding.spaceId,
     syncTarget: null,
@@ -303,6 +305,52 @@ describe('RagSyncSourceService', () => {
       writer as any,
       state as any,
       { run: jest.fn(async (_bytes, _signal, callback) => callback()) } as any,
+      {
+        projectStructuredKnowledge: jest.fn((item) => ({
+          projectorId: 'structured-knowledge-v2',
+          sourceType: item.sourceType,
+          sourceId: item.sourceId,
+          parts: [
+            {
+              partId: 'main',
+              fileName: item.fileName,
+              mimeType: 'text/markdown',
+              content: new TextEncoder().encode(item.markdown),
+              locator: {
+                pageId: item.pageId,
+                ...(item.databaseId ? { databaseId: item.databaseId } : {}),
+              },
+            },
+          ],
+        })),
+        isAttachmentSupported: jest.fn(
+          (item: { fileExt: string; mimeType: string | null }) =>
+            ['.md', '.txt'].includes(item.fileExt) &&
+            [
+              'application/octet-stream',
+              'text/markdown',
+              'text/plain',
+              'text/x-markdown',
+            ].includes(item.mimeType ?? ''),
+        ),
+        projectAttachmentText: jest.fn((item) => ({
+          projectorId: 'attachment-text-v1',
+          sourceType: 'attachment',
+          sourceId: item.sourceId,
+          parts: [
+            {
+              partId: 'main',
+              fileName: item.fileName,
+              mimeType: item.mimeType || 'text/plain',
+              content: item.content,
+              locator: {
+                pageId: item.pageId,
+                attachmentId: item.sourceId,
+              },
+            },
+          ],
+        })),
+      } as any,
     );
     return { service, rag, state, writer, storage };
   }
@@ -884,7 +932,7 @@ describe('RagSyncSourceService', () => {
     expect(writer.upload).not.toHaveBeenCalled();
   });
 
-  it('uploads extracted text for PDF attachments when local indexing is ready', async () => {
+  it('removes PDF attachments from the RAG sync corpus', async () => {
     const { service, rag, state, storage, writer } = setup({}, [], [], [], [], {
       'attachment-1': {
         textContent: 'Extracted searchable content',
@@ -908,42 +956,16 @@ describe('RagSyncSourceService', () => {
       hasMore: false,
       nextCursor: null,
     });
-    writer.upload.mockResolvedValue({ id: 'attachment-file' });
-
     await service.processQuantum(binding, context);
 
-    expect(writer.upload).toHaveBeenCalledWith(
-      binding,
-      expect.objectContaining({
-        fileName: 'guide.pdf-attachment-1.md',
-        mimeType: 'text/markdown',
-        content: expect.any(Uint8Array),
-        metadata: expect.objectContaining({
-          sourceType: 'attachment',
-          sourceId: 'attachment-1',
-          pageId: 'page-1',
-        }),
-      }),
-      context.signal,
-    );
-    const upload = writer.upload.mock.calls[0][1];
-    expect(new TextDecoder().decode(upload.content)).toBe(
-      '# guide.pdf\n\nExtracted searchable content',
-    );
+    expect(writer.upload).not.toHaveBeenCalled();
     expect(rag.resolveAttachmentForDownload).not.toHaveBeenCalled();
     expect(storage.readStream).not.toHaveBeenCalled();
-    expect(state.setMapping).toHaveBeenCalledWith(
-      lease,
-      expect.objectContaining({
-        sourceType: 'attachment',
-        sourceId: 'attachment-1',
-        fileId: 'attachment-file',
-      }),
-    );
+    expect(state.setMapping).not.toHaveBeenCalled();
   });
 
   it('uses distinct remote names for attachments with the same source name', async () => {
-    const { service, rag, writer } = setup({}, [], [], [], [], {
+    const { service, rag, storage, writer } = setup({}, [], [], [], [], {
       'attachment-1': {
         textContent: 'First extracted content',
         contentIndexStatus: 'ready',
@@ -957,18 +979,18 @@ describe('RagSyncSourceService', () => {
       items: [
         {
           id: 'attachment-1',
-          fileName: 'guide.pdf',
-          fileExt: '.pdf',
-          mimeType: 'application/pdf',
+          fileName: 'guide.txt',
+          fileExt: '.txt',
+          mimeType: 'text/plain',
           fileSize: 100,
           pageId: 'page-1',
           updatedAtMs: 200,
         },
         {
           id: 'attachment-2',
-          fileName: 'guide.pdf',
-          fileExt: '.pdf',
-          mimeType: 'application/pdf',
+          fileName: 'guide.txt',
+          fileExt: '.txt',
+          mimeType: 'text/plain',
           fileSize: 100,
           pageId: 'page-2',
           updatedAtMs: 201,
@@ -981,13 +1003,19 @@ describe('RagSyncSourceService', () => {
     writer.upload
       .mockResolvedValueOnce({ id: 'attachment-file-1' })
       .mockResolvedValueOnce({ id: 'attachment-file-2' });
+    rag.resolveAttachmentForDownload.mockImplementation((_, id: string) =>
+      Promise.resolve({ filePath: `/storage/${id}` }),
+    );
+    storage.readStream.mockImplementation((filePath: string) =>
+      Promise.resolve(Readable.from([`content:${filePath}`])),
+    );
 
     await service.processQuantum(binding, context);
 
     expect(writer.upload).toHaveBeenCalledTimes(2);
     expect(
       writer.upload.mock.calls.map((call) => call[1].fileName).sort(),
-    ).toEqual(['guide.pdf-attachment-1.md', 'guide.pdf-attachment-2.md']);
+    ).toEqual(['guide.txt-attachment-1.txt', 'guide.txt-attachment-2.txt']);
   });
 
   it('adds only safe feed stage and source-kind diagnostics to unknown errors', async () => {
@@ -1817,6 +1845,41 @@ describe('RagSyncSourceService', () => {
     expect(state.setFeedProgress).toHaveBeenCalledWith(lease, 'updates', null);
   });
 
+  it('removes a mapping when its remote file no longer exists', async () => {
+    const { service, state, writer } = setup();
+    const mapping = {
+      identity: 'page:page-1',
+      fileId: 'file-missing',
+      operationId: hex(1),
+      contentHash: hex(2),
+      sourceType: 'page',
+      sourceId: 'page-1',
+      pageId: 'page-1',
+      updatedAtMs: 10,
+    } as const;
+    state.getReconcileAt.mockResolvedValue(0);
+    state.getRemoteScanProgress.mockResolvedValue({
+      configVersion: binding.configVersion,
+      phase: 'mappings',
+      page: 1,
+      mappingCursor: '0',
+      expectedTotal: 0,
+      scopeFingerprint: effectiveFingerprint(),
+    });
+    state.scanMappings.mockResolvedValue({ cursor: '0', items: [mapping] });
+    state.wasRemoteScanFileIdSeen.mockResolvedValue(false);
+    writer.getFile.mockResolvedValue(null);
+
+    await expect(
+      service.processQuantum(binding, context),
+    ).resolves.toMatchObject({ hasMore: true });
+
+    expect(writer.deleteFile).not.toHaveBeenCalled();
+    expect(state.deleteMapping).toHaveBeenCalledWith(lease, mapping.identity);
+    expect(state.setCheckpoint).toHaveBeenCalledWith(lease, 'updates', 0);
+    expect(state.setFeedProgress).toHaveBeenCalledWith(lease, 'updates', null);
+  });
+
   it('does not acknowledge a reconciliation batch until replay checkpoints are durable', async () => {
     const { service, state, writer } = setup();
     const mapping = {
@@ -2360,10 +2423,11 @@ function effectiveFingerprint(): string {
   return createHash('sha256')
     .update(
       JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         serverScopeFingerprint: 'scope-fingerprint',
         maxAttachmentBytes: 25 * 1024 * 1024,
-        supportedAttachmentExtensions: ['.docx', '.md', '.pdf', '.txt'],
+        contentPolicyVersion: 1,
+        contentCapabilities: [],
       }),
     )
     .digest('hex');
@@ -2417,6 +2481,12 @@ function syncSource(
     sourceId: pageId,
     pageId,
     databaseId,
+    projectorId: 'structured-knowledge-v2' as const,
+    projectionVersion: 2,
+    partId: 'main',
+    partIndex: 0,
+    partCount: 1,
+    locator: { pageId },
     updatedAtMs: 1,
     fileName: `${pageId}.md`,
     mimeType: 'text/markdown',
@@ -2428,7 +2498,7 @@ function operationIdForSource(source: ReturnType<typeof syncSource>): string {
   const contentHash = createHash('sha256').update(source.content).digest('hex');
   return createHash('sha256')
     .update(
-      `binding-1\n1\n${source.identity}\n${source.pageId}\n${source.databaseId ?? ''}\n${contentHash}`,
+      `binding-1\n1\n${source.sourceType}\n${source.sourceId}\n${source.projectorId}\n${source.projectionVersion}\n${source.partId}\n${source.partIndex}\n${source.partCount}\n${source.pageId}\n${source.databaseId ?? ''}\n${source.updatedAtMs}\n${contentHash}`,
     )
     .digest('hex');
 }

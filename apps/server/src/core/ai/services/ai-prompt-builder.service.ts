@@ -162,7 +162,7 @@ export class AiPromptBuilderService {
         });
       }
       register({
-        candidateKey: `${source.sourceType}:${source.sourceId}:${source.sectionId ?? 'root'}`,
+        candidateKey: `${source.sourceType}:${source.sourceId}:${source.sectionId ?? 'root'}${source.partKey ? `:${source.partKey}` : ''}`,
         sourceType: source.sourceType,
         sourceId: source.sourceId,
         pageId: source.pageId,
@@ -239,7 +239,7 @@ export class AiPromptBuilderService {
               });
             }
             const marker = register({
-              candidateKey: `${source.sourceType}:${source.sourceId}:${source.sectionId ?? 'root'}`,
+              candidateKey: `${source.sourceType}:${source.sourceId}:${source.sectionId ?? 'root'}${source.partKey ? `:${source.partKey}` : ''}`,
               sourceType: source.sourceType,
               sourceId: source.sourceId,
               pageId: source.pageId,

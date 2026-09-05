@@ -132,12 +132,21 @@ function createService(options?: {
     pageAccess as any,
     contentPolicy as any,
     new KnowledgeProjectionService(db as any),
+    {
+      policyVersion: 1,
+      getCapabilities: () => [],
+      fingerprintInput: () => ({
+        contentPolicyVersion: 1,
+        contentCapabilities: [],
+      }),
+      isAttachmentSupported: () => true,
+    } as any,
   );
   return { service, db, databaseRowRepo };
 }
 
 describe('RagService security boundaries', () => {
-  it('includes scope identity and effective page access in the v3 fingerprint', async () => {
+  it('includes scope identity and effective page access in the v4 fingerprint', async () => {
     const first = createService({ readablePageIds: ['page-1'] });
     const second = createService({ readablePageIds: ['page-1', 'page-2'] });
 
@@ -149,7 +158,8 @@ describe('RagService security boundaries', () => {
     });
 
     expect(firstScope).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
+      contentPolicyVersion: 1,
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget: null,
@@ -176,7 +186,7 @@ describe('RagService security boundaries', () => {
     });
   });
 
-  it('separates explicit exclusions from status-derived blocks in scope v3', async () => {
+  it('separates explicit exclusions from status-derived blocks in scope v4', async () => {
     const { service } = createService({
       excludedPageIds: ['page-explicit'],
       ragSearchDoneOnly: true,
@@ -184,7 +194,7 @@ describe('RagService security boundaries', () => {
     });
 
     await expect(service.getScope(scope)).resolves.toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       ragSearchDoneOnly: true,
       excludedPageIds: ['page-explicit'],
       statusBlockedPageIds: ['page-without-done'],

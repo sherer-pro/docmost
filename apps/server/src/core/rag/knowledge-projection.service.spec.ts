@@ -17,7 +17,7 @@ describe('KnowledgeProjectionService', () => {
         },
       } as any),
     ).toEqual({
-      projectionVersion: 1,
+      projectionVersion: 2,
       documentFields: {
         status: true,
         assignee: false,

@@ -303,20 +303,34 @@ the vector metadata, so Docmost hydrates each unique candidate from
 }
 ```
 
-The built-in synchronizer writes schema version 2, adding `bindingId`,
-`targetVersion`, and `operationId`. Query-time retrieval accepts both this
-current format and the schema-version-1 compatibility format shown above; in
-both cases it revalidates `workspaceId`, `spaceId`, and the current Docmost ACL.
+The built-in synchronizer writes schema version 2 by default, adding
+`bindingId`, `targetVersion`, and `operationId`. Query-time retrieval accepts
+schema versions 1, signed 2, and signed 3; version 3 adds projector, part, and
+source-locator metadata for future multipart processors. In every case Docmost
+revalidates `workspaceId`, `spaceId`, and the current ACL.
 
 The adapter drops malformed, cross-workspace, and cross-space neighbors
 individually. A non-empty result without any compatible metadata is reported as
 `retrieval_invalid_response`; an empty collection is a successful empty search.
 External titles and URLs are never trusted.
 
-Docmost explicitly disables Open WebUI hybrid search for this adapter. The
-external reranker is not part of the integration contract, and an unhealthy
-global hybrid-search configuration must not make ordinary vector retrieval
-unavailable.
+Each space selects `vector` or `hybrid_with_vector_fallback`; vector is the
+backward-compatible default. Hybrid retrieval gets at most three seconds inside
+a six-second total budget and reserves one second for a vector fallback.
+Fallback is limited to timeout, `429`, `5xx`, malformed transport output, and
+hybrid/reranker failure. Valid empty results and security, authorization,
+target, or metadata incompatibility errors never fall back. Open WebUI result
+order is authoritative, duplicate identities retain the first candidate, and a
+logical source contributes at most two parts.
+
+Optional contextual follow-up rewrite changes only the retrieval query. It uses
+the current query, up to three earlier user messages after the policy history
+cutoff, and titles of still-readable cited sources. Assistant answers,
+reasoning, page/file content, and chat-file titles are excluded. The frozen
+provider runs at temperature 0 with an 8 KiB input cap, 128 output tokens, and a
+30 second deadline. Invalid output or any failure falls back to the original query
+without failing generation; run audit fields contain only the effective query,
+outcome, safe error, latency, and token counts.
 
 Open WebUI synchronization is built into the main Docmost process. Enable it at
 the deployment boundary, approve the exact writer origin, and start the ordinary
@@ -325,6 +339,7 @@ stack:
 ```dotenv
 RAG_SYNC_ENABLED=true
 RAG_SYNC_ALLOWED_ORIGINS=https://open-webui.example.com
+RAG_SYNC_METADATA_WRITE_VERSION=2
 ```
 
 ```bash
@@ -382,6 +397,16 @@ poll; boundary checks prevent later remote calls and unfenced checkpoint or
 mapping writes. Metadata reconciliation adopts or removes a side effect that
 completed before cancellation reached the remote service.
 
+RAG Sync and the public RAG attachment routes expose only `.md` and `.txt`
+attachments whose extension and MIME type both match the active
+`attachment-text-v1` capability. PDF, DOCX, images, and audio stay available to
+ordinary Docmost search, manual AI context, private chat-file processing, and
+the editor, but are not exported, synchronized, or accepted from external
+retrieval hydration. Reserved PDF/DOCX/OCR/vision/audio projector IDs remain
+disabled extension points. Multipart projector output is rejected while the
+writer stays on metadata v2; switch to v3 only as part of a separately verified
+processor rollout.
+
 Public `/api/rag/*` feed pagination uses opaque cursor v2. It binds the feed,
 workspace, space, scope fingerprint, starting watermark, a database-derived
 snapshot upper bound, and the last `(timestamp, id)` position. Keep the starting
@@ -396,8 +421,9 @@ Then configure the writer allowlist, enable the deployment switch, and use Save,
 Test, and Enable separately for each space; the API enforces that order. Legacy per-space environment values
 and secrets are intentionally not imported; remove them and revoke the old
 space-scoped Docmost RAG keys only after the embedded binding is healthy. The
-first reconciliation can adopt schema-v1 Docmost metadata, but every new write
-uses schema v2.
+first reconciliation can adopt schema-v1 Docmost metadata. Keep new writes on
+schema v2 during upgrade; readers already understand signed v3 for a later
+multipart rollout.
 
 For an emergency rollback, set `RAG_SYNC_ENABLED=false` and restart Docmost.
 Leave the additive tables in place and do not run the down migration, because it

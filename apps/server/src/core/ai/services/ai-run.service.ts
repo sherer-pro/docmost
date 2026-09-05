@@ -694,6 +694,13 @@ export class AiRunService {
       finishReason: run.finishReason,
       retrievalOutcome: run.retrievalOutcome as AiRun['retrievalOutcome'],
       retrievalErrorCode: run.retrievalErrorCode,
+      retrievalQuery: run.retrievalQuery,
+      retrievalRewriteOutcome:
+        run.retrievalRewriteOutcome as AiRun['retrievalRewriteOutcome'],
+      retrievalRewriteErrorCode: run.retrievalRewriteErrorCode,
+      retrievalRewriteLatencyMs: run.retrievalRewriteLatencyMs,
+      retrievalRewriteInputTokens: Number(run.retrievalRewriteInputTokens),
+      retrievalRewriteOutputTokens: Number(run.retrievalRewriteOutputTokens),
       inputTokens: Number(run.inputTokens),
       outputTokens: Number(run.outputTokens),
       createdAt: run.createdAt.toISOString(),

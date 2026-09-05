@@ -412,6 +412,12 @@ export interface AiRuns {
   responseSnapshot: string | null;
   retrievalErrorCode: string | null;
   retrievalOutcome: Generated<string>;
+  retrievalQuery: string | null;
+  retrievalRewriteErrorCode: string | null;
+  retrievalRewriteInputTokens: Generated<Int8>;
+  retrievalRewriteLatencyMs: number | null;
+  retrievalRewriteOutcome: Generated<string>;
+  retrievalRewriteOutputTokens: Generated<Int8>;
   rootRunId: string;
   selectionFrom: number | null;
   selectionText: string | null;
@@ -493,10 +499,12 @@ export interface AiSpaceConfigs {
   retrievalAdapter: Generated<string>;
   retrievalApiKeyEncrypted: string | null;
   retrievalMaxResults: Generated<number>;
+  retrievalFollowUpRewriteEnabled: Generated<boolean>;
   retrievalOpenWebuiApiKeyEncrypted: string | null;
   retrievalOpenWebuiBaseUrl: string | null;
   retrievalOpenWebuiKnowledgeId: string | null;
   retrievalTimeoutMs: Generated<number>;
+  retrievalQueryMode: Generated<string>;
   retrievalUrl: string | null;
   spaceId: string;
   systemInstructions: string | null;

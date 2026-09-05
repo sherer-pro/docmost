@@ -12,6 +12,7 @@ describe('loadRagSyncRuntimeConfig', () => {
       maxConcurrentBindings: 4,
       maxConcurrentDocuments: 4,
       redisPrefix: 'docmost:rag-sync',
+      metadataWriteVersion: 2,
     });
     expect(config).not.toHaveProperty('workspaceId');
     expect(config).not.toHaveProperty('spaceId');
@@ -26,6 +27,7 @@ describe('loadRagSyncRuntimeConfig', () => {
       RAG_SYNC_MAX_CONCURRENT_BINDINGS: '7',
       RAG_SYNC_MAX_CONCURRENT_DOCUMENTS: '3',
       RAG_SYNC_REDIS_PREFIX: 'custom:rag_sync',
+      RAG_SYNC_METADATA_WRITE_VERSION: '3',
     });
 
     expect(config.enabled).toBe(true);
@@ -34,6 +36,7 @@ describe('loadRagSyncRuntimeConfig', () => {
     expect(config.maxConcurrentDocuments).toBe(3);
     expect(config.redisPrefix).toBe('custom:rag_sync');
     expect(config.leaseTtlMs).toBe(30_000);
+    expect(config.metadataWriteVersion).toBe(3);
   });
 
   it('rejects ambiguous booleans and unsafe Redis prefixes', () => {
@@ -43,5 +46,8 @@ describe('loadRagSyncRuntimeConfig', () => {
     expect(() =>
       loadRagSyncRuntimeConfig({ RAG_SYNC_REDIS_PREFIX: 'prefix with space' }),
     ).toThrow('RAG_SYNC_REDIS_PREFIX');
+    expect(() =>
+      loadRagSyncRuntimeConfig({ RAG_SYNC_METADATA_WRITE_VERSION: '4' }),
+    ).toThrow('RAG_SYNC_METADATA_WRITE_VERSION');
   });
 });

@@ -12,6 +12,9 @@ describe('RagService attachment download authorization', () => {
     workspaceId: scope.workspace.id,
     spaceId: scope.space.id,
     pageId: 'page-1',
+    fileName: 'notes.txt',
+    fileExt: '.txt',
+    mimeType: 'text/plain',
     deletedAt: null,
   };
   const page = {
@@ -61,6 +64,12 @@ describe('RagService attachment download authorization', () => {
         }),
       } as any,
       {} as any,
+      {
+        isAttachmentSupported: jest.fn(
+          (value) =>
+            value.fileExt === '.txt' && value.mimeType === 'text/plain',
+        ),
+      } as any,
     );
     return { service, pageAccess };
   }
@@ -91,6 +100,30 @@ describe('RagService attachment download authorization', () => {
     await expect(
       service.resolveAttachmentForDownload(scope, attachment.id),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('does not expose PDF, DOCX, or image attachments through RAG download', async () => {
+    for (const unsupported of [
+      {
+        fileName: 'document.pdf',
+        fileExt: '.pdf',
+        mimeType: 'application/pdf',
+      },
+      {
+        fileName: 'document.docx',
+        fileExt: '.docx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      },
+      { fileName: 'image.png', fileExt: '.png', mimeType: 'image/png' },
+    ]) {
+      const { service } = createService({
+        attachment: { ...attachment, ...unsupported },
+      });
+      await expect(
+        service.resolveAttachmentForDownload(scope, attachment.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    }
   });
 
   it('does not expose deleted files or files on deleted pages', async () => {

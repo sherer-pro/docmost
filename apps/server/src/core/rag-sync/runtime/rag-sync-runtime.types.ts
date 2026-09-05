@@ -1,4 +1,7 @@
-import type { RagSyncSourceType } from '@docmost/api-contract';
+import type {
+  RagContentProcessorId,
+  RagSyncSourceType,
+} from '@docmost/api-contract';
 
 export const RAG_SYNC_BINDING_REGISTRY = Symbol('RAG_SYNC_BINDING_REGISTRY');
 export const RAG_SYNC_QUANTUM_PROCESSOR = Symbol('RAG_SYNC_QUANTUM_PROCESSOR');
@@ -84,6 +87,11 @@ export interface RagSyncSourceMapping {
   sourceId: string;
   pageId: string | null;
   databaseId?: string;
+  projectorId?: RagContentProcessorId;
+  projectionVersion?: number;
+  partId?: string;
+  partIndex?: number;
+  partCount?: number;
   updatedAtMs: number;
 }
 
@@ -178,6 +186,40 @@ export type RagSyncDocmostMetadataV2 = {
   marker?: 'target-test';
 };
 
+export type RagSyncDocmostMetadataV3 = {
+  schemaVersion: 3;
+  bindingId: string;
+  targetVersion: number;
+  workspaceId: string;
+  spaceId: string;
+  sourceType: RagSyncSourceType;
+  sourceId: string;
+  pageId: string | null;
+  databaseId?: string;
+  sourceUpdatedAtMs: number;
+  contentHash: string;
+  operationId: string;
+  projectorId: RagContentProcessorId;
+  projectionVersion: number;
+  partId: string;
+  partIndex: number;
+  partCount: number;
+  locator: {
+    pageId: string | null;
+    databaseId?: string;
+    attachmentId?: string;
+    sectionId?: string;
+    pageNumber?: number;
+    region?: { x: number; y: number; width: number; height: number };
+  };
+  ownershipMac?: string;
+  marker?: 'target-test';
+};
+
+export type RagSyncSignedDocmostMetadata =
+  | RagSyncDocmostMetadataV2
+  | RagSyncDocmostMetadataV3;
+
 export type RagSyncLegacyDocmostMetadata = {
   schemaVersion: 1;
   workspaceId: string;
@@ -191,6 +233,7 @@ export type RagSyncLegacyDocmostMetadata = {
 };
 
 export type RagSyncRemoteOwnership =
+  | { schemaVersion: 3; metadata: RagSyncDocmostMetadataV3 }
   | { schemaVersion: 2; metadata: RagSyncDocmostMetadataV2 }
   | { schemaVersion: 1; metadata: RagSyncLegacyDocmostMetadata };
 

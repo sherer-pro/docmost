@@ -1,4 +1,9 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  GatewayTimeoutException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { User } from '@docmost/db/types/entity.types';
@@ -19,6 +24,7 @@ import {
   AiSourceAccessService,
 } from '../services/ai-source-access.service';
 import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
+import { RagContentProjectorService } from '../../rag/rag-content-projector.service';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
@@ -43,6 +49,8 @@ export class AiRetrievalService {
     private readonly sourceAccess?: AiSourceAccessService,
     @Optional()
     private readonly knowledgeProjection?: KnowledgeProjectionService,
+    @Optional()
+    private readonly contentProjectors?: RagContentProjectorService,
   ) {}
 
   async assertSourcesAccessible(params: {
@@ -50,11 +58,13 @@ export class AiRetrievalService {
     user: User;
     workspaceId: string;
     spaceId: string;
+    mode?: 'default' | 'rag-search';
   }): Promise<void> {
+    const mode = params.mode ?? 'rag-search';
     if (this.sourceAccess) {
       await this.sourceAccess.assertAccessible(params.sources, {
         ...params,
-        mode: 'rag-search',
+        mode,
       });
       return;
     }
@@ -63,10 +73,20 @@ export class AiRetrievalService {
       params.spaceId,
     );
     const policy = this.contentPolicy
-      ? await this.contentPolicy.getRagSearchPolicy(
-          params.spaceId,
-          params.workspaceId,
-        )
+      ? mode === 'rag-search'
+        ? await this.contentPolicy.getRagSearchPolicy(
+            params.spaceId,
+            params.workspaceId,
+          )
+        : {
+            excludedPageIds: [
+              ...(await this.contentPolicy.getExcludedPageIds(
+                params.spaceId,
+                params.workspaceId,
+              )),
+            ],
+            statusBlockedPageIds: [],
+          }
       : null;
     const excluded = new Set([
       ...(policy?.excludedPageIds ?? []),
@@ -137,14 +157,24 @@ export class AiRetrievalService {
 
     try {
       const retrievalStartedAt = Date.now();
-      const allowedPageIds = [
-        ...(await this.currentAllowedPageIds(
+      const preparation = Promise.all([
+        this.currentAllowedPageIds(
           params.user,
           params.request.workspaceId,
           params.request.spaceId,
-        )),
-      ];
-      const safeRequest = await this.withDictionarySourceType(params.request);
+        ),
+        this.withDictionarySourceType(params.request),
+      ]);
+      const [allowedPageIdSet, safeRequest] = params.request.deadlineAtMs
+        ? await this.withTimeout(
+            preparation,
+            Math.max(
+              1,
+              Math.min(500, params.request.deadlineAtMs - Date.now()),
+            ),
+          )
+        : await preparation;
+      const allowedPageIds = [...allowedPageIdSet];
       const hits = await adapter.retrieve(
         params.config,
         {
@@ -153,25 +183,34 @@ export class AiRetrievalService {
         },
         params.signal,
       );
-      let sources = await this.resolveSafeSources(
-        hits,
-        await this.currentAllowedPageIds(
-          params.user,
+      const resolveSources = async () => {
+        let sources = await this.resolveSafeSources(
+          hits,
+          await this.currentAllowedPageIds(
+            params.user,
+            params.request.workspaceId,
+            params.request.spaceId,
+          ),
           params.request.workspaceId,
           params.request.spaceId,
-        ),
-        params.request.workspaceId,
-        params.request.spaceId,
-        params.config.maxResults,
-      );
-      if (this.sourceAccess) {
-        sources = await this.sourceAccess.filterAccessible(sources, {
-          user: params.user,
-          workspaceId: params.request.workspaceId,
-          spaceId: params.request.spaceId,
-          mode: 'rag-search',
-        });
-      }
+          params.config.maxResults,
+        );
+        if (this.sourceAccess) {
+          sources = await this.sourceAccess.filterAccessible(sources, {
+            user: params.user,
+            workspaceId: params.request.workspaceId,
+            spaceId: params.request.spaceId,
+            mode: 'rag-search',
+          });
+        }
+        return sources;
+      };
+      const sources = params.request.deadlineAtMs
+        ? await this.withTimeout(
+            resolveSources(),
+            Math.max(1, params.request.deadlineAtMs - Date.now()),
+          )
+        : await resolveSources();
       this.metrics.observeRetrievalQuery(
         Date.now() - retrievalStartedAt,
         hits.length,
@@ -196,6 +235,29 @@ export class AiRetrievalService {
   private outcome(value: AiRetrievalOutcome): AiRetrievalOutcome {
     this.metrics.observeRetrieval(value.status);
     return value;
+  }
+
+  private async withTimeout<T>(
+    operation: Promise<T>,
+    timeoutMs: number,
+  ): Promise<T> {
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(
+                new GatewayTimeoutException('RAG retrieval deadline exceeded'),
+              ),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   private async currentAllowedPageIds(
@@ -279,6 +341,8 @@ export class AiRetrievalService {
               'workspaceId',
               'spaceId',
               'fileName',
+              'fileExt',
+              'mimeType',
               'deletedAt',
             ])
             .where('id', 'in', attachmentIds)
@@ -386,6 +450,7 @@ export class AiRetrievalService {
           sourceUrl: `/s/${encodeURIComponent(term.spaceSlug)}/dictionary?term=${encodeURIComponent(term.id)}`,
           excerpt: this.sanitizeExcerpt(hit.text),
           relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
+          ...(hit.partKey ? { partKey: hit.partKey } : {}),
           sectionId: null,
           sectionTitle: null,
         });
@@ -428,7 +493,8 @@ export class AiRetrievalService {
           file.deletedAt ||
           file.pageId !== page.id ||
           file.workspaceId !== workspaceId ||
-          file.spaceId !== spaceId
+          file.spaceId !== spaceId ||
+          !this.isSupportedRagAttachment(file)
         ) {
           continue;
         }
@@ -462,6 +528,7 @@ export class AiRetrievalService {
           .filter(Boolean)
           .join('\n\n'),
         relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
+        ...(hit.partKey ? { partKey: hit.partKey } : {}),
         customFields,
         sectionId: section?.id ?? null,
         sectionTitle: section?.title ?? null,
@@ -495,6 +562,31 @@ export class AiRetrievalService {
       );
     if (dictionaryEnabled) sourceTypes.push('dictionary_term');
     return { ...request, sourceTypes };
+  }
+
+  private isSupportedRagAttachment(file: {
+    fileName: string;
+    fileExt: string;
+    mimeType: string | null;
+  }): boolean {
+    if (this.contentProjectors) {
+      return this.contentProjectors.isAttachmentSupported(file);
+    }
+    const extension = (file.fileExt || file.fileName)
+      .toLowerCase()
+      .match(/\.[a-z0-9]+$/u)?.[0];
+    return (
+      Boolean(extension && ['.md', '.txt'].includes(extension)) &&
+      Boolean(
+        file.mimeType &&
+          [
+            'application/octet-stream',
+            'text/markdown',
+            'text/plain',
+            'text/x-markdown',
+          ].includes(file.mimeType.toLowerCase()),
+      )
+    );
   }
 
   private sanitizeExcerpt(value: string): string {
@@ -572,6 +664,8 @@ export class AiRetrievalService {
     if (
       [
         'retrieval_invalid_response',
+        'retrieval_incompatible_metadata',
+        'retrieval_response_too_large',
         'retrieval_collection_unavailable',
       ].includes(responseCode)
     ) {

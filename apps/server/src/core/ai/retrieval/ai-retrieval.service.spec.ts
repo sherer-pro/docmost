@@ -139,6 +139,8 @@ describe('AiRetrievalService', () => {
       apiKey: null,
       timeoutMs: 8000,
       maxResults: 8,
+      queryMode: 'vector' as const,
+      followUpRewriteEnabled: false,
     };
     const request = {
       schemaVersion: 1 as const,
@@ -194,7 +196,9 @@ describe('AiRetrievalService', () => {
               pageId,
               workspaceId,
               spaceId,
-              fileName: 'local.pdf',
+              fileName: 'local.txt',
+              fileExt: '.txt',
+              mimeType: 'text/plain',
               deletedAt: null,
             },
           ]);
@@ -314,7 +318,7 @@ describe('AiRetrievalService', () => {
       }),
       expect.objectContaining({
         sourceType: 'attachment',
-        sourceTitle: 'local.pdf',
+        sourceTitle: 'local.txt',
         pageId,
       }),
     ]);
@@ -351,6 +355,8 @@ describe('AiRetrievalService', () => {
           apiKey: null,
           timeoutMs: 8000,
           maxResults: 8,
+          queryMode: 'vector',
+          followUpRewriteEnabled: false,
         },
         user: {} as any,
         requested: true,
@@ -423,6 +429,8 @@ describe('AiRetrievalService', () => {
           apiKey: null,
           timeoutMs: 8000,
           maxResults: 8,
+          queryMode: 'vector',
+          followUpRewriteEnabled: false,
         },
         user: {} as any,
         requested: true,

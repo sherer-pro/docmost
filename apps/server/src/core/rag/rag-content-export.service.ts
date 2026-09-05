@@ -25,6 +25,7 @@ import {
   KnowledgeDocumentFieldsConfig,
   KnowledgeProjectionService,
 } from './knowledge-projection.service';
+import { RagContentProjectorService } from './rag-content-projector.service';
 
 export interface RagAuthContext {
   user: User;
@@ -80,6 +81,7 @@ export class RagContentExportService {
     private readonly pageAccessService: PageAccessService,
     private readonly contentPolicy: AiContentPolicyService,
     private readonly projection: KnowledgeProjectionService,
+    private readonly contentProjectors: RagContentProjectorService,
   ) {}
 
   /**
@@ -167,8 +169,9 @@ export class RagContentExportService {
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify({
-          schemaVersion: 3,
+          schemaVersion: 4,
           ...this.projection.fingerprintInput(scope.space),
+          ...this.contentProjectors.fingerprintInput(),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
           syncTarget,
@@ -180,8 +183,10 @@ export class RagContentExportService {
       )
       .digest('hex');
     return {
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       projectionVersion: this.projection.version,
+      contentPolicyVersion: this.contentProjectors.policyVersion,
+      contentCapabilities: this.contentProjectors.getCapabilities(),
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget,
@@ -1551,6 +1556,7 @@ export class RagContentExportService {
       .where('attachmentPages.workspaceId', '=', scope.workspace.id)
       .where('attachmentPages.spaceId', '=', scope.space.id)
       .where('attachmentPages.deletedAt', 'is', null)
+      .where(this.ragAttachmentPredicate())
       .$if(Boolean(readablePageIds), (qb) =>
         qb.where('attachments.pageId', 'in', [...readablePageIds!]),
       )
@@ -1751,9 +1757,7 @@ export class RagContentExportService {
         ...normalizedProperties.map((property) =>
           new Date(property.updatedAt).getTime(),
         ),
-        ...rows.map((row) =>
-          new Date(row.projectionUpdatedAt).getTime(),
-        ),
+        ...rows.map((row) => new Date(row.projectionUpdatedAt).getTime()),
       ),
     );
     const projectionUpdatedAt = this.projection.projectionUpdatedAtFromMembers(
@@ -1920,6 +1924,7 @@ export class RagContentExportService {
       .where('spaceId', '=', scope.space.id)
       .where('pageId', '=', page.id)
       .where('deletedAt', 'is', null)
+      .where(this.ragAttachmentPredicate())
       .execute();
     const customFields = this.buildCustomFields(
       page.settings,
@@ -2024,6 +2029,10 @@ export class RagContentExportService {
       throw new NotFoundException('File not found');
     }
 
+    if (!this.contentProjectors.isAttachmentSupported(attachment)) {
+      throw new NotFoundException('File not found');
+    }
+
     if (attachment.workspaceId !== scope.workspace.id) {
       throw new NotFoundException('File not found');
     }
@@ -2073,6 +2082,27 @@ export class RagContentExportService {
 
   private millisecondTimestamp(reference: string) {
     return sql<Date>`date_trunc('milliseconds', ${this.db.dynamic.ref(reference)})`;
+  }
+
+  private ragAttachmentPredicate() {
+    const fileExt = this.db.dynamic.ref('attachments.fileExt');
+    const fileName = this.db.dynamic.ref('attachments.fileName');
+    const mimeType = this.db.dynamic.ref('attachments.mimeType');
+    return sql<boolean>`(
+      (
+        lower(coalesce(${fileExt}, '')) in ('md', '.md', 'txt', '.txt')
+        or (
+          lower(coalesce(${fileExt}, '')) = ''
+          and lower(${fileName}) ~ '\\.(md|txt)$'
+        )
+      )
+      and lower(coalesce(${mimeType}, '')) in (
+        'application/octet-stream',
+        'text/markdown',
+        'text/plain',
+        'text/x-markdown'
+      )
+    )`;
   }
 
   private projectionTimestamp(
@@ -2236,8 +2266,9 @@ export class RagContentExportService {
     return createHash('sha256')
       .update(
         JSON.stringify({
-          schemaVersion: 3,
+          schemaVersion: 4,
           ...this.projection.fingerprintInput(scope.space),
+          ...this.contentProjectors.fingerprintInput(),
           workspaceId: scope.workspace.id,
           spaceId: scope.space.id,
           policyFingerprint: policy.ragSearchFingerprint,

@@ -461,6 +461,12 @@ export class AiConfigService {
           dto.retrieval?.maxResults ??
           existing?.retrievalMaxResults ??
           AI_RETRIEVAL_DEFAULTS.topK,
+        retrievalQueryMode:
+          dto.retrieval?.queryMode ?? existing?.retrievalQueryMode ?? 'vector',
+        retrievalFollowUpRewriteEnabled:
+          dto.retrieval?.followUpRewriteEnabled ??
+          existing?.retrievalFollowUpRewriteEnabled ??
+          false,
         systemInstructions:
           dto.systemInstructions !== undefined
             ? dto.systemInstructions?.trim() || null
@@ -741,6 +747,11 @@ export class AiConfigService {
       ),
       timeoutMs: config.retrievalTimeoutMs,
       maxResults: config.retrievalMaxResults,
+      queryMode:
+        config.retrievalQueryMode === 'hybrid_with_vector_fallback'
+          ? 'hybrid_with_vector_fallback'
+          : 'vector',
+      followUpRewriteEnabled: config.retrievalFollowUpRewriteEnabled,
     };
   }
 
@@ -858,6 +869,15 @@ export class AiConfigService {
         dto.retrieval?.maxResults ??
         existing?.retrievalMaxResults ??
         AI_RETRIEVAL_DEFAULTS.topK,
+      queryMode:
+        dto.retrieval?.queryMode ??
+        (existing?.retrievalQueryMode === 'hybrid_with_vector_fallback'
+          ? 'hybrid_with_vector_fallback'
+          : 'vector'),
+      followUpRewriteEnabled:
+        dto.retrieval?.followUpRewriteEnabled ??
+        existing?.retrievalFollowUpRewriteEnabled ??
+        false,
     };
   }
 
@@ -1081,6 +1101,11 @@ export class AiConfigService {
         apiKeyConfigured: Boolean(config.retrievalApiKeyEncrypted),
         timeoutMs: config.retrievalTimeoutMs,
         maxResults: config.retrievalMaxResults,
+        queryMode:
+          config.retrievalQueryMode === 'hybrid_with_vector_fallback'
+            ? 'hybrid_with_vector_fallback'
+            : 'vector',
+        followUpRewriteEnabled: config.retrievalFollowUpRewriteEnabled,
         openWebUi: {
           baseUrl: config.retrievalOpenWebuiBaseUrl,
           knowledgeId: config.retrievalOpenWebuiKnowledgeId,

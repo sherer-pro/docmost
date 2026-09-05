@@ -1,5 +1,11 @@
-import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  GatewayTimeoutException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { validate as isUuid } from 'uuid';
+import { RAG_CONTENT_PROCESSOR_IDS } from '@docmost/api-contract';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
 import {
   AiRetrievalConfig,
@@ -100,7 +106,12 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       throw error;
     }
 
-    const result = await this.fetchCandidates(config, request, signal);
+    const result = await this.fetchCandidates(
+      config,
+      request,
+      config.queryMode === 'hybrid_with_vector_fallback',
+      signal,
+    );
     return {
       ok: true as const,
       latencyMs: Date.now() - startedAt,
@@ -117,12 +128,46 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     request: AiRetrievalRequest,
     signal?: AbortSignal,
   ): Promise<AiRetrievalHit[]> {
-    return (await this.fetchCandidates(config, request, signal)).hits;
+    if (config.queryMode !== 'hybrid_with_vector_fallback') {
+      return (await this.fetchCandidates(config, request, false, signal)).hits;
+    }
+
+    const deadlineAt = Math.min(
+      request.deadlineAtMs ?? Number.POSITIVE_INFINITY,
+      Date.now() + Math.min(config.timeoutMs, 6_000),
+    );
+    const hybridTimeoutMs = Math.max(
+      1,
+      Math.min(3_000, deadlineAt - Date.now() - 1_000),
+    );
+    try {
+      return (
+        await this.fetchCandidates(
+          { ...config, timeoutMs: hybridTimeoutMs },
+          request,
+          true,
+          signal,
+        )
+      ).hits;
+    } catch (error) {
+      if (!this.shouldFallbackToVector(error, signal)) throw error;
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs < 1_000) throw error;
+      return (
+        await this.fetchCandidates(
+          { ...config, timeoutMs: remainingMs },
+          request,
+          false,
+          signal,
+        )
+      ).hits;
+    }
   }
 
   private async fetchCandidates(
     config: AiRetrievalConfig,
     request: AiRetrievalRequest,
+    hybrid = config.queryMode === 'hybrid_with_vector_fallback',
     signal?: AbortSignal,
   ): Promise<{ hits: AiRetrievalHit[]; candidateCount: number }> {
     this.assertConfigured(config);
@@ -134,8 +179,11 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       body: JSON.stringify({
         collection_names: [config.openWebUiKnowledgeId],
         query: request.query,
-        k: AI_RETRIEVAL_DEFAULTS.candidateLimit,
-        hybrid: false,
+        k: Math.min(
+          AI_RETRIEVAL_DEFAULTS.candidateLimit,
+          request.candidateLimit,
+        ),
+        hybrid,
       }),
       maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
       maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
@@ -170,22 +218,21 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     }
     if (hits.length === 0) {
       throw new BadGatewayException({
-        code: 'retrieval_invalid_response',
+        code: 'retrieval_incompatible_metadata',
         message: 'Open WebUI returned no compatible Docmost metadata',
       });
     }
 
     const deduplicated = new Map<string, AiRetrievalHit>();
+    const partsPerSource = new Map<string, number>();
     for (const hit of hits) {
-      const key = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}`;
-      const previous = deduplicated.get(key);
-      if (
-        !previous ||
-        Number(hit.score ?? Number.NEGATIVE_INFINITY) >
-          Number(previous.score ?? Number.NEGATIVE_INFINITY)
-      ) {
-        deduplicated.set(key, hit);
-      }
+      const logicalKey = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}`;
+      const key = `${logicalKey}:${hit.partKey ?? 'main'}`;
+      if (deduplicated.has(key)) continue;
+      const partCount = partsPerSource.get(logicalKey) ?? 0;
+      if (partCount >= 2) continue;
+      deduplicated.set(key, hit);
+      partsPerSource.set(logicalKey, partCount + 1);
     }
     return { hits: [...deduplicated.values()], candidateCount };
   }
@@ -278,7 +325,7 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     }
     const docmost = docmostValue as Record<string, unknown>;
     if (
-      ![1, 2].includes(Number(docmost.schemaVersion)) ||
+      ![1, 2, 3].includes(Number(docmost.schemaVersion)) ||
       docmost.workspaceId !== request.workspaceId ||
       docmost.spaceId !== request.spaceId ||
       !['page', 'database_row', 'attachment', 'dictionary_term'].includes(
@@ -293,19 +340,60 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     ) {
       return null;
     }
+    const partKey = this.v3PartKey(docmost);
+    if (docmost.schemaVersion === 3 && !partKey) return null;
     return {
       sourceType: docmost.sourceType as AiRetrievalHit['sourceType'],
       sourceId: docmost.sourceId,
       pageId: docmost.pageId as string | null,
       text: document,
+      ...(partKey ? { partKey } : {}),
       ...(Number.isFinite(distance)
         ? { score: this.distanceToScore(Number(distance)) }
         : {}),
     };
   }
 
+  private v3PartKey(docmost: Record<string, unknown>): string | null {
+    if (docmost.schemaVersion !== 3) return null;
+    if (
+      !RAG_CONTENT_PROCESSOR_IDS.includes(docmost.projectorId as never) ||
+      (docmost.sourceType === 'attachment'
+        ? docmost.projectorId !== 'attachment-text-v1'
+        : docmost.projectorId !== 'structured-knowledge-v2') ||
+      typeof docmost.partId !== 'string' ||
+      !docmost.partId ||
+      docmost.partId.length > 128 ||
+      !Number.isSafeInteger(docmost.partIndex) ||
+      Number(docmost.partIndex) < 0 ||
+      !Number.isSafeInteger(docmost.partCount) ||
+      Number(docmost.partCount) < 1 ||
+      Number(docmost.partIndex) >= Number(docmost.partCount)
+    ) {
+      return null;
+    }
+    return `${docmost.projectorId}:${docmost.partId}`;
+  }
+
   private distanceToScore(distance: number): number {
     return 1 / (1 + Math.max(0, distance));
+  }
+
+  private shouldFallbackToVector(
+    error: unknown,
+    signal?: AbortSignal,
+  ): boolean {
+    if (signal?.aborted || (error as Error)?.name === 'AbortError') {
+      return false;
+    }
+    if (error instanceof GatewayTimeoutException) return true;
+    if (error instanceof AiRetrievalHttpError) {
+      return error.remoteStatus === 429 || error.remoteStatus >= 500;
+    }
+    const code = (error as any)?.response?.code;
+    if (code === 'retrieval_incompatible_metadata') return false;
+    if (code === 'retrieval_invalid_response') return true;
+    return error instanceof TypeError;
   }
 
   private firstArray(value: unknown): unknown[] {

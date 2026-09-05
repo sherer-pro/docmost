@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 17 -->
+<!-- ai-admin-guide-contract-version: 20 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -590,6 +590,22 @@ when the space has a configured adapter. `AiRun.retrievalOutcome` is one of
 does not fail generation; the model continues with available document and file
 context.
 
+When `retrievalFollowUpRewriteEnabled` is enabled, Docmost may rewrite an
+ambiguous follow-up only for the retrieval request. The original user message
+always remains the generation prompt. The rewrite input contains the current
+query, at most three earlier complete user messages after
+`promptHistoryCutoffAt`, and titles of live, currently readable sources cited by
+earlier complete assistant messages. Assistant prose, reasoning, page/file
+content, deleted or inaccessible source titles, and `chat_file` titles are
+never included. The same frozen provider configuration is used with temperature
+`0`, at most 128 output tokens, an 8 KiB input cap, and a 30 second deadline. The
+result must be one non-empty line of at most 1000 characters. Missing safe
+history, timeout, provider error, or invalid output falls back to the original
+query and never blocks generation. Retry and regenerate perform the rewrite
+again against their current safe history. `AiRun` stores only the owner-visible
+effective retrieval query, outcome, safe error code, latency, and input/output
+token counts; rewrite tokens are included in total usage.
+
 Before an external request, the server obtains the user's current
 `getSidebarAccessSnapshot`. Allowed page IDs are sent only to `http-json-v1`.
 Regardless of adapter output, every candidate is revalidated against the
@@ -617,7 +633,8 @@ page attachments and private chat files, not only page and retrieval sources.
 An external request is bounded to forty candidates, eight final results by
 default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB
 response. Malformed, oversized, and non-UUID candidates are rejected
-individually. Duplicate identities retain the highest score.
+individually. `http-json-v1` duplicate identities retain the highest score;
+Open WebUI duplicates retain the first upstream-ranked candidate.
 
 The shared Agent/MCP `search` capability also searches the dictionary as an
 independent corpus when the space switch is enabled. Exact normalized term or
@@ -636,9 +653,10 @@ the UUID, term, forms, definition, `pageId: null`, and the stable link
 | `open-webui-knowledge-v1` | base URL, Open WebUI API key, `knowledgeId`, timeout, maxResults | validates the Knowledge Base and calls Open WebUI collection retrieval |
 
 `open-webui-knowledge-v1` accepts only documents with supported `docmost`
-`schemaVersion: 1 | 2` metadata and matching `workspaceId` and `spaceId`. The
-built-in writer emits version 2; version 1 remains a read/cleanup compatibility
-format. External
+`schemaVersion: 1 | 2 | 3` metadata and matching `workspaceId` and `spaceId`.
+The built-in writer emits version 2 by default; version 1 remains a
+read/cleanup compatibility format and version 3 carries projector, part, and
+source-locator metadata for future multipart processors. External
 result types are `page`, `database_row`, `attachment`, and `dictionary_term`.
 A dictionary candidate is requested only while
 `space.settings.dictionary.enabled` is true, uses `pageId: null`, and is
@@ -646,9 +664,18 @@ revalidated against workspace, space, active-term state, the switch, and the
 caller's `Read Page` space ability; page ACL does not apply to terms. Page-backed
 safe retrieval results and attachment excerpts receive current parent document
 fields during local resolution. A `database` may be explicit context but is not
-an external retrieval result type. The adapter
-sends `hybrid: false`, so a broken external reranker does not disable normal
-vector search. When the collection response contains only `file_id`, the
+an external retrieval result type. The adapter supports query modes `vector`
+and `hybrid_with_vector_fallback`. Vector mode sends `hybrid: false`. Hybrid
+mode has a six-second total retrieval budget, up to three seconds for the
+hybrid attempt, and reserves one second for a vector fallback. Fallback occurs
+only for timeout, `429`, `5xx`, malformed transport response, or
+hybrid/reranker failure. It does not occur after abort, URL-policy or redirect
+rejection, oversized response, `400/401/403/404`, target mismatch, incompatible
+metadata, or a valid empty result. Open WebUI ranking remains authoritative:
+Docmost requests at most forty candidates, keeps first-seen identity order,
+caps a logical source to two parts, and returns at most eight final readable
+results without applying an unverified local score threshold. When the
+collection response contains only `file_id`, the
 adapter calls `GET /api/v1/files/:fileId` and reads canonical metadata from
 `file.meta.data.docmost`. Open WebUI distance is converted to
 `1 / (1 + max(0, distance))`.
@@ -668,6 +695,9 @@ administrator enables it. The configuration form preselects `http-json-v1`
 when retrieval is enabled; the timeout defaults to 8000 ms and the result limit
 to eight. The API accepts timeouts from 1000 to 60000 ms and one to twenty
 results.
+Open WebUI retrieval also defaults to `retrievalQueryMode=vector` and
+`retrievalFollowUpRewriteEnabled=false`; both switches are per space and can be
+rolled out independently.
 Configuration also includes `systemInstructions`, `visionEnabled`,
 `reasoningEnabled`, and up to fifty quick commands. Model, retrieval, and Open
 WebUI secrets are encrypted with the application secret. Public responses
@@ -858,6 +888,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260820T130000-knowledge-projection-dictionary-search.ts`](../apps/server/src/database/migrations/20260820T130000-knowledge-projection-dictionary-search.ts) | Extends only the persisted AI source-type constraint with `dictionary_term`; it performs no index build or table rewrite.                                                                                                                                                                          | Deletes persisted `dictionary_term` citations before restoring the old source-type constraint. Those citation rows are intentionally not recoverable by `down`.                                |
 | [`20260820T140000-search-dictionary-database-projection.ts`](../apps/server/src/database/migrations/20260820T140000-search-dictionary-database-projection.ts)   | Builds trigram expression indexes for dictionary terms, definitions, and normalized aliases; adds the database search projection columns/trigger; rewrites existing `pages` rows; and builds the partial database-projection GIN index.                                                            | Drops the database-projection index, trigger, function, and columns, then drops the three dictionary trigram indexes.                                                                          |
 | [`20260827T010000-ai-rag-search-done-filter.ts`](../apps/server/src/database/migrations/20260827T010000-ai-rag-search-done-filter.ts)                           | Adds the disabled-by-default `rag_search_done_only` space policy and a partial workspace/space/status index for active page-backed RAG sources. Existing spaces preserve their current output.                                                                                                     | Drops the status index and policy column; the runtime again uses the broad explicit-exclusion policy only.                                                                                     |
+| [`20260903T010000-ai-rag-hybrid-rewrite.ts`](../apps/server/src/database/migrations/20260903T010000-ai-rag-hybrid-rewrite.ts)                                   | Adds per-space vector/hybrid retrieval mode and contextual follow-up rewrite switches, both backfilled to safe disabled-compatible defaults. Adds owner-visible run audit fields for the effective retrieval query and rewrite outcome, safe error, latency, and token counts.                     | Removes the switches and rewrite audit fields. Existing retrieval returns to vector-only behavior and the rewrite audit history is lost.                                                       |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -926,9 +957,11 @@ requesting user's current ACL. Direct user access to the Open WebUI Knowledge
 Base is not safe because the external index contains the full policy-allowed
 space scope.
 
-All page/database/row Markdown is produced by `KnowledgeProjectionService`.
-The scope/feed fingerprint contains projection version `1`, the enabled
-document-field mask, the dictionary switch, `ragSearchDoneOnly`, explicit
+All page/database/row/dictionary Markdown is first produced by
+`KnowledgeProjectionService` and then passed through the shared
+`RagContentProjector` contract. The scope/feed fingerprint contains projection
+version `2`, content-policy version `1`, the ordered capability registry, the
+enabled document-field mask, the dictionary switch, `ragSearchDoneOnly`, explicit
 exclusions, and `statusBlockedPageIds`. A change resets the applicable
 update checkpoints, reconciles stale remote mappings, and reprojects existing
 documents without relying on an event being delivered. Entity changes,
@@ -951,19 +984,24 @@ live in the same workspace and space. A page, database, or attachment can still
 disappear after a feed snapshot; the embedded synchronizer treats that race as
 a deletion, schedules cleanup of its managed remote files, and advances the
 feed instead of retrying an internal not-found error indefinitely.
-The portable Open WebUI document contract sends only PDF, DOCX, TXT, and
-Markdown attachments. When Docmost has already indexed text from a PDF or DOCX,
-the embedded synchronizer uploads a Markdown text projection instead of asking
-the target to parse the binary again; ownership metadata still identifies the
-original attachment. TXT and Markdown keep their original portable content.
+The initial attachment projector sends only `.txt` and `.md` content whose
+extension and MIME type both match the allowlist. PDF, DOCX, images, and audio
+are deliberately absent from the public RAG attachment list/feed/download,
+built-in synchronization, and query-time retrieval hydration. This restriction
+does not remove their ordinary Docmost search index, manual AI context, chat
+file processing, or editor attachment behavior. Reserved disabled processor
+IDs (`pdf-text-v1`, `docx-text-v1`, `image-ocr-v1`, `image-vision-v1`, and
+`audio-transcript-v1`) establish the future extension points without enabling
+extraction now. TXT and Markdown keep their original portable content.
 Remote attachment file names include the Docmost attachment ID, preventing
 same-named attachments from colliding inside one Knowledge Base.
 The upstream `file_hash` is scoped to the source operation so equal content
 from distinct sources remains valid; signed ownership metadata retains the
 source content hash used by Docmost reconciliation.
-JPEG, PNG, and WebP remain available in Docmost but are not synchronized because
-their processing depends on target-specific OCR or vision configuration and can
-otherwise poison an incremental document queue.
+Every projection returns one or more parts with a stable `projectorId`,
+`partId`, content, MIME type, and source locator. Current processors return one
+`main` part. Future multipart processors require metadata writer v3; the runtime
+fails closed instead of writing multipart output with metadata v2.
 
 Retryable upstream and infrastructure errors keep bounded exponential backoff.
 A non-retryable runtime error stops an enabled binding with the stable error
@@ -1034,9 +1072,12 @@ and performs no unfenced state write. Uncertain side effects are found by
 deterministic operation metadata before retry.
 
 Reconciliation runs on first use, after state loss, target/scope change, and
-periodically. It accepts legacy schema-v1 metadata for adoption and cleanup but
-writes only schema v2 with binding, workspace, space, source, content hash,
-target version, and operation identity. Foreign files and whole Knowledge Base
+periodically. It reads schema v1, signed v2, and signed v3 metadata. New writes
+use schema v2 by default; setting `RAG_SYNC_METADATA_WRITE_VERSION=3` enables
+projector/part/locator metadata and multipart identities. The deterministic
+operation identity includes binding, target, source, projector, projection
+version, part, revision fields, and content hash, while upstream `file_hash`
+remains exactly that operation identity. Foreign files and whole Knowledge Base
 objects are never deleted. Deletions are scheduled ahead of updates; one feed
 page is processed per scheduling quantum so a large space cannot starve another.
 Mapping and ownership metadata use nullable `pageId` for `dictionary_term` and
@@ -1059,6 +1100,7 @@ RAG_SYNC_PROCESSING_TIMEOUT_MS=600000
 RAG_SYNC_MAX_ATTACHMENT_BYTES=26214400
 RAG_SYNC_RECONCILE_INTERVAL_MS=21600000
 RAG_SYNC_SHUTDOWN_TIMEOUT_MS=30000
+RAG_SYNC_METADATA_WRITE_VERSION=2
 ```
 
 `RAG_SYNC_ALLOWED_ORIGINS` is an exact-origin SSRF boundary independent of the
@@ -1074,8 +1116,9 @@ server with `RAG_SYNC_ENABLED=false`, configure the deployment writer allowlist,
 then configure and Test each space binding before enabling it. The API enforces
 this order. Do not import the
 old per-space environment secrets automatically. Revoke the old Docmost RAG API
-keys only after the embedded binding is healthy. Initial reconciliation accepts
-legacy schema-v1 ownership metadata and writes only schema v2 thereafter.
+keys only after the embedded binding is healthy. Keep metadata writes at v2
+during the upgrade; enable v3 only after reader compatibility is verified and a
+multipart processor is intentionally introduced.
 
 Emergency rollback is the deployment switch, not migration down. Keep the new
 tables and remote Knowledge Bases. A down migration destroys encrypted writer
@@ -1773,7 +1816,8 @@ Content and context additions include `ai_context_resolved_source_limit`,
 `ai_context_source_excluded`, and `ai_context_descendant_invalid`. Retrieval
 codes include `retrieval_request_too_large`, `retrieval_timeout`,
 `retrieval_unavailable`, `retrieval_url_rejected`,
-`retrieval_invalid_response`, and `retrieval_collection_unavailable`.
+`retrieval_invalid_response`, `retrieval_incompatible_metadata`,
+`retrieval_response_too_large`, and `retrieval_collection_unavailable`.
 `source_access_changed` means a previously accepted source became inaccessible
 during execution; clients discard streamed state and reload the scrubbed,
 access-restricted message.

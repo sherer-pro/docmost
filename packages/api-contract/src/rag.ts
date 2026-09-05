@@ -7,7 +7,28 @@ export type RagSyncSourceType =
   | "attachment"
   | "dictionary_term";
 
-export const RAG_KNOWLEDGE_PROJECTION_VERSION = 1 as const;
+export const RAG_KNOWLEDGE_PROJECTION_VERSION = 2 as const;
+export const RAG_CONTENT_POLICY_VERSION = 1 as const;
+
+export const RAG_CONTENT_PROCESSOR_IDS = [
+  "structured-knowledge-v2",
+  "attachment-text-v1",
+  "pdf-text-v1",
+  "docx-text-v1",
+  "image-ocr-v1",
+  "image-vision-v1",
+  "audio-transcript-v1",
+] as const;
+
+export type RagContentProcessorId = (typeof RAG_CONTENT_PROCESSOR_IDS)[number];
+
+export interface RagContentCapability {
+  processorId: RagContentProcessorId;
+  state: "enabled" | "disabled";
+  sourceType: "structured" | "attachment";
+  extensions: string[];
+  mimeTypes: string[];
+}
 
 export interface RagDocumentCustomFields {
   status?: string | null;
@@ -23,8 +44,10 @@ export interface RagSyncTarget {
 }
 
 export interface RagScope {
-  schemaVersion?: 1 | 2 | 3;
+  schemaVersion?: 1 | 2 | 3 | 4;
   projectionVersion: typeof RAG_KNOWLEDGE_PROJECTION_VERSION;
+  contentPolicyVersion?: typeof RAG_CONTENT_POLICY_VERSION;
+  contentCapabilities?: RagContentCapability[];
   workspaceId: string;
   spaceId: string;
   syncTarget: RagSyncTarget | null;

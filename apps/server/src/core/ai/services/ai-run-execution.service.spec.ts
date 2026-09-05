@@ -73,11 +73,7 @@ describe('agent built-in policy guard', () => {
     const operation = jest.fn(async () => ({ content: 'must not run' }));
 
     await expect(
-      (service as any).withCurrentBuiltinPolicy(
-        { id: 'run-1' },
-        {},
-        operation,
-      ),
+      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, {}, operation),
     ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
     expect(operation).not.toHaveBeenCalled();
   });
@@ -94,11 +90,7 @@ describe('agent built-in policy guard', () => {
     const operation = jest.fn(async () => ({ content: 'stale final answer' }));
 
     await expect(
-      (service as any).withCurrentBuiltinPolicy(
-        { id: 'run-1' },
-        {},
-        operation,
-      ),
+      (service as any).withCurrentBuiltinPolicy({ id: 'run-1' }, {}, operation),
     ).rejects.toMatchObject({ code: 'agent_tool_policy_changed' });
     expect(operation).toHaveBeenCalledTimes(1);
     expect(assertRunPolicyCurrent).toHaveBeenCalledTimes(2);
@@ -217,9 +209,7 @@ describe('AI run file source access guard', () => {
     const chatFileQuery: any = {
       select: jest.fn(() => chatFileQuery),
       where: jest.fn(() => chatFileQuery),
-      execute: jest.fn(async () =>
-        liveChatFileIds.map((id) => ({ id })),
-      ),
+      execute: jest.fn(async () => liveChatFileIds.map((id) => ({ id }))),
     };
     const dependencyQuery: any = {
       select: jest.fn(() => dependencyQuery),
@@ -298,7 +288,44 @@ describe('AI run file source access guard', () => {
     );
 
     expect(assertSourcesAccessible).toHaveBeenCalledWith(
-      expect.objectContaining({ sources: [attachment] }),
+      expect.objectContaining({ sources: [attachment], mode: 'default' }),
+    );
+  });
+
+  it('applies the RAG policy only to retrieval sources', async () => {
+    const { service, assertSourcesAccessible } = buildAccessGuardService();
+    const retrievalSource = {
+      sourceType: 'page',
+      sourceId: 'retrieval-page',
+      pageId: 'retrieval-page',
+    };
+
+    await (service as any).assertRunSourceAccess(
+      {
+        id: 'run-1',
+        conversationId: 'conversation-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        spaceId: 'space-1',
+      },
+      { id: 'user-1' },
+      [retrievalSource],
+      [retrievalSource],
+    );
+
+    expect(assertSourcesAccessible).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        sources: [retrievalSource],
+        mode: 'default',
+      }),
+    );
+    expect(assertSourcesAccessible).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        sources: [retrievalSource],
+        mode: 'rag-search',
+      }),
     );
   });
 });

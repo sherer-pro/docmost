@@ -112,6 +112,14 @@ export class UpdateAiRetrievalConfigDto {
   maxResults?: number;
 
   @IsOptional()
+  @IsIn(['vector', 'hybrid_with_vector_fallback'])
+  queryMode?: 'vector' | 'hybrid_with_vector_fallback';
+
+  @IsOptional()
+  @IsBoolean()
+  followUpRewriteEnabled?: boolean;
+
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => UpdateAiOpenWebUiRetrievalConfigDto)

@@ -13,6 +13,8 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     apiKey: 'key',
     timeoutMs: 1000,
     maxResults: 8,
+    queryMode: 'vector' as const,
+    followUpRewriteEnabled: false,
   };
   const request = {
     schemaVersion: 1 as const,
@@ -71,12 +73,15 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     expect(calledUrl).toBe(config.url);
     expect(calledInit?.method).toBe('POST');
     expect(JSON.parse(String(calledInit?.body))).toEqual(request);
-    expect(result[0]).toMatchObject({ text: 'safe text', pageId: request.pageId });
+    expect(result[0]).toMatchObject({
+      text: 'safe text',
+      pageId: request.pageId,
+    });
   });
 
   it('rejects a response body over the byte limit', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response('x'.repeat(256 * 1024 + 1)),
+    global.fetch = jest.fn(
+      async () => new Response('x'.repeat(256 * 1024 + 1)),
     ) as any;
     await expect(adapter.retrieve(config, request)).rejects.toBeInstanceOf(
       BadGatewayException,
@@ -84,46 +89,48 @@ describe('HttpJsonAiRetrievalAdapter', () => {
   });
 
   it('drops candidates whose text exceeds the per-candidate byte limit', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              sourceType: 'page',
-              sourceId: request.pageId,
-              pageId: request.pageId,
-              text: 'я'.repeat(9000),
-            },
-          ],
-        }),
-      ),
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                sourceType: 'page',
+                sourceId: request.pageId,
+                pageId: request.pageId,
+                text: 'я'.repeat(9000),
+              },
+            ],
+          }),
+        ),
     ) as any;
     await expect(adapter.retrieve(config, request)).resolves.toEqual([]);
   });
 
   it('keeps valid candidates and deduplicates by the highest score', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response(
-        JSON.stringify({
-          items: [
-            { sourceType: 'page', sourceId: 'invalid', pageId: 'invalid' },
-            {
-              sourceType: 'page',
-              sourceId: request.pageId,
-              pageId: request.pageId,
-              text: 'lower score',
-              score: 0.2,
-            },
-            {
-              sourceType: 'page',
-              sourceId: request.pageId,
-              pageId: request.pageId,
-              text: 'higher score',
-              score: 0.9,
-            },
-          ],
-        }),
-      ),
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              { sourceType: 'page', sourceId: 'invalid', pageId: 'invalid' },
+              {
+                sourceType: 'page',
+                sourceId: request.pageId,
+                pageId: request.pageId,
+                text: 'lower score',
+                score: 0.2,
+              },
+              {
+                sourceType: 'page',
+                sourceId: request.pageId,
+                pageId: request.pageId,
+                text: 'higher score',
+                score: 0.9,
+              },
+            ],
+          }),
+        ),
     ) as any;
 
     await expect(adapter.retrieve(config, request)).resolves.toEqual([
@@ -133,31 +140,32 @@ describe('HttpJsonAiRetrievalAdapter', () => {
 
   it('accepts null pageId only for requested dictionary terms', async () => {
     const termId = '0198f2f5-a5a3-7000-8000-000000000009';
-    global.fetch = jest.fn(async () =>
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              sourceType: 'dictionary_term',
-              sourceId: termId,
-              pageId: null,
-              text: 'Dictionary definition',
-            },
-            {
-              sourceType: 'dictionary_term',
-              sourceId: termId,
-              pageId: request.pageId,
-              text: 'Invalid dictionary page identity',
-            },
-            {
-              sourceType: 'page',
-              sourceId: request.pageId,
-              pageId: null,
-              text: 'Invalid page identity',
-            },
-          ],
-        }),
-      ),
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                sourceType: 'dictionary_term',
+                sourceId: termId,
+                pageId: null,
+                text: 'Dictionary definition',
+              },
+              {
+                sourceType: 'dictionary_term',
+                sourceId: termId,
+                pageId: request.pageId,
+                text: 'Invalid dictionary page identity',
+              },
+              {
+                sourceType: 'page',
+                sourceId: request.pageId,
+                pageId: null,
+                text: 'Invalid page identity',
+              },
+            ],
+          }),
+        ),
     ) as any;
 
     await expect(
@@ -188,9 +196,7 @@ describe('HttpJsonAiRetrievalAdapter', () => {
   it('includes URL policy resolution in the retrieval timeout', async () => {
     adapter = new HttpJsonAiRetrievalAdapter(
       new AiRetrievalHttpClient({
-        resolveAllowed: jest.fn(
-          () => new Promise<never>(() => undefined),
-        ),
+        resolveAllowed: jest.fn(() => new Promise<never>(() => undefined)),
       } as any),
     );
 

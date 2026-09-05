@@ -1590,7 +1590,7 @@
       }
     },
     "adminGuide": {
-      "knowledgeAccessDoneOnly": "Knowledge access 中的 `ragSearchDoneOnly` 开关会将查询时 AI 搜索、RAG API schemaVersion: 3 和 RAG Sync 限制为自身规范状态为 `DONE` 的页面、数据库和行；缺失或未知状态会被阻止。`statusBlockedPageIds` 与显式排除保持分离。被阻止的数据库文档使用 `documentEligible: false`，但符合条件的行会继续处理。附件继承页面状态；`dictionary_term`、手动聊天上下文、Agent/MCP、编辑器操作和普通 Docmost 搜索不变。",
+      "knowledgeAccessDoneOnly": "Knowledge access 中的 `ragSearchDoneOnly` 开关会将查询时 AI 搜索、RAG API schemaVersion: 4 和 RAG Sync 限制为自身规范状态为 `DONE` 的页面、数据库和行；缺失或未知状态会被阻止。`statusBlockedPageIds` 与显式排除保持分离。被阻止的数据库文档使用 `documentEligible: false`，但符合条件的行会继续处理。附件继承页面状态；`dictionary_term`、手动聊天上下文、Agent/MCP、编辑器操作和普通 Docmost 搜索不变。 RAG scope schemaVersion: 4 还会发布 contentPolicyVersion 和 contentCapabilities；RAG 仅启用 `.md` 和 `.txt` 附件。",
       "tab": "指南",
       "title": "AI、RAG 和 MCP 的工作方式",
       "description": "关于 AI 助手、外部搜索、同步以及 MCP 安全边界的实用指南。",
@@ -1652,7 +1652,7 @@
           },
           "success": "测试返回候选人，答案仅保留可读的、非排除的来源",
           "rollback": "禁用外部搜索； Chat 继续而不检索",
-          "technical": "Docmost 会在生成前和生成过程中、复用聊天历史时以及返回选中文本的结果前，重新检查来源实时状态、排除策略和 ACL。页面附件和私聊文件也受同样保护，选中文本始终视为不可信输入。访问权限变化时，会清除部分文本、推理和引用，并将消息标记为受限。"
+          "technical": "Docmost 会在生成前和生成过程中、复用聊天历史时以及返回选中文本的结果前，重新检查来源实时状态、排除策略和 ACL。页面附件和私聊文件也受同样保护，选中文本始终视为不可信输入。访问权限变化时，会清除部分文本、推理和引用，并将消息标记为受限。 Open WebUI 支持 `vector` 和 `hybrid_with_vector_fallback`。启用 `retrievalFollowUpRewriteEnabled` 时，仅根据安全的用户历史和仍可读取的引用标题重写检索查询，不包含助手正文或页面、文件内容。rewrite 上限为 30000 ms，失败时回退到原始查询且生成继续。"
         },
         "ragApi": {
           "description": "只读 /api/rag/* API 将完整和增量源导出到外部索引器，并可以在授权后返回受保护的附件流。它不搜索或回答问题；每个 RAG 密钥的范围仅限于一个空格。",
@@ -1666,13 +1666,13 @@
           },
           "success": "响应返回 200，稳定的游标，并且只有密钥创建者的实时可读范围",
           "rollback": "撤销密钥并停止索引器；创建新的恢复密钥",
-          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。投影 v1（`projectionVersion: 1`）通过独立的分页 feed 导出已启用的文档字段、命名数据库单元格和已启用的词典。"
+          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。投影 v1（`projectionVersion: 2`）通过独立的分页 feed 导出已启用的文档字段、命名数据库单元格和已启用的词典。 Scope schemaVersion: 4 和 projectionVersion: 2 会发布 contentPolicyVersion 与 contentCapabilities；RAG 只能列出或下载已声明的 `.md` 和 `.txt` 附件。"
         },
         "ragSync": {
           "description": "内置Open WebUI RAG同步在Docmost内部运行，通过Docmost服务直接读取PostgreSQL，与Redis协调，并使用单独的加密每空间凭证进行写入。它从不调用公共/api/rag/* API；查询和写入者凭据保持独立。",
           "owner": "部署操作员和空间管理员",
           "prerequisite": "RAG_SYNC_ENABLED、允许的 Open WebUI 来源、Knowledge ID 和写入器密钥",
-          "result": "Docmost 会在所选 Open WebUI Knowledge Base 中增量维护页面、数据库行和已启用的词典术语；附件中只有 PDF、DOCX、TXT 和 Markdown 会进入可移植索引",
+          "result": "Docmost 会在所选 Open WebUI Knowledge Base 中增量维护页面、数据库行、已启用的词典术语以及允许的 TXT/Markdown 附件。",
           "steps": {
             "step1": "保存目标和 writer 凭据",
             "step2": "验证 writer：只读 preflight，然后上传、处理并删除测试标记",
@@ -1680,7 +1680,7 @@
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
-          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、数据库行和已启用的词典术语分别管理；词典术语使用 `dictionary_term` 来源类型。每个流都使用绑定到固定数据库快照的不透明游标。保持起始 watermark 不变直到 hasMore=false；只有终止页才推进 checkpoint，重试必须保持幂等。 流至少投递一次。lease 或 slot 丢失会中止当前外部请求并禁止新工作；取消到达远端前已经完成的副作用由 reconciliation 处理。对于本地索引已就绪的 PDF 和 DOCX，Docmost 使用提取文本的 Markdown 投影。远程附件文件名包含 Docmost 附件 ID，因此同一 Knowledge Base 中的同名文件不会发生冲突。upstream 文件哈希限定在来源操作范围内，而签名的 ownership metadata 保留来源内容哈希。"
+          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、行和 `dictionary_term` 使用 structured-knowledge-v2；仅 `.md` 和 `.txt` 附件使用 `attachment-text-v1`。PDF、DOCX、图像和音频 processor 保持禁用。reader 接受 metadata schema v1、签名 v2 和签名 schema v3；写入默认仍为 v2，multipart 必须使用 v3，且 upstream file_hash=operationId。query 与 writer 凭据分离，feed 为 at-least-once，lease 丢失后禁止 unfenced 状态写入。"
         },
         "inboundMcp": {
           "description": "外部助手使用作用域 MCP 密钥连接到根 /mcp 端点。它是无状态的，仅公开允许的读取工具，并返回附件元数据而不是二进制附件内容。",
@@ -2227,6 +2227,13 @@
       "retrievalApiKey": "检索 API 密钥",
       "retrievalTimeout": "检索超时（毫秒）",
       "retrievalMaxResults": "最大结果",
+      "retrievalQueryMode": "Open WebUI 查询模式",
+      "retrievalQueryModeDescription": "混合搜索仅在外部服务发生临时故障时回退到向量搜索。",
+      "retrievalQueryModeVector": "向量搜索",
+      "retrievalQueryModeHybrid": "带向量回退的混合搜索",
+      "followUpRewrite": "使用对话上下文改写后续搜索",
+      "followUpRewriteDescription": "最多使用三条先前的用户消息和仍可访问的引用标题。原始消息保持不变。",
+      "ragSupportedContent": "RAG 目前索引页面、数据库、文档字段、词典术语和 .md/.txt 附件。PDF、DOCX、图像和音频仍可在 Docmost 中使用，但不会进入 RAG。",
       "testRetrieval": "测试检索",
       "retrievalTestSucceeded": "检索连接成功。",
       "retrievalTestFailed": "检索连接失败。",

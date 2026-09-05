@@ -8,6 +8,11 @@ import { AiContentPolicyModule } from '../ai-content-policy/ai-content-policy.mo
 import { ApiKeyTrafficModule } from '../api-key/traffic/api-key-traffic.module';
 import { KnowledgeProjectionService } from './knowledge-projection.service';
 import { DictionaryModule } from '../dictionary/dictionary.module';
+import {
+  RagAttachmentTextProjector,
+  RagContentProjectorService,
+  RagStructuredKnowledgeProjector,
+} from './rag-content-projector.service';
 
 @Module({
   imports: [
@@ -18,7 +23,19 @@ import { DictionaryModule } from '../dictionary/dictionary.module';
     DictionaryModule,
   ],
   controllers: [RagController],
-  providers: [KnowledgeProjectionService, RagContentExportService, RagService],
-  exports: [KnowledgeProjectionService, RagContentExportService, RagService],
+  providers: [
+    KnowledgeProjectionService,
+    RagStructuredKnowledgeProjector,
+    RagAttachmentTextProjector,
+    RagContentProjectorService,
+    RagContentExportService,
+    RagService,
+  ],
+  exports: [
+    KnowledgeProjectionService,
+    RagContentProjectorService,
+    RagContentExportService,
+    RagService,
+  ],
 })
 export class RagModule {}
