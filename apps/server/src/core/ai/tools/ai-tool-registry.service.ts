@@ -10,6 +10,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
+import type { JSONContent } from '@tiptap/core';
+import {
+  prosemirrorNodeToYJson,
+  strictJsonToNode,
+} from '../../../collaboration/collaboration.util';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { User } from '@docmost/db/types/entity.types';
 import {
@@ -2680,8 +2685,13 @@ export class AiToolRegistryService {
     const writeProposal = {
       pageId,
       baseContentHash,
+      // Hash the representation that the collaboration server will persist.
       expectedAfterHash: hashProseMirrorJson(
-        applyAiPageOperation(document, preparedOperation),
+        prosemirrorNodeToYJson(
+          strictJsonToNode(
+            applyAiPageOperation(document, preparedOperation) as JSONContent,
+          ),
+        ),
       ),
       operation: preparedOperation,
     };

@@ -180,6 +180,43 @@ describe('OpenWebUiWriterService', () => {
     ).toBe(owned);
   });
 
+  it.each([2, 3])(
+    'preserves signed v%s dictionary ownership through remote file projection',
+    async (version) => {
+      const { writer } = createWriter();
+      const metadata =
+        version === 2
+          ? signedMetadata({ sourceType: 'dictionary_term', pageId: null })
+          : signedMetadataV3(true);
+      const file = {
+        id: 'file-dictionary',
+        meta: { data: { docmost: metadata } },
+      };
+      jest
+        .spyOn(global, 'fetch')
+        .mockImplementation(
+          async (url) =>
+            new Response(
+              JSON.stringify(
+                String(url).includes('/knowledge/')
+                  ? { items: [file], total: 1 }
+                  : file,
+              ),
+              { headers: { 'content-type': 'application/json' } },
+            ),
+        );
+
+      const listed = await writer.listKnowledgeFilesPage(binding, 1);
+      const fetched = await writer.getFile(binding, file.id);
+      for (const projected of [listed.items[0], fetched]) {
+        expect(writer.readOwnership(projected, binding)).toEqual({
+          schemaVersion: version,
+          metadata,
+        });
+      }
+    },
+  );
+
   it('rejects metadata owned by another space', () => {
     const { writer } = createWriter();
     expect(
@@ -463,6 +500,35 @@ describe('OpenWebUiWriterService', () => {
     ]);
   });
 
+  it('verifies a target containing files without trusted ownership', async () => {
+    const { writer } = createWriter();
+    const untrustedMarker = {
+      id: 'untrusted-marker',
+      meta: {
+        data: {
+          docmost: {
+            ...signedMetadata({ marker: 'target-test', sourceUpdatedAtMs: 1 }),
+            ownershipMac: hex(9),
+          },
+        },
+      },
+    };
+    jest.spyOn(writer, 'listKnowledgeFilesPage').mockResolvedValue({
+      items: [{ id: 'foreign-file' }, untrustedMarker],
+      total: 2,
+      hasMore: false,
+    });
+    jest.spyOn(writer, 'upload').mockResolvedValue({ id: 'new-marker' });
+    jest.spyOn(writer, 'waitUntilProcessed').mockResolvedValue(undefined);
+    const remove = jest
+      .spyOn(writer, 'deleteFile')
+      .mockResolvedValue(undefined);
+
+    await writer.test(binding);
+
+    expect(remove.mock.calls.map((call) => call[1])).toEqual(['new-marker']);
+  });
+
   it('bounds stale marker discovery for target tests on a large knowledge base', async () => {
     const { writer } = createWriter();
     const page = jest
@@ -494,9 +560,9 @@ describe('OpenWebUiWriterService', () => {
 function signedMetadata(
   overrides: Partial<{
     targetVersion: number;
-    sourceType: 'page' | 'database_row' | 'attachment';
+    sourceType: 'page' | 'database_row' | 'attachment' | 'dictionary_term';
     sourceId: string;
-    pageId: string;
+    pageId: string | null;
     databaseId: string;
     sourceUpdatedAtMs: number;
     contentHash: string;
@@ -512,7 +578,7 @@ function signedMetadata(
     spaceId: binding.spaceId,
     sourceType: overrides.sourceType ?? ('page' as const),
     sourceId: overrides.sourceId ?? 'source-id',
-    pageId: overrides.pageId ?? 'page-id',
+    pageId: overrides.pageId === undefined ? 'page-id' : overrides.pageId,
     ...(overrides.databaseId ? { databaseId: overrides.databaseId } : {}),
     sourceUpdatedAtMs: overrides.sourceUpdatedAtMs ?? 1,
     contentHash: overrides.contentHash ?? hex(2),
@@ -543,16 +609,18 @@ function signedMetadata(
   return { ...metadata, ownershipMac };
 }
 
-function signedMetadataV3() {
+function signedMetadataV3(dictionary = false) {
   const metadata = {
     schemaVersion: 3 as const,
     bindingId: binding.id,
     targetVersion: binding.targetVersion,
     workspaceId: binding.workspaceId,
     spaceId: binding.spaceId,
-    sourceType: 'attachment' as const,
+    sourceType: dictionary
+      ? ('dictionary_term' as const)
+      : ('attachment' as const),
     sourceId: 'attachment-id',
-    pageId: 'page-id',
+    pageId: dictionary ? null : 'page-id',
     sourceUpdatedAtMs: 1,
     contentHash: hex(2),
     operationId: hex(1),
@@ -562,7 +630,7 @@ function signedMetadataV3() {
     partIndex: 0,
     partCount: 2,
     locator: {
-      pageId: 'page-id',
+      pageId: dictionary ? null : 'page-id',
       attachmentId: 'attachment-id',
       pageNumber: 1,
       region: { x: 0, y: 0, width: 10, height: 20 },

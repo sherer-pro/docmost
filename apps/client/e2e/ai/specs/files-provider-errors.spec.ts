@@ -21,6 +21,10 @@ test("supported image and unsupported file are handled without leaking state", a
   const imageChooserPromise = page.waitForEvent("filechooser");
   await attachFiles.click();
   const imageChooser = await imageChooserPromise;
+  await expect(attachFiles).not.toBeVisible();
+  expect(
+    await imageChooser.element().evaluate((input) => input.isConnected),
+  ).toBe(true);
   const uploadResponsePromise = page.waitForResponse((response) => {
     const request = response.request();
     return (
@@ -47,6 +51,10 @@ test("supported image and unsupported file are handled without leaking state", a
   const unsupportedChooserPromise = page.waitForEvent("filechooser");
   await attachFiles.click();
   const unsupportedChooser = await unsupportedChooserPromise;
+  await expect(attachFiles).not.toBeVisible();
+  expect(
+    await unsupportedChooser.element().evaluate((input) => input.isConnected),
+  ).toBe(true);
   await unsupportedChooser.setFiles({
     name: "unsupported.exe",
     mimeType: "application/x-msdownload",

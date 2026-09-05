@@ -54,6 +54,7 @@ import { generateHTML, generateJSON } from '../common/helpers/prosemirror/html';
 //import { generateJSON } from '@tiptap/html';
 import { Node, Schema } from '@tiptap/pm/model';
 import * as Y from 'yjs';
+import { prosemirrorToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import { Logger } from '@nestjs/common';
 
 export const tiptapExtensions = [
@@ -135,6 +136,15 @@ export function jsonToText(tiptapJson: JSONContent) {
 export function strictJsonToNode(tiptapJson: JSONContent) {
   const schema = getSchema(tiptapExtensions);
   return Node.fromJSON(schema, tiptapJson);
+}
+
+export function prosemirrorNodeToYJson(node: Node): JSONContent {
+  const document = prosemirrorToYDoc(node, 'default');
+  try {
+    return yDocToProsemirrorJSON(document, 'default');
+  } finally {
+    document.destroy();
+  }
 }
 
 export function jsonToNode(tiptapJson: JSONContent) {

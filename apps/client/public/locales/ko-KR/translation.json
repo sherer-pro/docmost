@@ -1638,7 +1638,7 @@
           },
           "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
           "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",
-          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다."
+          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다."
         },
         "retrieval": {
           "description": "스페이스 검색은 답변을 생성하는 동안 수행됩니다.",
@@ -1680,7 +1680,7 @@
           },
           "success": "마지막 성공이 진행되고 정리 또는 대상 불일치 상태가 유지되지 않습니다.",
           "rollback": "바인딩을 비활성화하고 정리를 완료합니다. 긴급 롤백을 위해 RAG_SYNC_ENABLED를 비활성화하고 다시 시작하세요.",
-          "technical": "내장 동기화는 Docmost 내부 서비스를 통해 읽고 /api/rag/*를 호출하지 않습니다. 페이지, 행, `dictionary_term`은 structured-knowledge-v2를 사용하고 `.md`와 `.txt` 첨부만 `attachment-text-v1`을 사용합니다. PDF, DOCX, 이미지, 오디오 processor는 비활성 상태입니다. reader는 metadata schema v1, 서명된 v2, 서명된 schema v3를 읽고, 쓰기 기본값은 v2이며 multipart에는 v3가 필요하고 upstream file_hash=operationId입니다. query와 writer 자격 증명은 분리되고 feed는 at-least-once이며 lease 손실 뒤 unfenced 쓰기는 금지됩니다."
+          "technical": "내장 동기화는 Docmost 내부 서비스를 통해 읽고 /api/rag/*를 호출하지 않습니다. 페이지, 행, `dictionary_term`은 structured-knowledge-v2를 사용하고 `.md`와 `.txt` 첨부만 `attachment-text-v1`을 사용합니다. PDF, DOCX, 이미지, 오디오 processor는 비활성 상태입니다. reader는 metadata schema v1, 서명된 v2, 서명된 schema v3를 읽고, 쓰기 기본값은 v2이며 multipart에는 v3가 필요하고 upstream file_hash=operationId입니다. query와 writer 자격 증명은 분리되고 feed는 at-least-once이며 lease 손실 뒤 unfenced 쓰기는 금지됩니다. writer 검증은 이 바인딩에 속한 오래된 서명된 target-test 마커만 삭제합니다. 소유 관계가 확인되지 않은 파일은 건너뛰고 보존합니다. 원격 파일 투영은 사전 용어의 pageId: null을 보존하여 서명된 소유권 메타데이터를 인식하고 기존 파일을 재사용합니다. 조기 조정은 마지막 대기 업로드가 제거된 후에도 모든 목록 페이지에서 계속됩니다."
         },
         "inboundMcp": {
           "description": "외부 보조자는 범위가 지정된 MCP 키를 사용하여 루트 /mcp 엔드포인트에 연결합니다.",

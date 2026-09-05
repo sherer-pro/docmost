@@ -129,6 +129,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     controls: [
       { kind: "environment", value: "RAG_SYNC_ENABLED" },
       { kind: "environment", value: "RAG_SYNC_ALLOWED_ORIGINS" },
+      { kind: "route", value: "/api/spaces/:spaceId/ai/rag-sync/actions/test" },
     ],
   },
   {

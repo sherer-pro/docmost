@@ -422,7 +422,10 @@ function sanitizeAndValidateNode(node: ProseMirrorJson): void {
   if (!node.type || !SAFE_NODE_TYPES.has(node.type)) {
     throw new Error('agent_node_type_not_allowed');
   }
-  if (node.text !== undefined && typeof node.text !== 'string') {
+  if (
+    node.text !== undefined &&
+    (node.type !== 'text' || typeof node.text !== 'string')
+  ) {
     throw new Error('agent_node_invalid');
   }
   if (node.marks && !Array.isArray(node.marks)) {

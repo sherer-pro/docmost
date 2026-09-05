@@ -1638,7 +1638,7 @@
           },
           "success": "测试答案完成； Agent 仅列出允许的工具并在写入之前询问",
           "rollback": "禁用 Agent 或空间模型，然后恢复最后一次已知的良好设置",
-          "technical": "内置助手通过为空间配置的提供商维护与页面关联的私密聊天。空间设置会显示今天和最近 7 天的请求数与令牌使用量。代理模式可以调用获准的 Docmost 工具，但只有在发起操作的用户确认后才会应用页面更改。在应用更改之前，服务器会再次检查当前页面的写入权限，以及 deployment、workspace、space、profile 和 group 各层级的工具策略。空间配置文件编辑器显示本地化的工具名称，并通过空间范围的配置文件列表获取生效的模型覆盖策略；只有工作区管理员可以更改主开关。共享知识投影会把已启用的文档和自定义字段、命名的数据库属性和单元格以及活动词典术语（`dictionary_term`）加入 AI 搜索和工具上下文。精选的 `AI_ASSISTANT_PROFILE_ICONS` 合约提供 {{profileIconCount}} 个本地化图标选项，并在配置文件编辑器和聊天面板中保持一致显示。"
+          "technical": "内置助手通过为空间配置的提供商维护与页面关联的私密聊天。空间设置会显示今天和最近 7 天的请求数与令牌使用量。代理模式可以调用获准的 Docmost 工具，但只有在发起操作的用户确认后才会应用页面更改。在应用更改之前，服务器会再次检查当前页面的写入权限，以及 deployment、workspace、space、profile 和 group 各层级的工具策略。空间配置文件编辑器显示本地化的工具名称，并通过空间范围的配置文件列表获取生效的模型覆盖策略；只有工作区管理员可以更改主开关。共享知识投影会把已启用的文档和自定义字段、命名的数据库属性和单元格以及活动词典术语（`dictionary_term`）加入 AI 搜索和工具上下文。精选的 `AI_ASSISTANT_PROFILE_ICONS` 合约提供 {{profileIconCount}} 个本地化图标选项，并在配置文件编辑器和聊天面板中保持一致显示。 添加菜单关闭后，聊天文件选择仍然有效：所选文件会被上传，或显示验证错误。 Agent 批准哈希在应用修改前包含编辑器默认属性和 Yjs 规范化。 非文本节点上的 text 字段会在批准前被拒绝；段落文本必须放在子文本节点中。"
         },
         "retrieval": {
           "description": "空间搜索在生成回答时执行。它从外部索引请求候选项，随后 Docmost 根据数据库、当前访问权限和 AI 排除规则重新验证每个来源。搜索失败不会中断聊天。",
@@ -1680,7 +1680,7 @@
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
-          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、行和 `dictionary_term` 使用 structured-knowledge-v2；仅 `.md` 和 `.txt` 附件使用 `attachment-text-v1`。PDF、DOCX、图像和音频 processor 保持禁用。reader 接受 metadata schema v1、签名 v2 和签名 schema v3；写入默认仍为 v2，multipart 必须使用 v3，且 upstream file_hash=operationId。query 与 writer 凭据分离，feed 为 at-least-once，lease 丢失后禁止 unfenced 状态写入。"
+          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、行和 `dictionary_term` 使用 structured-knowledge-v2；仅 `.md` 和 `.txt` 附件使用 `attachment-text-v1`。PDF、DOCX、图像和音频 processor 保持禁用。reader 接受 metadata schema v1、签名 v2 和签名 schema v3；写入默认仍为 v2，multipart 必须使用 v3，且 upstream file_hash=operationId。query 与 writer 凭据分离，feed 为 at-least-once，lease 丢失后禁止 unfenced 状态写入。 writer 验证仅删除属于此绑定的过期签名 target-test 标记；无法验证归属的文件会被跳过并保留。 远程文件投影保留词典术语的 pageId: null，以识别签名所有权元数据并复用现有文件。 提前触发的核对会遍历所有列表页，即使最后一个待处理上传已被删除。"
         },
         "inboundMcp": {
           "description": "外部助手使用作用域 MCP 密钥连接到根 /mcp 端点。它是无状态的，仅公开允许的读取工具，并返回附件元数据而不是二进制附件内容。",

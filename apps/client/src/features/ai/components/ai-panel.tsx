@@ -2381,7 +2381,7 @@ export function AiPanel() {
                 <IconPlus size={20} />
               </ActionIcon>
             ) : (
-              <Menu position="top-start" withinPortal offset={10}>
+              <Menu position="top-start" withinPortal offset={10} keepMounted>
                 <Menu.Target>
                   <ActionIcon
                     ref={contextTriggerRef}

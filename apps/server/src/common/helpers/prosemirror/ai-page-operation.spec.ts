@@ -87,6 +87,17 @@ describe('AI page operations', () => {
     );
   });
 
+  it('rejects block text that the editor would silently discard', () => {
+    expect(() =>
+      prepareAiPageOperation({
+        kind: 'insertNode',
+        anchorNodeId: 'paragraph-1',
+        position: 'after',
+        node: { type: 'paragraph', text: 'Must not become an empty paragraph' },
+      }),
+    ).toThrow('agent_node_invalid');
+  });
+
   it('rejects ambiguous text edits', () => {
     expect(() =>
       applyAiPageOperation(
