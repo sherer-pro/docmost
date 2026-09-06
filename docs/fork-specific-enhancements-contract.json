@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "documents": {
     "en": "README.md",
     "ru": "FORK_SPECIFIC_ENHANCEMENTS_RU.md"
@@ -107,14 +107,29 @@
           "ru": "непрозрачными псевдонимами"
         },
         {
-          "id": "knowledge-projection-v1",
-          "en": "`projectionVersion: 1` knowledge projection",
-          "ru": "проекцию знаний `projectionVersion: 1`"
+          "id": "knowledge-projection-v2",
+          "en": "`projectionVersion: 2` knowledge projection",
+          "ru": "проекцию знаний `projectionVersion: 2`"
         },
         {
           "id": "rag-sync-dictionary-source",
           "en": "active `dictionary_term` sources",
           "ru": "активных источников `dictionary_term`"
+        },
+        {
+          "id": "hybrid-retrieval",
+          "en": "`hybrid_with_vector_fallback`",
+          "ru": "`hybrid_with_vector_fallback`"
+        },
+        {
+          "id": "contextual-retrieval-rewrite",
+          "en": "`followUpRewriteEnabled`",
+          "ru": "`followUpRewriteEnabled`"
+        },
+        {
+          "id": "rag-scope-v4",
+          "en": "`schemaVersion: 4`",
+          "ru": "`schemaVersion: 4`"
         }
       ]
     },

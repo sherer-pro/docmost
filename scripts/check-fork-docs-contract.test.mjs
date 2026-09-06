@@ -125,6 +125,19 @@ test("accepts source contracts described by the fork documentation", () => {
   assert.deepEqual(validateForkSourceContracts(sources), []);
 });
 
+test("rejects unsupported knowledge projection versions", () => {
+  for (const version of [1, 3]) {
+    const errors = validateForkSourceContracts({
+      ...sources,
+      ragContract: sources.ragContract.replace(
+        "RAG_KNOWLEDGE_PROJECTION_VERSION = 2 as const",
+        `RAG_KNOWLEDGE_PROJECTION_VERSION = ${version} as const`,
+      ),
+    });
+    assert.ok(errors.includes("RAG knowledge projection version must remain 2"));
+  }
+});
+
 test("rejects source drift in release-specific capabilities", () => {
   const errors = validateForkSourceContracts({
     ...sources,

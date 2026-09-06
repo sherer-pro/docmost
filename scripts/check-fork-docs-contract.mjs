@@ -201,10 +201,10 @@ export function validateForkSourceContracts(sources) {
   }
   if (
     !sources.ragContract.includes(
-      "RAG_KNOWLEDGE_PROJECTION_VERSION = 1 as const",
+      "RAG_KNOWLEDGE_PROJECTION_VERSION = 2 as const",
     )
   ) {
-    issues.push("RAG knowledge projection version must remain 1");
+    issues.push("RAG knowledge projection version must remain 2");
   }
   if (!sources.ragContract.includes('| "dictionary_term"')) {
     issues.push("RAG source contract must include dictionary_term");

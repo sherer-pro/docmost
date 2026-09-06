@@ -1,5 +1,5 @@
 {
-  "version": 21,
+  "version": 22,
   "anchors": [
     "assistant",
     "retrieval",
@@ -99,6 +99,14 @@
       "key": "scenario.ragSync.technical",
       "needles": [
         "pageId: null"
+      ]
+    },
+    {
+      "id": "production-rag-content-controls",
+      "key": "scenario.ragSync.technical",
+      "needles": [
+        "RAG_SYNC_METADATA_WRITE_VERSION=2",
+        "RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1"
       ]
     }
   ],
