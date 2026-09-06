@@ -122,15 +122,16 @@ async function expectHeaderFitsMobileWidths(page: PlaywrightPage) {
 
 async function expectMobileOverflowActions(page: PlaywrightPage) {
   await page.getByRole("button", { name: "Open menu", exact: true }).click();
-  const order = await page
-    .locator("[data-page-header-menu-action]:visible")
-    .evaluateAll((elements) =>
-      elements.map((element) =>
-        element.getAttribute("data-page-header-menu-action"),
+  await expect
+    .poll(() =>
+      page.locator("[data-page-header-menu-action]:visible").evaluateAll(
+        (elements) =>
+          elements.map((element) =>
+            element.getAttribute("data-page-header-menu-action"),
+          ),
       ),
-    );
-
-  expect(order).toEqual(["favorite", "details"]);
+    )
+    .toEqual(["favorite", "details"]);
   await expect(
     page.getByRole("menuitem", { name: "Comments", exact: true }),
   ).toHaveCount(0);
@@ -464,6 +465,12 @@ test("mobile assistant drawer has an accessible name", async ({
     }
     await expect(assistantDialog).toBeVisible();
     await expect(assistantDialog).toHaveAccessibleName(/.+/);
+    await expect
+      .poll(async () => {
+        const currentUser = await apiGet<any>(api, "/api/users/me");
+        return currentUser.user.settings?.preferences?.aiPanelOpen;
+      })
+      .toBe(true);
     const overflow = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: document.documentElement.clientWidth,
@@ -474,6 +481,16 @@ test("mobile assistant drawer has an accessible name", async ({
     await captureStep(page, testInfo, "06-mobile-assistant-dialog", {
       fullPage: false,
     });
+    await assistantDialog
+      .getByRole("button", { name: "Close panel", exact: true })
+      .click();
+    await expect(assistantDialog).toBeHidden();
+    await expect
+      .poll(async () => {
+        const currentUser = await apiGet<any>(api, "/api/users/me");
+        return currentUser.user.settings?.preferences?.aiPanelOpen;
+      })
+      .toBe(false);
   } finally {
     await apiPost(api, "/api/users/update", {
       aiPanelOpen: original.aiPanelOpen ?? false,
