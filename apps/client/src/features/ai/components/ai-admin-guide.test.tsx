@@ -172,9 +172,11 @@ describe("AiAdminGuide", () => {
       view.querySelectorAll(
         'button[aria-label="Copy"], button[aria-label="ai.adminGuide.copy"]',
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(5);
     expect(view.textContent).toContain("RAG_SYNC_ENABLED");
     expect(view.textContent).toContain("RAG_SYNC_ALLOWED_ORIGINS");
+    expect(view.textContent).toContain("RAG_SYNC_METADATA_WRITE_VERSION");
+    expect(view.textContent).toContain("RAG_CONTENT_PROCESSORS_ENABLED");
     expect(view.textContent).toContain(
       "/api/spaces/:spaceId/ai/rag-sync/actions/test",
     );
