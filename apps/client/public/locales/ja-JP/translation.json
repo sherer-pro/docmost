@@ -1666,7 +1666,7 @@
           },
           "success": "応答は 200、安定したカーソル、およびキー作成者のライブ読み取り可能なスコープのみを返します。",
           "rollback": "キーを取り消し、インデクサーを停止します。回復用の新しいキーを作成する",
-          "technical": "受信側の /mcp と /api/rag/* は、それぞれ専用のキー種別だけを受け付けます。ユーザーセッションや別種別のキーは拒否されます。キーは作成者の現在のスペースアクセス権とページ可視性の範囲を超えません。対象スペースをアーカイブすると、そのキーは直ちに無効になります。トークンは作成時にのみ返され、種別、スペース、作成者、有効期限は更新できません。プロジェクション v1（`projectionVersion: 2`）は、有効な文書フィールド、名前付きデータベースセル、有効な辞書を独立したページ分割フィードでエクスポートします。 Scope schemaVersion: 4 と projectionVersion: 2 は contentPolicyVersion と contentCapabilities を公開し、RAG で列挙または取得できる添付は `.md` と `.txt` だけです。"
+          "technical": "受信側の /mcp と /api/rag/* は、それぞれ専用のキー種別だけを受け付けます。ユーザーセッションや別種別のキーは拒否されます。キーは作成者の現在のスペースアクセス権とページ可視性の範囲を超えません。対象スペースをアーカイブすると、そのキーは直ちに無効になります。トークンは作成時にのみ返され、種別、スペース、作成者、有効期限は更新できません。プロジェクション v2（`projectionVersion: 2`）は、有効な文書フィールド、名前付きデータベースセル、有効な辞書を独立したページ分割フィードでエクスポートします。 Scope schemaVersion: 4 と projectionVersion: 2 は contentPolicyVersion と contentCapabilities を公開し、RAG で列挙または取得できる添付は `.md` と `.txt` だけです。"
         },
         "ragSync": {
           "description": "組み込みの Open WebUI RAG Sync は Docmost 内で実行され、Docmost サービスを通じて PostgreSQL を直接読み取り、Redis と調整し、別の暗号化されたスペースごとの資格情報を使用して書き込みます。パブリック /api/rag/* API を呼び出すことはありません。クエリ資格情報とライター資格情報は分離されたままになります。",
@@ -1680,7 +1680,7 @@
           },
           "success": "最後の成功が進み、クリーンアップやターゲットの不一致状態は残りません。",
           "rollback": "バインドを無効にしてクリーンアップを終了します。緊急ロールバックのために RAG_SYNC_ENABLED を無効にして再起動します",
-          "technical": "組み込み同期は Docmost の内部サービスから読み取り、/api/rag/* を呼び出しません。ページ、行、`dictionary_term` は structured-knowledge-v2 を使い、`.md` と `.txt` の添付だけが `attachment-text-v1` を使います。PDF、DOCX、画像、音声の processor は無効です。reader は metadata schema v1、署名済み v2、署名済み schema v3 を受け入れ、書き込み既定値は v2、multipart は v3 必須、upstream file_hash=operationId です。query と writer の資格情報は分離され、feed は at-least-once、lease 喪失後の unfenced 書き込みは禁止されます。 writerの検証では、このバインディングに属する古い署名付きtarget-testマーカーのみを削除します。所有関係を検証できないファイルはスキップして保持します。 リモートファイルの射影は辞書用語の pageId: null を保持し、署名付き所有権メタデータの認識と既存ファイルの再利用を可能にします。 早期照合は最後の保留中アップロードが削除された後も、すべての一覧ページで継続します。"
+          "technical": "組み込み同期は Docmost の内部サービスから読み取り、/api/rag/* を呼び出しません。ページ、行、`dictionary_term` は structured-knowledge-v2 を使い、`.md` と `.txt` の添付だけが `attachment-text-v1` を使います。PDF、DOCX、画像、音声の processor は無効です。reader は metadata schema v1、署名済み v2、署名済み schema v3 を受け入れ、書き込み既定値は v2、multipart は v3 必須、upstream file_hash=operationId です。query と writer の資格情報は分離され、feed は at-least-once、lease 喪失後の unfenced 書き込みは禁止されます。 writerの検証では、このバインディングに属する古い署名付きtarget-testマーカーのみを削除します。所有関係を検証できないファイルはスキップして保持します。 リモートファイルの射影は辞書用語の pageId: null を保持し、署名付き所有権メタデータの認識と既存ファイルの再利用を可能にします。 早期照合は最後の保留中アップロードが削除された後も、すべての一覧ページで継続します。 本番環境の Compose は RAG_SYNC_METADATA_WRITE_VERSION=2 と RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1 を API と共同編集サービスに渡します。アップグレード時はこれらの既定値を維持し、新しい検索モードはスペースごとに個別に有効にしてください。"
         },
         "inboundMcp": {
           "description": "外部アシスタントは、スコープ付き MCP キーを使用してルート /mcp エンドポイントに接続します。これはステートレスで、許可された読み取りツールのみを公開し、バイナリの添付ファイルの内容ではなく添付ファイルのメタデータを返します。",

@@ -1,6 +1,6 @@
 [Russian version of Fork-Specific Enhancements](./FORK_SPECIFIC_ENHANCEMENTS_RU.md)
 
-<!-- fork-doc-contract-version: 2 -->
+<!-- fork-doc-contract-version: 3 -->
 
 ## Built-in administrator and operator guide
 
@@ -157,7 +157,11 @@ Supported capabilities include:
 
 - built-in per-space synchronization from Docmost to Open WebUI Knowledge Base;
 
-- a unified `projectionVersion: 1` knowledge projection for enabled document and custom fields, named database properties and cells, database rows, and active `dictionary_term` sources;
+- a unified `projectionVersion: 2` knowledge projection for enabled document and custom fields, named database properties and cells, database rows, and active `dictionary_term` sources;
+
+- optional Open WebUI `hybrid_with_vector_fallback` retrieval and `followUpRewriteEnabled` contextual query rewriting, with safe fallback to the original query;
+
+- `schemaVersion: 4` scope capabilities describing enabled content processors and supported attachment types;
 
 - tracking of created, updated, and deleted content;
 
@@ -963,8 +967,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.2.9`. Follow the
-[v1.2.9 upgrade and rollback notes](./apps/server/docs/release-notes/v1.2.9.md)
+For the current candidate the only accepted release tag is `v1.3.0`. Follow the
+[v1.3.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.3.0.md)
 before deployment.
 
 For backend changes:

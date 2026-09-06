@@ -1666,7 +1666,7 @@
           },
           "success": "响应返回 200，稳定的游标，并且只有密钥创建者的实时可读范围",
           "rollback": "撤销密钥并停止索引器；创建新的恢复密钥",
-          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。投影 v1（`projectionVersion: 2`）通过独立的分页 feed 导出已启用的文档字段、命名数据库单元格和已启用的词典。 Scope schemaVersion: 4 和 projectionVersion: 2 会发布 contentPolicyVersion 与 contentCapabilities；RAG 只能列出或下载已声明的 `.md` 和 `.txt` 附件。"
+          "technical": "入站 /mcp 和 /api/rag/* 只接受各自的密钥类型；用户会话和其他类型的密钥会被拒绝。密钥仍受其创建者当前的空间访问权限和页面可见性限制。归档绑定的空间会立即使其密钥失效。令牌仅在创建时返回；密钥类型、空间、创建者和到期时间均不可更新。投影 v2（`projectionVersion: 2`）通过独立的分页 feed 导出已启用的文档字段、命名数据库单元格和已启用的词典。 Scope schemaVersion: 4 和 projectionVersion: 2 会发布 contentPolicyVersion 与 contentCapabilities；RAG 只能列出或下载已声明的 `.md` 和 `.txt` 附件。"
         },
         "ragSync": {
           "description": "内置Open WebUI RAG同步在Docmost内部运行，通过Docmost服务直接读取PostgreSQL，与Redis协调，并使用单独的加密每空间凭证进行写入。它从不调用公共/api/rag/* API；查询和写入者凭据保持独立。",
@@ -1680,7 +1680,7 @@
           },
           "success": "最后的成功继续进行，并且不存在清理或目标不匹配状态",
           "rollback": "禁用绑定并完成清理；对于紧急回滚，禁用 RAG_SYNC_ENABLED 并重新启动",
-          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、行和 `dictionary_term` 使用 structured-knowledge-v2；仅 `.md` 和 `.txt` 附件使用 `attachment-text-v1`。PDF、DOCX、图像和音频 processor 保持禁用。reader 接受 metadata schema v1、签名 v2 和签名 schema v3；写入默认仍为 v2，multipart 必须使用 v3，且 upstream file_hash=operationId。query 与 writer 凭据分离，feed 为 at-least-once，lease 丢失后禁止 unfenced 状态写入。 writer 验证仅删除属于此绑定的过期签名 target-test 标记；无法验证归属的文件会被跳过并保留。 远程文件投影保留词典术语的 pageId: null，以识别签名所有权元数据并复用现有文件。 提前触发的核对会遍历所有列表页，即使最后一个待处理上传已被删除。"
+          "technical": "内置同步通过 Docmost 内部服务读取数据，绝不调用 /api/rag/*。页面、行和 `dictionary_term` 使用 structured-knowledge-v2；仅 `.md` 和 `.txt` 附件使用 `attachment-text-v1`。PDF、DOCX、图像和音频 processor 保持禁用。reader 接受 metadata schema v1、签名 v2 和签名 schema v3；写入默认仍为 v2，multipart 必须使用 v3，且 upstream file_hash=operationId。query 与 writer 凭据分离，feed 为 at-least-once，lease 丢失后禁止 unfenced 状态写入。 writer 验证仅删除属于此绑定的过期签名 target-test 标记；无法验证归属的文件会被跳过并保留。 远程文件投影保留词典术语的 pageId: null，以识别签名所有权元数据并复用现有文件。 提前触发的核对会遍历所有列表页，即使最后一个待处理上传已被删除。 生产环境 Compose 将 RAG_SYNC_METADATA_WRITE_VERSION=2 和 RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1 传递给 API 和协作服务。升级时请保留这些默认值；按空间单独启用新的检索模式。"
         },
         "inboundMcp": {
           "description": "外部助手使用作用域 MCP 密钥连接到根 /mcp 端点。它是无状态的，仅公开允许的读取工具，并返回附件元数据而不是二进制附件内容。",

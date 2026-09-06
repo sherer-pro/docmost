@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 21 -->
+<!-- ai-admin-guide-contract-version: 22 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -1105,6 +1105,12 @@ an earlier quantum. Only completion schedules the next periodic scan.
 Dictionary update/delete
 checkpoints are independent; disable drains term files and re-enable backfills
 them through fingerprint replay.
+
+Production Compose forwards `RAG_SYNC_METADATA_WRITE_VERSION=2` and
+`RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1` to both the API and
+collaboration services. Keep these defaults during upgrades. Existing spaces
+retain vector retrieval with follow-up rewriting disabled until explicitly
+enabled in their settings.
 
 Deployment configuration contains no per-space identifiers or secrets:
 
