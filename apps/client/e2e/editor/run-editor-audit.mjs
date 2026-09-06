@@ -256,6 +256,7 @@ let exitCode = 1;
 let originalWorkspaceTemplatePolicy;
 let sharedAuditMemberUserId;
 let restoreAdminAiPanel = false;
+let originalAdminLocale;
 
 try {
   const runId = new Date()
@@ -263,6 +264,12 @@ try {
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14);
   const currentUser = await responseJson(await api.get("/api/users/me"));
+  originalAdminLocale = currentUser.user.locale;
+  await responseJson(
+    await api.post("/api/users/update", {
+      data: { locale: "en-US" },
+    }),
+  );
   if (currentUser.user?.settings?.preferences?.aiPanelOpen) {
     await responseJson(
       await api.post("/api/users/update", {
@@ -401,6 +408,18 @@ try {
   delete process.env.DOCMOST_AUDIT_MEMBER_AUTH_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_CSRF_TOKEN;
   delete process.env.DOCMOST_AUDIT_MEMBER_USER_ID;
+  if (originalAdminLocale) {
+    await responseJson(
+      await api.post("/api/users/update", {
+        data: { locale: originalAdminLocale },
+      }),
+    ).catch((error) => {
+      console.error(
+        `Could not restore the audit administrator locale: ${error.message}`,
+      );
+      exitCode = 1;
+    });
+  }
   if (restoreAdminAiPanel) {
     await responseJson(
       await api.post("/api/users/update", {
