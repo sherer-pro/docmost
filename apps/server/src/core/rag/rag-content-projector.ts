@@ -13,7 +13,7 @@ export interface RagSourceLocator {
   region?: { x: number; y: number; width: number; height: number };
 }
 
-export interface RagProjectionPart {
+interface RagProjectionPart {
   partId: string;
   fileName: string;
   mimeType: string;

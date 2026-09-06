@@ -188,10 +188,6 @@ export class RagContentProjectorService {
   }
 }
 
-export function normalizeRagAttachmentExtension(value: string): string {
-  return normalizeExtension(value);
-}
-
 function normalizeExtension(value: string): string {
   const normalized = value.trim().toLowerCase();
   const suffix = normalized.includes('.')

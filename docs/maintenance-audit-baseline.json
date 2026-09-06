@@ -149,7 +149,6 @@
       "exports|apps/server/src/core/ai/services/ai-outbound-url-policy.service.ts|isAiLoopbackAddress",
       "exports|apps/server/src/core/ai/services/ai-outbound-url-policy.service.ts|isAiMulticastAddress",
       "exports|apps/server/src/core/ai/services/ai-outbound-url-policy.service.ts|isAiUnspecifiedAddress",
-      "exports|apps/server/src/core/ai/services/openai-compatible-provider.service.ts|AiProviderInvalidResponseError",
       "exports|apps/server/src/core/attachment/attachment-public-token.util.ts|ATTACHMENT_TOKEN_COOKIE_PREFIX",
       "exports|apps/server/src/core/group/dto/create-group.dto.ts|DefaultGroup",
       "exports|apps/server/src/core/label/dto/label.dto.ts|FindPagesByLabelDto",
