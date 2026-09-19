@@ -13,7 +13,7 @@ import {
 
 describe("AI administrator guide contract", () => {
   it("keeps stable anchors and context-sensitive routes", () => {
-    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(23);
+    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(24);
     expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(guideContract.version);
     expect(AI_ADMIN_GUIDE_ANCHORS).toEqual(guideContract.anchors);
     expect(getAiAdminGuideAnchorFromHash("#rag-api")).toBe("rag-api");
@@ -33,6 +33,7 @@ describe("AI administrator guide contract", () => {
       "step2",
       "step3",
       "step4",
+      "step5",
     ]);
   });
 
