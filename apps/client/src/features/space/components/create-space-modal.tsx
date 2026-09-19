@@ -3,7 +3,11 @@ import { useDisclosure } from "@mantine/hooks";
 import { CreateSpaceForm } from "@/features/space/components/create-space-form.tsx";
 import { useTranslation } from "react-i18next";
 
-export default function CreateSpaceModal() {
+export default function CreateSpaceModal({
+  administration = false,
+}: {
+  administration?: boolean;
+}) {
   const { t } = useTranslation();
   const [opened, { open, close }] = useDisclosure(false);
 
@@ -18,7 +22,7 @@ export default function CreateSpaceModal() {
         closeButtonProps={{ "aria-label": t("Close") }}
       >
         <Divider size="xs" mb="xs" />
-        <CreateSpaceForm />
+        <CreateSpaceForm administration={administration} />
       </Modal>
     </>
   );

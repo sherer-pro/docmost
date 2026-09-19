@@ -70,6 +70,8 @@
 - `apps/client/src/features/editor/components/fixed-toolbar` — persistent editor toolbar shown when the user preference is enabled.
 - `apps/client/src/features/page/components/reading-time` — live page reading-time calculation, localized labels, and theme-aware indicator styling.
 - `apps/client/src/features/space/components/custom-links` — admin-managed space sidebar custom links: curated Tabler icon registry, URL safety helper, and the settings UI.
+- `apps/client/src/features/space/components/settings` — routed space administration, section forms, and the shared unsaved-change blocker. `/settings/spaces/:spaceSlug/:section?` defaults to `general`; the router uses `createBrowserRouter`/`RouterProvider`.
+- `docs/SPACE_ADMINISTRATION.md` — administrative-list projection, atomic section updates, space-owned template policies, compatibility endpoints, and migration rollback boundaries.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/client/public/{manifest.json,sw.js,offline.html}` — PWA manifest, Service Worker, and static offline page; these user-facing strings are outside the i18next locale JSON pipeline.
 - `apps/server/src/database` — migrations and DB tooling. The canonical [AI and RAG migration ledger](docs/AI_ASSISTANT_AND_RAG.md#ai-and-rag-migration-ledger) records the ordered AI/RAG schema changes, backfills, destructive `down` operations, and operational rollback switches.
@@ -148,6 +150,8 @@
 - Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, sensitive-log redaction, transactional invitation outbox, collaboration lease ownership, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`
 - Frontend unit tests (Vitest): `pnpm --filter ./apps/client test`
+- Space administration browser acceptance with synthetic local API data: `node apps/client/e2e/space-administration/run.mjs` (owns and closes Vite on port 5193).
+- Space administration PostgreSQL acceptance: set `SPACES_ADMIN_TEST_DATABASE_URL` to an isolated localhost database ending in `_test`, then run `pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/space-administration.e2e-spec.ts`. The suite owns a unique schema and never loads the application `.env`.
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
 - Editor browser acceptance matrix: `pnpm test:editor:e2e`; a full run verifies downloaded Markdown/HTML/PDF/Docmost artifacts and deletes its audit space only after both Playwright and artifact verification pass. Focused runs skip the necessarily incomplete artifact check. Any failed full run retains its audit space for inspection.
 - AI assistant browser acceptance matrix: `pnpm test:ai:e2e`

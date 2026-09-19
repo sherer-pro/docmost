@@ -69,6 +69,10 @@ describe("client session cleanup", () => {
     );
     window.localStorage.setItem("unrelated", "keep");
     window.sessionStorage.setItem("docmost:ai-draft:w:u:p", "private");
+    window.sessionStorage.setItem(
+      "docmost:space-administration:scroll:/settings/spaces?query=private",
+      "123",
+    );
 
     await clearSensitiveClientState();
 
@@ -81,6 +85,11 @@ describe("client session cleanup", () => {
     ).toBeNull();
     expect(window.localStorage.getItem("unrelated")).toBe("keep");
     expect(window.sessionStorage.getItem("docmost:ai-draft:w:u:p")).toBeNull();
+    expect(
+      window.sessionStorage.getItem(
+        "docmost:space-administration:scroll:/settings/spaces?query=private",
+      ),
+    ).toBeNull();
     expect(deletedDatabases).toEqual(["page.private-document"]);
     expect(deletedCaches).toEqual(["docmost-pwa-v7-runtime"]);
     expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_SENSITIVE_DATA" });

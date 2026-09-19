@@ -740,6 +740,9 @@ export function useUpdateAiSpaceConfigMutation(spaceId?: string) {
     onSuccess: (config) => {
       const effectiveSpaceId = spaceId ?? config.spaceId;
       queryClient.setQueryData(AI_QUERY_KEYS.config(effectiveSpaceId), config);
+      void queryClient.invalidateQueries({
+        queryKey: ["spaces", "administration"],
+      });
       queryClient.setQueriesData<AiAvailability>(
         { queryKey: ["ai", "status", effectiveSpaceId] },
         (status) =>

@@ -227,7 +227,9 @@ export function TitleEditor({
 
     const focusTimer = setTimeout(() => {
       // guard against Cannot access view['hasFocus'] error
-      if (!titleEditor.isInitialized) return;
+      if (!titleEditor.isInitialized || !titleEditor.isEmpty) return;
+      // Do not steal focus after the user has selected another control.
+      if (document.activeElement !== document.body) return;
       titleEditor.commands.focus("end");
     }, 300);
 

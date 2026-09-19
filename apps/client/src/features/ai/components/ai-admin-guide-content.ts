@@ -199,6 +199,7 @@ export const AI_ADMIN_GUIDE_SECURITY_PRINCIPLES = [
   "separateCredentials",
   "liveChecks",
   "stopControls",
+  "templates",
 ] as const;
 
 export const AI_ADMIN_GUIDE_TROUBLESHOOTING_GROUPS = [
