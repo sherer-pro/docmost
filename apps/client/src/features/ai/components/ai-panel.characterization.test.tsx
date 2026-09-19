@@ -4,6 +4,11 @@ import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MantineProvider } from '@mantine/core';
+import { Editor } from '@tiptap/core';
+import { Document } from '@tiptap/extension-document';
+import { Paragraph } from '@tiptap/extension-paragraph';
+import { Text } from '@tiptap/extension-text';
+import { titleEditorAtom } from '@/features/editor/atoms/editor-atoms';
 
 const { atomValues } = vi.hoisted(() => ({
   atomValues: new Map<unknown, unknown>(),
@@ -31,10 +36,6 @@ vi.mock('@mantine/hooks', () => ({
 
 vi.mock('react-dnd', () => ({
   useDrop: () => [{ isOver: false, isAllowed: false }, vi.fn()],
-}));
-
-vi.mock('@tiptap/react', () => ({
-  useEditorState: () => '',
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -136,5 +137,30 @@ describe('AiPanel characterization', () => {
     expect(container.textContent).toContain('ai.openDocument');
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('survives a destroyed title editor during navigation and follows its replacement', () => {
+    const createEditor = () => new Editor({
+      extensions: [Document, Paragraph, Text],
+      content: '<p>Document title</p>',
+    });
+    const previous = createEditor();
+    previous.destroy();
+    const previousGetText = vi.spyOn(previous, 'getText');
+    atomValues.set(titleEditorAtom, previous);
+    const render = () => act(() => root.render(
+      <MantineProvider><AiPanel /></MantineProvider>,
+    ));
+    expect(render).not.toThrow();
+    expect(previousGetText).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('ai.openDocument');
+
+    const next = createEditor();
+    const nextGetText = vi.spyOn(next, 'getText');
+    atomValues.set(titleEditorAtom, next);
+    render();
+    act(() => next.commands.setContent('<p>Replacement title</p>'));
+    expect(nextGetText).toHaveBeenCalled();
+    next.destroy();
   });
 });

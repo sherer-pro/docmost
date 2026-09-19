@@ -134,6 +134,14 @@ export function TitleEditor({
   });
 
   useEffect(() => {
+    return () => {
+      setTitleEditor((current) =>
+        current === titleEditor ? null : current,
+      );
+    };
+  }, [setTitleEditor, titleEditor]);
+
+  useEffect(() => {
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;
     const canonicalPath = buildPageUrl(spaceSlug, slugId, title);
 
@@ -152,7 +160,7 @@ export function TitleEditor({
   ]);
 
   const saveTitle = useCallback(() => {
-    if (!titleEditor || activePageId !== pageId) return;
+    if (!titleEditor || titleEditor.isDestroyed || activePageId !== pageId) return;
 
     if (
       titleEditor.getText() === title ||
@@ -178,7 +186,7 @@ export function TitleEditor({
         },
       };
 
-      if (page.title !== titleEditor.getText()) return;
+      if (titleEditor.isDestroyed || page.title !== titleEditor.getText()) return;
 
       updatePageData(page);
 
@@ -190,7 +198,7 @@ export function TitleEditor({
   const debounceUpdate = useDebouncedCallback(saveTitle, 500);
 
   useEffect(() => {
-    if (!titleEditor) {
+    if (!titleEditor || titleEditor.isDestroyed) {
       return;
     }
 
@@ -227,7 +235,11 @@ export function TitleEditor({
 
     const focusTimer = setTimeout(() => {
       // guard against Cannot access view['hasFocus'] error
-      if (!titleEditor.isInitialized || !titleEditor.isEmpty) return;
+      if (
+        titleEditor.isDestroyed ||
+        !titleEditor.isInitialized ||
+        !titleEditor.isEmpty
+      ) return;
       // Do not steal focus after the user has selected another control.
       if (document.activeElement !== document.body) return;
       titleEditor.commands.focus("end");

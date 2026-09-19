@@ -1634,7 +1634,8 @@
             "step1": "Impostazioni di provider, modello, profilo e criteri Save",
             "step2": "Test Chat e Agent",
             "step3": "Enable il modello spaziale e i profili previsti",
-            "step4": "Su un telefono, verifica Chat e Agent, l’interruttore di ricerca dello spazio, il piè di pagina e il campo del messaggio con la tastiera aperta"
+            "step4": "Su un telefono, verifica Chat e Agent, l’interruttore di ricerca dello spazio, il piè di pagina e il campo del messaggio con la tastiera aperta",
+            "step5": "Passate da un documento alle impostazioni dello spazio e usate Indietro/Avanti; l’assistente deve usare il titolo del documento corrente."
           },
           "success": "Viene completata una risposta di prova; Agent elenca solo gli strumenti consentiti e chiede prima della scrittura",
           "rollback": "Disattiva Agent o il modello spaziale, quindi ripristina le ultime impostazioni funzionanti",

@@ -1634,7 +1634,8 @@
             "step1": "Save provider-, model-, profiel- en beleidsinstellingen",
             "step2": "Test Chat en Agent",
             "step3": "Enable het ruimtemodel en de beoogde profielen",
-            "step4": "Controleer op een telefoon met het toetsenbord open Chat en Agent, de schakelaar voor zoeken in de ruimte, de voettekst en het berichtveld"
+            "step4": "Controleer op een telefoon met het toetsenbord open Chat en Agent, de schakelaar voor zoeken in de ruimte, de voettekst en het berichtveld",
+            "step5": "Wissel tussen een document en de ruimte-instellingen en gebruik Terug/Vooruit; de assistent moet de titel van het huidige document gebruiken."
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
