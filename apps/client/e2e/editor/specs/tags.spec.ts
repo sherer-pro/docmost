@@ -51,7 +51,7 @@ async function openDocumentSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Space menu" }).click();
   await page.getByRole("menuitem", { name: "Space settings" }).click();
   const sectionSelector = page.getByRole("textbox", {
-    name: "Section",
+    name: "Settings section",
     exact: true,
   });
   await expect(page.locator("main").getByRole("heading").first()).toBeVisible();
@@ -287,6 +287,9 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     );
 
     slashMenu = await openTagSlashMenu(page);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      pageRecord.title,
+    );
     for (const label of tagMenuLabels) {
       await expect(slashMenu.getByText(label, { exact: true })).toBeVisible();
     }
