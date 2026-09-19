@@ -290,6 +290,7 @@
 | GET | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | PUT | `/spaces/:spaceId/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | POST | `/spaces/actions/export` | `apps/server/src/integrations/export/export.controller.ts` |
+| GET | `/spaces/administration` | `apps/server/src/core/space/space.controller.ts` |
 | GET | `/spaces/member-users` | `apps/server/src/core/space/space.controller.ts` |
 | GET | `/spaces/members` | `apps/server/src/core/space/space.controller.ts` |
 | POST | `/spaces/members/add` | `apps/server/src/core/space/space.controller.ts` |

@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PageTemplateSpacePolicySettings } from "./page-template-policy-settings";
 
 const mocks = vi.hoisted(() => ({
@@ -29,12 +30,15 @@ vi.mock("@mantine/core", () => {
     children,
     leftSection,
     variant,
+    loading,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     leftSection?: React.ReactNode;
     variant?: string;
+    loading?: boolean;
   }) => {
     void variant;
+    void loading;
     return (
       <button type="button" {...props}>
         {leftSection}
@@ -95,6 +99,9 @@ vi.mock("@mantine/core", () => {
     </label>
   );
   return {
+    Center: Wrapper,
+    Loader: Wrapper,
+    Modal: Wrapper,
     Alert: Wrapper,
     Badge: Wrapper,
     Button,
@@ -166,16 +173,19 @@ vi.mock("../services/page-template-api", () => ({
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("PageTemplateSpacePolicySettings", () => {
+  let client: QueryClient;
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mocks.getPolicyGroups.mockResolvedValue({ items: [], nextCursor: null });
   });
 
   afterEach(() => {
     act(() => root?.unmount());
+    client.clear();
     container?.remove();
     root = null;
     container = null;
@@ -186,13 +196,21 @@ describe("PageTemplateSpacePolicySettings", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root?.render(<PageTemplateSpacePolicySettings spaceId={spaceId} />);
+      root?.render(
+        <QueryClientProvider client={client}>
+          <PageTemplateSpacePolicySettings spaceId={spaceId} />
+        </QueryClientProvider>,
+      );
     });
   }
 
   function rerender(spaceId: string) {
     act(() => {
-      root?.render(<PageTemplateSpacePolicySettings spaceId={spaceId} />);
+      root?.render(
+        <QueryClientProvider client={client}>
+          <PageTemplateSpacePolicySettings spaceId={spaceId} />
+        </QueryClientProvider>,
+      );
     });
   }
 
@@ -202,199 +220,118 @@ describe("PageTemplateSpacePolicySettings", () => {
     });
   }
 
-  it("shows inherited deployment and workspace gates and disables local controls", async () => {
-    mocks.getSpacePolicy.mockResolvedValue(
-      policy({ systemEnabled: true, workspaceEnabled: false }),
+  const input = (label: string) =>
+    container!.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+  const submit = async (index = 0) => {
+    const form = container!.querySelectorAll("form").item(index);
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
     );
+    await settle();
+  };
+
+  it("keeps edits local until Save and ignores the retired workspace gate", async () => {
+    mocks.getSpacePolicy.mockResolvedValue(policy({ workspaceEnabled: false }));
+    mocks.updateSpacePolicy.mockImplementation(async (initial, value) => ({
+      ...initial,
+      ...value,
+      revision: 4,
+    }));
     render();
     await settle();
-
-    expect(container?.textContent).toContain("Deployment: Enabled");
-    expect(container?.textContent).toContain("Workspace: Disabled");
-    expect(container?.textContent).toContain("Space: Disabled");
-    expect(container?.textContent).toContain(
-      "Page templates are disabled for this workspace.",
-    );
-    expect(
-      container?.querySelector<HTMLInputElement>(
-        'input[aria-label="Enable page templates in this space"]',
-      )?.disabled,
-    ).toBe(true);
-  });
-
-  it("reloads the latest policy after a revision conflict", async () => {
-    mocks.getSpacePolicy.mockResolvedValue(policy());
-    mocks.updateSpacePolicy.mockRejectedValue({ response: { status: 409 } });
-    render();
     await settle();
-
-    const regular = container?.querySelector<HTMLInputElement>(
-      'input[aria-label="Allow independent copies"]',
-    );
-    await act(async () => regular?.click());
-    await settle();
-
+    await act(async () => input("Allow independent copies").click());
+    expect(mocks.updateSpacePolicy).not.toHaveBeenCalled();
+    await submit();
     expect(mocks.updateSpacePolicy).toHaveBeenCalledWith(
       expect.objectContaining({ revision: 3 }),
-      { allowRegularTemplate: false },
+      expect.objectContaining({ allowRegularTemplate: false }),
     );
-    expect(mocks.getSpacePolicy).toHaveBeenCalledTimes(2);
-    expect(mocks.notify).toHaveBeenCalledWith({
-      color: "red",
-      message: "The page changed. Refresh and try again.",
-    });
-    expect(
-      container?.querySelector<HTMLInputElement>(
-        'input[aria-label="Allow independent copies"]',
-      )?.disabled,
-    ).toBe(false);
+    expect(mocks.getWorkspacePolicy).not.toHaveBeenCalled();
   });
-
-  it("offers retry when the group list fails to load", async () => {
+  it("preserves failed input across a background refetch and retries with the original revision", async () => {
     mocks.getSpacePolicy.mockResolvedValue(policy());
-    mocks.getPolicyGroups
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    mocks.updateSpacePolicy
+      .mockRejectedValueOnce({ response: { status: 409 } })
+      .mockImplementation(async (_, value) => ({ ...value, revision: 4 }));
     render();
     await settle();
-
-    expect(container?.textContent).toContain("Could not load templates");
-    const retry = Array.from(container?.querySelectorAll("button") ?? []).find(
-      (button) => button.textContent === "Retry",
+    await settle();
+    await act(async () => input("Allow independent copies").click());
+    await submit();
+    expect(container!.textContent).toContain("spaceAdmin.conflictDescription");
+    await act(async () =>
+      client.setQueryData(
+        ["page-templates", "space-policy", "space-1"],
+        policy({ revision: 5 }),
+      ),
     );
-    await act(async () => retry?.click());
-    await settle();
-
-    expect(mocks.getPolicyGroups).toHaveBeenCalledTimes(2);
-    expect(
-      container?.querySelector('select[aria-label="Groups"]'),
-    ).not.toBeNull();
+    expect(input("Allow independent copies").checked).toBe(false);
+    await submit();
+    expect(mocks.updateSpacePolicy.mock.calls[1][0].revision).toBe(3);
   });
-
-  it("loads every group page before showing the searchable selector", async () => {
-    mocks.getSpacePolicy.mockResolvedValue(policy());
-    mocks.getPolicyGroups
-      .mockResolvedValueOnce({
-        items: [{ id: "group-1", name: "First" }],
-        nextCursor: "groups-page-2",
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: "group-2", name: "Second" }],
-        nextCursor: null,
-      });
-
-    render();
-    await settle();
-
-    expect(mocks.getPolicyGroups).toHaveBeenNthCalledWith(1, "space-1", {
-      limit: 50,
-      cursor: undefined,
-    });
-    expect(mocks.getPolicyGroups).toHaveBeenNthCalledWith(2, "space-1", {
-      limit: 50,
-      cursor: "groups-page-2",
-    });
-  });
-
-  it("ignores a stale group-policy response after the selected group changes", async () => {
-    const first = deferred<Record<string, unknown>>();
-    const second = deferred<Record<string, unknown>>();
+  it("saves the selected group independently with its own revision", async () => {
     mocks.getSpacePolicy.mockResolvedValue(policy());
     mocks.getPolicyGroups.mockResolvedValue({
-      items: [
-        { id: "group-a", name: "Group A" },
-        { id: "group-b", name: "Group B" },
-      ],
+      items: [{ id: "group-a", name: "Group A" }],
       nextCursor: null,
     });
-    mocks.getGroupPolicy.mockImplementation(
-      (_spaceId: string, groupId: string) =>
-        groupId === "group-a" ? first.promise : second.promise,
+    mocks.getGroupPolicy.mockResolvedValue(groupPolicy("group-a"));
+    mocks.updateGroupPolicy.mockImplementation(
+      async (initial, allowedActions) => ({
+        ...initial,
+        allowedActions,
+        revision: 2,
+      }),
     );
-    mocks.updateGroupPolicy.mockImplementation(async (current) => current);
-
     render();
     await settle();
-    const select = container?.querySelector<HTMLSelectElement>(
-      'select[aria-label="Groups"]',
+    await settle();
+    await act(async () =>
+      setSelectValue(container!.querySelector("select"), "group-a"),
     );
-
-    await act(async () => {
-      setSelectValue(select, "group-a");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(input("Inherit from space policy")).not.toBeNull();
     });
-    await act(async () => {
-      setSelectValue(select, "group-b");
-      second.resolve(groupPolicy("group-b"));
-      await second.promise;
-    });
-    await act(async () => {
-      first.resolve(groupPolicy("group-a"));
-      await first.promise;
-    });
-
-    const inherit = container?.querySelector<HTMLInputElement>(
-      'input[aria-label="Inherit from space policy"]',
-    );
-    await act(async () => inherit?.click());
-
+    await act(async () => input("Inherit from space policy").click());
+    expect(mocks.updateGroupPolicy).not.toHaveBeenCalled();
+    await submit(1);
     expect(mocks.updateGroupPolicy).toHaveBeenCalledWith(
-      expect.objectContaining({ groupId: "group-b" }),
+      expect.objectContaining({ groupId: "group-a", revision: 1 }),
       null,
     );
+    expect(mocks.updateSpacePolicy).not.toHaveBeenCalled();
   });
-
-  it("ignores policy and group responses from the previous space", async () => {
-    const policyA = deferred<Record<string, unknown>>();
-    const policyB = deferred<Record<string, unknown>>();
-    const groupsA = deferred<{
-      items: Array<{ id: string; name: string }>;
-      nextCursor: null;
-    }>();
-    const groupsB = deferred<{
-      items: Array<{ id: string; name: string }>;
-      nextCursor: null;
-    }>();
-    mocks.getSpacePolicy.mockImplementation((spaceId: string) =>
-      spaceId === "space-1" ? policyA.promise : policyB.promise,
+  it("discards edits only when Cancel is chosen", async () => {
+    mocks.getSpacePolicy.mockResolvedValue(policy());
+    render();
+    await settle();
+    await settle();
+    await act(async () => input("Allow independent copies").click());
+    const cancel = Array.from(container!.querySelectorAll("button")).find(
+      (button) => button.textContent === "Cancel",
+    )!;
+    await act(async () => cancel.click());
+    expect(input("Allow independent copies").checked).toBe(true);
+    expect(mocks.updateSpacePolicy).not.toHaveBeenCalled();
+  });
+  it("ignores a late response for a previous space", async () => {
+    const old = deferred<ReturnType<typeof policy>>();
+    mocks.getSpacePolicy.mockImplementation((id) =>
+      id === "space-1"
+        ? old.promise
+        : Promise.resolve(policy({ spaceId: id, allowRegularTemplate: false })),
     );
-    mocks.getPolicyGroups.mockImplementation((spaceId: string) =>
-      spaceId === "space-1" ? groupsA.promise : groupsB.promise,
-    );
-    mocks.updateSpacePolicy.mockImplementation(async (current) => current);
-
-    render("space-1");
+    render();
     rerender("space-2");
-    await act(async () => {
-      policyB.resolve(policy({ spaceId: "space-2" }));
-      groupsB.resolve({
-        items: [{ id: "group-b", name: "Group B" }],
-        nextCursor: null,
-      });
-      await Promise.all([policyB.promise, groupsB.promise]);
-    });
-    await act(async () => {
-      policyA.resolve(policy({ spaceId: "space-1" }));
-      groupsA.resolve({
-        items: [{ id: "group-a", name: "Group A" }],
-        nextCursor: null,
-      });
-      await Promise.all([policyA.promise, groupsA.promise]);
-    });
-
-    const groupOptions = Array.from(
-      container?.querySelectorAll('select[aria-label="Groups"] option') ?? [],
-    ).map((option) => option.textContent);
-    expect(groupOptions).toContain("Group B");
-    expect(groupOptions).not.toContain("Group A");
-
-    const regular = container?.querySelector<HTMLInputElement>(
-      'input[aria-label="Allow independent copies"]',
-    );
-    await act(async () => regular?.click());
-    expect(mocks.updateSpacePolicy).toHaveBeenCalledWith(
-      expect.objectContaining({ spaceId: "space-2" }),
-      { allowRegularTemplate: false },
-    );
+    await settle();
+    await settle();
+    await act(async () => old.resolve(policy()));
+    await settle();
+    expect(input("Allow independent copies").checked).toBe(false);
   });
 });
 

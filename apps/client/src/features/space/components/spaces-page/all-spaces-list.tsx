@@ -9,7 +9,6 @@ import { getSpaceUrl } from "@/lib/config";
 import { prefetchSpace } from "@/features/space/queries/space-query";
 import { SearchInput } from "@/components/common/search-input";
 import Paginate from "@/components/common/paginate";
-import SpaceSettingsModal from "@/features/space/components/settings-modal";
 import classes from "./all-spaces-list.module.css";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
@@ -49,15 +48,6 @@ export default function AllSpacesList({
 }: AllSpacesListProps) {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
-  const [settingsOpened, { open: openSettings, close: closeSettings }] =
-    useDisclosure(false);
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
-
-  const handleOpenSettings = (spaceId: string) => {
-    setSelectedSpaceId(spaceId);
-    openSettings();
-  };
-
   const state = isLoading
     ? "loading"
     : isError
@@ -150,7 +140,7 @@ export default function AllSpacesList({
                     </Text>
                   </Table.Td>
                   <Table.Td {...getResponsiveActionCellProps()}>
-                    {isAdmin && (
+                    {(isAdmin || space.membership?.role === "admin") && (
                       <Group gap="xs" justify="flex-end">
                         <Menu position="bottom-end">
                           <Menu.Target>
@@ -165,7 +155,8 @@ export default function AllSpacesList({
                           <Menu.Dropdown>
                             <Menu.Item
                               leftSection={<IconSettings size={16} />}
-                              onClick={() => handleOpenSettings(space.id)}
+                              component={Link}
+                              to={`/settings/spaces/${space.slug}/general`}
                             >
                               {t("Space settings")}
                             </Menu.Item>
@@ -187,14 +178,6 @@ export default function AllSpacesList({
           hasNextPage={hasNextPage}
           onNext={onNext}
           onPrev={onPrev}
-        />
-      )}
-
-      {selectedSpaceId && (
-        <SpaceSettingsModal
-          spaceId={selectedSpaceId}
-          opened={settingsOpened}
-          onClose={closeSettings}
         />
       )}
     </Box>

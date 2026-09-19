@@ -24,52 +24,61 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
     isPageTemplatesEnabled: () => true,
   };
 
-  it('returns HTTP 409 when a concurrent update wins the expected revision', async () => {
-    const update = fluent(async () => undefined);
+  it('retires the workspace PATCH without accessing persisted policies', async () => {
     const service = new PageTemplatePolicyService(
-      { updateTable: jest.fn(() => update) } as any,
+      {} as any,
       environment as any,
     );
-
     await expect(
       service.updateWorkspacePolicy({
         workspaceId: 'workspace',
         userId: 'user',
-        enabled: true,
-        expectedRevision: 2,
-      }),
-    ).rejects.toMatchObject({
-      status: 409,
-      response: expect.objectContaining({
-        code: 'page_template_policy_revision_conflict',
-      }),
-    });
-    expect(update.where).toHaveBeenCalledWith('revision', '=', 2);
-  });
-
-  it('returns HTTP 409 when concurrent revision-zero inserts conflict', async () => {
-    const insert = fluent(async () => undefined);
-    const service = new PageTemplatePolicyService(
-      { insertInto: jest.fn(() => insert) } as any,
-      environment as any,
-    );
-
-    await expect(
-      service.updateWorkspacePolicy({
-        workspaceId: 'workspace',
-        userId: 'user',
-        enabled: true,
+        enabled: false,
         expectedRevision: 0,
       }),
     ).rejects.toMatchObject({
-      status: 409,
+      status: 410,
       response: expect.objectContaining({
-        code: 'page_template_policy_revision_conflict',
+        code: 'page_template_workspace_policy_retired',
       }),
+    });
+    await expect(service.getWorkspacePolicy('workspace')).resolves.toEqual({
+      enabled: true,
+      systemEnabled: true,
+      revision: 0,
+      deprecated: true,
     });
   });
 
-  it('includes inherited deployment and workspace gates in a space policy', async () => {
+  it.each([0, 2])(
+    'retains revision conflicts for space policies at revision %s',
+    async (expectedRevision) => {
+      const query = fluent(async () => undefined);
+      const service = new PageTemplatePolicyService(
+        { updateTable: () => query, insertInto: () => query } as any,
+        environment as any,
+      );
+      await expect(
+        service.updateSpacePolicy({
+          workspaceId: 'workspace',
+          spaceId: 'space',
+          userId: 'user',
+          templatesEnabled: true,
+          allowCreateTemplate: true,
+          allowRegularTemplate: true,
+          allowSyncedTemplate: true,
+          expectedRevision,
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({
+          code: 'page_template_policy_revision_conflict',
+        }),
+      });
+    },
+  );
+
+  it('uses only the deployment gate and local policy', async () => {
     const query: any = {};
     for (const method of ['selectAll', 'where']) {
       query[method] = jest.fn(() => query);
@@ -85,17 +94,13 @@ describe('PageTemplatePolicyService optimistic revisions', () => {
       { selectFrom: jest.fn(() => query) } as any,
       environment as any,
     );
-    jest.spyOn(service, 'getWorkspacePolicy').mockResolvedValue({
-      enabled: false,
-      revision: 2,
-      systemEnabled: true,
-    });
+    const legacyRead = jest.spyOn(service, 'getWorkspacePolicy');
 
     await expect(service.getSpacePolicy('workspace', 'space')).resolves.toEqual(
       {
         spaceId: 'space',
         systemEnabled: true,
-        workspaceEnabled: false,
+        workspaceEnabled: true,
         templatesEnabled: true,
         allowCreateTemplate: true,
         allowRegularTemplate: true,

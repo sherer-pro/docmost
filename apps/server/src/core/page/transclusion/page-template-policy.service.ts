@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  GoneException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
@@ -152,7 +153,6 @@ export class PageTemplatePolicyService {
           : policy.allowSyncedTemplate;
     if (
       !policy.systemEnabled ||
-      !policy.workspaceEnabled ||
       !policy.templatesEnabled ||
       !actionEnabled ||
       !policy.allowedActions.includes(action)
@@ -166,69 +166,37 @@ export class PageTemplatePolicyService {
   }
 
   async getWorkspacePolicy(workspaceId: string) {
-    const row = await this.db
-      .selectFrom('pageTemplateWorkspacePolicies')
-      .selectAll()
-      .where('workspaceId', '=', workspaceId)
-      .executeTakeFirst();
     return {
-      enabled: row?.enabled ?? false,
-      revision: row?.revision ?? 0,
+      enabled: true,
+      revision: 0,
       systemEnabled: this.environment.isPageTemplatesEnabled(),
+      deprecated: true,
     };
   }
 
-  async updateWorkspacePolicy(params: {
+  async updateWorkspacePolicy(_params: {
     workspaceId: string;
     userId: string;
     enabled: boolean;
     expectedRevision: number;
   }) {
-    const updated =
-      params.expectedRevision === 0
-        ? await this.db
-            .insertInto('pageTemplateWorkspacePolicies')
-            .values({
-              workspaceId: params.workspaceId,
-              enabled: params.enabled,
-              revision: 1,
-              updatedById: params.userId,
-            })
-            .onConflict((conflict) =>
-              conflict.column('workspaceId').doNothing(),
-            )
-            .returning('revision')
-            .executeTakeFirst()
-        : await this.db
-            .updateTable('pageTemplateWorkspacePolicies')
-            .set({
-              enabled: params.enabled,
-              revision: params.expectedRevision + 1,
-              updatedById: params.userId,
-              updatedAt: new Date(),
-            })
-            .where('workspaceId', '=', params.workspaceId)
-            .where('revision', '=', params.expectedRevision)
-            .returning('revision')
-            .executeTakeFirst();
-    if (!updated) this.throwRevisionConflict();
-    return this.getWorkspacePolicy(params.workspaceId);
+    throw new GoneException({
+      code: 'page_template_workspace_policy_retired',
+      message: 'Manage page templates in each space instead',
+    });
   }
 
   async getSpacePolicy(workspaceId: string, spaceId: string) {
-    const [row, workspace] = await Promise.all([
-      this.db
-        .selectFrom('pageTemplateSpacePolicies')
-        .selectAll()
-        .where('workspaceId', '=', workspaceId)
-        .where('spaceId', '=', spaceId)
-        .executeTakeFirst(),
-      this.getWorkspacePolicy(workspaceId),
-    ]);
+    const row = await this.db
+      .selectFrom('pageTemplateSpacePolicies')
+      .selectAll()
+      .where('workspaceId', '=', workspaceId)
+      .where('spaceId', '=', spaceId)
+      .executeTakeFirst();
     return {
       spaceId,
-      systemEnabled: workspace.systemEnabled,
-      workspaceEnabled: workspace.enabled,
+      systemEnabled: this.environment.isPageTemplatesEnabled(),
+      workspaceEnabled: true,
       templatesEnabled: row?.templatesEnabled ?? false,
       allowCreateTemplate: row?.allowCreateTemplate ?? false,
       allowRegularTemplate: row?.allowRegularTemplate ?? false,
