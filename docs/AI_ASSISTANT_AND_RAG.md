@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 23 -->
+<!-- ai-admin-guide-contract-version: 24 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -186,6 +186,11 @@ snapshots; live ACL and policy narrowing are still rechecked. Retry operates on
 a run; regenerate operates on an assistant message. Cancellation records a
 request that the worker checks during streaming and terminates the attempt as
 `cancelled`.
+
+The assistant's live document-title subscription ignores destroyed editors during
+navigation. Page title editors release their shared reference on unmount; a late
+save response cannot read a destroyed editor. Returning from space settings,
+including browser Back/Forward, binds title updates to the current document.
 
 ### Citation contract
 
