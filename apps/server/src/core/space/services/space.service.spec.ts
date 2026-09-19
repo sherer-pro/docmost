@@ -47,11 +47,26 @@ describe('SpaceService', () => {
       updateSpace: jest.fn(),
       archiveSpace: jest.fn(),
       unarchiveSpace: jest.fn(),
-      findById: jest.fn(),
+      findById: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'space-1',
+          slug: 'space',
+          settings: { documentFields: { status: true } },
+        }),
       hasImportCleanupBlockers: jest.fn().mockResolvedValue(false),
       deleteSpace: jest.fn(),
     };
-    workspaceRepo = { findById: jest.fn() };
+    workspaceRepo = {
+      findById: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'workspace-1',
+          settings: {},
+          enforceMfa: false,
+          enforceSso: false,
+        }),
+    };
     shareRepo = { deleteBySpaceId: jest.fn() };
     ragBindingQuery = {
       select: jest.fn(),
@@ -111,57 +126,43 @@ describe('SpaceService', () => {
       'workspace-1',
     );
 
-    expect(spaceRepo.updateDictionarySettings).toHaveBeenCalledWith(
-      'space-1',
-      'workspace-1',
-      { enabled: true },
-    );
     expect(spaceRepo.updateSpace).toHaveBeenCalledWith(
-      { name: undefined, description: undefined, slug: undefined },
+      expect.objectContaining({
+        settings: {
+          documentFields: { status: true },
+          dictionary: { enabled: true },
+        },
+      }),
       'space-1',
       'workspace-1',
+      expect.anything(),
     );
+    expect(spaceRepo.updateDictionarySettings).not.toHaveBeenCalled();
   });
 
-  it('updates heading numbering without replacing other space settings', async () => {
-    spaceRepo.updateSpace.mockResolvedValue({
-      id: 'space-1',
-      settings: {
-        dictionary: { enabled: true },
-        headingNumbering: { enabled: true },
-      },
-    });
-
+  it.each([
+    [
+      { headingNumberingEnabled: true },
+      { headingNumbering: { enabled: true } },
+    ],
+    [
+      { tagSettings: { disabled: ['future'] } },
+      { tags: { disabled: ['future'] } },
+    ],
+  ])('merges section settings in one write', async (patch, expected) => {
+    spaceRepo.updateSpace.mockResolvedValue({ id: 'space-1' });
     await service.updateSpace(
-      { spaceId: 'space-1', headingNumberingEnabled: true },
+      { spaceId: 'space-1', ...patch } as any,
       'workspace-1',
     );
-
-    expect(spaceRepo.updateHeadingNumberingSettings).toHaveBeenCalledWith(
+    expect(spaceRepo.updateSpace).toHaveBeenCalledTimes(1);
+    expect(spaceRepo.updateSpace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: { documentFields: { status: true }, ...expected },
+      }),
       'space-1',
       'workspace-1',
-      { enabled: true },
-    );
-  });
-
-  it('updates tag settings without replacing other space settings', async () => {
-    spaceRepo.updateSpace.mockResolvedValue({
-      id: 'space-1',
-      settings: {
-        dictionary: { enabled: true },
-        tags: { disabled: ['future'] },
-      },
-    });
-
-    await service.updateSpace(
-      { spaceId: 'space-1', tagSettings: { disabled: ['future'] } },
-      'workspace-1',
-    );
-
-    expect(spaceRepo.updateTagSettings).toHaveBeenCalledWith(
-      'space-1',
-      'workspace-1',
-      { disabled: ['future'] },
+      expect.anything(),
     );
   });
 

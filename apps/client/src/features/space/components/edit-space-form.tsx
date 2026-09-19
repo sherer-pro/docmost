@@ -1,5 +1,15 @@
-import { Group, Box, Button, TextInput, Stack, Textarea } from "@mantine/core";
-import React from "react";
+import {
+  Group,
+  Box,
+  Button,
+  TextInput,
+  Stack,
+  Textarea,
+  Text,
+} from "@mantine/core";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useSettingsDirty, SettingsSaveBar } from "./settings/settings-draft";
 import { useForm, zodResolver } from "@mantine/form";
 import * as z from "zod";
 import { useUpdateSpaceMutation } from "@/features/space/queries/space-query.ts";
@@ -27,6 +37,9 @@ interface EditSpaceFormProps {
 export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
   const { t } = useTranslation();
   const updateSpaceMutation = useUpdateSpaceMutation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [saveError, setSaveError] = useState(false);
 
   const form = useForm<FormValues>({
     validate: zodResolver(formSchema),
@@ -36,6 +49,19 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
       slug: space.slug,
     },
   });
+
+  const release = useSettingsDirty(form.isDirty());
+  useEffect(() => {
+    if (!form.isDirty()) {
+      const values = {
+        name: space.name,
+        description: space.description || "",
+        slug: space.slug,
+      };
+      form.setValues(values);
+      form.resetDirty(values);
+    }
+  }, [space.name, space.description, space.slug]);
 
   const handleSubmit = async (values: {
     name?: string;
@@ -56,8 +82,25 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
       spaceData.slug = values.slug;
     }
 
-    await updateSpaceMutation.mutateAsync(spaceData);
-    form.resetDirty();
+    setSaveError(false);
+    try {
+      const saved = await updateSpaceMutation.mutateAsync(spaceData);
+      const savedValues = {
+        name: saved.name,
+        description: saved.description || "",
+        slug: saved.slug,
+      };
+      form.setValues(savedValues);
+      form.resetDirty(savedValues);
+      release();
+      if (saved.slug !== space.slug)
+        navigate(`/settings/spaces/${encodeURIComponent(saved.slug)}/general`, {
+          replace: true,
+          state: location.state,
+        });
+    } catch {
+      setSaveError(true);
+    }
   };
 
   return (
@@ -67,18 +110,21 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
           <Stack>
             <TextInput
               id="name"
-              label={t("Name")}
+              label={t("Space name")}
               placeholder={t("e.g Sales")}
               variant="filled"
               readOnly={readOnly}
+              disabled={updateSpaceMutation.isPending}
               {...form.getInputProps("name")}
             />
 
             <TextInput
               id="slug"
-              label={t("Slug")}
+              label={t("spaceAdmin.spaceAddress")}
+              description={`${window.location.origin}/s/${form.values.slug}`}
               variant="filled"
               readOnly={readOnly}
+              disabled={updateSpaceMutation.isPending}
               {...form.getInputProps("slug")}
             />
 
@@ -88,6 +134,7 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
               placeholder={t("e.g Space for sales team to collaborate")}
               variant="filled"
               readOnly={readOnly}
+              disabled={updateSpaceMutation.isPending}
               autosize
               minRows={1}
               maxRows={3}
@@ -96,11 +143,21 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
           </Stack>
 
           {!readOnly && (
-            <Group justify="flex-end" mt="md">
-              <Button type="submit" disabled={!form.isDirty()}>
-                {t("Save")}
-              </Button>
-            </Group>
+            <SettingsSaveBar
+              dirty={form.isDirty()}
+              pending={updateSpaceMutation.isPending}
+              error={saveError}
+              onCancel={() => {
+                form.setValues({
+                  name: space.name,
+                  description: space.description || "",
+                  slug: space.slug,
+                });
+                form.resetDirty();
+                setSaveError(false);
+                release();
+              }}
+            />
           )}
         </form>
       </Box>

@@ -10,9 +10,13 @@ import { useState } from "react";
 
 interface DeleteSpaceModalProps {
   space: ISpace;
+  returnTo?: string;
 }
 
-export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
+export default function DeleteSpaceModal({
+  space,
+  returnTo,
+}: DeleteSpaceModalProps) {
   const { t } = useTranslation();
   const [opened, { open, close }] = useDisclosure(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -41,7 +45,7 @@ export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
     try {
       // pass slug too so we can clear the local cache
       await deleteSpaceMutation.mutateAsync({ id: space.id, slug: space.slug });
-      navigate(APP_ROUTE.HOME);
+      navigate(returnTo ?? APP_ROUTE.HOME);
     } catch (error) {
       console.error("Failed to delete space", error);
     } finally {
@@ -51,7 +55,12 @@ export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
 
   return (
     <>
-      <Button onClick={open} variant="light" color="red">
+      <Button
+        onClick={open}
+        variant="light"
+        color="red"
+        c="var(--mantine-color-text)"
+      >
         {t("Delete")}
       </Button>
 
@@ -59,6 +68,7 @@ export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
         opened={opened}
         onClose={close}
         title={t("Are you sure you want to delete this space?")}
+        closeButtonProps={{ "aria-label": t("Close") }}
       >
         <Divider size="xs" mb="xs" />
         <Text>
@@ -77,6 +87,7 @@ export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
           {...confirmNameField.getInputProps()}
           variant="filled"
           placeholder={t("Confirm space name")}
+          aria-label={t("Confirm space name")}
           py="sm"
           data-autofocus
         />
@@ -84,7 +95,7 @@ export default function DeleteSpaceModal({ space }: DeleteSpaceModalProps) {
           <Button onClick={close} variant="default">
             {t("Cancel")}
           </Button>
-          <Button onClick={handleDelete} color="red" loading={isDeleting}>
+          <Button onClick={handleDelete} color="red.8" loading={isDeleting}>
             {t("Confirm")}
           </Button>
         </Group>

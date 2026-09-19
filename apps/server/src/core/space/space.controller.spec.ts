@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { SpaceAdministrationService } from './services/space-administration.service';
 import { SpaceController } from './space.controller';
 import { SpaceService } from './services/space.service';
 import { SpaceMemberService } from './services/space-member.service';
@@ -41,6 +42,7 @@ describe('SpaceController', () => {
     const moduleBuilder = Test.createTestingModule({
       controllers: [SpaceController],
       providers: [
+        { provide: SpaceAdministrationService, useValue: { list: jest.fn() } },
         { provide: SpaceService, useValue: mockSpaceService },
         { provide: SpaceMemberService, useValue: {} },
         { provide: SpaceMemberRepo, useValue: mockSpaceMemberRepo },
@@ -49,7 +51,8 @@ describe('SpaceController', () => {
         { provide: PageAccessService, useValue: mockPageAccessService },
         { provide: SpacePolicyService, useValue: mockSpacePolicy },
       ],
-    }).overrideGuard(JwtAuthGuard)
+    })
+      .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn(() => true) });
 
     const module: TestingModule = await moduleBuilder.compile();
@@ -96,7 +99,10 @@ describe('SpaceController', () => {
       'general',
       'workspace-1',
     );
-    expect(mockSpaceAbility.createForUser).toHaveBeenCalledWith(user, 'space-1');
+    expect(mockSpaceAbility.createForUser).toHaveBeenCalledWith(
+      user,
+      'space-1',
+    );
     expect(ability.cannot).toHaveBeenCalledWith(
       SpaceCaslAction.Read,
       SpaceCaslSubject.Settings,

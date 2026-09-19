@@ -1,4 +1,12 @@
-import { Group, Box, Button, TextInput, Stack, Textarea } from "@mantine/core";
+import {
+  Alert,
+  Group,
+  Box,
+  Button,
+  TextInput,
+  Stack,
+  Textarea,
+} from "@mantine/core";
 import React, { useEffect } from "react";
 import { useForm } from "@mantine/form";
 import { zodResolver } from "mantine-form-zod-resolver";
@@ -24,7 +32,11 @@ const formSchema = z.object({
 });
 type FormValues = z.infer<typeof formSchema>;
 
-export function CreateSpaceForm() {
+export function CreateSpaceForm({
+  administration = false,
+}: {
+  administration?: boolean;
+}) {
   const { t } = useTranslation();
   const createSpaceMutation = useCreateSpaceMutation();
   const navigate = useNavigate();
@@ -65,8 +77,16 @@ export function CreateSpaceForm() {
       description: data.description,
     };
 
-    const createdSpace = await createSpaceMutation.mutateAsync(spaceData);
-    navigate(getSpaceUrl(createdSpace.slug));
+    try {
+      const createdSpace = await createSpaceMutation.mutateAsync(spaceData);
+      navigate(
+        administration
+          ? `/settings/spaces/${createdSpace.slug}/general`
+          : getSpaceUrl(createdSpace.slug),
+      );
+    } catch {
+      // Keep the form open with its values for retry.
+    }
   };
 
   return (
@@ -86,7 +106,7 @@ export function CreateSpaceForm() {
             <TextInput
               withAsterisk
               id="slug"
-              label={t("Space slug")}
+              label={t("spaceAdmin.spaceAddress")}
               placeholder={t("e.g product")}
               variant="filled"
               {...form.getInputProps("slug")}
@@ -104,8 +124,15 @@ export function CreateSpaceForm() {
             />
           </Stack>
 
+          {createSpaceMutation.isError && (
+            <Alert mt="md" color="red" role="alert">
+              {t("spaceAdmin.saveFailed")}
+            </Alert>
+          )}
           <Group justify="flex-end" mt="md">
-            <Button type="submit">{t("Create")}</Button>
+            <Button type="submit" loading={createSpaceMutation.isPending}>
+              {t("Create")}
+            </Button>
           </Group>
         </form>
       </Box>

@@ -115,173 +115,131 @@ export class SpaceService {
     workspaceId: string,
     options: { canLoosenPolicy?: boolean } = {},
   ): Promise<Space> {
-    if (updateSpaceDto?.slug) {
-      const slugExists = await this.spaceRepo.slugExists(
-        updateSpaceDto.slug,
-        workspaceId,
+    const hasPolicyUpdate = [
+      'disablePublicSharing',
+      'enforceMfa',
+      'enforceSso',
+    ].some((key) => typeof updateSpaceDto[key] !== 'undefined');
+    if (
+      hasPolicyUpdate &&
+      !options.canLoosenPolicy &&
+      [
+        updateSpaceDto.disablePublicSharing,
+        updateSpaceDto.enforceMfa,
+        updateSpaceDto.enforceSso,
+      ].some((value) => value !== undefined && value !== true)
+    ) {
+      throw new ForbiddenException(
+        'Only workspace administrators can disable or reset a space policy override',
       );
-
-      if (slugExists) {
+    }
+    const result = await executeTx(this.db, async (trx) => {
+      const workspace = await this.workspaceRepo.findById(workspaceId, {
+        withLock: true,
+        trx,
+      });
+      const space = await this.spaceRepo.findById(
+        updateSpaceDto.spaceId,
+        workspaceId,
+        { withLock: true, trx },
+      );
+      if (!workspace || !space) throw new NotFoundException('Space not found');
+      if (
+        updateSpaceDto.slug &&
+        updateSpaceDto.slug.toLowerCase() !== space.slug.toLowerCase() &&
+        (await this.spaceRepo.slugExists(updateSpaceDto.slug, workspaceId, trx))
+      ) {
         throw new BadRequestException(
           'Space slug exists. Please use a unique space slug',
         );
       }
-    }
-
-    const hasPolicyUpdate =
-      typeof updateSpaceDto.disablePublicSharing !== 'undefined' ||
-      typeof updateSpaceDto.enforceMfa !== 'undefined' ||
-      typeof updateSpaceDto.enforceSso !== 'undefined';
-
-    if (hasPolicyUpdate) {
-      const requestedOverrides = [
-        updateSpaceDto.disablePublicSharing,
-        updateSpaceDto.enforceMfa,
-        updateSpaceDto.enforceSso,
-      ].filter((value) => typeof value !== 'undefined');
-
-      if (
-        !options.canLoosenPolicy &&
-        requestedOverrides.some((value) => value !== true)
-      ) {
-        throw new ForbiddenException(
-          'Only workspace administrators can disable or reset a space policy override',
-        );
-      }
-
-      await executeTx(this.db, async (trx) => {
-        const workspace = await this.workspaceRepo.findById(workspaceId, {
-          withLock: true,
-          trx,
-        });
-        const space = await this.spaceRepo.findById(
-          updateSpaceDto.spaceId,
-          workspaceId,
-          { withLock: true, trx },
-        );
-
-        if (!workspace || !space) {
-          throw new NotFoundException('Space not found');
-        }
-
-        const currentPolicy = this.spacePolicy.resolveFromSettings(
-          workspace,
-          space.settings,
-        );
-        const nextSettings = this.applyPolicyUpdates(
-          space.settings,
-          updateSpaceDto,
-        );
-        const nextPolicy = this.spacePolicy.resolveFromSettings(
-          workspace,
-          nextSettings,
-        );
-
+      const currentPolicy = this.spacePolicy.resolveFromSettings(
+        workspace,
+        space.settings,
+      );
+      const settings = this.applyPolicyUpdates(space.settings, updateSpaceDto);
+      const nextPolicy = this.spacePolicy.resolveFromSettings(
+        workspace,
+        settings,
+      );
+      if (hasPolicyUpdate && !options.canLoosenPolicy) {
+        const requested = [
+          updateSpaceDto.disablePublicSharing,
+          updateSpaceDto.enforceMfa,
+          updateSpaceDto.enforceSso,
+        ].filter((value) => typeof value !== 'undefined');
         if (
-          !options.canLoosenPolicy &&
+          requested.some((value) => value !== true) ||
           this.spacePolicy.isLoosening(
             currentPolicy.effective,
             nextPolicy.effective,
           )
         ) {
           throw new ForbiddenException(
-            'Only workspace administrators can loosen a space policy',
+            'Only workspace administrators can disable or reset a space policy override',
           );
         }
-
-        if (
-          !currentPolicy.effective.enforceSso &&
-          nextPolicy.effective.enforceSso
-        ) {
-          await this.assertSsoEnforcementReady(workspaceId, trx);
-        }
-
-        await this.spaceRepo.updateSpace(
-          { settings: nextSettings as any },
+      }
+      if (
+        !currentPolicy.effective.enforceSso &&
+        nextPolicy.effective.enforceSso
+      ) {
+        await this.assertSsoEnforcementReady(workspaceId, trx);
+      }
+      if (updateSpaceDto.documentFields)
+        settings.documentFields = {
+          ...settings.documentFields,
+          ...updateSpaceDto.documentFields,
+        };
+      if (typeof updateSpaceDto.dictionaryEnabled !== 'undefined')
+        settings.dictionary = {
+          ...settings.dictionary,
+          enabled: updateSpaceDto.dictionaryEnabled,
+        };
+      if (updateSpaceDto.tagSettings)
+        settings.tags = { ...settings.tags, ...updateSpaceDto.tagSettings };
+      if (typeof updateSpaceDto.headingNumberingEnabled !== 'undefined')
+        settings.headingNumbering = {
+          ...settings.headingNumbering,
+          enabled: updateSpaceDto.headingNumberingEnabled,
+        };
+      if (updateSpaceDto.customLinks)
+        settings.customLinks = {
+          links: (updateSpaceDto.customLinks.links ?? []).map((link) => ({
+            id: link.id || randomUUID(),
+            label: link.label.trim(),
+            url: link.url.trim(),
+            icon: link.icon,
+          })),
+        };
+      const updated = await this.spaceRepo.updateSpace(
+        {
+          name: updateSpaceDto.name,
+          description: updateSpaceDto.description,
+          slug: updateSpaceDto.slug,
+          settings: settings as any,
+        },
+        updateSpaceDto.spaceId,
+        workspaceId,
+        trx,
+      );
+      if (
+        !currentPolicy.effective.disablePublicSharing &&
+        nextPolicy.effective.disablePublicSharing
+      ) {
+        await this.shareRepo.deleteBySpaceId(
           updateSpaceDto.spaceId,
           workspaceId,
           trx,
         );
-
-        if (
-          !currentPolicy.effective.disablePublicSharing &&
-          nextPolicy.effective.disablePublicSharing
-        ) {
-          await this.shareRepo.deleteBySpaceId(
-            updateSpaceDto.spaceId,
-            workspaceId,
-            trx,
-          );
-        }
-      });
-
+      }
+      return this.spacePolicy.withPolicy(updated, workspace) as Space;
+    });
+    if (hasPolicyUpdate)
       await this.eventEmitter?.emitAsync(EventName.AUTHORIZATION_CHANGED, {
         workspaceId,
         spaceId: updateSpaceDto.spaceId,
       });
-    }
-
-    delete updateSpaceDto.disablePublicSharing;
-    delete updateSpaceDto.enforceMfa;
-    delete updateSpaceDto.enforceSso;
-
-    if (updateSpaceDto.documentFields) {
-      await this.spaceRepo.updateDocumentFieldsSettings(
-        updateSpaceDto.spaceId,
-        workspaceId,
-        updateSpaceDto.documentFields,
-      );
-    }
-
-    if (typeof updateSpaceDto.dictionaryEnabled !== 'undefined') {
-      await this.spaceRepo.updateDictionarySettings(
-        updateSpaceDto.spaceId,
-        workspaceId,
-        { enabled: updateSpaceDto.dictionaryEnabled },
-      );
-    }
-
-    if (updateSpaceDto.tagSettings) {
-      await this.spaceRepo.updateTagSettings(
-        updateSpaceDto.spaceId,
-        workspaceId,
-        updateSpaceDto.tagSettings,
-      );
-    }
-
-    if (typeof updateSpaceDto.headingNumberingEnabled !== 'undefined') {
-      await this.spaceRepo.updateHeadingNumberingSettings(
-        updateSpaceDto.spaceId,
-        workspaceId,
-        { enabled: updateSpaceDto.headingNumberingEnabled },
-      );
-    }
-
-    if (updateSpaceDto.customLinks) {
-      const links = (updateSpaceDto.customLinks.links ?? []).map((link) => ({
-        id: link.id || randomUUID(),
-        label: link.label.trim(),
-        url: link.url.trim(),
-        icon: link.icon,
-      }));
-
-      await this.spaceRepo.updateCustomLinksSettings(
-        updateSpaceDto.spaceId,
-        workspaceId,
-        { links },
-      );
-    }
-
-    const updatedSpace = await this.spaceRepo.updateSpace(
-      {
-        name: updateSpaceDto.name,
-        description: updateSpaceDto.description,
-        slug: updateSpaceDto.slug,
-      },
-      updateSpaceDto.spaceId,
-      workspaceId,
-    );
-
     if (
       updateSpaceDto.documentFields ||
       typeof updateSpaceDto.dictionaryEnabled !== 'undefined'
@@ -292,11 +250,7 @@ export class SpaceService {
         })
         .catch(() => undefined);
     }
-
-    const workspace = await this.workspaceRepo.findById(workspaceId);
-    return workspace && updatedSpace
-      ? (this.spacePolicy.withPolicy(updatedSpace, workspace) as Space)
-      : updatedSpace;
+    return result;
   }
 
   async getSpaceInfo(spaceId: string, workspaceId: string): Promise<Space> {
@@ -374,11 +328,7 @@ export class SpaceService {
         throw new NotFoundException('Space not found');
       }
       if (
-        await this.spaceRepo.hasImportCleanupBlockers(
-          spaceId,
-          workspaceId,
-          trx,
-        )
+        await this.spaceRepo.hasImportCleanupBlockers(spaceId, workspaceId, trx)
       ) {
         throw new ConflictException({
           code: 'space_import_cleanup_required',

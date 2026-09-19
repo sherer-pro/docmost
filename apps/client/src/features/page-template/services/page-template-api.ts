@@ -5,7 +5,6 @@ import type {
   PageTemplatePolicyGroupsQuery,
   PageTemplatePolicyGroupsResponse,
   PageTemplateSpacePolicy,
-  PageTemplateWorkspacePolicy,
 } from "@docmost/api-contract";
 import type {
   PageTemplateCapabilities,
@@ -207,24 +206,7 @@ export type {
   PageTemplateAction,
   PageTemplateGroupPolicy,
   PageTemplateSpacePolicy,
-  PageTemplateWorkspacePolicy,
 } from "@docmost/api-contract";
-
-export async function getPageTemplateWorkspacePolicy() {
-  const response = await api.get("/pages/templates/policies/workspace");
-  return response.data as PageTemplateWorkspacePolicy;
-}
-
-export async function updatePageTemplateWorkspacePolicy(
-  policy: PageTemplateWorkspacePolicy,
-  enabled: boolean,
-) {
-  const response = await api.patch("/pages/templates/policies/workspace", {
-    enabled,
-    expectedRevision: policy.revision,
-  });
-  return response.data as PageTemplateWorkspacePolicy;
-}
 
 export async function getPageTemplateSpacePolicy(spaceId: string) {
   const response = await api.get(`/pages/templates/policies/spaces/${spaceId}`);

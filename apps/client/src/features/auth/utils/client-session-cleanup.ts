@@ -9,6 +9,7 @@ const SENSITIVE_LOCAL_STORAGE_PREFIXES = ["docmost:database-table-state:"];
 const SENSITIVE_SESSION_STORAGE_PREFIXES = [
   "docmost:ai-draft:",
   "docmost:idempotency:",
+  "docmost:space-administration:",
 ];
 
 function removeStorageEntries(

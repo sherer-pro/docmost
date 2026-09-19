@@ -194,16 +194,13 @@ export class SpaceMemberRepo {
     return result;
   }
 
-
   /**
    * Returns effective user members of a space.
    * Includes direct user members and users inherited through group memberships.
    */
-  async getSpaceUserMembers(
-    spaceId: string,
-    pagination: PaginationOptions,
-  ) {
-    const limit = pagination.limit && pagination.limit > 0 ? pagination.limit : 20;
+  async getSpaceUserMembers(spaceId: string, pagination: PaginationOptions) {
+    const limit =
+      pagination.limit && pagination.limit > 0 ? pagination.limit : 20;
 
     let query = this.db
       .selectFrom('users')
@@ -318,7 +315,7 @@ export class SpaceMemberRepo {
 
   getUserSpaceIdsQuery(
     userId: string,
-    opts?: { includeArchived?: boolean },
+    opts?: { includeArchived?: boolean; activeMembershipsOnly?: boolean },
   ) {
     const includeArchived = opts?.includeArchived === true;
 
@@ -327,6 +324,9 @@ export class SpaceMemberRepo {
       .innerJoin('spaces', 'spaces.id', 'spaceMembers.spaceId')
       .select('spaces.id')
       .where('userId', '=', userId)
+      .$if(opts?.activeMembershipsOnly === true, (qb) =>
+        qb.where('spaceMembers.deletedAt', 'is', null),
+      )
       .$if(!includeArchived, (qb) => qb.where('spaces.archivedAt', 'is', null))
       .union(
         this.db
@@ -335,6 +335,13 @@ export class SpaceMemberRepo {
           .innerJoin('spaces', 'spaces.id', 'spaceMembers.spaceId')
           .select('spaces.id')
           .where('groupUsers.userId', '=', userId)
+          .$if(opts?.activeMembershipsOnly === true, (qb) =>
+            qb
+              .innerJoin('groups', 'groups.id', 'spaceMembers.groupId')
+              .where('spaceMembers.deletedAt', 'is', null)
+              .where('groups.deletedAt', 'is', null)
+              .whereRef('groups.workspaceId', '=', 'spaces.workspaceId'),
+          )
           .$if(!includeArchived, (qb) =>
             qb.where('spaces.archivedAt', 'is', null),
           ),
@@ -356,11 +363,21 @@ export class SpaceMemberRepo {
       .union(
         this.db
           .selectFrom('pageAccessRules')
-          .innerJoin('groupUsers', 'groupUsers.groupId', 'pageAccessRules.groupId')
+          .innerJoin(
+            'groupUsers',
+            'groupUsers.groupId',
+            'pageAccessRules.groupId',
+          )
           .innerJoin('pages', 'pages.id', 'pageAccessRules.pageId')
           .innerJoin('spaces', 'spaces.id', 'pageAccessRules.spaceId')
           .select('spaces.id')
           .where('groupUsers.userId', '=', userId)
+          .$if(opts?.activeMembershipsOnly === true, (qb) =>
+            qb
+              .innerJoin('groups', 'groups.id', 'pageAccessRules.groupId')
+              .where('groups.deletedAt', 'is', null)
+              .whereRef('groups.workspaceId', '=', 'spaces.workspaceId'),
+          )
           .where('pageAccessRules.principalType', '=', 'group')
           .where('pageAccessRules.effect', '=', 'allow')
           .where(({ not, exists, selectFrom }) =>
@@ -393,7 +410,11 @@ export class SpaceMemberRepo {
       .selectFrom('spaces')
       .selectAll()
       .select((eb) => [this.spaceRepo.withMemberCount(eb)])
-      .where('id', 'in', this.getUserSpaceIdsQuery(userId, { includeArchived }));
+      .where(
+        'id',
+        'in',
+        this.getUserSpaceIdsQuery(userId, { includeArchived }),
+      );
 
     if (pagination.query) {
       query = query.where((eb) =>

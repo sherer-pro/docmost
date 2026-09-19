@@ -550,11 +550,7 @@ export class PageTemplateInstanceService {
             deferSideEffects: true,
           },
         );
-        await this.persistCreatedPageSideEffects(
-          created,
-          attachmentRows,
-          trx,
-        );
+        await this.persistCreatedPageSideEffects(created, attachmentRows, trx);
         return created;
       });
       await this.finalizeCreatedPageOperation(operation, page, user);
@@ -762,10 +758,7 @@ export class PageTemplateInstanceService {
     operation: any,
     user: User,
     notFoundMessage: string,
-  ): Promise<
-    | { page: Page; idempotent: true }
-    | { targetPageId: string }
-  > {
+  ): Promise<{ page: Page; idempotent: true } | { targetPageId: string }> {
     if (operation.status === 'completed' && operation.resultPageId) {
       const page = await this.replayCreatedPageOperation(
         operation,
@@ -1614,10 +1607,7 @@ export class PageTemplateInstanceService {
       this.policy.resolveForUser(user.workspaceId, spaceId, user.id),
       this.spaceAbility.createForUser(user, spaceId),
     ]);
-    const enabled =
-      effective.systemEnabled &&
-      effective.workspaceEnabled &&
-      effective.templatesEnabled;
+    const enabled = effective.systemEnabled && effective.templatesEnabled;
     return {
       effective,
       capabilities: {

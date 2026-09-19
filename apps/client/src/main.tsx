@@ -7,10 +7,10 @@ import "@/features/dictionary/styles/dictionary-highlight.css";
 import "@/styles/accessibility.css";
 
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
+import { appRoutes } from "./App.tsx";
 import { mantineCssResolver, theme } from "@/theme";
 import { Center, Loader, MantineProvider } from "@mantine/core";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ModalsProvider } from "@mantine/modals";
 import { Notifications } from "@mantine/notifications";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -33,6 +33,8 @@ registerLogoutSync(async () => {
   window.location.replace(APP_ROUTE.AUTH.LOGIN);
 });
 
+const router = createBrowserRouter(appRoutes);
+
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement,
 );
@@ -49,25 +51,16 @@ void i18nReady
   .catch(() => undefined)
   .then(() =>
     root.render(
-      <BrowserRouter>
-        <MantineProvider
-          theme={theme}
-          cssVariablesResolver={mantineCssResolver}
-        >
-          <ModalsProvider>
-            <QueryClientProvider client={queryClient}>
-              <Notifications
-                position="bottom-center"
-                limit={3}
-                zIndex={10000}
-              />
-              <HelmetProvider>
-                <App />
-              </HelmetProvider>
-            </QueryClientProvider>
-          </ModalsProvider>
-        </MantineProvider>
-      </BrowserRouter>,
+      <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
+        <ModalsProvider>
+          <QueryClientProvider client={queryClient}>
+            <Notifications position="bottom-center" limit={3} zIndex={10000} />
+            <HelmetProvider>
+              <RouterProvider router={router} />
+            </HelmetProvider>
+          </QueryClientProvider>
+        </ModalsProvider>
+      </MantineProvider>,
     ),
   );
 

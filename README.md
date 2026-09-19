@@ -445,7 +445,7 @@ The editor includes the following additional capabilities:
 
 - published, immutable linked-template revisions with content-only background synchronization, localized progress and recovery states, version comparison, and safe detach or independent-copy actions;
 
-- layered deployment, workspace, space, and group template policies with explicit effective results; workspace owners/admins and space admins ignore group overrides but still obey the higher-level feature switches;
+- deployment, space, and group template policies with explicit saves and revision checks; workspace owners/admins and space admins ignore group overrides but still obey the server and space switches; space settings use dedicated section pages and an administrative list with search, archive filters, and safe feature summaries (see [space administration](docs/SPACE_ADMINISTRATION.md));
 
 - synced blocks created from selected document fragments, with reference lookup and safe unsyncing;
 
@@ -967,8 +967,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.3.0`. Follow the
-[v1.3.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.3.0.md)
+For the current candidate the only accepted release tag is `v1.3.1`. Follow the
+[v1.3.1 upgrade and rollback notes](./apps/server/docs/release-notes/v1.3.1.md)
 before deployment.
 
 For backend changes:

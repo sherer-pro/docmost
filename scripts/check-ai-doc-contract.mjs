@@ -51,6 +51,7 @@ export const AI_GUIDE_MIGRATION_FILES = [
   "20260811T190000-rag-sync-target-verification.ts",
   "20260820T130000-knowledge-projection-dictionary-search.ts",
   "20260820T140000-search-dictionary-database-projection.ts",
+  "20260919T180000-space-owned-template-policy.ts",
 ];
 
 const LOGIC_PATH_PATTERNS = [
@@ -128,10 +129,7 @@ function flatten(value, prefix = "", result = {}) {
   return result;
 }
 
-export function validateAiGuideRequiredFacts({
-  guideContract,
-  localeGuides,
-}) {
+export function validateAiGuideRequiredFacts({ guideContract, localeGuides }) {
   const issues = [];
   const factIds = new Set();
   for (const fact of guideContract.requiredFacts ?? []) {
@@ -376,9 +374,7 @@ async function validateStaticContract() {
       }
     }
   }
-  issues.push(
-    ...validateAiGuideRequiredFacts({ guideContract, localeGuides }),
-  );
+  issues.push(...validateAiGuideRequiredFacts({ guideContract, localeGuides }));
 
   const inventoryRoutes = new Set(
     files.inventory

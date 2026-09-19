@@ -2283,7 +2283,6 @@ export class AiToolRegistryService {
     );
     if (
       !policy.systemEnabled ||
-      !policy.workspaceEnabled ||
       !policy.templatesEnabled ||
       !policy.allowedActions.some((action) =>
         [

@@ -332,6 +332,7 @@ export function useAddSpaceMemberMutation() {
       queryClient.invalidateQueries({
         queryKey: ["spaceMembers", variables.spaceId],
       });
+      void queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
@@ -351,6 +352,7 @@ export function useRemoveSpaceMemberMutation() {
       queryClient.invalidateQueries({
         queryKey: ["spaceMembers", variables.spaceId],
       });
+      void queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
@@ -371,6 +373,7 @@ export function useChangeSpaceMemberRoleMutation() {
       queryClient.refetchQueries({
         queryKey: ["spaceMembers", variables.spaceId],
       });
+      void queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
