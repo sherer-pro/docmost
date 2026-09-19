@@ -47,6 +47,35 @@ async function makeEditable(page: import("@playwright/test").Page) {
   await expect(editor).toHaveAttribute("contenteditable", "true");
 }
 
+async function openDocumentSettings(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Space menu" }).click();
+  await page.getByRole("menuitem", { name: "Space settings" }).click();
+  const sectionSelector = page.getByRole("textbox", {
+    name: "Section",
+    exact: true,
+  });
+  await expect(page.locator("main").getByRole("heading").first()).toBeVisible();
+  if (await sectionSelector.isVisible()) {
+    await sectionSelector.click();
+    await page.getByRole("option", { name: "Documents", exact: true }).click();
+  } else {
+    await page
+      .getByRole("navigation", { name: "Space settings" })
+      .getByRole("link", { name: "Documents", exact: true })
+      .click();
+  }
+  const settings = page.getByRole("region", { name: "Documents", exact: true });
+  await expect(settings).toBeVisible();
+  return settings;
+}
+
+async function returnToDocument(page: import("@playwright/test").Page) {
+  await page.goBack();
+  await page.goBack();
+  await expect(mainEditor(page)).toBeVisible();
+  await makeEditable(page);
+}
+
 async function focusEditorEnd(page: import("@playwright/test").Page) {
   const paragraph = mainEditor(page).locator("p").last();
   const box = await paragraph.boundingBox();
@@ -229,23 +258,13 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     await page.evaluate(() => {
       (window as any).__tagSettingsMarker = "same-document";
     });
-    await page.getByRole("button", { name: "Space menu" }).click();
-    await page.getByRole("menuitem", { name: "Space settings" }).click();
-    const modal = page.getByRole("dialog", { name: /Tag audit/ });
-    await expect(modal).toBeVisible();
-    const labelsY = (await modal
-      .getByText("Labels", { exact: true })
-      .boundingBox())!.y;
-    const tagsY = (await modal
-      .getByText("Tags", { exact: true })
-      .boundingBox())!.y;
-    const dictionaryY = (await modal
-      .getByText("Dictionary", { exact: true })
-      .boundingBox())!.y;
-    expect(labelsY).toBeLessThan(tagsY);
-    expect(tagsY).toBeLessThan(dictionaryY);
-
-    const futureCheckbox = modal.getByRole("checkbox", { name: /Future/ });
+    const settings = await openDocumentSettings(page);
+    await expect(settings.getByText("Labels", { exact: true })).toBeVisible();
+    await expect(settings.getByText("Tags", { exact: true })).toBeVisible();
+    await expect(
+      settings.getByRole("checkbox", { name: "Enable dictionary", exact: true }),
+    ).toBeVisible();
+    const futureCheckbox = settings.getByRole("checkbox", { name: /Future/ });
     await expect(futureCheckbox).not.toBeChecked();
     const enableFutureResponse = page.waitForResponse(
       (response) =>
@@ -256,9 +275,13 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     await futureCheckbox.evaluate((element: HTMLInputElement) =>
       element.click(),
     );
+    await settings.getByRole("button", { name: "Save", exact: true }).click();
     expect((await enableFutureResponse).ok()).toBe(true);
     await expect(futureCheckbox).toBeChecked();
-    await modal.getByRole("button", { name: "Close" }).click();
+    await expect(
+      settings.getByRole("button", { name: "Save", exact: true }),
+    ).toBeDisabled();
+    await returnToDocument(page);
     expect(await page.evaluate(() => (window as any).__tagSettingsMarker)).toBe(
       "same-document",
     );
@@ -270,11 +293,8 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     await slashMenu.getByText("Tag Core", { exact: true }).click();
     await expect(editor.locator('[data-tag-value="core"]')).toHaveCount(2);
 
-    await page.getByRole("button", { name: "Space menu" }).click();
-    await page.getByRole("menuitem", { name: "Space settings" }).click();
-    const pilotCheckbox = page
-      .getByRole("dialog", { name: /Tag audit/ })
-      .getByRole("checkbox", { name: /Pilot/ });
+    const updatedSettings = await openDocumentSettings(page);
+    const pilotCheckbox = updatedSettings.getByRole("checkbox", { name: /Pilot/ });
     const disablePilotResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
@@ -284,11 +304,12 @@ test("keeps inline tags space-scoped across editors, clipboard and archive impor
     await pilotCheckbox.evaluate((element: HTMLInputElement) =>
       element.click(),
     );
+    await updatedSettings.getByRole("button", { name: "Save", exact: true }).click();
     expect((await disablePilotResponse).ok()).toBe(true);
-    await page
-      .getByRole("dialog", { name: /Tag audit/ })
-      .getByRole("button", { name: "Close" })
-      .click();
+    await expect(
+      updatedSettings.getByRole("button", { name: "Save", exact: true }),
+    ).toBeDisabled();
+    await returnToDocument(page);
 
     slashMenu = await openTagSlashMenu(page);
     await expect(slashMenu.getByText("Tag Pilot", { exact: true })).toHaveCount(

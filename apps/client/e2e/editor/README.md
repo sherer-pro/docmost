@@ -1,8 +1,9 @@
 # Editor regression audit
 
 This suite exercises the fork-specific editor surface against a running Docmost
-instance. It creates an isolated space, enables the page-template policy only
-for the duration of the run, and restores the workspace policy afterwards.
+instance. It creates an isolated space and enables its local page-template
+policy for the run. Workspace template policies are retired; the runner never
+changes them. The deployment template switch must already be enabled.
 
 Install the shared Python verifier dependencies and run from the repository
 root with credentials supplied only at runtime:
