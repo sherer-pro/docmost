@@ -36,6 +36,8 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
   const [replaceText, setReplaceText] = useState("");
   const [pageFindState, setPageFindState] = useAtom(searchAndReplaceStateAtom);
   const inputRef = useRef(null);
+  const canSearch = () =>
+    Boolean(editor && !editor.isDestroyed && editor.storage.searchAndReplace);
 
   const [replaceButton, replaceButtonToggle] = useToggle([
     { isReplaceShow: false, color: "gray" },
@@ -64,13 +66,13 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
       replaceButtonToggle();
     }
     // Clear search term in editor
-    if (editor) {
+    if (canSearch()) {
       editor.commands.setSearchTerm("");
     }
   };
 
   const goToSelection = () => {
-    if (!editor) return;
+    if (!canSearch()) return;
 
     const { results, resultIndex } = editor.storage.searchAndReplace;
     //TODO: check type error
@@ -90,33 +92,39 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
   };
 
   const next = () => {
+    if (!canSearch()) return;
     editor.commands.nextSearchResult();
     goToSelection();
   };
 
   const previous = () => {
+    if (!canSearch()) return;
     editor.commands.previousSearchResult();
     goToSelection();
   };
 
   const replace = () => {
+    if (!canSearch()) return;
     editor.commands.setReplaceTerm(replaceText);
     editor.commands.replace();
     goToSelection();
   };
 
   const replaceAll = () => {
+    if (!canSearch()) return;
     editor.commands.setReplaceTerm(replaceText);
     editor.commands.replaceAll();
   };
 
   useEffect(() => {
+    if (!canSearch()) return;
     editor.commands.setSearchTerm(searchText);
     editor.commands.resetIndex();
     editor.commands.selectCurrentItem();
-  }, [searchText]);
+  }, [editor, searchText]);
 
   const handleOpenEvent = (e) => {
+    if (!canSearch()) return;
     setPageFindState({ isOpen: true });
     const selectedText = editor.state.doc.textBetween(
       editor.state.selection.from,
@@ -146,13 +154,14 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
         handleCloseEvent,
       );
     };
-  }, [pageFindState.isOpen]);
+  }, [editor, pageFindState.isOpen]);
 
   useEffect(() => {
+    if (!canSearch()) return;
     editor.commands.setCaseSensitive(caseSensitive.isCaseSensitive);
     editor.commands.resetIndex();
     goToSelection();
-  }, [caseSensitive]);
+  }, [editor, caseSensitive]);
 
   const resultsCount = useMemo(
     () =>

@@ -836,6 +836,8 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
         exact: true,
       },
     );
+    await workflowEditor.focus();
+    await expect(workflowEditor).toBeFocused();
     await selectionText.selectText();
     const createSyncedBlockButton = page.getByRole("button", {
       name: "Create synced block",
