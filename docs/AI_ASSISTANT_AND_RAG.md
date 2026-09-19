@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 22 -->
+<!-- ai-admin-guide-contract-version: 23 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -902,6 +902,8 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20260827T010000-ai-rag-search-done-filter.ts`](../apps/server/src/database/migrations/20260827T010000-ai-rag-search-done-filter.ts)                           | Adds the disabled-by-default `rag_search_done_only` space policy and a partial workspace/space/status index for active page-backed RAG sources. Existing spaces preserve their current output.                                                                                                     | Drops the status index and policy column; the runtime again uses the broad explicit-exclusion policy only.                                                                                     |
 | [`20260903T010000-ai-rag-hybrid-rewrite.ts`](../apps/server/src/database/migrations/20260903T010000-ai-rag-hybrid-rewrite.ts)                                   | Adds per-space vector/hybrid retrieval mode and contextual follow-up rewrite switches, both backfilled to safe disabled-compatible defaults. Adds owner-visible run audit fields for the effective retrieval query and rewrite outcome, safe error, latency, and token counts.                     | Removes the switches and rewrite audit fields. Existing retrieval returns to vector-only behavior and the rewrite audit history is lost.                                                       |
 
+| [`20260919T180000-space-owned-template-policy.ts`](../apps/server/src/database/migrations/20260919T180000-space-owned-template-policy.ts) | Removes the workspace template gate from AI tools and editor decisions. Folds each old workspace flag into its local space flag, treats missing workspace policies as disabled, and saves policy snapshots. The server switch is excluded from migration. | Restores exact original local policies only while all policy snapshots remain unchanged; refuses after any later policy edit, insertion, or removal. Template contents and linked pages are preserved. |
+
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
 is not an operational feature rollback unless the applicable row above states
@@ -1298,6 +1300,18 @@ described in JSON Schema.
 | `listPageTemplates`          | optional `query`, `limit`                             | readable regular and synchronized templates in the key/run's current space; metadata only, maximum 50                        |
 | `getPageTemplateMetadata`    | `pageId`                                              | safe metadata, kind, and archive state for one readable regular or synchronized template in the current scoped space         |
 | `listPageTemplateUsages`     | `pageId`, optional `limit`                            | readable pages created from the template, excluding detached pages; maximum 50                                               |
+
+Template tools use the server `PAGE_TEMPLATES_ENABLED` switch, the space's
+local template enablement and action permissions, and existing group rules.
+The former workspace template switch no longer participates. Manage templates
+at `/settings/spaces/:spaceSlug/templates`; compatibility reads retain
+`workspaceEnabled: true`, the legacy workspace GET is marked `deprecated`, and
+its PATCH returns HTTP 410. Migration `20260919T180000-space-owned-template-policy.ts`
+folds the previous workspace gate into local policies and records rollback
+snapshots; it does not change template content or linked pages. See
+[space administration and template policies](SPACE_ADMINISTRATION.md) for the
+migration formula and safe rollback boundary. Workspace AI/MCP allowlists are
+independent of this retired template switch and continue to apply.
 
 Paginated built-in reads use opaque versioned keyset cursors bound to the tool
 name and target resource. Replaying a cursor for another page, database, or

@@ -267,6 +267,13 @@ function AiSpaceProviderSettings({
   });
 
   useEffect(() => {
+    if (
+      form.isDirty() ||
+      clearApiKey ||
+      clearRetrievalApiKey ||
+      clearOpenWebUiApiKey
+    )
+      return;
     if (!configQuery.data) {
       form.setValues(DEFAULT_FORM);
       return;

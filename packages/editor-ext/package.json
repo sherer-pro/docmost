@@ -26,7 +26,7 @@
     "@floating-ui/dom": "^1.7.3",
     "@joplin/turndown": "^4.0.74",
     "@joplin/turndown-plugin-gfm": "^1.0.56",
-    "@tiptap/core": "3.17.1",
+    "@tiptap/core": "3.30.5",
     "@tiptap/extension-code-block": "3.17.1",
     "@tiptap/extension-heading": "3.17.1",
     "@tiptap/extension-highlight": "3.17.1",
@@ -35,7 +35,7 @@
     "@tiptap/extension-table": "3.17.1",
     "@tiptap/extension-unique-id": "^3.17.1",
     "@tiptap/html": "3.17.1",
-    "@tiptap/pm": "3.17.1",
+    "@tiptap/pm": "3.30.5",
     "@tiptap/starter-kit": "3.17.1",
     "@tiptap/suggestion": "3.17.1",
     "diff": "8.0.3",
@@ -43,8 +43,8 @@
     "image-dimensions": "^2.5.0",
     "marked": "13.0.3",
     "nanoid": "3.3.18",
-    "prosemirror-state": "1.4.3",
-    "prosemirror-view": "1.40.0",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.42.4",
     "rfc6902": "5.1.2"
   },
   "devDependencies": {

@@ -89,6 +89,9 @@ graphify-out/*
 # TypeScript incremental build metadata
 *.tsbuildinfo
 
+# Local space administration browser evidence
+/artifacts/space-administration/
+
 # Windows
 Thumbs.db
 Desktop.ini

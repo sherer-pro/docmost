@@ -50,6 +50,8 @@ import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decor
 import { FastifyRequest } from 'fastify';
 import { SpacePolicyService } from '../space-policy/space-policy.service';
 import type { SpacePolicyContext } from '@docmost/api-contract';
+import { SpaceAdministrationService } from './services/space-administration.service';
+import { SpaceAdministrationDto } from './dto/space-administration.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('spaces')
@@ -62,6 +64,7 @@ export class SpaceController {
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly pageAccessService: PageAccessService,
     private readonly spacePolicy: SpacePolicyService,
+    private readonly administration: SpaceAdministrationService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -83,6 +86,22 @@ export class SpaceController {
   }
 
   @AuthPolicyScope('bootstrap')
+  @Get('administration')
+  async listAdministration(
+    @Query() query: SpaceAdministrationDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.administration.list(
+      user,
+      workspace,
+      (req as any).user?.session ?? (req.raw as any).userSession,
+      query,
+    );
+  }
+
+  @AuthPolicyScope('bootstrap')
   @Get('policy-context')
   async getSpacePolicyContext(
     @Query() query: SpacePolicyContextQueryDto,
@@ -99,8 +118,7 @@ export class SpaceController {
       throw new NotFoundException('Space not found');
     }
 
-    const session =
-      (req as any).user?.session ?? (req.raw as any).userSession;
+    const session = (req as any).user?.session ?? (req.raw as any).userSession;
     const authentication = this.spacePolicy.evaluateAuthentication(
       target.policy.effective,
       session,
@@ -201,8 +219,7 @@ export class SpaceController {
       { ...updateSpaceDto, spaceId },
       workspace.id,
       {
-        canLoosenPolicy:
-          user.role === 'owner' || user.role === 'admin',
+        canLoosenPolicy: user.role === 'owner' || user.role === 'admin',
       },
     );
   }

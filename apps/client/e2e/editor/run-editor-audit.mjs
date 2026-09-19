@@ -253,7 +253,6 @@ await ensureRuntimeAuth();
 const api = await createApi();
 let state;
 let exitCode = 1;
-let originalWorkspaceTemplatePolicy;
 let sharedAuditMemberUserId;
 let restoreAdminAiPanel = false;
 let originalAdminLocale;
@@ -277,22 +276,6 @@ try {
       }),
     );
     restoreAdminAiPanel = true;
-  }
-  originalWorkspaceTemplatePolicy = await responseJson(
-    await api.get("/api/pages/templates/policies/workspace"),
-  );
-  if (!originalWorkspaceTemplatePolicy.systemEnabled) {
-    throw new Error("Page templates are disabled by the deployment policy");
-  }
-  if (!originalWorkspaceTemplatePolicy.enabled) {
-    await responseJson(
-      await api.patch("/api/pages/templates/policies/workspace", {
-        data: {
-          enabled: true,
-          expectedRevision: originalWorkspaceTemplatePolicy.revision,
-        },
-      }),
-    );
   }
   const space = await responseJson(
     await api.post("/api/spaces", {
@@ -319,6 +302,9 @@ try {
   const spaceTemplatePolicy = await responseJson(
     await api.get(`/api/pages/templates/policies/spaces/${space.id}`),
   );
+  if (!spaceTemplatePolicy.systemEnabled) {
+    throw new Error("Page templates are disabled by the deployment policy");
+  }
   await responseJson(
     await api.put(`/api/pages/templates/policies/spaces/${space.id}`, {
       data: {
@@ -426,27 +412,6 @@ try {
         data: { aiPanelOpen: true },
       }),
     ).catch(() => undefined);
-  }
-  if (
-    originalWorkspaceTemplatePolicy &&
-    originalWorkspaceTemplatePolicy.systemEnabled
-  ) {
-    const currentPolicy = await responseJson(
-      await api.get("/api/pages/templates/policies/workspace"),
-    ).catch(() => null);
-    if (
-      currentPolicy &&
-      currentPolicy.enabled !== originalWorkspaceTemplatePolicy.enabled
-    ) {
-      await responseJson(
-        await api.patch("/api/pages/templates/policies/workspace", {
-          data: {
-            enabled: originalWorkspaceTemplatePolicy.enabled,
-            expectedRevision: currentPolicy.revision,
-          },
-        }),
-      ).catch(() => undefined);
-    }
   }
   await api.dispose();
 }

@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "anchors": [
     "assistant",
     "retrieval",
@@ -112,7 +112,6 @@
   ],
   "requiredKeys": [
     "description",
-    "knowledgeAccessDoneOnly",
     "diagram.expand",
     "diagram.invalid",
     "diagram.mcp.caption",
@@ -140,6 +139,7 @@
     "diagram.rag.textAlternative.step2",
     "diagram.rag.textAlternative.step3",
     "diagram.rag.textAlternative.step4",
+    "knowledgeAccessDoneOnly",
     "labels.environment",
     "labels.openSettings",
     "labels.owner",
@@ -246,6 +246,8 @@
     "security.principles.separateCredentials.title",
     "security.principles.stopControls.description",
     "security.principles.stopControls.title",
+    "security.principles.templates.description",
+    "security.principles.templates.title",
     "security.scenarioLabel",
     "security.title",
     "tab",
@@ -272,16 +274,16 @@
     "troubleshooting.rows.leaseLost.signal",
     "troubleshooting.rows.runtimeStopped.action",
     "troubleshooting.rows.runtimeStopped.signal",
-    "troubleshooting.rows.targetMismatch.action",
-    "troubleshooting.rows.targetMismatch.signal",
-    "troubleshooting.rows.writerVerification.action",
-    "troubleshooting.rows.writerVerification.signal",
     "troubleshooting.rows.sourceAccessChanged.action",
     "troubleshooting.rows.sourceAccessChanged.signal",
     "troubleshooting.rows.sourceRemoved.action",
     "troubleshooting.rows.sourceRemoved.signal",
     "troubleshooting.rows.sourceRestored.action",
     "troubleshooting.rows.sourceRestored.signal",
+    "troubleshooting.rows.targetMismatch.action",
+    "troubleshooting.rows.targetMismatch.signal",
+    "troubleshooting.rows.writerVerification.action",
+    "troubleshooting.rows.writerVerification.signal",
     "troubleshooting.title"
   ]
 }

@@ -31,7 +31,6 @@ import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
 import { modals } from "@mantine/modals";
-import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
 import {
   useGetSpaceBySlugQuery,
   useUpdateSpaceMutation,
@@ -93,8 +92,7 @@ export function SpaceSidebar() {
     INITIAL_TREE_BULK_STATE,
   );
   const location = useLocation();
-  const [opened, { open: openSettings, close: closeSettings }] =
-    useDisclosure(false);
+
   const [
     customLinkModalOpened,
     { open: openCustomLinkModal, close: closeCustomLinkModal },
@@ -458,7 +456,9 @@ export function SpaceSidebar() {
                 canExportSpace) && (
                 <SpaceMenu
                   spaceId={space.id}
-                  onSpaceSettings={openSettings}
+                  onSpaceSettings={() =>
+                    navigate(`/settings/spaces/${space.slug}/general`)
+                  }
                   canManagePages={canManageSpacePages}
                   canManageSpaceSettings={canManageSpaceSettings}
                   canExportSpace={canExportSpace}
@@ -510,12 +510,6 @@ export function SpaceSidebar() {
           </div>
         </div>
       </div>
-
-      <SpaceSettingsModal
-        opened={opened}
-        onClose={closeSettings}
-        spaceId={space?.slug}
-      />
 
       <CustomLinkFormModal
         opened={customLinkModalOpened}

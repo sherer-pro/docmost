@@ -12,4 +12,5 @@ export * from "./ai-tools";
 export * from "./rag";
 export * from "./rag-sync";
 export * from "./space-policy";
+export * from "./space-administration";
 export * from "./mermaid-sanitization-policy";

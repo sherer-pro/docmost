@@ -20,9 +20,7 @@ import { isCloud } from "@/lib/config.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { useAtom } from "jotai";
 import { useQuery } from "@tanstack/react-query";
-import {
-  currentUserAtom,
-} from "@/features/user/atoms/current-user-atom.ts";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import {
   prefetchApiKeyManagement,
   prefetchGroups,
@@ -107,6 +105,13 @@ const groupedData: DataGroup[] = [
 export default function SettingsSidebar() {
   const { t } = useTranslation();
   const location = useLocation();
+  const spacesPath =
+    location.pathname === "/settings/spaces"
+      ? location.pathname + location.search
+      : typeof location.state?.spacesReturnTo === "string" &&
+          /^\/settings\/spaces(?:\?|$)/.test(location.state.spacesReturnTo)
+        ? location.state.spacesReturnTo
+        : "/settings/spaces";
   const [active, setActive] = useState(location.pathname);
   const { goBack } = useSettingsNavigation();
   const { isAdmin } = useUserRole();
@@ -190,11 +195,9 @@ export default function SettingsSidebar() {
             <Link
               onMouseEnter={prefetchHandler}
               className={classes.link}
-              data-active={
-                isSettingsItemActive(active, item.path) || undefined
-              }
+              data-active={isSettingsItemActive(active, item.path) || undefined}
               key={item.label}
-              to={item.path}
+              to={item.path === "/settings/spaces" ? spacesPath : item.path}
               onClick={() => {
                 if (mobileSidebarOpened) {
                   toggleMobileSidebar();

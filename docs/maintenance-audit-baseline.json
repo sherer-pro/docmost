@@ -483,11 +483,6 @@
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {
-        "fingerprint": "tsx|features/group/components/group-members.tsx|features/space/components/space-members.tsx|26|134",
-        "classification": "parallel-product-flow",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
-      },
-      {
         "fingerprint": "tsx|integrations/transactional/emails/comment-created-email.tsx|integrations/transactional/emails/page-recipient-email.tsx|29|158",
         "classification": "delivery-variant",
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."

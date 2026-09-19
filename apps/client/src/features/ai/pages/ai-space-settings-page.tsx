@@ -16,7 +16,12 @@ import {
   IconMapOff,
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import {
+  Link,
+  useParams,
+  useSearchParams,
+  useLocation,
+} from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { getAppName } from "@/lib/config.ts";
@@ -29,6 +34,10 @@ import {
   AiSpaceSettings,
   type AiSpaceSettingsSection,
 } from "@/features/ai/components/ai-space-settings.tsx";
+import {
+  SettingsDraftProvider,
+  useSettingsDirty,
+} from "@/features/space/components/settings/settings-draft";
 import classes from "./ai-space-settings-page.module.css";
 
 const SECTIONS: Exclude<AiSpaceSettingsSection, "all">[] = [
@@ -56,23 +65,26 @@ function getAiGuideAnchorForSpaceSection(
 }
 
 export default function AiSpaceSettingsPage() {
+  return (
+    <SettingsDraftProvider>
+      <AiSpaceSettingsContent />
+    </SettingsDraftProvider>
+  );
+}
+
+function AiSpaceSettingsContent() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { spaceSlug = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const fromSpaceSettings = searchParams.get("from") === "space-settings";
   const spaceQuery = useSpaceQuery(spaceSlug);
   const currentUserQuery = useCurrentUser();
   const [section, setSection] =
     useState<Exclude<AiSpaceSettingsSection, "all">>("overview");
   const [dirty, setDirty] = useState(false);
 
-  useEffect(() => {
-    const preventUnload = (event: BeforeUnloadEvent) => {
-      if (!dirty) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", preventUnload);
-    return () => window.removeEventListener("beforeunload", preventUnload);
-  }, [dirty]);
+  useSettingsDirty(dirty);
 
   const chooseSection = (next: Exclude<AiSpaceSettingsSection, "all">) => {
     if (
@@ -117,9 +129,11 @@ export default function AiSpaceSettingsPage() {
   });
   const isWorkspaceAdmin =
     workspaceRole === UserRole.OWNER || workspaceRole === UserRole.ADMIN;
-  const backPath = isWorkspaceAdmin
-    ? "/settings/ai/spaces"
-    : `/s/${space.slug}`;
+  const backPath = fromSpaceSettings
+    ? `/settings/spaces/${space.slug}/ai`
+    : isWorkspaceAdmin
+      ? "/settings/ai/spaces"
+      : `/s/${space.slug}`;
 
   if (!fullSpaceAccess) {
     return (
@@ -153,15 +167,18 @@ export default function AiSpaceSettingsPage() {
         <Button
           component={Link}
           to={backPath}
+          state={location.state}
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={15} />}
           px={0}
         >
           {t(
-            isWorkspaceAdmin
-              ? "ai.integrations.backToOverview"
-              : "ai.integrations.backToSpace",
+            fromSpaceSettings
+              ? "Space settings"
+              : isWorkspaceAdmin
+                ? "ai.integrations.backToOverview"
+                : "ai.integrations.backToSpace",
           )}
         </Button>
         <Group mt="xs" gap="sm" justify="space-between" align="flex-start">
@@ -184,14 +201,6 @@ export default function AiSpaceSettingsPage() {
               variant="light"
               size="sm"
               leftSection={<IconBook2 size={16} />}
-              onClick={(event) => {
-                if (
-                  dirty &&
-                  !window.confirm(t("ai.integrations.unsavedNavigationConfirm"))
-                ) {
-                  event.preventDefault();
-                }
-              }}
             >
               {t("ai.adminGuide.openRelevantGuide")}
             </Button>

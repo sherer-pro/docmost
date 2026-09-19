@@ -388,6 +388,7 @@ export class SpaceRepo {
       .select('spaceMembers.userId')
       .where('spaceMembers.userId', 'is not', null)
       .whereRef('spaceMembers.spaceId', '=', 'spaces.id')
+      .where('spaceMembers.deletedAt', 'is', null)
       .union(
         eb
           .selectFrom('spaceMembers')
@@ -396,6 +397,9 @@ export class SpaceRepo {
           .leftJoin('groupUsers', 'groupUsers.groupId', 'groups.id')
           .select('groupUsers.userId')
           .where('groupUsers.userId', 'is not', null)
+          .where('spaceMembers.deletedAt', 'is', null)
+          .where('groups.deletedAt', 'is', null)
+          .whereRef('groups.workspaceId', '=', 'spaces.workspaceId')
           .whereRef('spaceMembers.spaceId', '=', 'spaces.id'),
       )
       .as('userId');

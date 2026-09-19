@@ -158,7 +158,7 @@ describe("inline comments in editor selections", () => {
       let pasted = editor.state.doc.slice(7, 11);
 
       editor.view.someProp("transformPasted", (transform) => {
-        pasted = transform(pasted, editor.view);
+        pasted = transform(pasted, editor.view, false);
         return false;
       });
 

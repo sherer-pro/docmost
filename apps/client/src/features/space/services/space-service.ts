@@ -9,13 +9,13 @@ import {
 } from "@/features/space/types/space.types";
 import { IPagination, QueryParams } from "@/lib/types.ts";
 import { SpaceUserInfo } from "@/features/space/types/space.types.ts";
-import { downloadBlobFromAxiosResponse } from '@/lib/download';
+import { downloadBlobFromAxiosResponse } from "@/lib/download";
 import type { SpacePolicyContext } from "@docmost/api-contract";
 
 export async function getSpaces(
   params?: QueryParams,
 ): Promise<IPagination<ISpace>> {
-  const req = await api.get('/spaces', { params });
+  const req = await api.get("/spaces", { params });
   return req.data;
 }
 
@@ -39,12 +39,13 @@ export async function getSpaceBySlug(spaceSlug: string): Promise<ISpace> {
 }
 
 export async function createSpace(data: Partial<ISpace>): Promise<ISpace> {
-  const req = await api.post<ISpace>('/spaces', data);
+  const req = await api.post<ISpace>("/spaces", data);
   return req.data;
 }
 
 export async function updateSpace(data: Partial<ISpace>): Promise<ISpace> {
-  const req = await api.patch<ISpace>(`/spaces/${data.spaceId}`, data);
+  const { spaceId, ...patch } = data;
+  const req = await api.patch<ISpace>(`/spaces/${spaceId}`, patch);
   return req.data;
 }
 
@@ -102,8 +103,8 @@ export async function exportSpace(data: IExportSpaceParams): Promise<void> {
    * Export returns a binary file with `content-disposition` header,
    * so we explicitly request a blob response and keep full AxiosResponse.
    */
-  const req = await api.post<Blob>('/spaces/actions/export', data, {
-    responseType: 'blob',
+  const req = await api.post<Blob>("/spaces/actions/export", data, {
+    responseType: "blob",
     skipEnvelopeUnwrap: true,
   });
 

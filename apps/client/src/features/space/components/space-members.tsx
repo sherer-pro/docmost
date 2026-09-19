@@ -1,5 +1,6 @@
 import { Group, Table, Text, Menu } from "@mantine/core";
 import React from "react";
+import { AsyncQueryState } from "@/components/ui/async-query-state";
 import { IconDots } from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
@@ -44,7 +45,7 @@ export default function SpaceMembersList({
   const { t } = useTranslation();
   const { search, cursor, goNext, goPrev, handleSearch } =
     usePaginateAndSearch();
-  const { data, isLoading } = useSpaceMembersQuery(spaceId, {
+  const { data, isLoading, isError, refetch } = useSpaceMembersQuery(spaceId, {
     cursor,
     limit: 100,
     query: search,
@@ -116,114 +117,123 @@ export default function SpaceMembersList({
   return (
     <>
       <SearchInput onSearch={handleSearch} />
-      <Table.ScrollContainer
-        minWidth={500}
-        className={tableClasses.responsiveScroll}
+      <AsyncQueryState
+        state={isLoading ? "loading" : isError ? "error" : "ready"}
+        loadingLabel={t("Members")}
+        errorTitle={t("spaceAdmin.membersFailed")}
+        emptyTitle={t("Members")}
+        onRetry={() => void refetch()}
+        retryLabel={t("Retry")}
       >
-        <Table
-          highlightOnHover
-          verticalSpacing={8}
-          className={tableClasses.responsiveTable}
+        <Table.ScrollContainer
+          minWidth={500}
+          className={tableClasses.responsiveScroll}
         >
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t("Member")}</Table.Th>
-              <Table.Th>{t("Role")}</Table.Th>
-              <Table.Th></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
+          <Table
+            highlightOnHover
+            verticalSpacing={8}
+            className={tableClasses.responsiveTable}
+          >
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("Member")}</Table.Th>
+                <Table.Th>{t("Role")}</Table.Th>
+                <Table.Th></Table.Th>
+              </Table.Tr>
+            </Table.Thead>
 
-          <Table.Tbody>
-            {data?.items.length > 0 ? (
-              data?.items.map((member, index) => (
-                <Table.Tr key={index}>
-                  <Table.Td {...getResponsivePrimaryCellProps(t("Member"))}>
-                    <Group gap="sm" wrap="nowrap">
-                      {member.type === "user" && (
-                        <CustomAvatar
-                          avatarUrl={member?.avatarUrl}
-                          name={member.name}
-                        />
+            <Table.Tbody>
+              {data?.items.length > 0 ? (
+                data?.items.map((member, index) => (
+                  <Table.Tr key={index}>
+                    <Table.Td {...getResponsivePrimaryCellProps(t("Member"))}>
+                      <Group gap="sm" wrap="nowrap">
+                        {member.type === "user" && (
+                          <CustomAvatar
+                            avatarUrl={member?.avatarUrl}
+                            name={member.name}
+                          />
+                        )}
+
+                        {member.type === "group" && <IconGroupCircle />}
+
+                        <div
+                          style={{
+                            minWidth: 0,
+                            overflow: "hidden",
+                            maxWidth: 260,
+                          }}
+                        >
+                          <AutoTooltipText fz="sm" fw={500}>
+                            {member?.name}
+                          </AutoTooltipText>
+                          <Text fz="xs" c="dimmed">
+                            {member.type == "user" && member?.email}
+
+                            {member.type == "group" &&
+                              `${t("Group")} - ${formatMemberCount(member?.memberCount, t)}`}
+                          </Text>
+                        </div>
+                      </Group>
+                    </Table.Td>
+
+                    <Table.Td {...getResponsiveMetaCellProps(t("Role"))}>
+                      <RoleSelectMenu
+                        roles={spaceRoleData}
+                        roleName={getSpaceRoleLabel(member.role)}
+                        onChange={(newRole) =>
+                          handleRoleChange(
+                            member.id,
+                            member.type,
+                            newRole,
+                            member.role,
+                          )
+                        }
+                        disabled={readOnly}
+                      />
+                    </Table.Td>
+
+                    <Table.Td {...getResponsiveActionCellProps()}>
+                      {!readOnly && (
+                        <Menu
+                          shadow="xl"
+                          position="bottom-end"
+                          offset={20}
+                          width={200}
+                          withArrow
+                          arrowPosition="center"
+                        >
+                          <Menu.Target>
+                            <AccessibleActionIcon
+                              label={t("More options")}
+                              variant="subtle"
+                              c="gray"
+                            >
+                              <IconDots size={20} stroke={2} />
+                            </AccessibleActionIcon>
+                          </Menu.Target>
+
+                          <Menu.Dropdown>
+                            <Menu.Item
+                              onClick={() =>
+                                openRemoveModal(member.id, member.type)
+                              }
+                            >
+                              {t("Remove space member")}
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
                       )}
-
-                      {member.type === "group" && <IconGroupCircle />}
-
-                      <div
-                        style={{
-                          minWidth: 0,
-                          overflow: "hidden",
-                          maxWidth: 260,
-                        }}
-                      >
-                        <AutoTooltipText fz="sm" fw={500}>
-                          {member?.name}
-                        </AutoTooltipText>
-                        <Text fz="xs" c="dimmed">
-                          {member.type == "user" && member?.email}
-
-                          {member.type == "group" &&
-                            `${t("Group")} - ${formatMemberCount(member?.memberCount, t)}`}
-                        </Text>
-                      </div>
-                    </Group>
-                  </Table.Td>
-
-                  <Table.Td {...getResponsiveMetaCellProps(t("Role"))}>
-                    <RoleSelectMenu
-                      roles={spaceRoleData}
-                      roleName={getSpaceRoleLabel(member.role)}
-                      onChange={(newRole) =>
-                        handleRoleChange(
-                          member.id,
-                          member.type,
-                          newRole,
-                          member.role,
-                        )
-                      }
-                      disabled={readOnly}
-                    />
-                  </Table.Td>
-
-                  <Table.Td {...getResponsiveActionCellProps()}>
-                    {!readOnly && (
-                      <Menu
-                        shadow="xl"
-                        position="bottom-end"
-                        offset={20}
-                        width={200}
-                        withArrow
-                        arrowPosition="center"
-                      >
-                        <Menu.Target>
-                          <AccessibleActionIcon
-                            label={t("More options")}
-                            variant="subtle"
-                            c="gray"
-                          >
-                            <IconDots size={20} stroke={2} />
-                          </AccessibleActionIcon>
-                        </Menu.Target>
-
-                        <Menu.Dropdown>
-                          <Menu.Item
-                            onClick={() =>
-                              openRemoveModal(member.id, member.type)
-                            }
-                          >
-                            {t("Remove space member")}
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ))
-            ) : (
-              <NoTableResults colSpan={3} />
-            )}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              ) : (
+                <NoTableResults colSpan={3} />
+              )}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </AsyncQueryState>
 
       {data?.items.length > 0 && (
         <Paginate

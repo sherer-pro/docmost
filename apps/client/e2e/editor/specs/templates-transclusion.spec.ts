@@ -983,6 +983,16 @@ test.describe("page template lifecycle", () => {
   });
 
   test("policies enforce role and cross-space boundaries", async () => {
+    const legacyPolicy = await apiGet<any>(
+      api,
+      "/api/pages/templates/policies/workspace",
+    );
+    expect(legacyPolicy).toMatchObject({ enabled: true, deprecated: true });
+    const retiredUpdate = await api.patch("/api/pages/templates/policies/workspace", {
+      data: { enabled: false, expectedRevision: legacyPolicy.revision },
+    });
+    expect(retiredUpdate.status()).toBe(410);
+    await retiredUpdate.dispose();
     const groupPolicy = await apiGet<any>(
       api,
       `/api/pages/templates/policies/spaces/${state.spaceId}/groups/${groupId}`,

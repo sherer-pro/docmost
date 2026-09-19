@@ -1,134 +1,368 @@
-import { Badge, Group, Table, Text } from "@mantine/core";
-import React, { useState } from "react";
-import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
-import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
-import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
-import { useDisclosure } from "@mantine/hooks";
-import { formatMemberCount } from "@/lib";
-import { useTranslation } from "react-i18next";
-import Paginate from "@/components/common/paginate.tsx";
-import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
-import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
-import tableClasses from "@/components/ui/responsive-table.module.css";
-import NoTableResults from "@/components/common/no-table-results.tsx";
+import { useEffect, useRef, useState } from "react";
 import {
-  getResponsiveMetaCellProps,
+  ActionIcon,
+  Anchor,
+  Badge,
+  Button,
+  Group,
+  Select,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+} from "@mantine/core";
+import { IconExternalLink, IconSearch } from "@tabler/icons-react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import type {
+  SpaceAdministrationResponse,
+  SpaceArchiveFilter,
+} from "@docmost/api-contract";
+import api from "@/lib/api-client";
+import { AsyncQueryState } from "@/components/ui/async-query-state";
+import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { AvatarIconType } from "@/features/attachments/types/attachment.types";
+import Paginate from "@/components/common/paginate";
+import tableClasses from "@/components/ui/responsive-table.module.css";
+import {
   getResponsivePrimaryCellProps,
+  getResponsiveMetaCellProps,
+  getResponsiveActionCellProps,
 } from "@/components/ui/responsive-table";
-import { useNavigate } from "react-router-dom";
-import { getSpaceUrl } from "@/lib/config";
-import useUserRole from "@/hooks/use-user-role";
 
+const scrollPositions = new Map<string, number>();
+const scrollStoragePrefix = "docmost:space-administration:scroll:";
 export default function SpaceList() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { isAdmin } = useUserRole();
-  const { cursor, goNext, goPrev } = useCursorPaginate();
-  const { data, isLoading } = useGetSpacesQuery({
-    cursor,
-    includeArchived: true,
-  });
-  const [opened, { open, close }] = useDisclosure(false);
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string>(null);
-
-  const handleClick = (space: { id: string; slug: string }) => {
-    if (isAdmin) {
-      setSelectedSpaceId(space.id);
-      open();
-      return;
-    }
-
-    navigate(getSpaceUrl(space.slug));
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const query = params.get("query") ?? "";
+  const status: SpaceArchiveFilter =
+    params.get("status") === "all"
+      ? "all"
+      : params.get("status") === "archived"
+        ? "archived"
+        : "active";
+  const [search, setSearch] = useState(query);
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    setSearch(query);
+  }, [query]);
+  useEffect(() => {
+    if (composing || search === query) return;
+    const timeout = window.setTimeout(() => {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          next.delete("cursor");
+          next.delete("beforeCursor");
+          if (search.trim()) next.set("query", search.trim());
+          else next.delete("query");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [search, query, composing, setParams]);
+  const request = {
+    query,
+    status,
+    limit: 20,
+    cursor: params.get("cursor") || undefined,
+    beforeCursor: params.get("beforeCursor") || undefined,
   };
-
+  const result = useQuery({
+    queryKey: ["spaces", "administration", request],
+    refetchOnMount: true,
+    queryFn: async () =>
+      (
+        await api.get<SpaceAdministrationResponse>("/spaces/administration", {
+          params: request,
+        })
+      ).data,
+  });
+  const positionKey = location.pathname + location.search;
+  const restoredPosition = useRef<string | null>(null);
+  useEffect(() => {
+    const record = () => {
+      if (restoredPosition.current === positionKey)
+        scrollPositions.set(positionKey, window.scrollY);
+    };
+    const persist = () => {
+      const position = scrollPositions.get(positionKey);
+      if (position === undefined) return;
+      try {
+        sessionStorage.setItem(
+          scrollStoragePrefix + positionKey,
+          String(position),
+        );
+      } catch {
+        /* Storage may be unavailable. */
+      }
+    };
+    window.addEventListener("scroll", record, { passive: true });
+    window.addEventListener("pagehide", persist);
+    return () => {
+      persist();
+      window.removeEventListener("scroll", record);
+      window.removeEventListener("pagehide", persist);
+    };
+  }, [positionKey]);
+  useEffect(() => {
+    if (!result.data || restoredPosition.current === positionKey) return;
+    restoredPosition.current = positionKey;
+    let position = scrollPositions.get(positionKey);
+    if (position === undefined) {
+      try {
+        position = Number(
+          sessionStorage.getItem(scrollStoragePrefix + positionKey),
+        );
+      } catch {
+        /* Use the initial position without storage. */
+      }
+    }
+    position =
+      typeof position === "number" && Number.isFinite(position) && position >= 0
+        ? position
+        : 0;
+    scrollPositions.set(positionKey, position);
+    window.scrollTo(0, position);
+  }, [positionKey, result.data]);
+  const page = (cursor: string | null, before = false) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete("cursor");
+      next.delete("beforeCursor");
+      if (cursor) next.set(before ? "beforeCursor" : "cursor", cursor);
+      return next;
+    });
+  const items = result.data?.items ?? [];
+  const state = result.isLoading
+    ? "loading"
+    : result.isError
+      ? "error"
+      : !items.length
+        ? "empty"
+        : "ready";
   return (
-    <>
-      <Table.ScrollContainer
-        minWidth={500}
-        className={tableClasses.responsiveScroll}
+    <Stack>
+      <Group align="end">
+        <TextInput
+          style={{ flex: "1 1 240px" }}
+          label={t("spaceAdmin.searchLabel")}
+          placeholder={t("spaceAdmin.searchPlaceholder")}
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(event) => setSearch(event.currentTarget.value)}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={() => setComposing(false)}
+        />
+        <Select
+          label={t("spaceAdmin.status")}
+          value={status}
+          allowDeselect={false}
+          data={(["active", "archived", "all"] as const).map((value) => ({
+            value,
+            label: t(`spaceAdmin.filter.${value}`),
+          }))}
+          onChange={(value) => {
+            if (!value) return;
+            setParams((previous) => {
+              const next = new URLSearchParams(previous);
+              next.set("status", value);
+              next.delete("cursor");
+              next.delete("beforeCursor");
+              return next;
+            });
+          }}
+        />
+      </Group>
+      <AsyncQueryState
+        state={state}
+        loadingLabel={t("Spaces")}
+        errorTitle={t("Could not load spaces")}
+        emptyTitle={t(
+          query
+            ? "spaceAdmin.noResults"
+            : status === "all"
+              ? "spaceAdmin.noSpacesYet"
+              : "spaceAdmin.noSpaces",
+        )}
+        retryLabel={t("Retry")}
+        onRetry={() => void result.refetch()}
       >
-        <Table
-          highlightOnHover
-          verticalSpacing="sm"
-          layout="fixed"
-          className={tableClasses.responsiveTable}
+        <Table.ScrollContainer
+          minWidth={700}
+          className={tableClasses.responsiveScroll}
         >
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t("Space")}</Table.Th>
-              <Table.Th>{t("Members")}</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-
-          <Table.Tbody>
-            {data?.items.length > 0 ? (
-              data?.items.map((space, index) => (
-                <Table.Tr
-                  key={index}
-                  style={{ cursor: "pointer" }}
-                  onClick={() => handleClick(space)}
-                >
+          <Table
+            className={tableClasses.responsiveTable}
+            verticalSpacing="md"
+            highlightOnHover
+          >
+            <Table.Thead>
+              <Table.Tr>
+                {[
+                  "Space",
+                  "Members",
+                  "spaceAdmin.sections.access",
+                  "spaceAdmin.features",
+                  "spaceAdmin.actions",
+                ].map((key) => (
+                  <Table.Th key={key}>{t(key)}</Table.Th>
+                ))}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((space) => (
+                <Table.Tr key={space.id}>
                   <Table.Td {...getResponsivePrimaryCellProps(t("Space"))}>
-                    <Group gap="sm" wrap="nowrap">
+                    <Group wrap="nowrap">
                       <CustomAvatar
-                        avatarUrl={space.logo}
+                        name={space.name}
+                        avatarUrl={space.logo ?? undefined}
                         type={AvatarIconType.SPACE_ICON}
                         variant="filled"
-                        name={space.name}
                       />
-                      <div style={{ minWidth: 0, overflow: "hidden" }}>
-                        <Group gap="xs" wrap="nowrap">
-                          <AutoTooltipText
-                            fz="sm"
-                            fw={500}
-                            lineClamp={1}
-                            style={{ minWidth: 0, flex: 1 }}
+                      <div style={{ minWidth: 0 }}>
+                        <Anchor
+                          component={Link}
+                          to={
+                            space.canManage
+                              ? `/settings/spaces/${encodeURIComponent(space.slug)}/general`
+                              : `/s/${space.slug}`
+                          }
+                          state={{ spacesReturnTo: positionKey }}
+                          fw={600}
+                          style={{ overflowWrap: "anywhere" }}
+                        >
+                          {space.name}
+                        </Anchor>
+                        {space.archivedAt && (
+                          <Badge
+                            ml="xs"
+                            size="xs"
+                            color="gray"
+                            variant="light"
+                            c="var(--mantine-color-text)"
                           >
-                            {space.name}
-                          </AutoTooltipText>
-                          {space.archivedAt && (
-                            <Badge size="xs" variant="light" color="gray">
-                              {t("Archived")}
-                            </Badge>
-                          )}
-                        </Group>
-                        <Text fz="xs" c="dimmed" lineClamp={2}>
-                          {space.description}
+                            {t("Archived")}
+                          </Badge>
+                        )}
+                        {space.description && (
+                          <Text size="xs" c="dimmed" lineClamp={2}>
+                            {space.description}
+                          </Text>
+                        )}
+                        <Text size="xs" c="dimmed">
+                          /s/{space.slug}
                         </Text>
                       </div>
                     </Group>
                   </Table.Td>
                   <Table.Td {...getResponsiveMetaCellProps(t("Members"))}>
-                    <Text size="sm" style={{ whiteSpace: "nowrap" }}>
-                      {formatMemberCount(space.memberCount, t)}
+                    <Text size="sm">
+                      {space.memberCount === undefined
+                        ? "—"
+                        : t("spaceAdmin.memberCount", {
+                            count: space.memberCount,
+                          })}
                     </Text>
                   </Table.Td>
+                  <Table.Td
+                    {...getResponsiveMetaCellProps(
+                      t("spaceAdmin.sections.access"),
+                    )}
+                  >
+                    {space.requiresStepUp ? (
+                      <Text size="sm">{t("spaceAdmin.confirmSignIn")}</Text>
+                    ) : space.access ? (
+                      <Stack gap={3}>
+                        <Text size="xs">
+                          {t(
+                            space.access.disablePublicSharing
+                              ? "spaceAdmin.sharingDenied"
+                              : "spaceAdmin.sharingAllowed",
+                          )}
+                        </Text>
+                        {space.access.enforceMfa && (
+                          <Text size="xs">{t("spaceAdmin.mfaRequired")}</Text>
+                        )}
+                        {space.access.enforceSso && (
+                          <Text size="xs">{t("spaceAdmin.ssoRequired")}</Text>
+                        )}
+                      </Stack>
+                    ) : (
+                      <Text size="sm">—</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td
+                    {...getResponsiveMetaCellProps(t("spaceAdmin.features"))}
+                  >
+                    {space.features ? (
+                      <Stack gap={3}>
+                        <Text size="xs">
+                          {t("spaceAdmin.templateState", {
+                            value: t(
+                              `spaceAdmin.templateStates.${space.features.templates}`,
+                            ),
+                          })}
+                        </Text>
+                        <Text size="xs">
+                          {t("spaceAdmin.dictionaryState", {
+                            value: t(
+                              space.features.dictionary
+                                ? "Enabled"
+                                : "Disabled",
+                            ),
+                          })}
+                        </Text>
+                        <Text size="xs">
+                          {t(`spaceAdmin.aiStates.${space.features.ai}`)}
+                        </Text>
+                      </Stack>
+                    ) : (
+                      <Text size="sm">—</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td {...getResponsiveActionCellProps()}>
+                    <ActionIcon
+                      component={Link}
+                      size={32}
+                      to={`/s/${space.slug}`}
+                      aria-label={t("spaceAdmin.openSpace")}
+                      variant="subtle"
+                    >
+                      <IconExternalLink size={18} />
+                    </ActionIcon>
+                  </Table.Td>
                 </Table.Tr>
-              ))
-            ) : (
-              <NoTableResults colSpan={2} />
-            )}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-
-      {data?.items.length > 0 && (
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </AsyncQueryState>
+      {state === "empty" && (query || status !== "active") && (
+        <Button
+          variant="light"
+          onClick={() => {
+            setSearch("");
+            setParams({});
+          }}
+        >
+          {t("spaceAdmin.clearFilters")}
+        </Button>
+      )}
+      {!!items.length && (
         <Paginate
-          hasPrevPage={data?.meta?.hasPrevPage}
-          hasNextPage={data?.meta?.hasNextPage}
-          onNext={() => goNext(data?.meta?.nextCursor)}
-          onPrev={goPrev}
+          hasPrevPage={result.data?.meta.hasPrevPage}
+          hasNextPage={result.data?.meta.hasNextPage}
+          onNext={() => page(result.data!.meta.nextCursor)}
+          onPrev={() => page(result.data!.meta.prevCursor, true)}
         />
       )}
-
-      {selectedSpaceId && (
-        <SpaceSettingsModal
-          opened={opened}
-          onClose={close}
-          spaceId={selectedSpaceId}
-        />
-      )}
-    </>
+    </Stack>
   );
 }

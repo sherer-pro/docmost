@@ -124,10 +124,7 @@ export type TemplateInstanceInfo = TemplateInstanceInfoBase &
         canReadTemplate: true;
       }
     | {
-        provenanceState: Exclude<
-          PageTemplateProvenanceState,
-          "linked"
-        >;
+        provenanceState: Exclude<PageTemplateProvenanceState, "linked">;
         sourceTemplate: null;
         canReadTemplate: false;
       }
@@ -232,6 +229,7 @@ export type PageTemplateSyncRunsResponse = {
 };
 
 export type PageTemplateWorkspacePolicy = {
+  deprecated?: boolean;
   enabled: boolean;
   revision: number;
   systemEnabled: boolean;

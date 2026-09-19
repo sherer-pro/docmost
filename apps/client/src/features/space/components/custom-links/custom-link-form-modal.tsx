@@ -32,6 +32,7 @@ interface CustomLinkFormModalProps {
   onClose: () => void;
   onSubmit: (value: CustomLinkFormValue) => void;
   isPending?: boolean;
+  initialValue?: CustomLinkFormValue;
 }
 
 export default function CustomLinkFormModal({
@@ -39,6 +40,7 @@ export default function CustomLinkFormModal({
   onClose,
   onSubmit,
   isPending,
+  initialValue,
 }: CustomLinkFormModalProps) {
   const { t } = useTranslation();
   const [label, setLabel] = useState("");
@@ -52,15 +54,15 @@ export default function CustomLinkFormModal({
 
   useEffect(() => {
     if (opened) {
-      setLabel("");
-      setUrl("");
+      setLabel(initialValue?.label ?? "");
+      setUrl(initialValue?.url ?? "");
       setUrlTouched(false);
-      setIcon(DEFAULT_CUSTOM_LINK_ICON);
+      setIcon(initialValue?.icon ?? DEFAULT_CUSTOM_LINK_ICON);
       setError(null);
       setIconPickerOpened(false);
       setIconQuery("");
     }
-  }, [opened]);
+  }, [opened, initialValue]);
 
   const trimmedUrl = url.trim();
   const urlError =
@@ -92,7 +94,13 @@ export default function CustomLinkFormModal({
   const SelectedIcon = getCustomLinkIcon(icon);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t("Add link")} size="sm">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={t(initialValue ? "Edit link" : "Add link")}
+      closeButtonProps={{ "aria-label": t("Close") }}
+      size="sm"
+    >
       <Stack gap="sm">
         <TextInput
           label={t("Link name")}
@@ -137,9 +145,7 @@ export default function CustomLinkFormModal({
                   size="xs"
                   placeholder={t("Search icons")}
                   value={iconQuery}
-                  onChange={(event) =>
-                    setIconQuery(event.currentTarget.value)
-                  }
+                  onChange={(event) => setIconQuery(event.currentTarget.value)}
                   aria-label={t("Search icons")}
                 />
                 <ScrollArea.Autosize mah={220} type="auto">
