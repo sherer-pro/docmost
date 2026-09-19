@@ -180,7 +180,9 @@ export function AiPanel() {
   const liveDocumentTitle = useEditorState({
     editor: titleEditor,
     selector: ({ editor: currentTitleEditor }) =>
-      currentTitleEditor?.getText().trim() ?? "",
+      currentTitleEditor && !currentTitleEditor.isDestroyed
+        ? currentTitleEditor.getText().trim()
+        : "",
   });
   const streamingRuns = useAtomValue(aiStreamingRunsAtom);
   const setStreamingRuns = useSetAtom(aiStreamingRunsAtom);
