@@ -1634,7 +1634,8 @@
             "step1": "Configuración de proveedor, modelo, perfil y política de Save",
             "step2": "Test Chat y Agent",
             "step3": "Enable el modelo espacial y los perfiles previstos.",
-            "step4": "En un teléfono, compruebe Chat y Agent, el interruptor de búsqueda del espacio, el pie y el campo de mensaje con el teclado abierto"
+            "step4": "En un teléfono, compruebe Chat y Agent, el interruptor de búsqueda del espacio, el pie y el campo de mensaje con el teclado abierto",
+            "step5": "Cambie entre un documento y los ajustes del espacio y use Atrás/Adelante; el asistente debe usar el título del documento actual."
           },
           "success": "Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir",
           "rollback": "Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida",

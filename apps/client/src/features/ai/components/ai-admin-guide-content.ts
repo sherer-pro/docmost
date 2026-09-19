@@ -98,7 +98,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     settingsPath: "/settings/ai/spaces",
     diagram: null,
     controls: [{ kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" }],
-    stepKeys: ["step1", "step2", "step3", "step4"],
+    stepKeys: ["step1", "step2", "step3", "step4", "step5"],
     profileIconCount: AI_ASSISTANT_PROFILE_ICONS.length,
   },
   {
