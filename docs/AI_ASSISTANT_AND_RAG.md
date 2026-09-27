@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 24 -->
+<!-- ai-admin-guide-contract-version: 25 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -793,6 +793,15 @@ reachable endpoint without current allowed sources returns `state=empty` as a
 warning rather than reporting retrieval as ready.
 
 ### Network and security boundaries
+
+Network permissions are independent per integration. `WEB_PUSH_ALLOWED_ORIGINS`
+grants only Web Push delivery to exact public HTTPS origins; it never grants
+AI provider, retrieval, or MCP access. An empty list disables push delivery,
+including existing subscriptions. Approve the push providers used by your
+browsers before upgrading a deployment that sends Web Push notifications.
+Push delivery pins validated public addresses, rejects redirects, and limits
+each delivery to ten seconds and 64 KiB of response data, with four concurrent
+deliveries per process. See the security regression runbook for acceptance.
 
 `AI_PROVIDER_ALLOWED_ORIGINS` and `AI_RETRIEVAL_ALLOWED_ORIGINS` are separate
 production allowlists of exact HTTP(S) origins for model and retrieval

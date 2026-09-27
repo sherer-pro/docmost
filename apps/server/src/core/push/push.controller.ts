@@ -21,6 +21,7 @@ import {
 } from './dto/push-subscription.dto';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PushEndpointPolicyService } from './push-endpoint-policy.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('push')
@@ -28,6 +29,7 @@ export class PushController {
   constructor(
     private readonly pushSubscriptionRepo: PushSubscriptionRepo,
     private readonly environmentService: EnvironmentService,
+    private readonly endpointPolicy: PushEndpointPolicyService,
   ) {}
 
   @Get('vapid-public-key')
@@ -50,6 +52,7 @@ export class PushController {
       throw new BadRequestException('Missing push subscription keys');
     }
 
+    await this.endpointPolicy.assertAllowed(dto.endpoint);
     const subscription = await this.pushSubscriptionRepo.upsert({
       endpoint: dto.endpoint,
       p256dh,

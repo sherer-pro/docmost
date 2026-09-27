@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Pushmeldingen zijn al geregistreerd op 10 apparaten. Schakel ze uit op een ander apparaat en probeer het opnieuw.",
+  "This push notification provider is not allowed. Contact your administrator.": "Deze aanbieder van pushmeldingen is niet toegestaan. Neem contact op met uw beheerder.",
   "Account": "Account",
   "Active": "Actief",
   "Inactive": "Inactief",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Minimale rechten",
             "description": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven."
+          },
+          "separateOrigins": {
+            "title": "Afzonderlijke netwerkrechten",
+            "description": "Sta origins per integratie afzonderlijk toe. WEB_PUSH_ALLOWED_ORIGINS staat alleen Web Push via openbare HTTPS toe, zonder toegang tot AI-providers, retrieval of MCP. Een lege lijst schakelt pushbezorging uit."
           },
           "separateCredentials": {
             "title": "Gescheiden referenties",

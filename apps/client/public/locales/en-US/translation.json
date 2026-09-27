@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Push notifications are already registered on 10 devices. Disable them on another device and try again.",
+  "This push notification provider is not allowed. Contact your administrator.": "This push notification provider is not allowed. Contact your administrator.",
   "Account": "Account",
   "Active": "Active",
   "Inactive": "Inactive",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Least privilege",
             "description": "Docmost rechecks live source state, exclusions, and ACL before and during generation, when reusing chat history, and before returning editor-selection results."
+          },
+          "separateOrigins": {
+            "title": "Separate network permissions",
+            "description": "Approve origins separately for each integration. WEB_PUSH_ALLOWED_ORIGINS grants only public HTTPS Web Push delivery, never AI provider, retrieval, or MCP access. An empty push list disables delivery."
           },
           "separateCredentials": {
             "title": "Separate credentials",

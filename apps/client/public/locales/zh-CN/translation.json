@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "推送通知已在10台设备上注册。请在另一台设备上停用后重试。",
+  "This push notification provider is not allowed. Contact your administrator.": "此推送通知服务提供商未获允许。请联系管理员。",
   "Account": "账户",
   "Active": "活跃",
   "Inactive": "未启用",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "最小权限",
             "description": "Docmost 会在生成前和生成过程中、复用聊天历史时以及返回选中文本的结果前，重新检查来源实时状态、排除策略和 ACL。页面附件和私聊文件也受同样保护，选中文本始终视为不可信输入。访问权限变化时，会清除部分文本、推理和引用，并将消息标记为受限。"
+          },
+          "separateOrigins": {
+            "title": "独立的网络权限",
+            "description": "请为每项集成单独批准来源。WEB_PUSH_ALLOWED_ORIGINS 仅允许通过公共 HTTPS 发送 Web Push，不授予 AI 提供商、检索或 MCP 访问权限。推送列表为空时会停用发送。"
           },
           "separateCredentials": {
             "title": "凭据隔离",

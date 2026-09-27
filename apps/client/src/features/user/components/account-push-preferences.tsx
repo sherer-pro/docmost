@@ -91,7 +91,9 @@ export default function AccountPushPreferences() {
             setIsPushEnabled(previousPushEnabled);
             notifications.show({
               color: "red",
-              message: t("Push notifications are not supported in this browser."),
+              message: t(
+                "Push notifications are not supported in this browser.",
+              ),
             });
             return;
           }
@@ -112,11 +114,19 @@ export default function AccountPushPreferences() {
 
           try {
             await createPushSubscription();
-          } catch {
+          } catch (error) {
             setIsPushEnabled(previousPushEnabled);
+            const code = (error as { response?: { data?: { code?: string } } })
+              ?.response?.data?.code;
             notifications.show({
               color: "red",
-              message: t("Failed to enable push notifications. Please try again."),
+              message: t(
+                code === "push_subscription_limit"
+                  ? "Push notifications are already registered on 10 devices. Disable them on another device and try again."
+                  : code === "push_endpoint_not_allowed"
+                    ? "This push notification provider is not allowed. Contact your administrator."
+                    : "Failed to enable push notifications. Please try again.",
+              ),
             });
             return;
           }
@@ -160,7 +170,9 @@ export default function AccountPushPreferences() {
         setIsPushEnabled(previousPushEnabled);
         notifications.show({
           color: "red",
-          message: t("Failed to update push notification settings. Please try again."),
+          message: t(
+            "Failed to update push notification settings. Please try again.",
+          ),
         });
       } finally {
         setIsSavingPushEnabled(false);
@@ -192,7 +204,9 @@ export default function AccountPushPreferences() {
         setSelectedFrequency(pushFrequency);
         notifications.show({
           color: "red",
-          message: t("Failed to update push notification settings. Please try again."),
+          message: t(
+            "Failed to update push notification settings. Please try again.",
+          ),
         });
       } finally {
         setIsSavingFrequency(false);

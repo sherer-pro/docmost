@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Push-Benachrichtigungen sind bereits auf 10 Geräten registriert. Deaktivieren Sie sie auf einem anderen Gerät und versuchen Sie es erneut.",
+  "This push notification provider is not allowed. Contact your administrator.": "Dieser Push-Anbieter ist nicht erlaubt. Wenden Sie sich an Ihre Administration.",
   "Account": "Konto",
   "Active": "Aktiv",
   "Inactive": "Inaktiv",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Minimale Berechtigungen",
             "description": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut."
+          },
+          "separateOrigins": {
+            "title": "Getrennte Netzwerkberechtigungen",
+            "description": "Genehmigen Sie Ursprünge für jede Integration separat. WEB_PUSH_ALLOWED_ORIGINS erlaubt nur Web Push über öffentliches HTTPS, keinen Zugriff auf KI-Anbieter, Retrieval oder MCP. Eine leere Push-Liste deaktiviert die Zustellung."
           },
           "separateCredentials": {
             "title": "Getrennte Zugangsdaten",

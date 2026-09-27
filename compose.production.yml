@@ -64,6 +64,7 @@ x-docmost-environment: &docmost-environment
   SMTP_SECURE: "${SMTP_SECURE:-false}"
   SMTP_IGNORETLS: "${SMTP_IGNORETLS:-false}"
   WEB_PUSH_VAPID_PUBLIC_KEY: "${WEB_PUSH_VAPID_PUBLIC_KEY:-}"
+  WEB_PUSH_ALLOWED_ORIGINS: "${WEB_PUSH_ALLOWED_ORIGINS:-}"
   WEB_PUSH_SUBJECT: "${WEB_PUSH_SUBJECT:-}"
   DRAWIO_URL: "${DRAWIO_URL:?Set DRAWIO_URL to an approved absolute HTTPS URL}"
   CLOUD: "${CLOUD:-false}"

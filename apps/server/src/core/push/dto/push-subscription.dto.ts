@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -22,6 +23,7 @@ export class PushSubscriptionKeysDto {
 export class CreatePushSubscriptionDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2048)
   endpoint: string;
 
   /**

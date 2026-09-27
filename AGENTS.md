@@ -252,7 +252,7 @@ Minimum:
 
 - Storage: `STORAGE_DRIVER`, `AWS_S3_*`
 - Mail: `MAIL_DRIVER`, `SMTP_*`, `POSTMARK_TOKEN`
-- Web Push: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
+- Web Push: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`, `WEB_PUSH_ALLOWED_ORIGINS`. The origin list must name approved public HTTPS push providers; an empty list disables delivery, including existing subscriptions. There is no loopback exception. Registration allows at most 10 active subscriptions per user, with renewal allowed at the limit.
 - PDF export: `PDF_CHROMIUM_EXECUTABLE_PATH`, `PDF_RENDER_TIMEOUT_MS`
 - Diagnostics: `DEBUG_MODE`, `DEBUG_DB`, `LOG_HTTP`
 - Search: `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE`

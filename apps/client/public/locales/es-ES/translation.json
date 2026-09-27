@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Las notificaciones push ya están registradas en 10 dispositivos. Desactívelas en otro dispositivo e inténtelo de nuevo.",
+  "This push notification provider is not allowed. Contact your administrator.": "Este proveedor de notificaciones push no está permitido. Contacte con su administrador.",
   "Account": "Cuenta",
   "Active": "Activo",
   "Inactive": "Inactivo",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Privilegios mínimos",
             "description": "Docmost vuelve a comprobar el estado actual de la fuente, las exclusiones y la ACL antes y durante la generación, al reutilizar el historial del chat y antes de devolver resultados de una selección."
+          },
+          "separateOrigins": {
+            "title": "Permisos de red separados",
+            "description": "Autorice los orígenes por separado para cada integración. WEB_PUSH_ALLOWED_ORIGINS solo permite Web Push mediante HTTPS público, sin conceder acceso a proveedores de IA, recuperación ni MCP. Una lista vacía desactiva la entrega."
           },
           "separateCredentials": {
             "title": "Credenciales separadas",

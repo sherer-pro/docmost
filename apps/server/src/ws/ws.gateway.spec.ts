@@ -110,6 +110,31 @@ describe('WsGateway.handleMessage', () => {
     jest.clearAllMocks();
   });
 
+  it('does not log rejected payloads, unknown keys, or nested private values', async () => {
+    const socket = createSocketMock(['workspace-workspace-a']);
+    const logger = { warn: jest.fn() };
+    (gateway as any).logger = logger;
+    const canary = 'SYNTHETIC_PRIVATE_CANARY';
+    await gateway.handleMessage(socket as any, {
+      data: { title: canary, password: canary },
+      [canary]: canary,
+    });
+    await gateway.handlePresenceUpdate(socket as any, {
+      type: canary,
+      [canary]: { token: canary },
+    });
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(canary);
+    expect(logger.warn).toHaveBeenCalledWith({
+      event: 'ws_message_rejected',
+      reason: 'invalid_payload',
+    });
+    expect(logger.warn).toHaveBeenCalledWith({
+      event: 'ws_presence_rejected',
+      reason: 'invalid_payload',
+    });
+    expect(socket.broadcast.to).not.toHaveBeenCalled();
+  });
+
   it('invalidates block consumers when an update omits workspaceId', async () => {
     pageRepo.findById.mockResolvedValueOnce({
       id: 'source-page',

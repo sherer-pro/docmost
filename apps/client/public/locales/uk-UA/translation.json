@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Push-сповіщення вже підключено на 10 пристроях. Вимкніть їх на іншому пристрої та спробуйте ще раз.",
+  "This push notification provider is not allowed. Contact your administrator.": "Цей сервіс push-сповіщень не дозволено. Зверніться до адміністратора.",
   "Account": "Обліковий запис",
   "Active": "Активний",
   "Inactive": "Неактивний",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Мінімально необхідні права",
             "description": "Docmost повторно перевіряє актуальність джерела, виключення та ACL до і під час генерації, при повторному використанні історії чату та перед поверненням результату для виділення."
+          },
+          "separateOrigins": {
+            "title": "Окремі мережеві дозволи",
+            "description": "Дозволяйте адреси окремо для кожної інтеграції. WEB_PUSH_ALLOWED_ORIGINS дозволяє лише доставку Web Push через публічний HTTPS і не надає доступу до AI-провайдерів, пошуку або MCP. Порожній список вимикає доставку push-сповіщень."
           },
           "separateCredentials": {
             "title": "Окремі облікові дані",

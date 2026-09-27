@@ -22,6 +22,10 @@ import { StartupConfigurationError } from '../../common/errors/startup.errors';
 
 export class EnvironmentVariables {
   @IsOptional()
+  @IsString()
+  WEB_PUSH_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
   @IsIn(['development', 'production', 'test'])
   NODE_ENV: string;
 
