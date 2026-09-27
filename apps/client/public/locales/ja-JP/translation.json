@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "プッシュ通知はすでに10台の端末で登録されています。別の端末で無効にしてから再試行してください。",
+  "This push notification provider is not allowed. Contact your administrator.": "このプッシュ通知プロバイダーは許可されていません。管理者にお問い合わせください。",
   "Account": "アカウント",
   "Active": "アクティブ",
   "Inactive": "非アクティブ",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "最小権限",
             "description": "Docmost は生成前と生成中、チャット履歴の再利用時、選択範囲の結果を返す前に、ソースの現在状態、除外設定、ACL を再確認します。ページ添付ファイルと非公開チャットファイルも保護され、選択テキストは信頼できない入力として扱われます。アクセスが変わると、途中の本文、推論、引用を消去し、メッセージを制限状態にします。"
+          },
+          "separateOrigins": {
+            "title": "ネットワーク権限を分離",
+            "description": "連携ごとにオリジンを個別に許可してください。WEB_PUSH_ALLOWED_ORIGINS は公開 HTTPS 経由の Web Push 配信のみを許可し、AI プロバイダー、検索、MCP へのアクセスは許可しません。空のリストでは配信が無効になります。"
           },
           "separateCredentials": {
             "title": "認証情報の分離",

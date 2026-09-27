@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "푸시 알림이 이미 기기 10대에 등록되어 있습니다. 다른 기기에서 알림을 끄고 다시 시도하세요.",
+  "This push notification provider is not allowed. Contact your administrator.": "이 푸시 알림 제공업체는 허용되지 않습니다. 관리자에게 문의하세요.",
   "Account": "계정",
   "Active": "활성",
   "Inactive": "비활성",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "최소 권한",
             "description": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다."
+          },
+          "separateOrigins": {
+            "title": "별도의 네트워크 권한",
+            "description": "통합별로 오리진을 따로 허용하세요. WEB_PUSH_ALLOWED_ORIGINS는 공개 HTTPS를 통한 Web Push 전송만 허용하며 AI 제공자, 검색 또는 MCP 접근은 허용하지 않습니다. 목록이 비어 있으면 전송이 비활성화됩니다."
           },
           "separateCredentials": {
             "title": "자격 증명 분리",

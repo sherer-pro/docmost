@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as webpush from 'web-push';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { PushSubscriptionRepo } from '@docmost/db/repos/push-subscription/push-subscription.repo';
+import { PushEndpointPolicyService } from './push-endpoint-policy.service';
+import { PushTransportService } from './push-transport.service';
 
 interface PushPayload {
   title: string;
@@ -39,6 +41,8 @@ export class PushService {
   constructor(
     private readonly environmentService: EnvironmentService,
     private readonly pushSubscriptionRepo: PushSubscriptionRepo,
+    private readonly endpointPolicy: PushEndpointPolicyService,
+    private readonly transport: PushTransportService,
   ) {
     const vapidSubject = this.environmentService.getWebPushSubject();
     const vapidPublicKey = this.environmentService.getWebPushVapidPublicKey();
@@ -54,6 +58,12 @@ export class PushService {
     }
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    if (!this.endpointPolicy.isConfigured()) {
+      this.logger.warn({
+        event: 'push_delivery_disabled',
+        reason: 'allowed_origins_missing',
+      });
+    }
   }
 
   async sendToUser(
@@ -61,7 +71,7 @@ export class PushService {
     payload: PushPayload,
     options?: PushSendOptions,
   ): Promise<PushSendResult> {
-    if (!this.isConfigured) {
+    if (!this.isConfigured || !this.endpointPolicy.isConfigured()) {
       return {
         sent: 0,
         failed: 0,
@@ -96,7 +106,7 @@ export class PushService {
     await Promise.all(
       subscriptions.map(async (subscription) => {
         try {
-          await webpush.sendNotification(
+          await this.transport.send(
             {
               endpoint: subscription.endpoint,
               keys: {

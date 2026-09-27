@@ -191,12 +191,14 @@ export class WsGateway
     const validationErrors = validateSync(payload, {
       whitelist: true,
       forbidNonWhitelisted: true,
+      validationError: { target: false, value: false },
     });
 
     if (validationErrors.length > 0) {
-      this.logger.warn(
-        `Invalid WS payload from client ${client.id}: ${JSON.stringify(validationErrors)}`,
-      );
+      this.logger.warn({
+        event: 'ws_message_rejected',
+        reason: 'invalid_payload',
+      });
       return;
     }
 
@@ -216,9 +218,10 @@ export class WsGateway
     }
 
     if (!this.isRelayDataOperationAllowed(payload.data)) {
-      this.logger.warn(
-        `Invalid WS relay operation from client ${client.id}: ${String(payload.data?.operation)}`,
-      );
+      this.logger.warn({
+        event: 'ws_message_rejected',
+        reason: 'invalid_operation',
+      });
       return;
     }
 
@@ -227,9 +230,10 @@ export class WsGateway
      * Relay is allowed only to an explicit room granted on connect.
      */
     if (!authorizedRooms.has(payload.targetRoom)) {
-      this.logger.warn(
-        `Client ${client.id} tried to relay an event to unauthorized room ${payload.targetRoom}`,
-      );
+      this.logger.warn({
+        event: 'ws_message_rejected',
+        reason: 'unauthorized_room',
+      });
       return;
     }
 
@@ -238,9 +242,10 @@ export class WsGateway
      * Even when a room is authorized, the socket must actually be joined to it.
      */
     if (!client.rooms.has(payload.targetRoom)) {
-      this.logger.warn(
-        `Client ${client.id} is not in room ${payload.targetRoom}; relay rejected`,
-      );
+      this.logger.warn({
+        event: 'ws_message_rejected',
+        reason: 'room_not_joined',
+      });
       return;
     }
 
@@ -344,12 +349,14 @@ export class WsGateway
     const validationErrors = validateSync(payload, {
       whitelist: true,
       forbidNonWhitelisted: true,
+      validationError: { target: false, value: false },
     });
 
     if (validationErrors.length > 0) {
-      this.logger.warn(
-        `Invalid presence payload from client ${client.id}: ${JSON.stringify(validationErrors)}`,
-      );
+      this.logger.warn({
+        event: 'ws_presence_rejected',
+        reason: 'invalid_payload',
+      });
       return;
     }
 

@@ -1,4 +1,5 @@
 import * as webpush from 'web-push';
+import { BadRequestException } from '@nestjs/common';
 import { PushService } from './push.service';
 
 jest.mock('web-push', () => ({
@@ -26,13 +27,43 @@ describe('PushService', () => {
       ]),
       revokeByEndpoint: jest.fn(),
     } as any;
-    const service = new PushService(environmentService, pushSubscriptionRepo);
+    const service = new PushService(
+      environmentService,
+      pushSubscriptionRepo,
+      { isConfigured: () => true } as any,
+      { send: webpush.sendNotification } as any,
+    );
 
     return { service, pushSubscriptionRepo };
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('does not retry policy-denied legacy subscriptions or delete them', async () => {
+    const { service, pushSubscriptionRepo } = createService();
+    jest
+      .mocked(webpush.sendNotification)
+      .mockRejectedValue(new BadRequestException());
+    await expect(
+      service.sendToUser('user-1', { title: 'Title', body: 'Body' }),
+    ).resolves.toMatchObject({
+      outcome: 'fatal-failure',
+      failed: 1,
+      retrySubscriptionIds: [],
+    });
+    expect(pushSubscriptionRepo.revokeByEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('disables delivery when the operator allowlist is empty', async () => {
+    const { service, pushSubscriptionRepo } = createService();
+    (service as any).endpointPolicy = { isConfigured: () => false };
+    await expect(
+      service.sendToUser('user-1', { title: 'Title', body: 'Body' }),
+    ).resolves.toMatchObject({ outcome: 'disabled' });
+    expect(pushSubscriptionRepo.findActiveByUserId).not.toHaveBeenCalled();
+    expect(webpush.sendNotification).not.toHaveBeenCalled();
   });
 
   it('redacts the endpoint and raw provider failure from logs', async () => {
@@ -106,6 +137,8 @@ describe('PushService', () => {
     const service = new PushService(
       environmentService,
       pushSubscriptionRepo,
+      { isConfigured: () => true } as any,
+      { send: webpush.sendNotification } as any,
     );
 
     await expect(

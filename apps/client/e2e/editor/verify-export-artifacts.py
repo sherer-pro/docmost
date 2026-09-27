@@ -43,6 +43,28 @@ EXPECTED_TAG_LABELS = ("TBD", "TODO", "DONE", "Core", "Future", "Pilot")
 DOCMOST_ARCHIVE_SCHEMA_VERSION = 5
 
 
+def assert_safe_archive_paths(archive: zipfile.ZipFile) -> None:
+    seen: set[str] = set()
+    for entry in archive.infolist():
+        name = entry.orig_filename.rstrip("/")
+        parts = name.split("/")
+        assert name and all(
+            part not in ("", ".", "..")
+            and not re.search(r'[<>:"\\|?*\x00-\x1f\x7f]', part)
+            and not part.endswith((".", " "))
+            and not re.match(r"^(con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])(?:\.|$)", part, re.I)
+            for part in parts
+        ), "Unsafe export archive path"
+        assert name.casefold() not in seen, "Ambiguous export archive path"
+        seen.add(name.casefold())
+
+
+def assert_no_executable_html(document) -> None:
+    assert not document.xpath("//script"), "HTML export contains a script element"
+    for element in document.iter():
+        assert not any(key.lower().startswith("on") for key in element.attrib), "HTML export contains an event handler"
+
+
 def parse_markdown_token_count(content: str) -> int:
     if MarkdownIt is not None:
         return len(MarkdownIt("commonmark").parse(content))
@@ -77,6 +99,7 @@ def iter_nodes(value: Any):
 
 def verify_markdown(archive_path: Path) -> dict[str, Any]:
     with zipfile.ZipFile(archive_path) as archive:
+        assert_safe_archive_paths(archive)
         names = [name for name in archive.namelist() if name.endswith(".md")]
         assert names, "Markdown export contains no .md document"
         content = "\n".join(
@@ -101,6 +124,7 @@ def verify_markdown(archive_path: Path) -> dict[str, Any]:
 
 def verify_html(archive_path: Path) -> dict[str, Any]:
     with zipfile.ZipFile(archive_path) as archive:
+        assert_safe_archive_paths(archive)
         names = [name for name in archive.namelist() if name.endswith(".html")]
         assert names, "HTML export contains no .html document"
         documents = [
@@ -115,6 +139,7 @@ def verify_html(archive_path: Path) -> dict[str, Any]:
     unsafe_urls: list[str] = []
     service_nodes: list[str] = []
     for document in documents:
+        assert_no_executable_html(document)
         for element in document.iter():
             if element.attrib.get("data-type") == "transclusionReference":
                 service_nodes.append("transclusionReference")

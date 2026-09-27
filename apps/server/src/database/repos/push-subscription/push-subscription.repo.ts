@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '../../types/kysely.types';
 import {
@@ -13,23 +13,57 @@ export class PushSubscriptionRepo {
   async upsert(
     subscription: InsertablePushSubscription,
   ): Promise<PushSubscription> {
-    return this.db
-      .insertInto('pushSubscriptions')
-      .values(subscription)
-      .onConflict((oc) =>
-        oc.column('endpoint').doUpdateSet({
-          userId: subscription.userId,
-          workspaceId: subscription.workspaceId,
-          p256dh: subscription.p256dh,
-          auth: subscription.auth,
-          userAgent: subscription.userAgent ?? null,
-          lastSeenAt: new Date(),
-          revokedAt: null,
-          updatedAt: new Date(),
-        }),
-      )
-      .returningAll()
-      .executeTakeFirstOrThrow();
+    return this.db.transaction().execute(async (trx) => {
+      // Serialize admission per owner, including concurrent first registrations.
+      await trx
+        .selectFrom('users')
+        .select('id')
+        .where('id', '=', subscription.userId)
+        .where('workspaceId', '=', subscription.workspaceId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const existing = await trx
+        .selectFrom('pushSubscriptions')
+        .select('id')
+        .where('endpoint', '=', subscription.endpoint)
+        .where('userId', '=', subscription.userId)
+        .where('revokedAt', 'is', null)
+        .executeTakeFirst();
+      if (!existing) {
+        const count = await trx
+          .selectFrom('pushSubscriptions')
+          .select((eb) => eb.fn.countAll<number>().as('count'))
+          .where('userId', '=', subscription.userId)
+          .where('revokedAt', 'is', null)
+          .executeTakeFirstOrThrow();
+        if (Number(count.count) >= 10) {
+          throw new HttpException(
+            {
+              code: 'push_subscription_limit',
+              message: 'The push subscription limit has been reached',
+            },
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
+        }
+      }
+      return trx
+        .insertInto('pushSubscriptions')
+        .values(subscription)
+        .onConflict((oc) =>
+          oc.column('endpoint').doUpdateSet({
+            userId: subscription.userId,
+            workspaceId: subscription.workspaceId,
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
+            userAgent: subscription.userAgent ?? null,
+            lastSeenAt: new Date(),
+            revokedAt: null,
+            updatedAt: new Date(),
+          }),
+        )
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    });
   }
 
   async findActiveByUserId(

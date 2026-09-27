@@ -1,5 +1,5 @@
 {
-  "version": 24,
+  "version": 25,
   "anchors": [
     "assistant",
     "retrieval",
@@ -245,6 +245,8 @@
     "security.principles.liveChecks.title",
     "security.principles.separateCredentials.description",
     "security.principles.separateCredentials.title",
+    "security.principles.separateOrigins.description",
+    "security.principles.separateOrigins.title",
     "security.principles.stopControls.description",
     "security.principles.stopControls.title",
     "security.principles.templates.description",

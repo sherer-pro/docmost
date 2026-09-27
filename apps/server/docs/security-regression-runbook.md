@@ -45,6 +45,62 @@ pnpm verify:quick
 
 ## Manual staging smoke (required before production rollout)
 
+### September 2026 remediation acceptance
+
+Web Push requires `WEB_PUSH_ALLOWED_ORIGINS` in addition to VAPID. Set a
+comma-separated list of exact HTTPS origins for the approved providers used by
+your browsers. There are no wildcard or private-network exceptions. An empty
+list disables delivery and rejects registration. Existing subscriptions are
+retained; endpoints removed from the allowlist are skipped as permanent failures.
+AI, retrieval, MCP, and SSO allowlists never grant Web Push access.
+
+The push transport validates every DNS answer and pins one public address while
+preserving the provider hostname and normal TLS verification. Redirects are not
+followed. Each active delivery has a ten-second deadline and a 64 KiB response
+limit; no more than four deliveries run concurrently per process.
+Registration admits at most ten active devices per user. Renewing an existing
+active subscription remains possible even for legacy accounts above the quota.
+Reactivation needs a free slot. The API returns `push_subscription_limit` (429)
+or `push_endpoint_not_allowed` (400), and the account UI localizes both outcomes.
+
+Focused push, export, and WebSocket regressions are included in `test:security`.
+Run the database concurrency check only against a dedicated local database whose
+name ends in `_test`, with `PUSH_TEST_DATABASE_URL` set explicitly:
+
+```bash
+corepack pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/push-quota.e2e-spec.ts
+```
+
+The suite creates and removes a unique schema, never loads `.env`, and skips
+without the explicit URL. It does not provision PostgreSQL. A skipped suite is
+not concurrency acceptance.
+
+On isolated staging, revoke access to a mention target and rename it before
+exporting the still-readable source as HTML, Markdown, and PDF (including
+database PDF). The new title and URL must be absent; the stored label remains
+plain text. Repeat for deleted targets and a target in another space. Verify
+readable links, subtree filtering, transclusions, and attachment access.
+
+Export hostile titles, Unicode names, equal and case-colliding names, dot
+segments, Windows reserved names, and percent signs. The generated HTML title
+must remain text. ZIP paths, metadata, and relative links use one path plan;
+URL segments are encoded separately. Open HTML in a network-blocked browser,
+run the artifact verifier, and perform the export/import round trip. The native
+Docmost archive format is unchanged. No database migration is required.
+
+WebSocket rejection logs now contain fixed structured events:
+`ws_message_rejected` with `invalid_payload`, `invalid_operation`,
+`unauthorized_room`, or `room_not_joined`; `ws_presence_rejected` with
+`invalid_payload`. They contain no input payload, arbitrary field names, or
+operation values. Update log queries to these codes. Historical log cleanup
+and deployment egress changes require a separate operations task.
+
+These changes require isolated runtime acceptance before rollout. Unit and
+artifact checks do not establish real device delivery, live ACL revocation,
+production proxy behavior, or import authorization after queued-task revocation.
+
+### Existing staging matrix
+
 1. Share SEO:
    - create a page with a title containing HTML/script payload.
    - open public share URL and inspect page source.

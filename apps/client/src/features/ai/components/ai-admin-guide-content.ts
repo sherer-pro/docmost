@@ -197,6 +197,7 @@ export const AI_ADMIN_GUIDE_SECURITY_ROWS = [
 export const AI_ADMIN_GUIDE_SECURITY_PRINCIPLES = [
   "leastPrivilege",
   "separateCredentials",
+  "separateOrigins",
   "liveChecks",
   "stopControls",
   "templates",

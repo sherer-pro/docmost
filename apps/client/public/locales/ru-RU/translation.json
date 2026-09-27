@@ -1,4 +1,6 @@
 {
+  "Push notifications are already registered on 10 devices. Disable them on another device and try again.": "Push-уведомления уже подключены на 10 устройствах. Отключите их на другом устройстве и повторите попытку.",
+  "This push notification provider is not allowed. Contact your administrator.": "Этот сервис push-уведомлений не разрешён. Обратитесь к администратору.",
   "Account": "Аккаунт",
   "Active": "Активный",
   "Inactive": "Неактивный",
@@ -1764,6 +1766,10 @@
           "leastPrivilege": {
             "title": "Минимально необходимые права",
             "description": "Каждый ключ и инструмент ограничивается конкретным пространством, возможностями и текущими правами пользователя."
+          },
+          "separateOrigins": {
+            "title": "Отдельные сетевые разрешения",
+            "description": "Разрешайте адреса отдельно для каждой интеграции. WEB_PUSH_ALLOWED_ORIGINS разрешает только доставку Web Push через публичный HTTPS и не даёт доступа к AI-провайдерам, поиску или MCP. Пустой список отключает доставку push-уведомлений."
           },
           "separateCredentials": {
             "title": "Раздельные учётные данные",

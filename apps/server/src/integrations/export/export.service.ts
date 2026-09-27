@@ -16,7 +16,8 @@ import * as JSZip from 'jszip';
 import { StorageService } from '../storage/storage.service';
 import {
   buildTree,
-  computeLocalPath,
+  createExportPathPlan,
+  assertSafeExportPath,
   getExportExtension,
   getPageTitle,
   PageExportTree,
@@ -668,7 +669,7 @@ export class ExportService {
       return `<!DOCTYPE html>
       <html>
         <head>
-         <title>${pageTitle}</title>
+         <title>${this.escapeHtml(pageTitle)}</title>
          <style>
            [data-docmost-transclusion="true"] { break-inside: avoid; }
            [data-docmost-transclusion-label="true"] { line-height: 1.4; }
@@ -813,6 +814,7 @@ export class ExportService {
       prosemirrorJson = await this.turnPageMentionsToLinks(
         prosemirrorJson,
         page.workspaceId,
+        authorizedUser,
       );
     }
 
@@ -917,7 +919,11 @@ export class ExportService {
       referencePageId,
     );
 
-    return this.turnPageMentionsToLinks(materializedJson, workspaceId);
+    return this.turnPageMentionsToLinks(
+      materializedJson,
+      workspaceId,
+      authorizedUser,
+    );
   }
 
   private resolveTransclusionPresentationStrings(
@@ -3125,11 +3131,15 @@ export class ExportService {
     headingNumberingByPageId?: Record<string, boolean>,
     authorizedUser?: User,
   ): Promise<void> {
-    const slugIdToPath: Record<string, string> = {};
+    const slugIdToPath: Record<string, string> = Object.create(null);
     const pageIdToFilePath: Record<string, string> = {};
     const pagesMetadata: Record<string, ExportPageMetadata> = {};
 
-    computeLocalPath(tree, format, null, '', slugIdToPath);
+    const pathPlan = createExportPathPlan(tree, format);
+    for (const pages of Object.values(tree)) {
+      for (const page of pages)
+        slugIdToPath[page.slugId] = pathPlan.get(page.id)!.zipPath;
+    }
 
     const stack: { folder: JSZip; parentPageId: string | null }[] = [
       { folder: zip, parentPageId: null },
@@ -3153,6 +3163,7 @@ export class ExportService {
         const prosemirrorJson = await this.turnPageMentionsToLinks(
           materializedJson,
           page.workspaceId,
+          authorizedUser,
         );
 
         const currentPagePath = slugIdToPath[page.slugId];
@@ -3177,7 +3188,7 @@ export class ExportService {
           }
         }
 
-        const pageTitle = getPageTitle(page.title);
+        const plannedPath = pathPlan.get(page.id)!;
         const pageHeadingNumberingEnabled =
           headingNumberingByPageId &&
           Object.prototype.hasOwnProperty.call(
@@ -3200,15 +3211,17 @@ export class ExportService {
           materialized.attachmentPageIds,
         );
 
-        folder.file(
-          `${pageTitle}${getExportExtension(format)}`,
-          pageExportContent,
-        );
+        zip.file(plannedPath.zipPath, pageExportContent);
 
-        pageIdToFilePath[page.id] = currentPagePath;
+        // Keep the legacy metadata key encoding used by generic imports.
+        const metadataPath = currentPagePath
+          .split('/')
+          .map((segment) => encodeURIComponent(segment))
+          .join('/');
+        pageIdToFilePath[page.id] = metadataPath;
 
         const parentPath = parentPageId ? pageIdToFilePath[parentPageId] : null;
-        pagesMetadata[currentPagePath] = {
+        pagesMetadata[metadataPath] = {
           pageId: page.id,
           slugId: page.slugId,
           icon: page.icon ?? null,
@@ -3221,7 +3234,7 @@ export class ExportService {
         };
 
         if (childPages.length > 0) {
-          const pageFolder = folder.folder(pageTitle);
+          const pageFolder = folder.folder(plannedPath.segment);
           stack.push({ folder: pageFolder, parentPageId: page.id });
         }
       }
@@ -3235,6 +3248,7 @@ export class ExportService {
     };
 
     zip.file('docmost-metadata.json', JSON.stringify(metadata, null, 2));
+    for (const name of Object.keys(zip.files)) assertSafeExportPath(name);
   }
 
   async zipAttachments(
@@ -3280,7 +3294,11 @@ export class ExportService {
     }
   }
 
-  async turnPageMentionsToLinks(prosemirrorJson: any, workspaceId: string) {
+  async turnPageMentionsToLinks(
+    prosemirrorJson: any,
+    workspaceId: string,
+    authorizedUser?: User,
+  ) {
     const doc = jsonToNode(prosemirrorJson);
 
     const pageMentionIds = [];
@@ -3297,15 +3315,37 @@ export class ExportService {
       return prosemirrorJson;
     }
 
-    const pages = await this.db
-      .selectFrom('pages')
-      .select(['id', 'slugId', 'title', 'creatorId', 'spaceId', 'workspaceId'])
-      .select((eb) => this.pageRepo.withSpace(eb))
-      .where('id', 'in', pageMentionIds)
-      .where('workspaceId', '=', workspaceId)
-      .execute();
+    const pages =
+      authorizedUser && authorizedUser.workspaceId === workspaceId
+        ? await this.db
+            .selectFrom('pages')
+            .select([
+              'id',
+              'slugId',
+              'title',
+              'creatorId',
+              'spaceId',
+              'workspaceId',
+            ])
+            .select((eb) => this.pageRepo.withSpace(eb))
+            .where('id', 'in', pageMentionIds)
+            .where('workspaceId', '=', workspaceId)
+            .where('deletedAt', 'is', null)
+            .execute()
+        : [];
 
-    const pageMap = new Map(pages.map((page) => [page.id, page]));
+    const access =
+      authorizedUser && pages.length
+        ? await this.pageAccessService.getEffectiveAccessForPages(
+            pages,
+            authorizedUser,
+          )
+        : new Map();
+    const pageMap = new Map(
+      pages
+        .filter((page) => access.get(page.id)?.capabilities.canRead)
+        .map((page) => [page.id, page]),
+    );
 
     let editorState = EditorState.create({
       doc: doc,
@@ -3361,8 +3401,14 @@ export class ExportService {
             page.space.slug,
           );
         } else {
-          // if page is not found, default to  the node label and slugId
-          replaceMentionWithLink(node, pos, label, slugId, 'undefined');
+          // Preserve only text already present in the source document.
+          const text = typeof label === 'string' && label ? label : 'untitled';
+          transaction.replaceWith(
+            pos + offset,
+            pos + offset + node.nodeSize,
+            editorState.schema.text(text),
+          );
+          offset += text.length - node.nodeSize;
         }
       }
     });

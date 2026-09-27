@@ -351,6 +351,10 @@ export class EnvironmentService {
     return this.configService.get<string>('WEB_PUSH_SUBJECT');
   }
 
+  getWebPushAllowedOrigins(): string {
+    return this.configService.get<string>('WEB_PUSH_ALLOWED_ORIGINS', '');
+  }
+
   getDrawioUrl(): string {
     return this.configService.get<string>('DRAWIO_URL');
   }
