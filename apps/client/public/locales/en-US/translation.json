@@ -1655,7 +1655,7 @@
           },
           "success": "The test returns candidates and the answer keeps only readable, non-excluded sources",
           "rollback": "Disable external search; Chat continues without retrieval",
-          "technical": "Docmost rechecks live source state, exclusions, and ACL before and during generation, when reusing chat history, and before returning editor-selection results. Page attachments and private chat files are guarded too, and selected text remains untrusted input. If access changes, partial text, reasoning, and citations are cleared and the message becomes restricted. Open WebUI supports `vector` and `hybrid_with_vector_fallback`. When `retrievalFollowUpRewriteEnabled` is on, only the retrieval query is rewritten from safe user history and live citation titles; assistant prose and file/page bodies are excluded. The rewrite has a 30000 ms deadline and falls back to the original query without blocking generation."
+          "technical": "Docmost rechecks live source state, exclusions, and ACL before and during generation, when reusing chat history, and before returning editor-selection results. Page attachments and private chat files are guarded too, and selected text remains untrusted input. If access changes, partial text, reasoning, and citations are cleared and the message becomes restricted. Open WebUI supports `vector` and `hybrid_with_vector_fallback`. When `retrievalFollowUpRewriteEnabled` is on, only the retrieval query is rewritten from safe user history and live citation titles; assistant prose and file/page bodies are excluded. The rewrite has a 2000 ms deadline and falls back to the original query without blocking generation. Evidence is resolved from current Docmost content; only transmitted fragments can be cited. The evidence-v1 pilot uses structured-knowledge-v3, local fallback and a 10000 ms preparation budget. Empty evidence produces an explicit no-data or unavailable-search answer."
         },
         "ragApi": {
           "description": "The read-only /api/rag/* API exports full and incremental feeds to an external indexer and can return protected attachment streams after authorization.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "Maximum requests one member can make per day.",
       "spaceTokenLimitDescription": "Maximum input and output tokens used by this space per day.",
       "retentionDaysDescription": "Number of days private AI chat data is retained.",
-      "loading": "Loading AI settings…"
+      "loading": "Loading AI settings…",
+      "qualityProfile": "Search quality profile",
+      "qualityProfileDescription": "The pilot profile uses structured fragments and local search. Synchronization requires metadata v3.",
+      "qualityProfileLegacy": "Previous search profile",
+      "qualityProfileEvidence": "Evidence quality pilot",
+      "queryExpansion": "Expand compound questions",
+      "queryExpansionDescription": "Up to two additional searches; keep disabled until quality and latency are measured.",
+      "searchProfileVerified": "Search configuration verified",
+      "searchProfileUnverified": "Search configuration not verified",
+      "rerankerDisabled": "Reranker disabled"
     },
     "cancel": "Cancel",
     "delete": "Delete",

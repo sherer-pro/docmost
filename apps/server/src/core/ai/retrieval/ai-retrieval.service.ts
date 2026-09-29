@@ -25,11 +25,30 @@ import {
 } from '../services/ai-source-access.service';
 import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
 import { RagContentProjectorService } from '../../rag/rag-content-projector.service';
+import { AiCanonicalEvidenceService } from './ai-canonical-evidence.service';
+import { SearchService } from '../../search/search.service';
+import { DictionarySearchService } from '../../dictionary/dictionary-search.service';
+import { evidenceHash, normalizeEvidence } from '../../rag/rag-evidence.util';
+import { resolveCurrentEvidence } from '../../rag/structured-knowledge.util';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
   errorCode?: string;
   sources: AiSafeRetrievalSource[];
+  diagnostics?: {
+    profile: string;
+    mode: string;
+    received: number;
+    rejected: number;
+    rejectedAcl: number;
+    stale: number;
+    refreshed: number;
+    merged: number;
+    admitted: number;
+    latencyMs: number;
+    degradation?: string;
+    effectiveProfile?: AiRetrievalHit['effectiveProfile'];
+  };
 };
 
 @Injectable()
@@ -51,6 +70,9 @@ export class AiRetrievalService {
     private readonly knowledgeProjection?: KnowledgeProjectionService,
     @Optional()
     private readonly contentProjectors?: RagContentProjectorService,
+    @Optional() private readonly canonical?: AiCanonicalEvidenceService,
+    @Optional() private readonly localSearch?: SearchService,
+    @Optional() private readonly dictionarySearch?: DictionarySearchService,
   ) {}
 
   async assertSourcesAccessible(params: {
@@ -131,11 +153,23 @@ export class AiRetrievalService {
       request.workspaceId,
       request.spaceId,
       config.maxResults,
+      user,
     );
 
     return {
       ...result,
       validCandidateCount: sources.length,
+      canary: request.canary
+        ? sources.some(
+            (source) =>
+              source.sourceId === request.canary!.sourceId &&
+              normalizeEvidence(source.excerpt).includes(
+                normalizeEvidence(request.canary!.expectedText),
+              ),
+          )
+          ? ('passed' as const)
+          : ('failed' as const)
+        : ('not_requested' as const),
       state: sources.length > 0 ? ('ready' as const) : ('empty' as const),
     };
   }
@@ -151,12 +185,17 @@ export class AiRetrievalService {
       return this.outcome({ status: 'not_requested', sources: [] });
     }
     const adapter = this.getAdapter(params.config);
-    if (!adapter.isConfigured(params.config)) {
+    if (!adapter.isConfigured(params.config) && !this.localSearch) {
       return this.outcome({ status: 'disabled', sources: [] });
     }
 
     try {
       const retrievalStartedAt = Date.now();
+      const deadlineAtMs = params.request.deadlineAtMs ?? Date.now() + 10_000;
+      const signal = AbortSignal.any([
+        ...(params.signal ? [params.signal] : []),
+        AbortSignal.timeout(Math.max(1, deadlineAtMs - Date.now())),
+      ]);
       const preparation = Promise.all([
         this.currentAllowedPageIds(
           params.user,
@@ -175,15 +214,57 @@ export class AiRetrievalService {
           )
         : await preparation;
       const allowedPageIds = [...allowedPageIdSet];
-      const hits = await adapter.retrieve(
-        params.config,
-        {
-          ...safeRequest,
-          allowedPageIds,
-        },
-        params.signal,
+      let degradation: string | undefined;
+      const externalDeadline = Math.min(deadlineAtMs, Date.now() + 6_000);
+      const queries = [
+        ...new Set([
+          safeRequest.query,
+          ...(safeRequest.additionalQueries ?? []).slice(0, 2),
+        ]),
+      ];
+      const rankings = await Promise.all(
+        queries.map(async (query) => {
+          if (!adapter.isConfigured(params.config)) {
+            degradation = 'retrieval_disabled';
+            return [];
+          }
+          try {
+            return await this.withTimeout(
+              adapter.retrieve(
+                {
+                  ...params.config,
+                  timeoutMs: Math.max(1, externalDeadline - Date.now()),
+                },
+                {
+                  ...safeRequest,
+                  query,
+                  allowedPageIds,
+                  deadlineAtMs: externalDeadline,
+                },
+                AbortSignal.any([
+                  signal,
+                  AbortSignal.timeout(
+                    Math.max(1, externalDeadline - Date.now()),
+                  ),
+                ]),
+              ),
+              Math.max(1, externalDeadline - Date.now()),
+            );
+          } catch (error) {
+            degradation = this.toErrorCode(error);
+            return [];
+          }
+        }),
       );
+      let hits = this.fuseRanks(rankings);
+      const counts = { rejectedAcl: 0, stale: 0, refreshed: 0, merged: 0 };
       const resolveSources = async () => {
+        Object.assign(counts, {
+          rejectedAcl: 0,
+          stale: 0,
+          refreshed: 0,
+          merged: 0,
+        });
         let sources = await this.resolveSafeSources(
           hits,
           await this.currentAllowedPageIds(
@@ -193,32 +274,88 @@ export class AiRetrievalService {
           ),
           params.request.workspaceId,
           params.request.spaceId,
-          params.config.maxResults,
+          40,
+          params.user,
+          counts,
+          signal,
         );
         if (this.sourceAccess) {
+          const before = sources.length;
           sources = await this.sourceAccess.filterAccessible(sources, {
             user: params.user,
             workspaceId: params.request.workspaceId,
             spaceId: params.request.spaceId,
             mode: 'rag-search',
           });
+          counts.rejectedAcl += before - sources.length;
         }
-        return sources;
+        // Canonicalization can merge several remote chunks into one parent.
+        const unique = new Map(
+          sources.map((source) => [
+            `${source.sourceType}:${source.sourceId}:${source.contentHash}`,
+            source,
+          ]),
+        );
+        counts.merged = sources.length - unique.size;
+        return [...unique.values()].slice(0, params.config.maxResults);
       };
-      const sources = params.request.deadlineAtMs
+      let sources = params.request.deadlineAtMs
         ? await this.withTimeout(
             resolveSources(),
             Math.max(1, params.request.deadlineAtMs - Date.now()),
           )
         : await resolveSources();
+      if (
+        (params.config.qualityProfile === 'evidence-v1' ||
+          sources.length === 0) &&
+        this.localSearch &&
+        !signal.aborted
+      ) {
+        const local = await this.withTimeout(
+          this.localCandidates(params.request, params.user),
+          Math.max(1, deadlineAtMs - Date.now()),
+        ).catch(() => []);
+        if (local.length && !signal.aborted) {
+          const externalHits = hits;
+          const externalCounts = { ...counts };
+          hits = this.fuseRanks([hits, local]);
+          try {
+            sources = await this.withTimeout(
+              resolveSources(),
+              Math.max(1, deadlineAtMs - Date.now()),
+            );
+          } catch {
+            hits = externalHits;
+            Object.assign(counts, externalCounts);
+            degradation ??= 'retrieval_timeout';
+          }
+        }
+      }
       this.metrics.observeRetrievalQuery(
         Date.now() - retrievalStartedAt,
         hits.length,
         sources.length,
       );
       return this.outcome({
-        status: sources.length > 0 ? 'used' : 'empty',
+        status: sources.length > 0 ? 'used' : degradation ? 'failed' : 'empty',
         sources,
+        ...(degradation ? { errorCode: degradation } : {}),
+        diagnostics: {
+          profile: params.config.qualityProfile ?? 'legacy-v1',
+          mode: hits.some((hit) => hit.local)
+            ? rankings.some((rank) => rank.length)
+              ? 'external_and_local'
+              : 'local_fallback'
+            : (hits[0]?.retrievalMode ?? 'unverified'),
+          received: hits.length,
+          rejected: counts.rejectedAcl + counts.stale,
+          ...counts,
+          admitted: sources.length,
+          latencyMs: Date.now() - retrievalStartedAt,
+          degradation,
+          effectiveProfile: rankings.flat().find((hit) => hit.effectiveProfile)
+            ?.effectiveProfile,
+        },
       });
     } catch (error) {
       const errorCode = this.toErrorCode(error);
@@ -235,6 +372,63 @@ export class AiRetrievalService {
   private outcome(value: AiRetrievalOutcome): AiRetrievalOutcome {
     this.metrics.observeRetrieval(value.status);
     return value;
+  }
+
+  private fuseRanks(rankings: AiRetrievalHit[][]): AiRetrievalHit[] {
+    const fused = new Map<string, { hit: AiRetrievalHit; rank: number }>();
+    for (const ranking of rankings) {
+      const seen = new Set<string>();
+      ranking.forEach((hit, index) => {
+        const key = `${hit.sourceType}:${hit.sourceId}:${evidenceHash(normalizeEvidence(hit.text))}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const previous = fused.get(key);
+        fused.set(key, {
+          hit: previous?.hit ?? hit,
+          rank: (previous?.rank ?? 0) + 1 / (60 + index + 1),
+        });
+      });
+    }
+    return [...fused.values()]
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, 40)
+      .map((item) => item.hit);
+  }
+
+  private async localCandidates(
+    request: AiRetrievalRequest,
+    user: User,
+  ): Promise<AiRetrievalHit[]> {
+    const [pages, dictionary] = await Promise.all([
+      this.localSearch!.searchPage(
+        { query: request.query, spaceId: request.spaceId, limit: 40 } as any,
+        { userId: user.id, workspaceId: request.workspaceId },
+      ),
+      this.dictionarySearch?.search(
+        { query: request.query, spaceId: request.spaceId, limit: 8 } as any,
+        { userId: user.id, workspaceId: request.workspaceId },
+      ) ?? { items: [] },
+    ]);
+    return [
+      ...dictionary.items.map((item) => ({
+        sourceType: 'dictionary_term' as const,
+        sourceId: item.id,
+        pageId: null,
+        text: request.query,
+        local: true,
+        retrievalMode: 'local' as const,
+        scoreKind: 'local_rank' as const,
+      })),
+      ...pages.items.map((item) => ({
+        sourceType: 'page' as const,
+        sourceId: item.id,
+        pageId: item.id,
+        text: request.query,
+        local: true,
+        retrievalMode: 'local' as const,
+        scoreKind: 'local_rank' as const,
+      })),
+    ];
   }
 
   private async withTimeout<T>(
@@ -306,6 +500,9 @@ export class AiRetrievalService {
     workspaceId: string,
     spaceId: string,
     topK: number,
+    user?: User,
+    counts = { rejectedAcl: 0, stale: 0, refreshed: 0, merged: 0 },
+    signal?: AbortSignal,
   ): Promise<AiSafeRetrievalSource[]> {
     if (hits.length === 0) {
       return [];
@@ -423,7 +620,42 @@ export class AiRetrievalService {
     );
 
     const safe: AiSafeRetrievalSource[] = [];
+    const documents = new Map<
+      string,
+      ReturnType<AiCanonicalEvidenceService['load']>
+    >();
+    const current = async (hit: AiRetrievalHit) => {
+      if (!this.canonical || !user) return null;
+      const key = `${hit.sourceType}:${hit.sourceId}`;
+      if (!documents.has(key))
+        documents.set(
+          key,
+          this.canonical
+            .load(hit, user, workspaceId, spaceId, signal)
+            .catch(() => null),
+        );
+      const document = await documents.get(key);
+      if (!document) {
+        counts.stale += 1;
+        return null;
+      }
+      const evidence = resolveCurrentEvidence(
+        document.markdown,
+        hit,
+        document.headings,
+      );
+      if (!evidence) counts.stale += 1;
+      else if (evidence.refreshed) counts.refreshed += 1;
+      return evidence
+        ? {
+            ...evidence,
+            sourceVersion: document.version,
+            contentHash: evidenceHash(evidence.excerpt),
+          }
+        : null;
+    };
     for (const hit of hits) {
+      if (signal?.aborted) break;
       if (hit.sourceType === 'dictionary_term') {
         const term = dictionaryTermsById.get(hit.sourceId);
         const dictionaryEnabled = Boolean(
@@ -442,13 +674,18 @@ export class AiRetrievalService {
         ) {
           continue;
         }
+        const evidence = await current(hit);
+        if (!evidence) continue;
         safe.push({
           sourceType: 'dictionary_term',
           sourceId: hit.sourceId,
           pageId: null,
           sourceTitle: term.term,
           sourceUrl: `/s/${encodeURIComponent(term.spaceSlug)}/dictionary?term=${encodeURIComponent(term.id)}`,
-          excerpt: this.sanitizeExcerpt(hit.text),
+          excerpt: evidence.excerpt,
+          sourceVersion: evidence.sourceVersion,
+          contentHash: evidence.contentHash,
+          scoreKind: hit.scoreKind ?? 'unknown',
           relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
           ...(hit.partKey ? { partKey: hit.partKey } : {}),
           sectionId: null,
@@ -468,6 +705,7 @@ export class AiRetrievalService {
       const resolvedPageId = hit.pageId;
       if (!resolvedPageId) continue;
       const page = pagesById.get(resolvedPageId);
+      if (page && !allowedPageIds.has(page.id)) counts.rejectedAcl += 1;
       if (
         !page ||
         page.deletedAt ||
@@ -501,10 +739,12 @@ export class AiRetrievalService {
         title = file.fileName;
       }
 
+      const evidence = await current(hit);
+      if (!evidence) continue;
       const section =
         hit.sourceType === 'attachment'
           ? null
-          : this.matchPageSection(page.content, hit.text);
+          : this.matchPageSection(page.content, evidence.excerpt);
       const pageUrl = `/s/${encodeURIComponent(page.spaceSlug)}/p/${encodeURIComponent(page.slugId)}`;
       const customFields = pageCustomFields.get(page.id);
       const documentFieldsMarkdown = this.knowledgeProjection
@@ -524,7 +764,7 @@ export class AiRetrievalService {
             : section
               ? `${pageUrl}#${encodeURIComponent(section.id)}`
               : pageUrl,
-        excerpt: [documentFieldsMarkdown, this.sanitizeExcerpt(hit.text)]
+        excerpt: [documentFieldsMarkdown, evidence.excerpt]
           .filter(Boolean)
           .join('\n\n'),
         relevanceScore: Number.isFinite(hit.score) ? Number(hit.score) : null,
@@ -532,6 +772,10 @@ export class AiRetrievalService {
         customFields,
         sectionId: section?.id ?? null,
         sectionTitle: section?.title ?? null,
+        sourceVersion: evidence.sourceVersion,
+        contentHash: evidence.contentHash,
+        headingPath: evidence.headingPath,
+        scoreKind: hit.scoreKind ?? 'unknown',
       });
       if (safe.length >= topK) {
         break;

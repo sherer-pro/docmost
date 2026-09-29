@@ -1655,7 +1655,7 @@
           },
           "success": "Der Test gibt Kandidaten zurück und die Antwort enthält nur lesbare, nicht ausgeschlossene Quellen",
           "rollback": "Externe Suche deaktivieren; Chat wird ohne Abruf fortgesetzt",
-          "technical": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt. Open WebUI unterstützt `vector` und `hybrid_with_vector_fallback`. Mit `retrievalFollowUpRewriteEnabled` wird nur die Suchanfrage aus sicherem Benutzerverlauf und Titeln weiterhin lesbarer Zitate umgeschrieben; Assistententext sowie Seiten- und Dateiinhalte fehlen. Das Rewrite-Limit beträgt 30000 ms, bei Fehlern wird die ursprüngliche Anfrage verwendet und die Generierung fortgesetzt."
+          "technical": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt. Open WebUI unterstützt `vector` und `hybrid_with_vector_fallback`. Mit `retrievalFollowUpRewriteEnabled` wird nur die Suchanfrage aus sicherem Benutzerverlauf und Titeln weiterhin lesbarer Zitate umgeschrieben; Assistententext sowie Seiten- und Dateiinhalte fehlen. Das Rewrite-Limit beträgt 2000 ms, bei Fehlern wird die ursprüngliche Anfrage verwendet und die Generierung fortgesetzt. Belege stammen aus aktuellen Docmost-Inhalten; nur übermittelte Abschnitte sind zitierbar. Das Pilotprofil evidence-v1 verwendet structured-knowledge-v3, lokale Ersatzsuche und ein Zeitbudget von 10000 ms. Ohne Belege werden fehlende Daten und eine nicht verfügbare Suche unterschieden."
         },
         "ragApi": {
           "description": "Die schreibgeschützte API /api/rag/* exportiert vollständige und inkrementelle Feeds an einen externen Indexer und kann nach der Autorisierung geschützte Anhangsstreams zurückgeben.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "Maximale Anfragen eines Mitglieds pro Tag.",
       "spaceTokenLimitDescription": "Maximale Eingabe- und Ausgabe-Token dieses Bereichs pro Tag.",
       "retentionDaysDescription": "Anzahl der Tage, für die private KI-Chatdaten aufbewahrt werden.",
-      "loading": "KI-Einstellungen werden geladen…"
+      "loading": "KI-Einstellungen werden geladen…",
+      "qualityProfile": "Qualitätsprofil der Suche",
+      "qualityProfileDescription": "Das Pilotprofil verwendet strukturierte Abschnitte und lokale Suche. Die Synchronisierung benötigt Metadaten v3.",
+      "qualityProfileLegacy": "Bisheriges Suchprofil",
+      "qualityProfileEvidence": "Pilot für belegte Antworten",
+      "queryExpansion": "Mehrteilige Fragen erweitern",
+      "queryExpansionDescription": "Bis zu zwei zusätzliche Suchanfragen; erst nach Messung von Qualität und Latenz aktivieren.",
+      "searchProfileVerified": "Suchkonfiguration geprüft",
+      "searchProfileUnverified": "Suchkonfiguration nicht geprüft",
+      "rerankerDisabled": "Reranker deaktiviert"
     },
     "cancel": "Abbrechen",
     "delete": "Löschen",

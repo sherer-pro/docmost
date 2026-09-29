@@ -5,6 +5,8 @@ import {
   type RagContentProcessorId,
 } from '@docmost/api-contract';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { structuredParts } from './structured-knowledge.util';
+import { evidenceHash } from './rag-evidence.util';
 import {
   RagAttachmentTextProjectionInput,
   RagContentProjector,
@@ -106,7 +108,7 @@ export class RagContentProjectorService {
     );
   }
 
-  getCapabilities(): RagContentCapability[] {
+  getCapabilities(qualityProfile = 'legacy-v1'): RagContentCapability[] {
     const attachmentText = {
       ...this.attachmentText.capability,
       state: this.enabledProcessorIds.has(this.attachmentText.id)
@@ -115,6 +117,11 @@ export class RagContentProjectorService {
     };
     return [
       this.structuredKnowledge.capability,
+      {
+        ...this.structuredKnowledge.capability,
+        processorId: 'structured-knowledge-v3',
+        state: qualityProfile === 'evidence-v1' ? 'enabled' : 'disabled',
+      },
       attachmentText,
       ...(
         [
@@ -162,6 +169,28 @@ export class RagContentProjectorService {
   projectStructuredKnowledge(
     input: RagStructuredKnowledgeProjectionInput,
   ): RagProjectionResult {
+    if (input.qualityProfile === 'evidence-v1') {
+      return {
+        projectorId: 'structured-knowledge-v3',
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        parts: structuredParts(input.markdown, input.headings).map((part) => ({
+          partId: `${part.partId}-${evidenceHash(part.markdown).slice(0, 16)}`,
+          fileName: `${part.partId}-${input.fileName}`,
+          mimeType: 'text/markdown',
+          content: new TextEncoder().encode(part.markdown),
+          locator: {
+            pageId: input.pageId,
+            ...(input.databaseId ? { databaseId: input.databaseId } : {}),
+            sectionId: part.sectionId,
+            headingPath: part.headingPath,
+            links: [
+              ...new Set(part.markdown.match(/https?:\/\/[^\s<>"\])]+/g) ?? []),
+            ].slice(0, 32),
+          },
+        })),
+      };
+    }
     return this.structuredKnowledge.project(input);
   }
 

@@ -500,3 +500,10 @@ Local commands:
 - `pnpm context:verify` performs the read-only health, profile, listener, MCP, hook, smoke, and graph contract checks.
 
 AgentMemory is a shared machine service: one database, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository. Merge shared user configuration with read -> merge -> atomic write, preserve unrelated entries, and create a backup only when content changes. This repository registers the pinned `@agentmemory/mcp@0.9.28` shim once through `.codex/config.toml`; do not enable a duplicate AgentMemory plugin. Preserve the project `.codex/hooks.json` Graphify hook and never bypass hook trust.
+
+## RAG evidence quality verification
+
+- The optional per-space `evidence-v1` profile uses `structured-knowledge-v3`; metadata write version 3 is required for its synchronization. `legacy-v1` retains canonical evidence and citation safety fixes.
+- Validate the 200-question synthetic corpus and evaluator with `node --test scripts/rag-quality-benchmark.test.mjs`. Regenerate fixtures with `node scripts/generate-rag-quality-corpus.mjs`.
+- Score recorded, human-reviewed runs with `node scripts/rag-quality-benchmark.mjs results.jsonl report.json holdout evidence-v1`; read `tests/rag-quality/README.md` before running a quality experiment. Unit tests do not establish production relevance or faithfulness.
+- Isolated Open WebUI first startup may download embeddings; `OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS` accepts 1000-900000 ms. Use a unique `COMPOSE_PROJECT_NAME`; the runner removes only that test stack.

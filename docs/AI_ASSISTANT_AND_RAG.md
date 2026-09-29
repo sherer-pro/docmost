@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 25 -->
+<!-- ai-admin-guide-contract-version: 26 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -215,9 +215,10 @@ run-context snapshot, so Retry and Regenerate preserve the original anchors.
 Page and database URLs are canonical relative application URLs. Section URLs
 append `#headingId`, while private files use authenticated download routes.
 
-Retrieval excerpts are matched against the currently authorized local page
-content. An exact or unique normalized match may resolve to a stable section;
-an ambiguous match falls back to the page root. Attachment retrieval results
+Retrieval candidates are resolved against current canonical Docmost content.
+A unique normalized match or a current structural locator is required;
+unresolvable and ambiguous fragments are discarded. Section links additionally
+require a stable editor heading. Attachment retrieval results
 link directly to the authenticated attachment route. Built-in agent read tools
 return internal citation references, and the execution layer adds the assigned
 `[S<n>]` markers plus page source dependencies. Outbound external MCP results
@@ -615,7 +616,7 @@ query, at most three earlier complete user messages after
 earlier complete assistant messages. Assistant prose, reasoning, page/file
 content, deleted or inaccessible source titles, and `chat_file` titles are
 never included. The same frozen provider configuration is used with temperature
-`0`, at most 128 output tokens, an 8 KiB input cap, and a 30 second deadline. The
+`0`, at most 128 output tokens, an 8 KiB input cap, and a two second deadline. The
 result must be one non-empty line of at most 1000 characters. Missing safe
 history, timeout, provider error, or invalid output falls back to the original
 query and never blocks generation. Retry and regenerate perform the rewrite
@@ -650,8 +651,9 @@ page attachments and private chat files, not only page and retrieval sources.
 An external request is bounded to forty candidates, eight final results by
 default, 16 KiB of text per hit, a 1 MiB serialized request, and a 256 KiB
 response. Malformed, oversized, and non-UUID candidates are rejected
-individually. `http-json-v1` duplicate identities retain the highest score;
-Open WebUI duplicates retain the first upstream-ranked candidate.
+individually. Deduplication uses source identity and normalized fragment hash;
+different fragments of the same source survive. Final limits apply after
+authorization and canonical fragment merging.
 
 The shared Agent/MCP `search` capability also searches the dictionary as an
 independent corpus when the space switch is enabled. Exact normalized term or
@@ -690,12 +692,81 @@ hybrid/reranker failure. It does not occur after abort, URL-policy or redirect
 rejection, oversized response, `400/401/403/404`, target mismatch, incompatible
 metadata, or a valid empty result. Open WebUI ranking remains authoritative:
 Docmost requests at most forty candidates, keeps first-seen identity order,
-caps a logical source to two parts, and returns at most eight final readable
+preserves distinct fragments of one source, and returns at most eight final readable
 results without applying an unverified local score threshold. When the
 collection response contains only `file_id`, the
 adapter calls `GET /api/v1/files/:fileId` and reads canonical metadata from
-`file.meta.data.docmost`. Open WebUI distance is converted to
-`1 / (1 + max(0, distance))`.
+`file.meta.data.docmost`. Vector distance is converted to
+`1 / (1 + max(0, distance))`; hybrid scores retain their original direction and
+explicit semantics. Unverified scores are never treated as calibrated confidence.
+
+### Evidence quality profiles
+
+Both `legacy-v1` and `evidence-v1` resolve evidence from current Docmost content,
+preserve ACL/DONE/exclusion checks, and authorize citations after context packing.
+Rollback does not restore stale index text. The default remains `legacy-v1`;
+enable `evidence-v1` in one pilot space first. Answers are not cached across users.
+
+The pilot uses `structured-knowledge-v3` for pages, database rows and dictionary
+entries. Exported editor headings preserve stable section IDs; generated sections
+use deterministic heading-path identifiers. Children target a conservative 350
+text-token upper bound with up to 50 tokens of whole-block overlap. Atomic rules
+may exceed that soft target. Parent reconstruction targets 1200 tokens and keeps
+matched table rows, units, captions and nearby conditions together. Meaningful
+URLs remain in content and provenance metadata. No unreadable ancestor titles
+are added. PDF/DOCX, OCR, vision and audio processors remain disabled for RAG.
+
+Pilot sync requires `RAG_SYNC_METADATA_WRITE_VERSION=3`; the default remains 2.
+The scope fingerprint includes the quality profile and triggers feed replay.
+Signed v3 metadata contains projector version, part, source revision, content hash
+and locator. Obsolete signed parts are retired only after all replacements finish
+processing; unsigned files are preserved. Rollback rebuilds current source data
+before retiring structured parts. Existing leases and reconciliation still apply.
+
+Evidence preparation shares a 10000 ms deadline, including up to 2000 ms for
+rewriting and 6000 ms for external retrieval. The original query is always kept.
+`queryExpansionEnabled` defaults to false; compound questions can add at most two
+subqueries, including any contextual rewrite. RRF uses rank constant 60 without
+mixing incomparable scores. Local search and dictionary supply pilot results and
+fallback evidence when external evidence cannot be resolved. Every result passes
+the same current RAG policy. Cancellation aborts outbound retrieval requests.
+
+Open WebUI receives explicit `k=40` and `k_reranker=40` candidate limits; Docmost
+then selects eight final readable fragments by default. Keeping reranked
+candidates until authorization prevents early ACL-related evidence loss.
+Configuration tests inspect version, embedding model, hybrid, splitter and
+reranker through admin endpoints. Missing permission or fields means unverified.
+Pilot diagnostics distinguish verified hybrid, unverified hybrid, vector fallback
+and local fallback. A generic `400` never authorizes a vector retry. Endpoints
+and score semantics follow the [Open WebUI v0.11.0 source](https://github.com/open-webui/open-webui/blob/v0.11.0/backend/open_webui/routers/retrieval.py).
+
+Packing reserves instructions, history, framing and output capacity, reallocates
+empty-category budgets and conservatively estimates text tokens by UTF-8 bytes.
+Blocks retain boundaries; oversized ordinary paragraphs may end at a sentence
+boundary with a truncation notice. Orphan labels cannot authorize citations.
+Agent citations are admitted when their bounded result enters model history.
+Search-enabled platform rules require supported facts, explicit gaps and conflicts
+with source versions. With no usable evidence, a deterministic response distinguishes
+missing data from unavailable search. This guard does not prove claim support.
+
+`ai_runs.evidence_snapshot` stores transmitted excerpts and available revisions
+and hashes. `retrieval_diagnostics` records profile, mode, received, rejected,
+ACL, stale, refreshed, merged, admitted, transmitted and cited counts, timing and
+degradation. Run responses expose only these compatible diagnostics, including a
+sanitized effective search profile when available. Snapshots also preserve query
+settings and remain private operational data, excluded from ordinary run
+responses and removed with conversation retention. Historical answers still
+require current source access. Reauthorize every source before exporting a
+snapshot; retain it no longer than its originating conversation.
+
+Retrieval tests accept optional `canary: {query, sourceId, expectedText}` and
+return `passed`, `failed` or `not_requested` independently of connection health.
+Choose a readable DONE source with a non-sensitive known answer. The synthetic
+200-question corpus, 120/80 split and evaluator are documented in the
+[quality evaluation runbook](../tests/rag-quality/README.md). Production recall,
+claim support and reranker gain remain unmeasured until evaluated with fixed
+models and target hardware. Start cross-encoder experiments with
+`BAAI/bge-reranker-v2-m3` in Open WebUI; this change does not enable a reranker.
 
 ## 4. Configuration and operation
 
@@ -922,6 +993,8 @@ Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
 is not an operational feature rollback unless the applicable row above states
 that its data loss is acceptable.
+
+| [`20260929T120000-rag-evidence-quality.ts`](../apps/server/src/database/migrations/20260929T120000-rag-evidence-quality.ts) | Adds per-space quality and expansion switches, private evidence snapshots and retrieval diagnostics. Defaults preserve the previous profile; correctness fixes apply to both profiles. | Drops the new settings, snapshots and diagnostics. Prefer switching to legacy-v1 over destructive schema rollback. |
 
 ## 5. Built-in synchronization with Open WebUI
 

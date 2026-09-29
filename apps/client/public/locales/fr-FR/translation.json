@@ -1655,7 +1655,7 @@
           },
           "success": "Le test renvoie les candidats et la réponse ne conserve que les sources lisibles et non exclues",
           "rollback": "Désactivez la recherche externe ; Chat continue sans récupération",
-          "technical": "Docmost revérifie l’état réel de la source, les exclusions et l’ACL avant et pendant la génération, lors de la réutilisation de l’historique et avant de renvoyer un résultat sur une sélection. Les pièces jointes de page et les fichiers privés du chat sont également protégés ; le texte sélectionné reste une entrée non fiable. Si l’accès change, le texte partiel, le raisonnement et les citations sont effacés et le message devient restreint. Open WebUI prend en charge `vector` et `hybrid_with_vector_fallback`. Avec `retrievalFollowUpRewriteEnabled`, seule la requête de recherche est réécrite à partir de l’historique utilisateur sûr et des titres de citations encore lisibles ; les réponses de l’assistant et le contenu des pages ou fichiers sont exclus. Le rewrite est limité à 30000 ms et revient à la requête d’origine sans bloquer la génération."
+          "technical": "Docmost revérifie l’état réel de la source, les exclusions et l’ACL avant et pendant la génération, lors de la réutilisation de l’historique et avant de renvoyer un résultat sur une sélection. Les pièces jointes de page et les fichiers privés du chat sont également protégés ; le texte sélectionné reste une entrée non fiable. Si l’accès change, le texte partiel, le raisonnement et les citations sont effacés et le message devient restreint. Open WebUI prend en charge `vector` et `hybrid_with_vector_fallback`. Avec `retrievalFollowUpRewriteEnabled`, seule la requête de recherche est réécrite à partir de l’historique utilisateur sûr et des titres de citations encore lisibles ; les réponses de l’assistant et le contenu des pages ou fichiers sont exclus. Le rewrite est limité à 2000 ms et revient à la requête d’origine sans bloquer la génération. Les preuves proviennent du contenu actuel de Docmost ; seuls les fragments transmis peuvent être cités. Le pilote evidence-v1 utilise structured-knowledge-v3, un repli local et un budget de 10000 ms. Sans preuves, la réponse distingue données absentes et recherche indisponible."
         },
         "ragApi": {
           "description": "L'API /api/rag/* en lecture seule exporte des flux complets et incrémentiels vers un indexeur externe et peut renvoyer des flux de pièces jointes protégés après autorisation.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "Nombre maximal de requêtes par membre et par jour.",
       "spaceTokenLimitDescription": "Nombre maximal de jetons d’entrée et de sortie utilisés par cet espace par jour.",
       "retentionDaysDescription": "Nombre de jours de conservation des données de chat privé avec l’IA.",
-      "loading": "Chargement des paramètres IA…"
+      "loading": "Chargement des paramètres IA…",
+      "qualityProfile": "Profil de qualité de recherche",
+      "qualityProfileDescription": "Le profil pilote utilise des fragments structurés et la recherche locale. La synchronisation nécessite les métadonnées v3.",
+      "qualityProfileLegacy": "Profil de recherche précédent",
+      "qualityProfileEvidence": "Pilote des réponses sourcées",
+      "queryExpansion": "Développer les questions composées",
+      "queryExpansionDescription": "Deux recherches supplémentaires au maximum ; activez après avoir mesuré qualité et latence.",
+      "searchProfileVerified": "Configuration de recherche vérifiée",
+      "searchProfileUnverified": "Configuration de recherche non vérifiée",
+      "rerankerDisabled": "Reclassement désactivé"
     },
     "cancel": "Annuler",
     "delete": "Supprimer",

@@ -12,6 +12,7 @@ export const RAG_CONTENT_POLICY_VERSION = 1 as const;
 
 export const RAG_CONTENT_PROCESSOR_IDS = [
   "structured-knowledge-v2",
+  "structured-knowledge-v3",
   "attachment-text-v1",
   "pdf-text-v1",
   "docx-text-v1",
@@ -44,6 +45,7 @@ export interface RagSyncTarget {
 }
 
 export interface RagScope {
+  qualityProfile?: "legacy-v1" | "evidence-v1";
   schemaVersion?: 1 | 2 | 3 | 4;
   projectionVersion: typeof RAG_KNOWLEDGE_PROJECTION_VERSION;
   contentPolicyVersion?: typeof RAG_CONTENT_POLICY_VERSION;

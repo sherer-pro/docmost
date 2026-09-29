@@ -146,8 +146,11 @@ describe('AiQueryRewriteService', () => {
     expect(provider.complete.mock.calls[0][0]).toMatchObject({
       temperature: 0,
       maxOutputTokens: 128,
-      requestTimeoutMs: 30_000,
+      requestTimeoutMs: expect.any(Number),
     });
+    expect(
+      provider.complete.mock.calls[0][0].requestTimeoutMs,
+    ).toBeLessThanOrEqual(2_000);
   });
 
   it('skips the provider when there is no prior user message', async () => {

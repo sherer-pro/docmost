@@ -1,5 +1,5 @@
 {
-  "version": 25,
+  "version": 26,
   "anchors": [
     "assistant",
     "retrieval",
@@ -47,7 +47,7 @@
       "needles": [
         "hybrid_with_vector_fallback",
         "retrievalFollowUpRewriteEnabled",
-        "30000 ms"
+        "2000 ms"
       ]
     },
     {
@@ -107,6 +107,15 @@
       "needles": [
         "RAG_SYNC_METADATA_WRITE_VERSION=2",
         "RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1"
+      ]
+    },
+    {
+      "id": "rag-evidence-quality",
+      "key": "scenario.retrieval.technical",
+      "needles": [
+        "evidence-v1",
+        "structured-knowledge-v3",
+        "10000 ms"
       ]
     }
   ],

@@ -1655,7 +1655,7 @@
           },
           "success": "La prueba arroja candidatos y la respuesta conserva solo fuentes legibles y no excluidas.",
           "rollback": "Deshabilitar la búsqueda externa; Chat continúa sin recuperación",
-          "technical": "Docmost vuelve a comprobar el estado actual de la fuente, las exclusiones y la ACL antes y durante la generación, al reutilizar el historial del chat y antes de devolver resultados de una selección. También protege los adjuntos de página y los archivos privados del chat; el texto seleccionado sigue siendo una entrada no confiable. Si cambia el acceso, borra texto parcial, razonamiento y citas, y restringe el mensaje. Open WebUI admite `vector` y `hybrid_with_vector_fallback`. Con `retrievalFollowUpRewriteEnabled`, solo se reescribe la consulta usando historial seguro del usuario y títulos de citas aún legibles; no se incluyen respuestas del asistente ni contenido de páginas o archivos. El rewrite tiene un límite de 30000 ms y, si falla, se usa la consulta original sin detener la generación."
+          "technical": "Docmost vuelve a comprobar el estado actual de la fuente, las exclusiones y la ACL antes y durante la generación, al reutilizar el historial del chat y antes de devolver resultados de una selección. También protege los adjuntos de página y los archivos privados del chat; el texto seleccionado sigue siendo una entrada no confiable. Si cambia el acceso, borra texto parcial, razonamiento y citas, y restringe el mensaje. Open WebUI admite `vector` y `hybrid_with_vector_fallback`. Con `retrievalFollowUpRewriteEnabled`, solo se reescribe la consulta usando historial seguro del usuario y títulos de citas aún legibles; no se incluyen respuestas del asistente ni contenido de páginas o archivos. El rewrite tiene un límite de 2000 ms y, si falla, se usa la consulta original sin detener la generación. Las evidencias proceden del contenido actual de Docmost; solo se citan los fragmentos enviados. El piloto evidence-v1 usa structured-knowledge-v3, búsqueda local de respaldo y un presupuesto de 10000 ms. Sin evidencias, se distingue entre datos ausentes y búsqueda no disponible."
         },
         "ragApi": {
           "description": "La API /api/rag/* de solo lectura exporta feeds completos e incrementales a un indexador externo y puede devolver flujos de archivos adjuntos protegidos después de la autorización.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "Máximo de solicitudes que puede hacer un miembro al día.",
       "spaceTokenLimitDescription": "Máximo de tokens de entrada y salida utilizados por este espacio al día.",
       "retentionDaysDescription": "Número de días que se conservan los datos de chats privados con IA.",
-      "loading": "Cargando la configuración de IA…"
+      "loading": "Cargando la configuración de IA…",
+      "qualityProfile": "Perfil de calidad de búsqueda",
+      "qualityProfileDescription": "El perfil piloto usa fragmentos estructurados y búsqueda local. La sincronización requiere metadatos v3.",
+      "qualityProfileLegacy": "Perfil de búsqueda anterior",
+      "qualityProfileEvidence": "Piloto de respuestas con evidencia",
+      "queryExpansion": "Ampliar preguntas compuestas",
+      "queryExpansionDescription": "Hasta dos búsquedas adicionales; active después de medir la calidad y la latencia.",
+      "searchProfileVerified": "Configuración de búsqueda verificada",
+      "searchProfileUnverified": "Configuración de búsqueda sin verificar",
+      "rerankerDisabled": "Reordenador desactivado"
     },
     "cancel": "Cancelar",
     "delete": "Eliminar",

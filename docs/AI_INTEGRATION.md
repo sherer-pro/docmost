@@ -597,3 +597,7 @@ Core per-space AI is the only document-generation UX. The retired AI Answers rou
 The client uses one Markdown sanitizer and safe-link policy for chat and selection results. `Copy` is always available for a normal assistant response. Replacing the original selection requires the same page and document snapshot hash; inserting below uses the original position only while that hash still matches. After the document changes, the chat flow may offer an explicitly confirmed insert at the current cursor, while selection-only actions become copy-only.
 
 All core AI strings use explicit `ai.*` locale keys in every supported locale. Stable server error codes are resolved through a guarded localized fallback and never expose translation keys or remote provider messages. Service Worker cache version 3 loads `/locales/*` with a network-first strategy so an online client does not retain an older translation bundle.
+
+### Evidence quality pilot
+
+Start with one space and follow [quality profiles](AI_ASSISTANT_AND_RAG.md#evidence-quality-profiles) and the [evaluation runbook](../tests/rag-quality/README.md). A successful connection or healthy synchronization does not prove retrieval quality. Use the known-answer canary before changing the pilot scope. Roll back the per-space profile while retaining canonical evidence checks.

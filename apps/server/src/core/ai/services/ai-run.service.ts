@@ -693,6 +693,8 @@ export class AiRunService {
       errorMessage: run.errorMessage,
       finishReason: run.finishReason,
       retrievalOutcome: run.retrievalOutcome as AiRun['retrievalOutcome'],
+      retrievalDiagnostics: (run.retrievalDiagnostics ??
+        null) as AiRun['retrievalDiagnostics'],
       retrievalErrorCode: run.retrievalErrorCode,
       retrievalQuery: run.retrievalQuery,
       retrievalRewriteOutcome:

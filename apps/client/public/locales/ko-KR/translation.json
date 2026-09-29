@@ -1655,7 +1655,7 @@
           },
           "success": "테스트는 후보를 반환하고 답변은 읽을 수 있고 제외되지 않은 소스만 유지합니다.",
           "rollback": "외부 검색을 비활성화합니다. Chat가 검색 없이 계속됩니다.",
-          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다. Open WebUI는 `vector`와 `hybrid_with_vector_fallback`을 지원합니다. `retrievalFollowUpRewriteEnabled`가 켜지면 안전한 사용자 기록과 현재 읽을 수 있는 인용 제목만으로 검색 쿼리를 다시 작성하며, 어시스턴트 본문이나 페이지·파일 내용은 포함하지 않습니다. rewrite 제한은 30000 ms이고 실패하면 원래 쿼리로 돌아가 생성은 계속됩니다."
+          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다. Open WebUI는 `vector`와 `hybrid_with_vector_fallback`을 지원합니다. `retrievalFollowUpRewriteEnabled`가 켜지면 안전한 사용자 기록과 현재 읽을 수 있는 인용 제목만으로 검색 쿼리를 다시 작성하며, 어시스턴트 본문이나 페이지·파일 내용은 포함하지 않습니다. rewrite 제한은 2000 ms이고 실패하면 원래 쿼리로 돌아가 생성은 계속됩니다. 근거는 현재 Docmost 콘텐츠에서 가져오며 전달된 조각만 인용할 수 있습니다. 시험 프로필 evidence-v1은 structured-knowledge-v3, 로컬 대체 검색, 10000 ms 준비 시간 제한을 사용합니다. 근거가 없으면 정보 부족과 검색 불가를 구분합니다."
         },
         "ragApi": {
           "description": "읽기 전용 /api/rag/* API는 전체 및 증분 피드를 외부 인덱서로 내보내고 인증 후 보호된 첨부 파일 스트림을 반환할 수 있습니다.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "멤버 한 명이 하루에 실행할 수 있는 최대 요청 수입니다.",
       "spaceTokenLimitDescription": "이 공간에서 하루에 사용하는 최대 입력 및 출력 토큰 수입니다.",
       "retentionDaysDescription": "비공개 AI 채팅 데이터를 보관하는 일수입니다.",
-      "loading": "AI 설정을 불러오는 중…"
+      "loading": "AI 설정을 불러오는 중…",
+      "qualityProfile": "검색 품질 프로필",
+      "qualityProfileDescription": "시험 프로필은 구조화된 조각과 로컬 검색을 사용합니다. 동기화에는 메타데이터 v3가 필요합니다.",
+      "qualityProfileLegacy": "이전 검색 프로필",
+      "qualityProfileEvidence": "근거 중심 시험 프로필",
+      "queryExpansion": "복합 질문 검색 확장",
+      "queryExpansionDescription": "최대 두 번 추가 검색합니다. 품질과 지연 시간을 측정한 후 활성화하세요.",
+      "searchProfileVerified": "검색 설정 확인됨",
+      "searchProfileUnverified": "검색 설정 미확인",
+      "rerankerDisabled": "재순위 지정 비활성화"
     },
     "cancel": "취소",
     "delete": "삭제",

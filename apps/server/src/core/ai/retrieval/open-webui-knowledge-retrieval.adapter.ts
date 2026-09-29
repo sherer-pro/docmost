@@ -13,6 +13,7 @@ import {
   AiRetrievalRequest,
 } from '../ai.types';
 import { AiRetrievalAdapter } from './ai-retrieval.adapter';
+import { evidenceHash, normalizeEvidence } from '../../rag/rag-evidence.util';
 import {
   AiRetrievalHttpClient,
   AiRetrievalHttpError,
@@ -112,14 +113,59 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       config.queryMode === 'hybrid_with_vector_fallback',
       signal,
     );
+    const effectiveProfile = await this.inspectProfile(config, signal);
     return {
       ok: true as const,
       latencyMs: Date.now() - startedAt,
       adapter: this.kind,
       ...(remoteVersion ? { remoteVersion } : {}),
+      effectiveProfile,
       candidateCount: result.candidateCount,
       validCandidateCount: result.hits.length,
       state: result.hits.length > 0 ? ('ready' as const) : ('empty' as const),
+    };
+  }
+
+  private async inspectProfile(
+    config: AiRetrievalConfig,
+    signal?: AbortSignal,
+  ) {
+    const read = async (path: string) => {
+      try {
+        return await this.http.requestJson<Record<string, unknown>>({
+          url: this.endpoint(config, `api/v1/retrieval/${path}`),
+          apiKey: config.openWebUiApiKey,
+          timeoutMs: Math.min(config.timeoutMs, 1000),
+          maxRequestBytes: 0,
+          maxResponseBytes: 128 * 1024,
+          signal,
+        });
+      } catch {
+        return {};
+      }
+    };
+    // Remote settings can contain credentials. Project only these public fields.
+    const [settings, embedding] = await Promise.all([
+      read('config'),
+      read('embedding'),
+    ]);
+    const label = (value: unknown) =>
+      typeof value === 'string' ? value.slice(0, 256) : null;
+    return {
+      verified:
+        typeof settings.ENABLE_RAG_HYBRID_SEARCH === 'boolean' &&
+        typeof embedding.RAG_EMBEDDING_MODEL === 'string' &&
+        typeof settings.RAG_RERANKING_MODEL === 'string' &&
+        typeof settings.TEXT_SPLITTER === 'string',
+      hybrid:
+        typeof settings.ENABLE_RAG_HYBRID_SEARCH === 'boolean'
+          ? settings.ENABLE_RAG_HYBRID_SEARCH
+          : null,
+      embeddingModel: label(embedding.RAG_EMBEDDING_MODEL),
+      rerankerModel: label(settings.RAG_RERANKING_MODEL),
+      splitter: label(settings.TEXT_SPLITTER),
+      candidateLimit: 40,
+      evidenceLimit: config.maxResults,
     };
   }
 
@@ -160,7 +206,10 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
           false,
           signal,
         )
-      ).hits;
+      ).hits.map((hit) => ({
+        ...hit,
+        retrievalMode: 'vector_fallback' as const,
+      }));
     }
   }
 
@@ -171,6 +220,26 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     signal?: AbortSignal,
   ): Promise<{ hits: AiRetrievalHit[]; candidateCount: number }> {
     this.assertConfigured(config);
+    const deadline = Math.min(
+      request.deadlineAtMs ?? Infinity,
+      Date.now() + Math.min(6_000, config.timeoutMs),
+    );
+    const profile =
+      config.qualityProfile === 'evidence-v1'
+        ? await this.inspectProfile(
+            {
+              ...config,
+              timeoutMs: Math.min(500, Math.max(1, deadline - Date.now())),
+            },
+            signal,
+          )
+        : null;
+    const hybridRequested = hybrid;
+    if (profile?.hybrid === false) hybrid = false;
+    config = {
+      ...config,
+      timeoutMs: Math.max(1, Math.min(config.timeoutMs, deadline - Date.now())),
+    };
     const payload = await this.http.requestJson<OpenWebUiQueryResponse>({
       url: this.endpoint(config, 'api/v1/retrieval/query/collection'),
       apiKey: config.openWebUiApiKey,
@@ -184,6 +253,10 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
           request.candidateLimit,
         ),
         hybrid,
+        k_reranker: Math.min(
+          AI_RETRIEVAL_DEFAULTS.candidateLimit,
+          request.candidateLimit,
+        ),
       }),
       maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
       maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
@@ -202,7 +275,7 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     }
 
     const hydratedMetadatas = await this.hydrateFileMetadata(
-      config,
+      { ...config, timeoutMs: Math.max(1, deadline - Date.now()) },
       metadatas.slice(0, candidateCount),
       signal,
     );
@@ -214,7 +287,28 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
         distances[index],
         request,
       );
-      if (parsed) hits.push(parsed);
+      if (parsed)
+        hits.push({
+          ...parsed,
+          ...(profile ? { effectiveProfile: profile } : {}),
+          score: Number.isFinite(distances[index])
+            ? hybrid
+              ? Number(distances[index])
+              : this.distanceToScore(Number(distances[index]))
+            : undefined,
+          scoreKind: hybrid
+            ? profile?.verified && profile.rerankerModel
+              ? 'reranker'
+              : 'unknown'
+            : 'vector_similarity',
+          retrievalMode: hybrid
+            ? profile?.verified
+              ? 'hybrid'
+              : 'hybrid_unverified'
+            : hybridRequested
+              ? 'vector_fallback'
+              : 'vector',
+        });
     }
     if (hits.length === 0) {
       throw new BadGatewayException({
@@ -224,15 +318,11 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
     }
 
     const deduplicated = new Map<string, AiRetrievalHit>();
-    const partsPerSource = new Map<string, number>();
     for (const hit of hits) {
       const logicalKey = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}`;
-      const key = `${logicalKey}:${hit.partKey ?? 'main'}`;
+      const key = `${logicalKey}:${evidenceHash(normalizeEvidence(hit.text))}`;
       if (deduplicated.has(key)) continue;
-      const partCount = partsPerSource.get(logicalKey) ?? 0;
-      if (partCount >= 2) continue;
       deduplicated.set(key, hit);
-      partsPerSource.set(logicalKey, partCount + 1);
     }
     return { hits: [...deduplicated.values()], candidateCount };
   }
@@ -347,6 +437,16 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       sourceId: docmost.sourceId,
       pageId: docmost.pageId as string | null,
       text: document,
+      ...(typeof (docmost.locator as any)?.sectionId === 'string'
+        ? { sectionId: (docmost.locator as any).sectionId.slice(0, 128) }
+        : {}),
+      ...(typeof docmost.sourceUpdatedAtMs === 'number' &&
+      Number.isFinite(docmost.sourceUpdatedAtMs)
+        ? { sourceVersion: String(docmost.sourceUpdatedAtMs) }
+        : {}),
+      ...(typeof docmost.contentHash === 'string'
+        ? { contentHash: docmost.contentHash.slice(0, 64) }
+        : {}),
       ...(partKey ? { partKey } : {}),
       ...(Number.isFinite(distance)
         ? { score: this.distanceToScore(Number(distance)) }
@@ -360,7 +460,9 @@ export class OpenWebUiKnowledgeRetrievalAdapter implements AiRetrievalAdapter {
       !RAG_CONTENT_PROCESSOR_IDS.includes(docmost.projectorId as never) ||
       (docmost.sourceType === 'attachment'
         ? docmost.projectorId !== 'attachment-text-v1'
-        : docmost.projectorId !== 'structured-knowledge-v2') ||
+        : !['structured-knowledge-v2', 'structured-knowledge-v3'].includes(
+            String(docmost.projectorId),
+          )) ||
       typeof docmost.partId !== 'string' ||
       !docmost.partId ||
       docmost.partId.length > 128 ||

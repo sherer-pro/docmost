@@ -86,6 +86,7 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
       collection_names: ['knowledge-1'],
       query: request.query,
       k: 40,
+      k_reranker: 40,
       hybrid: false,
     });
   });
@@ -269,10 +270,11 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
 
     await expect(adapter.retrieve(config, request)).resolves.toEqual([
       expect.objectContaining({ text: 'far' }),
+      expect.objectContaining({ text: 'near' }),
     ]);
   });
 
-  it('accepts v3 multipart metadata and caps one logical source to two parts', async () => {
+  it('retains distinct v3 fragments even in one part or logical source', async () => {
     const v3 = (partId: string, partIndex: number) =>
       thisMetadata({
         schemaVersion: 3,
@@ -298,10 +300,12 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
         text: 'first',
         partKey: 'structured-knowledge-v2:page-1',
       }),
+      expect.objectContaining({ text: 'first duplicate' }),
       expect.objectContaining({
         text: 'second',
         partKey: 'structured-knowledge-v2:page-2',
       }),
+      expect.objectContaining({ text: 'third' }),
     ]);
   });
 
@@ -472,7 +476,67 @@ describe('OpenWebUiKnowledgeRetrievalAdapter', () => {
       'https://open-webui.example.test/api/version',
       'https://open-webui.example.test/api/v1/knowledge/knowledge-1',
       'https://open-webui.example.test/api/v1/retrieval/query/collection',
+      'https://open-webui.example.test/api/v1/retrieval/config',
+      'https://open-webui.example.test/api/v1/retrieval/embedding',
     ]);
+  });
+
+  it.each([true, false])(
+    'reports verified hybrid configuration with a disabled reranker (hybrid=%s)',
+    async (enabled) => {
+      let queryBody: any;
+      global.fetch = jest.fn(async (url, init) => {
+        if (String(url).endsWith('/config'))
+          return jsonResponse({
+            ENABLE_RAG_HYBRID_SEARCH: enabled,
+            RAG_RERANKING_MODEL: '',
+            TEXT_SPLITTER: 'token',
+          });
+        if (String(url).endsWith('/embedding'))
+          return jsonResponse({ RAG_EMBEDDING_MODEL: 'multilingual-model' });
+        queryBody = JSON.parse(String(init?.body));
+        return jsonResponse({
+          documents: [['current text']],
+          metadatas: [[thisMetadata({})]],
+          distances: [[0.8]],
+        });
+      }) as any;
+      const hits = await adapter.retrieve(
+        {
+          ...config,
+          timeoutMs: 6000,
+          qualityProfile: 'evidence-v1',
+          queryMode: 'hybrid_with_vector_fallback',
+        },
+        request,
+      );
+      expect(queryBody).toMatchObject({
+        hybrid: enabled,
+        k: 40,
+        k_reranker: 40,
+      });
+      expect(hits[0]).toMatchObject({
+        retrievalMode: enabled ? 'hybrid' : 'vector_fallback',
+        scoreKind: enabled ? 'unknown' : 'vector_similarity',
+      });
+    },
+  );
+
+  it('does not interpret arbitrary bad requests as permission to retry', async () => {
+    global.fetch = jest.fn(
+      async () => new Response('', { status: 400 }),
+    ) as any;
+    await expect(
+      adapter.retrieve(
+        {
+          ...config,
+          timeoutMs: 6000,
+          queryMode: 'hybrid_with_vector_fallback',
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({ remoteStatus: 400 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('maps inaccessible knowledge collections to a stable error code', async () => {

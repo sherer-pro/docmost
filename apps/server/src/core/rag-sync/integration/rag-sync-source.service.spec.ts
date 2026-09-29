@@ -355,6 +355,100 @@ describe('RagSyncSourceService', () => {
     return { service, rag, state, writer, storage };
   }
 
+  it.each([false, true])(
+    'retires old projection only after all parts are processed (failure=%s)',
+    async (fail) => {
+      const { service, state, writer } = setup();
+      const internal = service as any;
+      writer['metadataWriteVersion'] = () => 3;
+      internal.contentProjectors.projectStructuredKnowledge.mockReturnValue({
+        projectorId: 'structured-knowledge-v3',
+        parts: ['first', 'second'].map((text) => ({
+          partId: text,
+          fileName: `${text}.md`,
+          mimeType: 'text/markdown',
+          content: new TextEncoder().encode(text),
+          locator: { pageId: 'page-1' },
+        })),
+      });
+      const events: string[] = [];
+      writer.upload.mockImplementation(async (_binding, item) => ({
+        id: item.fileName,
+      }));
+      writer.waitUntilProcessed.mockImplementation(async (_binding, fileId) => {
+        events.push(fileId);
+        if (fail && fileId === 'second.md')
+          throw new Error('processing failed');
+      });
+      const retire = jest
+        .spyOn(internal, 'retireSourceParts')
+        .mockImplementation(async () => {
+          events.push('retire');
+        });
+      const session = {
+        binding,
+        context,
+        ragScope: { ...ragScope, qualityProfile: 'evidence-v1' },
+        processedCount: 1,
+      };
+      const operation = internal.upsertSource(
+        session,
+        syncSource('page:page-1', 'page-1', 'Current text'),
+        true,
+      );
+      if (fail) {
+        await expect(operation).rejects.toThrow('processing failed');
+        expect(retire).not.toHaveBeenCalled();
+      } else {
+        await expect(operation).resolves.toBe(true);
+        expect(events).toEqual(['first.md', 'second.md', 'retire']);
+        expect(state.setMapping).toHaveBeenCalledTimes(2);
+      }
+    },
+  );
+
+  it('resumes rollback cleanup even when the legacy file is already current', async () => {
+    const { service, state, writer } = setup();
+    const internal = service as any;
+    const source = syncSource('page:page-1', 'page-1', 'Current text');
+    const contentHash = createHash('sha256')
+      .update(source.content)
+      .digest('hex');
+    state.getMapping.mockResolvedValue({
+      ...source,
+      contentHash,
+      operationId: 'operation-1',
+      fileId: 'current',
+    });
+    writer.getFile.mockResolvedValue({ id: 'current' });
+    writer.readOwnership.mockReturnValue({
+      schemaVersion: 2,
+      metadata: { ...source, operationId: 'operation-1' },
+    });
+    const retire = jest
+      .spyOn(internal, 'retireSourceParts')
+      .mockResolvedValue(undefined);
+    await expect(
+      internal.upsertSource(
+        {
+          binding,
+          context,
+          ragScope: { ...ragScope, qualityProfile: 'legacy-v1' },
+          processedCount: 0,
+        },
+        source,
+        true,
+      ),
+    ).resolves.toBe(true);
+    expect(writer.upload).not.toHaveBeenCalled();
+    expect(retire).toHaveBeenCalledWith(
+      expect.anything(),
+      'page',
+      'page-1',
+      new Set(['page:page-1']),
+    );
+  });
+
   it('keeps archived spaces available for draining and cleanup', async () => {
     const { service } = setup({ archivedAt: new Date() });
 

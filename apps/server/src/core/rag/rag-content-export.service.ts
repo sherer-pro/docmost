@@ -26,6 +26,7 @@ import {
   KnowledgeProjectionService,
 } from './knowledge-projection.service';
 import { RagContentProjectorService } from './rag-content-projector.service';
+import { editorKnowledgeHeadings } from './structured-knowledge.util';
 
 export interface RagAuthContext {
   user: User;
@@ -151,6 +152,7 @@ export class RagContentExportService {
           'retrievalAdapter',
           'retrievalOpenWebuiBaseUrl',
           'retrievalOpenWebuiKnowledgeId',
+          'retrievalQualityProfile',
         ])
         .where('workspaceId', '=', scope.workspace.id)
         .where('spaceId', '=', scope.space.id)
@@ -170,6 +172,7 @@ export class RagContentExportService {
       .update(
         JSON.stringify({
           schemaVersion: 4,
+          qualityProfile: aiConfig?.retrievalQualityProfile ?? 'legacy-v1',
           ...this.projection.fingerprintInput(scope.space),
           ...this.contentProjectors.fingerprintInput(),
           workspaceId: scope.workspace.id,
@@ -184,9 +187,15 @@ export class RagContentExportService {
       .digest('hex');
     return {
       schemaVersion: 4 as const,
+      qualityProfile:
+        aiConfig?.retrievalQualityProfile === 'evidence-v1'
+          ? ('evidence-v1' as const)
+          : ('legacy-v1' as const),
       projectionVersion: this.projection.version,
       contentPolicyVersion: this.contentProjectors.policyVersion,
-      contentCapabilities: this.contentProjectors.getCapabilities(),
+      contentCapabilities: this.contentProjectors.getCapabilities(
+        aiConfig?.retrievalQualityProfile,
+      ),
       workspaceId: scope.workspace.id,
       spaceId: scope.space.id,
       syncTarget,
@@ -584,6 +593,7 @@ export class RagContentExportService {
           : row.page,
         cells: rowFields.cells,
         rowMarkdown,
+        headingLocators: editorKnowledgeHeadings(rowPage?.content),
         knowledgeMarkdown: [
           `# ${rowPage?.title || row.pageTitle || row.id}`,
           this.projection.renderDocumentFields(fields, memberNames),
@@ -896,6 +906,7 @@ export class RagContentExportService {
       ...(includeContent
         ? {
             contentMarkdown: this.toMarkdown(page.content),
+            headingLocators: editorKnowledgeHeadings(page.content),
             knowledgeMarkdown: this.projection.renderPageKnowledgeMarkdown({
               title: page.title,
               contentMarkdown: this.toMarkdown(page.content),
@@ -1805,7 +1816,7 @@ export class RagContentExportService {
   }
 
   async getDatabaseSyncMetadata(
-    scope: RagSystemContext,
+    scope: RagReadContext,
     databaseIdOrPageSlug: string,
   ) {
     const database = await this.resolveDatabaseInScope(
@@ -1843,6 +1854,20 @@ export class RagContentExportService {
       documentEligible: !policy.statusBlockedPageIds.includes(databasePage.id),
       title: database.name,
       customFields,
+      headingLocators: editorKnowledgeHeadings(databasePage.content),
+      projectionUpdatedAt: this.projection.projectionUpdatedAtFromMembers(
+        new Date(
+          Math.max(
+            new Date(database.updatedAt).getTime(),
+            new Date(databasePage.updatedAt).getTime(),
+            ...properties.map((property) =>
+              new Date(property.updatedAt).getTime(),
+            ),
+          ),
+        ),
+        customFields,
+        members,
+      ),
       knowledgeMarkdown: [
         this.projection.renderDocumentFields(customFields, memberNames),
         this.projection.renderDatabaseSchema(properties),
