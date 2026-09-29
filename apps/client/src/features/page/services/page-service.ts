@@ -458,6 +458,17 @@ export async function resolvePageAccessUsers(
   return req.data;
 }
 
+export async function resolveReferencedUsers(
+  pageId: string,
+  payload: { userIds: string[] },
+): Promise<Array<{ id: string; name: string; avatarUrl: string | null }>> {
+  const req = await api.post(
+    `/pages/${pageId}/actions/referenced-users/resolve`,
+    payload,
+  );
+  return req.data;
+}
+
 export async function grantPageUserAccess(
   pageId: string,
   payload: { userId: string; role: "reader" | "writer" },

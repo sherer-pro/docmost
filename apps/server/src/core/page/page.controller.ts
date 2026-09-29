@@ -67,6 +67,7 @@ import {
   GrantPageGroupAccessDto,
   GrantPageUserAccessDto,
   ResolvePageAccessUsersDto,
+  ResolveReferencedUsersDto,
 } from './dto/page-access.dto';
 import { LinkPreviewService } from './services/link-preview.service';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
@@ -450,6 +451,23 @@ export class PageController {
 
     await this.pageAccessService.assertCanReadPage(page, user);
     return this.pageAccessService.resolveReadableUsers(page, dto.userIds ?? []);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('page', { key: 'pageId' })
+  @Post(':pageId/actions/referenced-users/resolve')
+  async resolveReferencedUsers(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: ResolveReferencedUsersDto,
+    @AuthUser() user: User,
+  ) {
+    const page = await this.pageRepo.findById(pageId);
+    if (!page || page.deletedAt) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.assertCanReadPage(page, user);
+    return this.pageService.resolveReferencedUsers(page, dto.userIds ?? []);
   }
 
   @HttpCode(HttpStatus.OK)

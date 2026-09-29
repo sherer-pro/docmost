@@ -19,6 +19,7 @@ import {
   normalizeDatabaseStringValue,
   normalizeDatabaseUserId,
 } from '@/features/database/utils/database-cell-value.ts';
+import type { SpaceMemberSelectOption } from '@/features/page/components/document-fields/space-member-select-utils.tsx';
 import { DictionaryTextHighlighter } from '@/features/dictionary/components/dictionary-text-highlighter';
 import { DictionaryTextarea } from '@/features/dictionary/components/dictionary-textarea';
 import { IDictionaryTerm } from '@/features/dictionary/types/dictionary.types';
@@ -36,6 +37,7 @@ interface DatabaseCellRendererProps {
   isEditing: boolean;
   editingValue: unknown;
   spaceId: string;
+  pageId?: string;
   dictionaryTerms?: IDictionaryTerm[];
   dictionaryMatcherIndex?: DictionaryMatcherIndex;
   dictionaryEnabled?: boolean;
@@ -49,12 +51,30 @@ interface DatabaseCellRendererProps {
   onSave: (value?: unknown) => void;
 }
 
+function getSelectedUserIdentity(
+  value: unknown,
+  userId: string | null,
+): SpaceMemberSelectOption[] {
+  if (!userId || !value || typeof value !== 'object') return [];
+  const candidate = value as { name?: unknown; avatarUrl?: unknown };
+  if (typeof candidate.name !== 'string' || !candidate.name || candidate.name === userId) {
+    return [];
+  }
+  return [{
+    value: userId,
+    label: candidate.name,
+    avatarUrl: typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : undefined,
+  }];
+}
+
 function DatabaseUserViewValue({
   value,
   spaceId,
+  pageId,
 }: {
   value: unknown;
   spaceId: string;
+  pageId?: string;
 }) {
   const { t } = useTranslation();
   const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
@@ -66,22 +86,33 @@ function DatabaseUserViewValue({
   return (
     <ResolvedDatabaseUserViewValue
       selectedUserId={selectedUserId}
+      value={value}
       spaceId={spaceId}
+      pageId={pageId}
     />
   );
 }
 
 function ResolvedDatabaseUserViewValue({
   selectedUserId,
+  value,
   spaceId,
+  pageId,
 }: {
   selectedUserId: string;
+  value: unknown;
   spaceId: string;
+  pageId?: string;
 }) {
   const { t } = useTranslation();
+  const selectedUsers = useMemo(
+    () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
+    [pageId, value, selectedUserId],
+  );
   const { options: memberOptions, knownUsersById } = useSpaceMemberSelectOptions(
     spaceId,
     [selectedUserId],
+    { pageId, selectedUsers },
   );
   const selectedMember = useMemo(
     () =>
@@ -112,6 +143,7 @@ function ResolvedDatabaseUserViewValue({
 function DatabaseUserEditor({
   value,
   spaceId,
+  pageId,
   ariaLabel,
   autoFocus,
   onChange,
@@ -120,6 +152,7 @@ function DatabaseUserEditor({
 }: {
   value: unknown;
   spaceId: string;
+  pageId?: string;
   ariaLabel: string;
   autoFocus: boolean;
   onChange: (value: unknown) => void;
@@ -128,13 +161,21 @@ function DatabaseUserEditor({
 }) {
   const { t } = useTranslation();
   const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
+  const selectedUsers = useMemo(
+    () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
+    [pageId, value, selectedUserId],
+  );
   const {
     options: memberOptions,
     searchValue,
     setSearchValue,
     isLoading: isMembersLoading,
     knownUsersById,
-  } = useSpaceMemberSelectOptions(spaceId, selectedUserId ? [selectedUserId] : []);
+  } = useSpaceMemberSelectOptions(
+    spaceId,
+    selectedUserId ? [selectedUserId] : [],
+    { pageId, selectedUsers },
+  );
   const selectedMember = useMemo(
     () =>
       selectedUserId
@@ -186,6 +227,7 @@ export function DatabaseCellRenderer({
   isEditing,
   editingValue,
   spaceId,
+  pageId,
   dictionaryTerms = [],
   dictionaryMatcherIndex,
   dictionaryEnabled = false,
@@ -289,7 +331,7 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'user') {
-      return <DatabaseUserViewValue value={value} spaceId={spaceId} />;
+      return <DatabaseUserViewValue value={value} spaceId={spaceId} pageId={pageId} />;
     }
 
     if (property.type === 'page_reference') {
@@ -439,6 +481,7 @@ export function DatabaseCellRenderer({
         <DatabaseUserEditor
           value={editorValue}
           spaceId={spaceId}
+          pageId={pageId}
           ariaLabel={cellLabel ?? property.name}
           autoFocus={isEditing}
           onChange={onChange}

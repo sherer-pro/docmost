@@ -332,6 +332,9 @@ export function useAddSpaceMemberMutation() {
       queryClient.invalidateQueries({
         queryKey: ["spaceMembers", variables.spaceId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["spaceMemberUsers", variables.spaceId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
@@ -351,6 +354,9 @@ export function useRemoveSpaceMemberMutation() {
       notifications.show({ message: t("Member removed successfully") });
       queryClient.invalidateQueries({
         queryKey: ["spaceMembers", variables.spaceId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["spaceMemberUsers", variables.spaceId],
       });
       void queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },

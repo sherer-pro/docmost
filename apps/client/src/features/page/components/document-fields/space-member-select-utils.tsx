@@ -5,8 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ComboboxItem } from "@mantine/core";
 import { getSpaceMemberUsers } from "@/features/space/services/space-service.ts";
-import { resolvePageAccessUsers } from "@/features/page/services/page-service.ts";
+import { resolveReferencedUsers } from "@/features/page/services/page-service.ts";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
+import { useTranslation } from "react-i18next";
 
 export interface SpaceMemberSelectOption extends ComboboxItem {
   avatarUrl?: string;
@@ -25,6 +26,7 @@ interface SpaceMemberSearchConfig {
 
 interface SpaceMemberSelectOptionsConfig {
   pageId?: string;
+  selectedUsers?: SpaceMemberSelectOption[];
 }
 
 type SpaceMemberSearchProps = Pick<
@@ -112,9 +114,21 @@ export function useSpaceMemberSelectOptions(
   selectedIds: string[],
   config?: SpaceMemberSelectOptionsConfig,
 ) {
+  const { t } = useTranslation();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedQuery] = useDebouncedValue(searchValue, 400);
   const [knownUsersById, setKnownUsersById] = useState<Record<string, SpaceMemberSelectOption>>({});
+  const selectedUsersById = useMemo(
+    () =>
+      Object.fromEntries(
+        (config?.selectedUsers ?? []).map((user) => [user.value, user]),
+      ) as Record<string, SpaceMemberSelectOption>,
+    [config?.selectedUsers],
+  );
+  const displayUsersById = useMemo(
+    () => ({ ...knownUsersById, ...selectedUsersById }),
+    [knownUsersById, selectedUsersById],
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ["spaceMemberUsers", spaceId, debouncedQuery],
@@ -128,16 +142,24 @@ export function useSpaceMemberSelectOptions(
 
   const unresolvedSelectedIds = useMemo(
     () =>
-      [...new Set(selectedIds.filter((id) => !!id && !knownUsersById[id]))],
-    [knownUsersById, selectedIds],
+      [...new Set(selectedIds.filter((id) => !!id && !displayUsersById[id]))],
+    [displayUsersById, selectedIds],
   );
 
   const { data: resolvedPageUsers } = useQuery({
-    queryKey: ["pageAccessResolvedUsers", config?.pageId, unresolvedSelectedIds],
-    queryFn: () =>
-      resolvePageAccessUsers(config?.pageId ?? "", {
-        userIds: unresolvedSelectedIds,
-      }),
+    queryKey: ["pageReferencedUsers", config?.pageId, unresolvedSelectedIds],
+    queryFn: async () => {
+      const batches = [];
+      for (let index = 0; index < unresolvedSelectedIds.length; index += 100) {
+        batches.push(unresolvedSelectedIds.slice(index, index + 100));
+      }
+      const resolved = await Promise.all(
+        batches.map((userIds) =>
+          resolveReferencedUsers(config?.pageId ?? "", { userIds }),
+        ),
+      );
+      return resolved.flat();
+    },
     enabled: Boolean(config?.pageId && unresolvedSelectedIds.length > 0),
   });
 
@@ -175,9 +197,8 @@ export function useSpaceMemberSelectOptions(
       resolvedPageUsers.forEach((user) => {
         next[user.id] = {
           value: user.id,
-          label: user.name || user.email || user.id,
+          label: user.name,
           avatarUrl: user.avatarUrl ?? undefined,
-          email: user.email,
         };
       });
 
@@ -194,19 +215,19 @@ export function useSpaceMemberSelectOptions(
     }));
 
     const selectedItems = selectedIds
-      .map((id) => knownUsersById[id] ?? { value: id, label: id })
+      .map((id) => displayUsersById[id] ?? { value: id, label: t("Unknown") })
       .filter((item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index);
 
     return [...selectedItems, ...currentItems].filter(
       (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index,
     );
-  }, [data?.items, knownUsersById, selectedIds]);
+  }, [data?.items, displayUsersById, selectedIds, t]);
 
   return {
     options,
     searchValue,
     setSearchValue,
     isLoading,
-    knownUsersById,
+    knownUsersById: displayUsersById,
   };
 }

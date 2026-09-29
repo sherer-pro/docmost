@@ -205,18 +205,24 @@ export class SpaceMemberRepo {
     let query = this.db
       .selectFrom('users')
       .select(['users.id', 'users.name', 'users.email', 'users.avatarUrl'])
+      .where('users.deletedAt', 'is', null)
+      .where('users.deactivatedAt', 'is', null)
       .where('users.id', 'in', (eb) =>
         eb
           .selectFrom('spaceMembers as sm')
           .select('sm.userId as userId')
           .where('sm.spaceId', '=', spaceId)
+          .where('sm.deletedAt', 'is', null)
           .where('sm.userId', 'is not', null)
           .union(
             eb
               .selectFrom('spaceMembers as sm')
               .innerJoin('groupUsers as gu', 'gu.groupId', 'sm.groupId')
+              .innerJoin('groups as g', 'g.id', 'sm.groupId')
               .select('gu.userId as userId')
-              .where('sm.spaceId', '=', spaceId),
+              .where('sm.spaceId', '=', spaceId)
+              .where('sm.deletedAt', 'is', null)
+              .where('g.deletedAt', 'is', null),
           ),
       );
 
@@ -290,13 +296,17 @@ export class SpaceMemberRepo {
       .select('userId')
       .where('userId', 'in', userIds)
       .where('spaceId', '=', spaceId)
+      .where('deletedAt', 'is', null)
       .unionAll(
         this.db
           .selectFrom('spaceMembers')
           .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
+          .innerJoin('groups', 'groups.id', 'spaceMembers.groupId')
           .select('groupUsers.userId')
           .where('groupUsers.userId', 'in', userIds)
-          .where('spaceMembers.spaceId', '=', spaceId),
+          .where('spaceMembers.spaceId', '=', spaceId)
+          .where('spaceMembers.deletedAt', 'is', null)
+          .where('groups.deletedAt', 'is', null),
       )
       .execute();
 

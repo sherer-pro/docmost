@@ -38,3 +38,5 @@ export class ResolvePageAccessUsersDto {
   @IsUUID(undefined, { each: true })
   userIds: string[];
 }
+
+export class ResolveReferencedUsersDto extends ResolvePageAccessUsersDto {}

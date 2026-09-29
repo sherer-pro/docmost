@@ -152,6 +152,7 @@
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/create-independent-copy` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/actions/detach-template` | `apps/server/src/core/page/page-template.controller.ts` |
+| POST | `/pages/:pageId/actions/referenced-users/resolve` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/convert-to-database` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/actions/copy-markdown-with-comments` | `apps/server/src/integrations/export/export.controller.ts` |
 | POST | `/pages/actions/create-from-template` | `apps/server/src/core/page/page-template.controller.ts` |

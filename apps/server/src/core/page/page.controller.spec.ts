@@ -13,6 +13,7 @@ describe('PageController guardrails and mixed-id contract', () => {
     update: jest.fn(),
     duplicatePage: jest.fn(),
     resolvePageDatabaseId: jest.fn(),
+    resolveReferencedUsers: jest.fn(),
     forceDelete: jest.fn(),
     removePage: jest.fn(),
   };
@@ -174,6 +175,28 @@ describe('PageController guardrails and mixed-id contract', () => {
     });
     pageRepo.findReferencesByIds.mockResolvedValue([]);
     pageAccessService.getEffectiveAccessForPages.mockResolvedValue(new Map());
+  });
+
+  it('requires page read access before resolving stored user identities', async () => {
+    const user = { id: 'reader', workspaceId: 'workspace-1' } as any;
+    pageService.resolveReferencedUsers.mockResolvedValue([
+      { id: 'user-1', name: 'Former member', avatarUrl: '/avatar' },
+    ]);
+
+    await expect(
+      controller.resolveReferencedUsers('uuid-page', { userIds: ['user-1'] }, user),
+    ).resolves.toEqual([
+      { id: 'user-1', name: 'Former member', avatarUrl: '/avatar' },
+    ]);
+    expect(pageAccessService.assertCanReadPage).toHaveBeenCalled();
+
+    pageAccessService.assertCanReadPage.mockRejectedValueOnce(
+      new ForbiddenException(),
+    );
+    await expect(
+      controller.resolveReferencedUsers('uuid-page', { userIds: ['user-1'] }, user),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pageService.resolveReferencedUsers).toHaveBeenCalledTimes(1);
   });
 
   it('returns each readable page reference once and omits inaccessible pages', async () => {

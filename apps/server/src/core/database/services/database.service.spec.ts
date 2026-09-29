@@ -81,6 +81,7 @@ describe('DatabaseService mixed tree flows', () => {
     assertCanReadPage: jest.fn(async () => undefined),
     assertCanWritePage: jest.fn(async () => undefined),
     assertCanCreateChild: jest.fn(async () => undefined),
+    getAssignableSpaceUserIds: jest.fn(async (ids: string[]) => new Set(ids)),
     getSidebarAccessSnapshot: jest.fn(async () => ({
       readablePageIds: allowAllPageIds,
       visiblePageIds: allowAllPageIds,
@@ -1082,7 +1083,7 @@ describe('DatabaseService mixed tree flows', () => {
       },
     ]);
     userRepo.findByIds.mockResolvedValue([
-      { id: userId, name: 'Jane Doe', workspaceId: 'ws-1' },
+      { id: userId, name: 'Jane Doe', avatarUrl: '/avatars/jane', workspaceId: 'ws-1' },
     ]);
 
     const rows = await service.listRows('db-1', user, 'ws-1');
@@ -1090,6 +1091,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(rows[0].cells[0].value).toEqual({
       id: userId,
       name: 'Jane Doe',
+      avatarUrl: '/avatars/jane',
     });
     expect(userRepo.findByIds).toHaveBeenCalledWith([userId], 'ws-1');
     expect(userRepo.findById).not.toHaveBeenCalled();
@@ -1152,6 +1154,38 @@ describe('DatabaseService mixed tree flows', () => {
     expect(rows[0].cells[0].value).toEqual({
       id: '019c8501-f413-737d-8d18-536a9f78d347',
       name: '019c8501-f413-737d-8d18-536a9f78d347',
+      avatarUrl: null,
+    });
+  });
+
+  it('does not expose a fully deleted workspace user in a saved user cell', async () => {
+    const userId = '019c8501-f413-737d-8d18-536a9f78d347';
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
+    databaseRowRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'row-1',
+        pageId: 'row-page-1',
+        cells: [{ propertyId: 'prop-user', value: { id: userId } }],
+      },
+    ]);
+    userRepo.findByIds.mockResolvedValue([
+      {
+        id: userId,
+        name: 'Deleted user',
+        avatarUrl: null,
+        deletedAt: new Date(),
+        workspaceId: 'ws-1',
+      },
+    ]);
+
+    const rows = await service.listRows('db-1', user, 'ws-1');
+
+    expect(rows[0].cells[0].value).toEqual({
+      id: userId,
+      name: userId,
+      avatarUrl: null,
     });
   });
 
@@ -1743,6 +1777,39 @@ describe('DatabaseService mixed tree flows', () => {
         candidateUserIds: ['user-new'],
       }),
     );
+  });
+
+  it('rejects a new user cell assignment after space membership ends', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-user', type: 'user' },
+    ]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-old', propertyId: 'prop-user', value: null },
+    ]);
+    pageAccessService.getAssignableSpaceUserIds.mockResolvedValueOnce(new Set());
+
+    await expect(
+      service.batchUpdateRowCells(
+        'db-1',
+        'row-page-1',
+        { cells: [{ propertyId: 'prop-user', value: { id: 'user-former' } }] },
+        user,
+        'ws-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(databaseCellRepo.upsertCell).not.toHaveBeenCalled();
   });
 
   it('does not send duplicate notification when user value remains the same', async () => {
