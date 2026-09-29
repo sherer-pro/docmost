@@ -171,6 +171,105 @@ export class PageService {
     return row?.databaseId ?? null;
   }
 
+  async resolveReferencedUsers(
+    page: Page,
+    requestedUserIds: string[],
+  ) {
+    const referencedIds = new Set<string>();
+    const assigneeId = getPageAssigneeId(page.settings);
+    if (assigneeId) referencedIds.add(assigneeId);
+    getPageStakeholderIds(page.settings).forEach((id) => referencedIds.add(id));
+
+    const row = await this.databaseRowRepo.findActiveByPageId(
+      page.id,
+      page.workspaceId,
+    );
+    let canReadRowCells = Boolean(row);
+    if (row) {
+      const database = await this.databaseRepo.findById(
+        row.databaseId,
+        page.workspaceId,
+      );
+      canReadRowCells = Boolean(
+        database && database.spaceId === page.spaceId,
+      );
+    }
+    if (row && canReadRowCells) {
+      const [properties, cells] = await Promise.all([
+        this.databasePropertyRepo.findByDatabaseId(row.databaseId),
+        this.databaseCellRepo.findByDatabaseAndPage(row.databaseId, page.id),
+      ]);
+      const userPropertyIds = new Set(
+        properties.filter((property) => property.type === 'user').map((property) => property.id),
+      );
+      for (const cell of cells) {
+        if (!userPropertyIds.has(cell.propertyId)) continue;
+        const value = cell.value as unknown;
+        let userId: string | null = null;
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            userId = typeof parsed === 'string' ? parsed : parsed?.id;
+          } catch {
+            userId = value;
+          }
+        } else if (value && typeof value === 'object' && 'id' in value) {
+          userId = (value as { id?: unknown }).id as string;
+        }
+        if (typeof userId === 'string' && userId.trim()) {
+          referencedIds.add(userId.trim());
+        }
+      }
+    }
+
+    const ids = [...new Set(requestedUserIds)].filter((id) => referencedIds.has(id));
+    const users = await this.userRepo.findByIds(ids, page.workspaceId);
+    const usersById = new Map(
+      users
+        .filter((user) => !user.deletedAt && user.workspaceId === page.workspaceId)
+        .map((user) => [user.id, user]),
+    );
+    return ids
+      .map((id) => usersById.get(id))
+      .filter((user): user is NonNullable<typeof user> => !!user)
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+      }));
+  }
+
+  private async assertNewAssignmentsAllowed(
+    currentSettings: PageSettings | null,
+    nextSettings: PageSettings | null,
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const previousAssigneeId = getPageAssigneeId(currentSettings);
+    const nextAssigneeId = getPageAssigneeId(nextSettings);
+    const previousStakeholderIds = new Set(getPageStakeholderIds(currentSettings));
+    const addedIds = [
+      ...(nextAssigneeId && nextAssigneeId !== previousAssigneeId
+        ? [nextAssigneeId]
+        : []),
+      ...getPageStakeholderIds(nextSettings).filter(
+        (id) => !previousStakeholderIds.has(id),
+      ),
+    ];
+    if (addedIds.length === 0) return;
+
+    const assignableIds = await this.pageAccessService.getAssignableSpaceUserIds(
+      addedIds,
+      spaceId,
+      workspaceId,
+    );
+    if (addedIds.some((id) => !assignableIds.has(id))) {
+      throw new BadRequestException(
+        'Assignee and stakeholders must be active space members',
+      );
+    }
+  }
+
   private async duplicateLinkedDatabases(params: {
     pageMap: Map<string, CopyPageMapEntry>;
     copiedPageByOriginalId: CopiedPageByOriginalId;
@@ -665,6 +764,14 @@ export class PageService {
       deferSideEffects?: boolean;
     },
   ): Promise<Page> {
+    if (createPageDto.settings) {
+      await this.assertNewAssignmentsAllowed(
+        null,
+        createPageDto.settings,
+        createPageDto.spaceId,
+        workspaceId,
+      );
+    }
     let content = undefined;
     let textContent = undefined;
     let ydoc = undefined;
@@ -858,6 +965,12 @@ export class PageService {
     const nextSettings = updatePageDto.toSettingsPayload(currentSettings);
     const resolvedNextSettings = (nextSettings ??
       currentSettings) as PageSettings | null;
+    await this.assertNewAssignmentsAllowed(
+      currentSettings,
+      resolvedNextSettings,
+      page.spaceId,
+      page.workspaceId,
+    );
     const statusChanged =
       normalizePageSettings(currentSettings).status !==
       normalizePageSettings(resolvedNextSettings).status;

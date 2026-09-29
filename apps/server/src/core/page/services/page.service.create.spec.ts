@@ -20,6 +20,9 @@ describe('PageService create', () => {
   const pageAccessMutationService = {
     copyParentRulesToChild: jest.fn(),
   };
+  const pageAccessService = {
+    getAssignableSpaceUserIds: jest.fn(async (ids: string[]) => new Set(ids)),
+  };
   const trxStub: any = new Proxy(function () {}, {
     get: (_target, property) =>
       property === 'then'
@@ -52,7 +55,7 @@ describe('PageService create', () => {
     {} as any,
     userRepo as any,
     {} as any,
-    {} as any,
+    pageAccessService as any,
     pageAccessMutationService as any,
   );
 
@@ -88,6 +91,18 @@ describe('PageService create', () => {
       PAGE_ID,
       'edit',
     );
+  });
+
+  it('rejects an explicit assignee who is no longer in the space', async () => {
+    pageAccessService.getAssignableSpaceUserIds.mockResolvedValueOnce(new Set());
+
+    await expect(
+      service.create('user-1', 'ws-1', {
+        spaceId: 'space-1',
+        settings: { assigneeId: 'user-former' },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(pageRepo.insertPage).not.toHaveBeenCalled();
   });
 
   it('rejects a child whose depth would exceed the tree limit', async () => {

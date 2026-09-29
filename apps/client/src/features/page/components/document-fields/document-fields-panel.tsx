@@ -425,9 +425,9 @@ export function DocumentFieldsPanel({
           <CustomAvatar
             avatarUrl={user?.avatarUrl}
             size={18}
-            name={user?.label ?? userId}
+            name={user?.label ?? t("Unknown")}
           />
-          <Text size="sm">{user?.label ?? userId}</Text>
+          <Text size="sm">{user?.label ?? t("Unknown")}</Text>
         </Group>
       );
     }
@@ -776,12 +776,12 @@ export function DocumentFieldsPanel({
                             size={18}
                             name={
                               knownUsersById[fields.assigneeId]?.label ??
-                              fields.assigneeId
+                              t("Unknown")
                             }
                           />
                           <Text size="sm">
                             {knownUsersById[fields.assigneeId]?.label ??
-                              fields.assigneeId}
+                              t("Unknown")}
                           </Text>
                         </Group>
                       ) : (
@@ -823,10 +823,10 @@ export function DocumentFieldsPanel({
                               <CustomAvatar
                                 avatarUrl={knownUsersById[id]?.avatarUrl}
                                 size={18}
-                                name={knownUsersById[id]?.label ?? id}
+                                name={knownUsersById[id]?.label ?? t("Unknown")}
                               />
                               <Text size="sm">
-                                {knownUsersById[id]?.label ?? id}
+                                {knownUsersById[id]?.label ?? t("Unknown")}
                               </Text>
                             </Group>
                           ))}
@@ -867,6 +867,7 @@ export function DocumentFieldsPanel({
                       renderReadOnlyDbValue(property)
                     ) : (
                       <DatabaseCellRenderer
+                        pageId={page.id}
                         property={property}
                         value={dbFieldValues.get(property.id)}
                         isEditable={isEditable}

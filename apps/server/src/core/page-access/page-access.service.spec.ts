@@ -31,6 +31,7 @@ describe('PageAccessService', () => {
 
   const spaceMemberRepo = {
     getUserSpaceRoles: jest.fn(),
+    getUserIdsWithSpaceAccess: jest.fn(),
   };
 
   const environmentService = {
@@ -68,6 +69,36 @@ describe('PageAccessService', () => {
     );
 
     jest.spyOn(service as any, 'getSpaceArchivedAt').mockResolvedValue(null);
+  });
+
+  it('accepts active direct or group space members but excludes inactive workspace users', async () => {
+    spaceMemberRepo.getUserIdsWithSpaceAccess.mockResolvedValue(
+      new Set(['direct', 'group', 'deleted']),
+    );
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      execute: jest.fn().mockResolvedValue([
+        { id: 'direct' },
+        { id: 'group' },
+      ]),
+    };
+    (service as any).db = { selectFrom: jest.fn(() => query) };
+
+    const result = await service.getAssignableSpaceUserIds(
+      ['direct', 'group', 'deleted', 'outside'],
+      'space-1',
+      'workspace-1',
+    );
+
+    expect(result).toEqual(new Set(['direct', 'group']));
+    expect(spaceMemberRepo.getUserIdsWithSpaceAccess).toHaveBeenCalledWith(
+      ['direct', 'group', 'deleted', 'outside'],
+      'space-1',
+    );
+    expect(query.where).toHaveBeenCalledWith('workspaceId', '=', 'workspace-1');
+    expect(query.where).toHaveBeenCalledWith('deletedAt', 'is', null);
+    expect(query.where).toHaveBeenCalledWith('deactivatedAt', 'is', null);
   });
 
   it('grants full bypass capabilities to workspace owner/admin', async () => {

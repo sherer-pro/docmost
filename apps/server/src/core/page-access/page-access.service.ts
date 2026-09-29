@@ -1010,6 +1010,36 @@ export class PageAccessService {
       .map((user) => user.id);
   }
 
+  async getAssignableSpaceUserIds(
+    userIds: string[],
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<Set<string>> {
+    const candidateIds = [...new Set(userIds.filter(Boolean))];
+    if (candidateIds.length === 0) {
+      return new Set();
+    }
+
+    const memberIds = await this.spaceMemberRepo.getUserIdsWithSpaceAccess(
+      candidateIds,
+      spaceId,
+    );
+    if (memberIds.size === 0) {
+      return new Set();
+    }
+
+    const users = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('id', 'in', [...memberIds])
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
+      .execute();
+
+    return new Set(users.map((user) => user.id));
+  }
+
   async listEffectiveUsers(
     page: Page,
     pagination: PaginationOptions,

@@ -28,6 +28,9 @@ describe('PageService custom fields history', () => {
   const eventEmitter = {
     emit: jest.fn(),
   };
+  const pageAccessService = {
+    getAssignableSpaceUserIds: jest.fn(async (ids: string[]) => new Set(ids)),
+  };
 
   const service = new PageService(
     pageRepo as any,
@@ -49,7 +52,7 @@ describe('PageService custom fields history', () => {
     spaceRepo as any,
     userRepo as any,
     pageHistoryRecorder as any,
-    {} as any,
+    pageAccessService as any,
     {} as any,
   );
 
@@ -252,5 +255,26 @@ describe('PageService custom fields history', () => {
         }),
       }),
     );
+  });
+
+  it('rejects a newly added former member without changing the page', async () => {
+    pageAccessService.getAssignableSpaceUserIds.mockResolvedValueOnce(new Set());
+    await expect(
+      service.update(
+        {
+          id: 'page-1',
+          spaceId: 'space-1',
+          workspaceId: 'ws-1',
+          contributorIds: ['user-1'],
+          settings: { assigneeId: 'user-old' },
+        } as any,
+        {
+          toSettingsPayload: jest.fn(() => ({ assigneeId: 'user-new' })),
+        } as any,
+        { id: 'user-2' } as any,
+      ),
+    ).rejects.toThrow('Assignee and stakeholders must be active space members');
+
+    expect(pageRepo.updatePage).not.toHaveBeenCalled();
   });
 });

@@ -612,8 +612,8 @@ export class DatabaseService {
       // Cell values are user-authored legacy data. A failed enrichment query
       // must not make the database rows endpoint unavailable.
     }
-    const userNameById = new Map(
-      users.map((user) => [user.id, user.name?.trim() || user.id]),
+    const userById = new Map(
+      users.filter((user) => !user.deletedAt).map((user) => [user.id, user]),
     );
 
     return rows.map((row) => ({
@@ -632,7 +632,8 @@ export class DatabaseService {
           ...cell,
           value: {
             id: userId,
-            name: userNameById.get(userId) ?? userId,
+            name: userById.get(userId)?.name?.trim() || userId,
+            avatarUrl: userById.get(userId)?.avatarUrl ?? null,
           },
         };
       }),
@@ -2356,6 +2357,37 @@ export class DatabaseService {
       if (!propertyById.has(cell.propertyId)) {
         throw new BadRequestException(
           'Database cell property does not belong to this database',
+        );
+      }
+    }
+
+    const currentUserIds = new Map(
+      existingCells.map((cell) => [
+        cell.propertyId,
+        this.extractUserIdFromCellValue(cell.value),
+      ]),
+    );
+    const newUserIds: string[] = [];
+    for (const cell of dto.cells) {
+      if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
+      const nextUserId =
+        cell.operation === 'delete'
+          ? null
+          : this.extractUserIdFromCellValue(cell.value);
+      if (nextUserId && nextUserId !== currentUserIds.get(cell.propertyId)) {
+        newUserIds.push(nextUserId);
+      }
+      currentUserIds.set(cell.propertyId, nextUserId);
+    }
+    if (newUserIds.length > 0) {
+      const assignableIds = await this.pageAccessService.getAssignableSpaceUserIds(
+        newUserIds,
+        database.spaceId,
+        workspaceId,
+      );
+      if (newUserIds.some((id) => !assignableIds.has(id))) {
+        throw new BadRequestException(
+          'Database user must be an active space member',
         );
       }
     }

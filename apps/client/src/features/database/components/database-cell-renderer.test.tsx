@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatabaseCellRenderer } from "./database-cell-renderer";
 import type { IDatabaseProperty } from "@/features/database/types/database.types";
@@ -104,5 +105,42 @@ describe("DatabaseCellRenderer dictionary exclusions", () => {
 
     expect(container.textContent).toContain("Alpha");
     expect(container.querySelector(".dictionary-highlight")).toBeNull();
+  });
+
+  it("shows a saved former member identity in a user cell", async () => {
+    const formerId = "11111111-1111-4111-8111-111111111111";
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    queryClient.setQueryData(["spaceMemberUsers", "space-1", ""], {
+      items: [],
+    });
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        <QueryClientProvider client={queryClient}>
+          <MantineProvider>
+            <DatabaseCellRenderer
+              property={{ ...property, type: "user" }}
+              value={{ id: formerId, name: "Former User", avatarUrl: "/former" }}
+              isEditable={false}
+              isEditing={false}
+              editingValue={null}
+              spaceId="space-1"
+              onStartEdit={vi.fn()}
+              onChange={vi.fn()}
+              onSave={vi.fn()}
+            />
+          </MantineProvider>
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("Former User");
+    expect(container.textContent).not.toContain(formerId);
+    expect(container.querySelector('img[alt="Former User"]')).not.toBeNull();
   });
 });
