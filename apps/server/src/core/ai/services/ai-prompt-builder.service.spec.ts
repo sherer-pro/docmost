@@ -71,6 +71,70 @@ describe('AiPromptBuilderService', () => {
   } as any;
   const user = { id: 'user' } as any;
 
+  it('authorizes only evidence actually packed into the prompt', async () => {
+    const result = await createService().build({
+      run: {
+        ...run,
+        useSpaceSearch: true,
+        selectionText: null,
+        documentSnapshot: null,
+      },
+      user,
+      instructions: null,
+      currentUserContent: 'Question',
+      fileText: '',
+      fileSources: [],
+      contextSources: [],
+      images: [],
+      retrievalSources: Array.from({ length: 8 }, (_, index) => ({
+        sourceType: 'page' as const,
+        sourceId: `p${index}`,
+        pageId: `p${index}`,
+        sourceTitle: `Page ${index}`,
+        sourceUrl: null,
+        excerpt: 'Evidence '.repeat(330),
+        relevanceScore: null,
+      })),
+      contextWindow: 7_000,
+      maxOutputTokens: 1_000,
+    });
+    expect(result.citationCandidates).toHaveLength(1);
+    expect(String(result.messages.at(-1)?.content)).not.toContain('[S8]');
+    expect(
+      new AiCitationService().finalize('Unseen [S8]', result.citationCandidates)
+        .content,
+    ).toBe('Unseen ');
+  });
+
+  it('keeps two different fragments of one source citable', async () => {
+    const result = await createService().build({
+      run: { ...run, selectionText: null, documentSnapshot: null },
+      user,
+      instructions: null,
+      currentUserContent: 'Compare',
+      fileText: '',
+      fileSources: [],
+      contextSources: [],
+      images: [],
+      retrievalSources: ['First evidence', 'Second evidence'].map(
+        (excerpt) => ({
+          sourceType: 'page' as const,
+          sourceId: 'page',
+          pageId: 'page',
+          sourceTitle: 'Page',
+          sourceUrl: null,
+          excerpt,
+          relevanceScore: null,
+        }),
+      ),
+      contextWindow: 32_768,
+      maxOutputTokens: 2_048,
+    });
+    expect(
+      result.citationCandidates.map((candidate) => candidate.excerpt),
+    ).toEqual(['First evidence', 'Second evidence']);
+  });
+
   it('prioritizes a selection over the full document snapshot', async () => {
     const { messages } = await createService().build({
       run,

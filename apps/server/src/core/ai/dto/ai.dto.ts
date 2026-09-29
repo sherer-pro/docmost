@@ -120,6 +120,14 @@ export class UpdateAiRetrievalConfigDto {
   followUpRewriteEnabled?: boolean;
 
   @IsOptional()
+  @IsIn(['legacy-v1', 'evidence-v1'])
+  qualityProfile?: 'legacy-v1' | 'evidence-v1';
+
+  @IsOptional()
+  @IsBoolean()
+  queryExpansionEnabled?: boolean;
+
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => UpdateAiOpenWebUiRetrievalConfigDto)
@@ -255,7 +263,25 @@ export class UpdateAiSpaceConfigDto {
   quickCommands?: AiQuickCommandDto[] | null;
 }
 
-export class TestAiSpaceConfigDto extends UpdateAiSpaceConfigDto {}
+class AiRetrievalCanaryDto {
+  @IsString()
+  @Length(1, 1000)
+  query: string;
+
+  @IsUUID()
+  sourceId: string;
+
+  @IsString()
+  @Length(1, 1000)
+  expectedText: string;
+}
+
+export class TestAiSpaceConfigDto extends UpdateAiSpaceConfigDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AiRetrievalCanaryDto)
+  canary?: AiRetrievalCanaryDto;
+}
 
 export class CreateAiConversationDto {
   @IsUUID()

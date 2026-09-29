@@ -65,6 +65,9 @@ import { AiSourceAccessService } from './services/ai-source-access.service';
 import { AiProviderModule } from './ai-provider.module';
 import { RagModule } from '../rag/rag.module';
 import { AiQueryRewriteService } from './retrieval/ai-query-rewrite.service';
+import { AiCanonicalEvidenceService } from './retrieval/ai-canonical-evidence.service';
+import { DictionaryModule } from '../dictionary/dictionary.module';
+import { StorageModule } from '../../integrations/storage/storage.module';
 
 @Module({
   imports: [
@@ -77,6 +80,8 @@ import { AiQueryRewriteService } from './retrieval/ai-query-rewrite.service';
     ShareModule,
     TransclusionModule,
     RagModule,
+    DictionaryModule,
+    StorageModule,
   ],
   controllers: [
     AiConfigController,
@@ -107,6 +112,7 @@ import { AiQueryRewriteService } from './retrieval/ai-query-rewrite.service';
     AiRetrievalUrlPolicyService,
     AiRetrievalService,
     AiQueryRewriteService,
+    AiCanonicalEvidenceService,
     AiRetrievalHttpClient,
     AiRunExecutionService,
     AiRunEventService,

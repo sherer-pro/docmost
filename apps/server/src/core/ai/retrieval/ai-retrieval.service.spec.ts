@@ -12,6 +12,67 @@ function queryReturning(rows: unknown[]) {
 }
 
 describe('AiRetrievalService', () => {
+  it('keeps external evidence when optional local search exhausts the shared deadline', async () => {
+    const hit = {
+      sourceType: 'page',
+      sourceId: 'page',
+      pageId: 'page',
+      text: 'Current value 200',
+    };
+    const source = {
+      ...hit,
+      excerpt: hit.text,
+      contentHash: 'current',
+      sourceTitle: 'Page',
+      sourceUrl: null,
+      relevanceScore: null,
+    };
+    const adapter = {
+      kind: 'http-json-v1',
+      isConfigured: () => true,
+      retrieve: jest.fn(async () => [hit]),
+    };
+    const service = new AiRetrievalService(
+      {} as any,
+      {} as any,
+      adapter as any,
+      { kind: 'none' } as any,
+      { observeRetrieval: jest.fn(), observeRetrievalQuery: jest.fn() } as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { searchPage: jest.fn(() => new Promise(() => {})) } as any,
+    );
+    jest
+      .spyOn(service as any, 'currentAllowedPageIds')
+      .mockResolvedValue(new Set(['page']));
+    jest
+      .spyOn(service as any, 'withDictionarySourceType')
+      .mockImplementation(async (request) => request);
+    const resolve = jest
+      .spyOn(service as any, 'resolveSafeSources')
+      .mockResolvedValueOnce([source])
+      .mockImplementation(() => new Promise(() => {}));
+    const result = await service.retrieveSafe({
+      config: {
+        adapter: 'http-json-v1',
+        qualityProfile: 'evidence-v1',
+        maxResults: 8,
+      } as any,
+      user: {} as any,
+      requested: true,
+      request: {
+        query: 'current value',
+        deadlineAtMs: Date.now() + 100,
+      } as any,
+    });
+    expect(result).toMatchObject({ status: 'used', sources: [source] });
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
   it('maps a unique excerpt to a stable heading and rejects ambiguous matches', () => {
     const service = new AiRetrievalService(
       {} as any,
@@ -131,6 +192,17 @@ describe('AiRetrievalService', () => {
       {
         observeRetrieval: jest.fn(),
         observeRetrievalQuery: jest.fn(),
+      } as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        load: jest.fn(async () => ({
+          markdown: 'Candidate excerpt',
+          version: '2026-09-29T00:00:00.000Z',
+        })),
       } as any,
     );
     const config = {
@@ -252,6 +324,21 @@ describe('AiRetrievalService', () => {
         observeRetrieval: jest.fn(),
         observeRetrievalQuery: jest.fn(),
       } as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        load: jest.fn(async (hit) => ({
+          markdown: {
+            page: 'Page excerpt',
+            database_row: 'Row excerpt',
+            attachment: 'Attachment excerpt',
+          }[hit.sourceType],
+          version: '2026-09-29T00:00:00.000Z',
+        })),
+      } as any,
     );
 
     const sources = await (service as any).resolveSafeSources(
@@ -303,6 +390,7 @@ describe('AiRetrievalService', () => {
       workspaceId,
       spaceId,
       8,
+      {},
     );
 
     expect(sources).toEqual([
@@ -447,11 +535,13 @@ describe('AiRetrievalService', () => {
           candidateLimit: 40,
         },
       }),
-    ).resolves.toEqual({ status: 'empty', sources: [] });
+    ).resolves.toEqual(
+      expect.objectContaining({ status: 'empty', sources: [] }),
+    );
     expect(adapter.retrieve).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ allowedPageIds: ['page-id'] }),
-      undefined,
+      expect.any(AbortSignal),
     );
     expect(sourceAccess.getAllowedPageIds).toHaveBeenCalledTimes(2);
     for (const [params] of sourceAccess.getAllowedPageIds.mock.calls) {

@@ -143,6 +143,13 @@ the deployment boundary by default and require explicit opt-in.
 
 ### 3. RAG and Open WebUI integration
 
+Search evidence is resolved from current Docmost content before generation, and
+only fragments actually sent to the model can be cited. The optional
+`evidence-v1` quality profile adds `structured-knowledge-v3` sections, local
+fallback and bounded query expansion. The 200-question synthetic evaluation
+corpus separates tuning and holdout cases; production quality and reranker
+benefit still require measurement. See the [evaluation runbook](tests/rag-quality/README.md).
+
 The fork includes its own RAG API and integrations with external knowledge-retrieval systems.
 
 Supported capabilities include:

@@ -43,6 +43,20 @@ describe('AiCitationService', () => {
     expect(candidates).toHaveLength(512);
   });
 
+  it('retains the exact transmitted headings and excludes orphan markers', () => {
+    const service = new AiCitationService();
+    const result = service.transmittedCandidates(
+      [candidate('S1', 'one'), candidate('S8', 'eight')],
+      '[S1] Source\n## Price, USD\n\n200\n\n[S8] Unsent source\n## Empty section',
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      marker: 'S1',
+      excerpt: '## Price, USD\n\n200',
+    });
+    expect(service.finalize('200 [S8]', result).content).toBe('200 ');
+  });
+
   it('neutralizes marker-like strings in untrusted reference data', () => {
     expect(
       new AiCitationService().neutralizeUntrustedValue({

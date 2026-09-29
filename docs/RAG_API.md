@@ -703,3 +703,7 @@ Because delivery is at-least-once, consumers must:
 - For queue, checkpoint, mapping, lock-loss, and key-rotation recovery, follow
   the canonical [Recovery and diagnostics](./AI_ASSISTANT_AND_RAG.md#recovery-and-diagnostics)
   procedure.
+
+### Optional structured heading provenance
+
+Page details and hydrated database rows may include `headingLocators` with stable editor `{id,title,level}` records. These additive fields support the internal `structured-knowledge-v3` pilot. External retrieval `http-json-v1` remains schema version 1 without mandatory new fields. See [quality profiles](AI_ASSISTANT_AND_RAG.md#evidence-quality-profiles).

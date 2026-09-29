@@ -463,6 +463,14 @@ export class AiConfigService {
           AI_RETRIEVAL_DEFAULTS.topK,
         retrievalQueryMode:
           dto.retrieval?.queryMode ?? existing?.retrievalQueryMode ?? 'vector',
+        retrievalQualityProfile:
+          dto.retrieval?.qualityProfile ??
+          existing?.retrievalQualityProfile ??
+          'legacy-v1',
+        retrievalQueryExpansionEnabled:
+          dto.retrieval?.queryExpansionEnabled ??
+          existing?.retrievalQueryExpansionEnabled ??
+          false,
         retrievalFollowUpRewriteEnabled:
           dto.retrieval?.followUpRewriteEnabled ??
           existing?.retrievalFollowUpRewriteEnabled ??
@@ -714,7 +722,13 @@ export class AiConfigService {
         workspaceId: workspace.id,
         spaceId,
         pageId: page.id,
-        query: 'Docmost retrieval connection test',
+        query: dto.canary?.query ?? 'Docmost retrieval connection test',
+        canary: dto.canary
+          ? {
+              sourceId: dto.canary.sourceId,
+              expectedText: dto.canary.expectedText,
+            }
+          : undefined,
         allowedPageIds: [page.id],
         sourceTypes: ['page', 'database_row', 'attachment'],
         limit: Math.min(config.maxResults, 3),
@@ -752,6 +766,11 @@ export class AiConfigService {
           ? 'hybrid_with_vector_fallback'
           : 'vector',
       followUpRewriteEnabled: config.retrievalFollowUpRewriteEnabled,
+      qualityProfile:
+        config.retrievalQualityProfile === 'evidence-v1'
+          ? 'evidence-v1'
+          : 'legacy-v1',
+      queryExpansionEnabled: config.retrievalQueryExpansionEnabled ?? false,
     };
   }
 
@@ -877,6 +896,15 @@ export class AiConfigService {
       followUpRewriteEnabled:
         dto.retrieval?.followUpRewriteEnabled ??
         existing?.retrievalFollowUpRewriteEnabled ??
+        false,
+      qualityProfile:
+        dto.retrieval?.qualityProfile ??
+        (existing?.retrievalQualityProfile === 'evidence-v1'
+          ? 'evidence-v1'
+          : 'legacy-v1'),
+      queryExpansionEnabled:
+        dto.retrieval?.queryExpansionEnabled ??
+        existing?.retrievalQueryExpansionEnabled ??
         false,
     };
   }
@@ -1106,6 +1134,11 @@ export class AiConfigService {
             ? 'hybrid_with_vector_fallback'
             : 'vector',
         followUpRewriteEnabled: config.retrievalFollowUpRewriteEnabled,
+        qualityProfile:
+          config.retrievalQualityProfile === 'evidence-v1'
+            ? 'evidence-v1'
+            : 'legacy-v1',
+        queryExpansionEnabled: config.retrievalQueryExpansionEnabled ?? false,
         openWebUi: {
           baseUrl: config.retrievalOpenWebuiBaseUrl,
           knowledgeId: config.retrievalOpenWebuiKnowledgeId,

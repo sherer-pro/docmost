@@ -4,7 +4,10 @@ import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { AiRun, AiRunStep, User } from '@docmost/db/types/entity.types';
 import { sql } from 'kysely';
 import { AI_RETRIEVAL_DEFAULTS } from '../ai.constants';
-import { AiRetrievalService } from '../retrieval/ai-retrieval.service';
+import {
+  AiRetrievalService,
+  AiRetrievalOutcome,
+} from '../retrieval/ai-retrieval.service';
 import { AiConfigService } from './ai-config.service';
 import { AiConversationService } from './ai-conversation.service';
 import { AiFileService } from './ai-file.service';
@@ -52,6 +55,7 @@ import {
   AiQueryRewriteResult,
   AiQueryRewriteService,
 } from '../retrieval/ai-query-rewrite.service';
+import { withDeadline } from '../../../common/security/untrusted-document.util';
 
 class AiRunCancelledError extends Error {}
 
@@ -250,44 +254,78 @@ export class AiRunExecutionService {
     let lastFlush = Date.now();
     let lastHeartbeat = 0;
     try {
-      const contextSources = await this.contexts.resolveRunContext(
-        run,
-        user as User,
-        Math.min(
-          500_000,
-          Math.max(
-            16_000,
-            (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
-              2,
+      const retrievalDeadlineAtMs = Date.now() + 10_000;
+      const preparationSignal = run.useSpaceSearch
+        ? AbortSignal.timeout(10_000)
+        : undefined;
+      const prepare = async <T>(
+        operation: () => Promise<T>,
+        empty: T,
+      ): Promise<T> => {
+        if (!run.useSpaceSearch) return operation();
+        if (Date.now() >= retrievalDeadlineAtMs) return empty;
+        try {
+          return await withDeadline(
+            operation(),
+            retrievalDeadlineAtMs,
+            'ai_evidence_deadline',
+          );
+        } catch (error) {
+          if (
+            preparationSignal?.aborted ||
+            (error as Error).message === 'ai_evidence_deadline'
+          )
+            return empty;
+          throw error;
+        }
+      };
+      const contextSources = await prepare(
+        () =>
+          this.contexts.resolveRunContext(
+            run,
+            user as User,
+            Math.min(
+              500_000,
+              Math.max(
+                16_000,
+                (providerRuntime.contextWindow -
+                  providerConfig.maxOutputTokens) *
+                  2,
+              ),
+            ),
+            preparationSignal,
           ),
-        ),
+        [],
       );
-      const fileContext = await this.files.buildContext(
-        run.chatFileIds,
-        run.attachmentIds,
-        {
-          conversationId: run.conversationId,
-          userId: run.userId,
-          workspaceId: run.workspaceId,
-          spaceId: run.spaceId,
-          visionEnabled: providerRuntime.visionEnabled,
-          maxTextChars: Math.min(
-            250_000,
-            Math.max(
-              8_000,
-              (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
-                1.5,
+      const fileContext = await prepare(
+        () =>
+          this.files.buildContext(run.chatFileIds, run.attachmentIds, {
+            signal: preparationSignal,
+            conversationId: run.conversationId,
+            userId: run.userId,
+            workspaceId: run.workspaceId,
+            spaceId: run.spaceId,
+            visionEnabled: providerRuntime.visionEnabled,
+            maxTextChars: Math.min(
+              250_000,
+              Math.max(
+                8_000,
+                (providerRuntime.contextWindow -
+                  providerConfig.maxOutputTokens) *
+                  1.5,
+              ),
             ),
-          ),
-          maxImageBytes: Math.min(
-            2 * 1024 * 1024,
-            Math.max(
-              256 * 1024,
-              (providerRuntime.contextWindow - providerConfig.maxOutputTokens) *
-                4,
+            maxImageBytes: Math.min(
+              2 * 1024 * 1024,
+              Math.max(
+                256 * 1024,
+                (providerRuntime.contextWindow -
+                  providerConfig.maxOutputTokens) *
+                  4,
+              ),
             ),
-          ),
-        },
+          }),
+        { text: '', images: [], citations: [] },
       );
       const retrievalConfig = this.configs.toRetrievalConfig(config);
       const rewrite = this.queryRewrite
@@ -300,13 +338,10 @@ export class AiRunExecutionService {
               retrievalConfig.adapter !== 'none' &&
               retrievalConfig.followUpRewriteEnabled,
             providerConfig,
+            deadlineAtMs: Math.min(retrievalDeadlineAtMs, Date.now() + 2_000),
           })
         : this.disabledRewrite(userMessage.content, run.useSpaceSearch);
-      const retrievalDeadlineAtMs =
-        retrievalConfig.queryMode === 'hybrid_with_vector_fallback'
-          ? Date.now() + 6_000
-          : undefined;
-      const retrievalOutcome = await this.retrieval.retrieveSafe({
+      const retrievalOutcome = await this.retrieveWithCancellation(run.id, {
         config: retrievalConfig,
         user: user as User,
         requested: run.useSpaceSearch,
@@ -316,7 +351,21 @@ export class AiRunExecutionService {
           workspaceId: run.workspaceId,
           spaceId: run.spaceId,
           pageId: run.pageId,
-          query: rewrite.query,
+          query: userMessage.content,
+          additionalQueries: [
+            ...new Set([
+              ...(rewrite.outcome === 'rewritten' ? [rewrite.query] : []),
+              ...(retrievalConfig.queryExpansionEnabled &&
+              /[?;]|\b(?:compare|versus)\b|сравни/iu.test(userMessage.content)
+                ? userMessage.content
+                    .split(/[?;]\s*/u)
+                    .map((value) => value.trim())
+                    .filter((value) => value.length >= 12)
+                : []),
+            ]),
+          ]
+            .filter((query) => query !== userMessage.content)
+            .slice(0, 2),
           allowedPageIds: [],
           sourceTypes: ['page', 'database_row', 'attachment'],
           limit: config.retrievalMaxResults,
@@ -335,6 +384,7 @@ export class AiRunExecutionService {
           retrievalRewriteLatencyMs: rewrite.latencyMs,
           retrievalRewriteInputTokens: rewrite.usage.inputTokens,
           retrievalRewriteOutputTokens: rewrite.usage.outputTokens,
+          retrievalDiagnostics: retrievalOutcome.diagnostics as never,
           updatedAt: new Date(),
         })
         .where('id', '=', run.id)
@@ -370,12 +420,36 @@ export class AiRunExecutionService {
           contextWindow,
           maxOutputTokens,
         });
-      let prompt = await buildMessages(
-        providerRuntime.contextWindow,
-        providerConfig.maxOutputTokens,
+      let prompt = await prepare(
+        () =>
+          buildMessages(
+            providerRuntime.contextWindow,
+            providerConfig.maxOutputTokens,
+          ),
+        { messages: [], citationCandidates: [] },
       );
+      const preparationMs = Date.now() - (retrievalDeadlineAtMs - 10_000);
+      if (run.useSpaceSearch && preparationMs >= 10_000) {
+        retrievalOutcome.status = 'failed';
+        retrievalOutcome.errorCode = 'retrieval_timeout';
+      }
 
       if (run.executionMode === 'agent') {
+        if (prompt.messages.length === 0) {
+          await this.completeAgentRun({
+            run,
+            user: user as User,
+            content: this.noEvidenceAnswer(user as User, 'failed'),
+            usage: rewrite.usage,
+            contextSources,
+            fileCitations: fileContext.citations,
+            retrievalOutcome,
+            userContent: userMessage.content,
+            dailyTokenLimitPerSpace: Number(config.dailyTokenLimitPerSpace),
+            citationCandidates: [],
+          });
+          return;
+        }
         await this.executeAgent({
           run,
           user: user as User,
@@ -501,7 +575,16 @@ export class AiRunExecutionService {
       };
       let usage: AiProviderUsage;
       try {
-        usage = await stream(prompt.messages, providerConfig.maxOutputTokens);
+        if (run.useSpaceSearch && prompt.citationCandidates.length === 0) {
+          content = this.noEvidenceAnswer(
+            user as User,
+            retrievalOutcome.status,
+          );
+          pendingDelta = content;
+          usage = { inputTokens: 0, outputTokens: 0 };
+        } else {
+          usage = await stream(prompt.messages, providerConfig.maxOutputTokens);
+        }
       } catch (error) {
         if (!(error instanceof AiProviderEmptyResponseError)) throw error;
         const fallback = getEmptyResponseFallbackLimits({
@@ -552,6 +635,29 @@ export class AiRunExecutionService {
             outputTokens: usage.outputTokens,
             responseSnapshot: content,
             reasoningSnapshot: reasoning,
+            evidenceSnapshot: {
+              schemaVersion: 1,
+              profile: retrievalConfig.qualityProfile ?? 'legacy-v1',
+              search: {
+                adapter: retrievalConfig.adapter,
+                queryMode: retrievalConfig.queryMode,
+                originalQuery: userMessage.content,
+                rewrittenQuery: rewrite.query,
+                candidateLimit: 40,
+                evidenceLimit: retrievalConfig.maxResults,
+                effectiveProfile:
+                  retrievalOutcome.diagnostics?.effectiveProfile,
+              },
+              sources: prompt.citationCandidates,
+            } as never,
+            retrievalDiagnostics: {
+              ...retrievalOutcome.diagnostics,
+              preparationMs,
+              transmitted: prompt.citationCandidates.length,
+              cited: finalized.sources.filter(
+                (source) => source.citationState === 'cited',
+              ).length,
+            } as never,
             updatedAt: completedAt,
           })
           .where('id', '=', run.id)
@@ -646,11 +752,7 @@ export class AiRunExecutionService {
     citationCandidates: AiCitationCandidate[];
     contextSources: any[];
     fileCitations: any[];
-    retrievalOutcome: {
-      status: any;
-      errorCode?: string;
-      sources: any[];
-    };
+    retrievalOutcome: AiRetrievalOutcome;
     userContent: string;
     providerConfig: AiProviderConfig;
     rewriteUsage: AiProviderUsage;
@@ -907,12 +1009,13 @@ export class AiRunExecutionService {
                   })(),
             retrievalOutcome.sources,
           );
+          const pendingCandidates = [...citationCandidates];
           const executionContent = external
             ? this.neutralizeExternalCitationMarkers(execution.content)
             : this.attachToolCitations(
                 this.citations.neutralizeUntrustedValue(execution.content),
                 execution.citations ?? [],
-                citationCandidates,
+                pendingCandidates,
               );
           const bytes = Buffer.byteLength(
             JSON.stringify(this.toolResultForModel(executionContent)),
@@ -969,6 +1072,11 @@ export class AiRunExecutionService {
               result: this.toolResultForModel(executionContent),
             }),
           });
+          citationCandidates.splice(
+            0,
+            citationCandidates.length,
+            ...pendingCandidates,
+          );
         } catch (error) {
           if (error instanceof AiAgentExecutionError) {
             throw error;
@@ -1164,6 +1272,47 @@ export class AiRunExecutionService {
     return { value: boundedContent, docmostCitations: citationMetadata };
   }
 
+  private noEvidenceAnswer(user: User, status: string): string {
+    const russian = (user.locale ?? 'en').startsWith('ru');
+    const unavailable = status === 'failed' || status === 'disabled';
+    return russian
+      ? unavailable
+        ? 'Поиск сейчас недоступен. Доступных подтверждающих источников для ответа нет.'
+        : 'В доступных источниках не найдено сведений для ответа на этот вопрос.'
+      : unavailable
+        ? 'Search is currently unavailable. No accessible supporting evidence is available for this answer.'
+        : 'The accessible sources do not contain sufficient evidence to answer this question.';
+  }
+
+  private async retrieveWithCancellation(
+    runId: string,
+    params: Parameters<AiRetrievalService['retrieveSafe']>[0],
+  ) {
+    const controller = new AbortController();
+    let checking = false;
+    const timer = setInterval(() => {
+      if (checking) return;
+      checking = true;
+      void this.isCancelled(runId)
+        .then((cancelled) => {
+          if (cancelled) controller.abort();
+        })
+        .catch(() => controller.abort())
+        .finally(() => {
+          checking = false;
+        });
+    }, 250);
+    try {
+      return await this.retrieval.retrieveSafe({
+        ...params,
+        signal: controller.signal,
+      });
+    } finally {
+      clearInterval(timer);
+      controller.abort();
+    }
+  }
+
   private neutralizeExternalCitationMarkers(value: unknown): unknown {
     return this.citations.neutralizeUntrustedValue(value);
   }
@@ -1185,6 +1334,9 @@ export class AiRunExecutionService {
           marker: citation.marker,
           sourceTitle: citation.sourceTitle,
           sectionTitle: citation.sectionTitle,
+          evidence:
+            (citation.source as AiCitationCandidate | undefined)?.excerpt ??
+            null,
         };
       }),
     };
@@ -1195,6 +1347,7 @@ export class AiRunExecutionService {
     candidates: AiCitationCandidate[],
   ): void {
     for (const step of steps) {
+      if (step.status !== 'completed') continue;
       const result = step.result as {
         docmostCitations?: Array<{
           marker?: string;
@@ -1572,16 +1725,17 @@ export class AiRunExecutionService {
     usage: AiProviderUsage;
     contextSources: any[];
     fileCitations: any[];
-    retrievalOutcome: {
-      status: any;
-      errorCode?: string;
-      sources: any[];
-    };
+    retrievalOutcome: AiRetrievalOutcome;
     userContent: string;
     dailyTokenLimitPerSpace: number;
     citationCandidates: AiCitationCandidate[];
     user: User;
   }): Promise<void> {
+    if (params.run.useSpaceSearch && params.citationCandidates.length === 0)
+      params.content = this.noEvidenceAnswer(
+        params.user,
+        params.retrievalOutcome.status,
+      );
     await this.assertRunSourceAccess(
       params.run,
       params.user,
@@ -1612,6 +1766,20 @@ export class AiRunExecutionService {
           outputTokens: params.usage.outputTokens,
           responseSnapshot: params.content,
           reasoningSnapshot: '',
+          evidenceSnapshot: {
+            schemaVersion: 1,
+            profile:
+              params.retrievalOutcome.diagnostics?.profile ?? 'legacy-v1',
+            search: params.retrievalOutcome.diagnostics?.effectiveProfile,
+            sources: params.citationCandidates,
+          } as never,
+          retrievalDiagnostics: {
+            ...params.retrievalOutcome.diagnostics,
+            transmitted: params.citationCandidates.length,
+            cited: finalized.sources.filter(
+              (source) => source.citationState === 'cited',
+            ).length,
+          } as never,
           updatedAt: completedAt,
         })
         .where('id', '=', params.run.id)

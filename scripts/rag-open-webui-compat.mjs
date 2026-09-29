@@ -14,16 +14,25 @@ async function json(path, options = {}) {
   try {
     payload = text ? JSON.parse(text) : undefined;
   } catch {
-    throw new Error(`${options.method ?? "GET"} ${path} returned malformed JSON`);
+    throw new Error(
+      `${options.method ?? "GET"} ${path} returned malformed JSON`,
+    );
   }
   if (!response.ok) {
-    throw new Error(`${options.method ?? "GET"} ${path} returned ${response.status}`);
+    throw new Error(
+      `${options.method ?? "GET"} ${path} returned ${response.status}`,
+    );
   }
   return payload;
 }
 
 async function waitForHealth() {
-  const deadline = Date.now() + 180_000;
+  const timeout = Number(
+    process.env.OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS ?? 180_000,
+  );
+  if (!Number.isFinite(timeout) || timeout < 1000 || timeout > 900_000)
+    throw new Error("Invalid Open WebUI startup timeout");
+  const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(new URL("health", baseUrl));
@@ -120,7 +129,11 @@ try {
     const sourceId = randomUUID();
     const contentHash = String(index + 1).repeat(64);
     const form = new FormData();
-    form.set("file", new Blob([fixture.bytes], { type: fixture.type }), fixture.name);
+    form.set(
+      "file",
+      new Blob([fixture.bytes], { type: fixture.type }),
+      fixture.name,
+    );
     form.set(
       "metadata",
       JSON.stringify({
@@ -146,7 +159,8 @@ try {
       "api/v1/files/?process=true&process_in_background=true",
       { method: "POST", headers, body: form },
     );
-    if (!uploaded.id) throw new Error(`Open WebUI upload omitted id for ${fixture.name}`);
+    if (!uploaded.id)
+      throw new Error(`Open WebUI upload omitted id for ${fixture.name}`);
     uploadedFileIds.push(uploaded.id);
 
     let completed = false;
@@ -160,11 +174,14 @@ try {
         break;
       }
       if (["failed", "not_found"].includes(status.status)) {
-        throw new Error(`Open WebUI processing failed for ${fixture.name}: ${status.status}`);
+        throw new Error(
+          `Open WebUI processing failed for ${fixture.name}: ${status.status}`,
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    if (!completed) throw new Error(`Open WebUI processing timed out for ${fixture.name}`);
+    if (!completed)
+      throw new Error(`Open WebUI processing timed out for ${fixture.name}`);
   }
   const page = await json(
     `api/v1/knowledge/${knowledge.id}/files?page=1&limit=30&include_content=false`,
@@ -172,7 +189,9 @@ try {
   );
   for (const fileId of uploadedFileIds) {
     if (!page.items?.some((file) => file.id === fileId)) {
-      throw new Error(`Uploaded file ${fileId} is absent from the Knowledge listing`);
+      throw new Error(
+        `Uploaded file ${fileId} is absent from the Knowledge listing`,
+      );
     }
   }
   const retrieval = await json("api/v1/retrieval/query/collection", {
@@ -182,13 +201,57 @@ try {
       collection_names: [knowledge.id],
       query: "8f516876",
       k: 5,
+      k_reranker: 5,
       hybrid: false,
     }),
   });
   if (!Array.isArray(retrieval.documents?.[0])) {
     throw new Error("Open WebUI retrieval response shape is incompatible");
   }
-  process.stdout.write("Open WebUI v0.11.0 writer and retrieval contracts are compatible\n");
+  const originalConfig = await json("api/v1/retrieval/config", { headers });
+  try {
+    await json("api/v1/retrieval/config/update", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        ENABLE_RAG_HYBRID_SEARCH: true,
+        TOP_K: 40,
+        TOP_K_RERANKER: 8,
+      }),
+    });
+    const effective = await json("api/v1/retrieval/config", { headers });
+    if (effective.ENABLE_RAG_HYBRID_SEARCH !== true)
+      throw new Error("Hybrid search was not enabled by Open WebUI");
+    const hybrid = await json("api/v1/retrieval/query/collection", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        collection_names: [knowledge.id],
+        query: "8f516876",
+        k: 40,
+        k_reranker: 8,
+        hybrid: true,
+      }),
+    });
+    if (!hybrid.documents?.[0]?.some((text) => text.includes("8f516876")))
+      throw new Error("Hybrid canary evidence was not retrieved");
+    process.stdout.write(
+      `Hybrid canary passed; reranker=${effective.RAG_RERANKING_MODEL ? "configured" : "disabled"}\n`,
+    );
+  } finally {
+    await json("api/v1/retrieval/config/update", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        ENABLE_RAG_HYBRID_SEARCH: originalConfig.ENABLE_RAG_HYBRID_SEARCH,
+        TOP_K: originalConfig.TOP_K,
+        TOP_K_RERANKER: originalConfig.TOP_K_RERANKER,
+      }),
+    });
+  }
+  process.stdout.write(
+    "Open WebUI v0.11.0 writer and retrieval contracts are compatible\n",
+  );
 } finally {
   for (const fileId of uploadedFileIds) {
     await fetch(new URL(`api/v1/files/${fileId}`, baseUrl), {

@@ -39,6 +39,10 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 import { AiSourceAccessChangedError } from './ai-source-access.service';
 import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
+import {
+  fitEvidence,
+  evidenceTokenUpperBound,
+} from '../../rag/rag-evidence.util';
 
 export interface AiResolvedRunContextSource {
   sourceType: AiContextSourceType;
@@ -776,7 +780,9 @@ export class AiContextService {
     run: AiRun,
     user: User,
     maxChars: number,
+    signal?: AbortSignal,
   ): Promise<AiResolvedRunContextSource[]> {
+    signal?.throwIfAborted();
     const rows = await this.db
       .selectFrom('aiRunContextSources')
       .selectAll()
@@ -800,6 +806,7 @@ export class AiContextService {
     const resolved: AiResolvedRunContextSource[] = [];
     let remaining = maxChars;
     for (const row of rows) {
+      signal?.throwIfAborted();
       let markdown = row.markdownSnapshot;
       let title = row.sourceTitle;
       let dependencies = [row.pageId];
@@ -820,8 +827,9 @@ export class AiContextService {
         dependencies = snapshot.dependencyPageIds;
         citationHeadings = snapshot.citationHeadings;
       }
-      const bounded = markdown.slice(0, Math.max(0, remaining));
-      remaining -= bounded.length;
+      const bounded = fitEvidence(markdown, Math.max(0, remaining));
+      signal?.throwIfAborted();
+      remaining -= evidenceTokenUpperBound(bounded);
       const stored = await this.persistResolvedSnapshot(
         run,
         row,
@@ -915,10 +923,13 @@ export class AiContextService {
       }
       return {
         title: page.title?.trim() || '',
-        markdown: this.insertAfterTitle(
-          this.pageMarkdown(page.title, page.content, page.textContent),
-          await this.documentFieldsMarkdown(page.id, workspaceId, spaceId),
-        ).slice(0, maxChars),
+        markdown: fitEvidence(
+          this.insertAfterTitle(
+            this.pageMarkdown(page.title, page.content, page.textContent),
+            await this.documentFieldsMarkdown(page.id, workspaceId, spaceId),
+          ),
+          maxChars,
+        ),
         dependencyPageIds: [page.id],
         citationHeadings: this.extractCitationHeadings(page.content),
       };
@@ -987,16 +998,18 @@ export class AiContextService {
       spaceId,
       row.settings,
     );
-    const markdown = [
-      `# ${row.title?.trim() || row.databaseName}`,
-      documentFields,
-      `Database: ${row.databaseName}`,
-      this.cellsMarkdown(cells.get(row.pageId) ?? []),
-      this.safeMarkdown(row.content, row.textContent),
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-      .slice(0, maxChars);
+    const markdown = fitEvidence(
+      [
+        `# ${row.title?.trim() || row.databaseName}`,
+        documentFields,
+        `Database: ${row.databaseName}`,
+        this.cellsMarkdown(cells.get(row.pageId) ?? []),
+        this.safeMarkdown(row.content, row.textContent),
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      maxChars,
+    );
     return {
       title: row.title?.trim() || row.databaseName,
       markdown,
@@ -1098,7 +1111,7 @@ export class AiContextService {
     }
     return {
       title: database.name,
-      markdown: markdown.slice(0, maxChars),
+      markdown: fitEvidence(markdown, maxChars),
       dependencyPageIds: usedPageIds,
       citationHeadings: [],
     };

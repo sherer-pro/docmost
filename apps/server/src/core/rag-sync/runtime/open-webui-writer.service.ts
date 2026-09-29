@@ -838,6 +838,14 @@ function projectLocator(
   if (Number.isSafeInteger(value.pageNumber)) {
     result.pageNumber = value.pageNumber;
   }
+  for (const name of ['headingPath', 'links']) {
+    if (
+      Array.isArray(value[name]) &&
+      value[name].length <= 32 &&
+      value[name].every((item) => isBoundedString(item, 2048))
+    )
+      result[name] = value[name];
+  }
   if (isRecord(value.region)) {
     const region = projectRegion(value.region);
     if (region) result.region = region;

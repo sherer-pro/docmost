@@ -107,7 +107,7 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     await expect(adapter.retrieve(config, request)).resolves.toEqual([]);
   });
 
-  it('keeps valid candidates and deduplicates by the highest score', async () => {
+  it('keeps distinct valid fragments of the same source', async () => {
     global.fetch = jest.fn(
       async () =>
         new Response(
@@ -134,6 +134,7 @@ describe('HttpJsonAiRetrievalAdapter', () => {
     ) as any;
 
     await expect(adapter.retrieve(config, request)).resolves.toEqual([
+      expect.objectContaining({ text: 'lower score', score: 0.2 }),
       expect.objectContaining({ text: 'higher score', score: 0.9 }),
     ]);
   });

@@ -43,6 +43,7 @@ const CHECKPOINT_SETTLE_MS = 5_000;
 const TARGET_TEST_TIMEOUT_MS = 120_000;
 
 type SyncSource = {
+  headings?: import('../../rag/structured-knowledge.util').KnowledgeHeading[];
   identity: string;
   sourceType: RagSyncSourceType;
   sourceId: string;
@@ -113,6 +114,7 @@ type InternalRagAttachmentDeletedItem = {
 };
 
 type InternalRagPageDetail = {
+  headingLocators?: import('../../rag/structured-knowledge.util').KnowledgeHeading[];
   id: string;
   title: string | null;
   contentMarkdown?: string | null;
@@ -120,6 +122,7 @@ type InternalRagPageDetail = {
 };
 
 type InternalRagDatabaseDetail = {
+  headingLocators?: import('../../rag/structured-knowledge.util').KnowledgeHeading[];
   id: string;
   databaseId: string;
   title: string;
@@ -129,6 +132,7 @@ type InternalRagDatabaseDetail = {
 
 type InternalRagDatabaseRowsPage = {
   items: Array<{
+    headingLocators?: import('../../rag/structured-knowledge.util').KnowledgeHeading[];
     id: string;
     pageId: string;
     updatedAt?: string | Date;
@@ -554,6 +558,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
               sourceType: 'page',
               sourceId: page.id,
               pageId: page.id,
+              headings: page.headingLocators,
               updatedAtMs: item.updatedAtMs,
               fileName: safeFileName(page.title || 'Untitled', page.id, '.md'),
               markdown:
@@ -654,6 +659,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
             sourceType: 'page',
             sourceId: database.id,
             pageId: database.id,
+            headings: database.headingLocators,
             databaseId: database.databaseId,
             updatedAtMs,
             fileName: safeFileName(database.title, database.id, '.md'),
@@ -702,6 +708,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
               sourceType: 'database_row',
               sourceId: row.id,
               pageId: row.pageId,
+              headings: row.headingLocators,
               databaseId: database.databaseId,
               updatedAtMs: dateToMs(
                 row.projectionUpdatedAt ?? row.updatedAt,
@@ -1075,6 +1082,61 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     source: SyncSource,
     memoryReserved = false,
   ): Promise<boolean> {
+    if (
+      source.sourceType !== 'attachment' &&
+      source.projectorId === 'structured-knowledge-v2' &&
+      session.ragScope.qualityProfile === 'evidence-v1'
+    ) {
+      if (this.metadataWriteVersion() !== 3)
+        throw new RagSyncRuntimeError(
+          'rag_sync_metadata_v3_required',
+          false,
+          'Evidence profile requires metadata write version 3',
+        );
+      const projection = this.contentProjectors.projectStructuredKnowledge({
+        qualityProfile: 'evidence-v1',
+        sourceType: source.sourceType,
+        sourceId: source.sourceId,
+        pageId: source.pageId,
+        databaseId: source.databaseId,
+        fileName: source.fileName,
+        markdown: new TextDecoder().decode(source.content),
+        headings: source.headings,
+      });
+      const identities = new Set<string>();
+      for (const [index, part] of projection.parts.entries()) {
+        const identity = projectedSourceIdentity(
+          source.sourceType,
+          source.sourceId,
+          projection.projectorId,
+          part.partId,
+          projection.parts.length,
+        );
+        identities.add(identity);
+        const complete = await this.upsertSource(
+          session,
+          {
+            ...source,
+            identity,
+            ...part,
+            projectorId: projection.projectorId,
+            projectionVersion: 3,
+            partIndex: index,
+            partCount: projection.parts.length,
+          },
+          memoryReserved,
+        );
+        if (!complete) return false;
+      }
+      // All replacements are processed before any signed obsolete part is retired.
+      await this.retireSourceParts(
+        session,
+        source.sourceType,
+        source.sourceId,
+        identities,
+      );
+      return true;
+    }
     const projectedIdentity = projectedSourceIdentity(
       source.sourceType,
       source.sourceId,
@@ -1127,6 +1189,17 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
           session.context.lease,
           existing.operationId,
         );
+        if (
+          source.projectorId === 'structured-knowledge-v2' &&
+          session.ragScope.qualityProfile === 'legacy-v1'
+        ) {
+          await this.retireSourceParts(
+            session,
+            source.sourceType,
+            source.sourceId,
+            new Set([source.identity]),
+          );
+        }
         return true;
       }
       await this.state.deleteMapping(session.context.lease, source.identity);
@@ -1138,6 +1211,13 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
         false,
         'Multipart RAG projection requires metadata write version 3',
       );
+    }
+    // Completed parts resume without consuming the next quantum's upload budget.
+    if (
+      source.projectorId === 'structured-knowledge-v3' &&
+      !this.consumeBudget(session)
+    ) {
+      return false;
     }
     const operationId = sha256(
       new TextEncoder().encode(
@@ -1368,10 +1448,53 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     if (existing && existing.fileId !== remote.id) {
       await this.deleteMappedFileIfOwned(session, existing);
     }
+    if (
+      source.projectorId === 'structured-knowledge-v2' &&
+      session.ragScope.qualityProfile === 'legacy-v1'
+    ) {
+      await this.retireSourceParts(
+        session,
+        source.sourceType,
+        source.sourceId,
+        new Set([source.identity]),
+      );
+    }
     return true;
   }
 
+  private async retireSourceParts(
+    session: QuantumSession,
+    sourceType: RagSyncSourceType,
+    sourceId: string,
+    keep: Set<string>,
+  ): Promise<void> {
+    const scanId = `projection:${sourceType}:${sourceId}`;
+    let cursor = '0';
+    do {
+      this.assertActive(session);
+      const scan = await this.state.scanMappings(
+        session.context.lease,
+        cursor,
+        100,
+        scanId,
+      );
+      for (const mapping of scan.items) {
+        if (
+          mapping.sourceType !== sourceType ||
+          mapping.sourceId !== sourceId ||
+          keep.has(mapping.identity)
+        )
+          continue;
+        await this.deleteMappedFileIfOwned(session, mapping);
+        await this.state.deleteMapping(session.context.lease, mapping.identity);
+      }
+      await this.ackScanBatch(session, 'mappings', scanId, scan.ackToken);
+      cursor = scan.hasMore ? scan.cursor : '0';
+    } while (cursor !== '0');
+  }
+
   private structuredSource(input: {
+    headings?: import('../../rag/structured-knowledge.util').KnowledgeHeading[];
     sourceType: Exclude<RagSyncSourceType, 'attachment'>;
     sourceId: string;
     pageId: string | null;
@@ -1389,6 +1512,7 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
       pageId: input.pageId,
       ...(input.databaseId ? { databaseId: input.databaseId } : {}),
       updatedAtMs: input.updatedAtMs,
+      headings: input.headings,
       fileName: part.fileName,
       mimeType: part.mimeType,
       content: part.content,
@@ -1405,6 +1529,18 @@ export class RagSyncSourceService implements RagSyncQuantumProcessor {
     session: QuantumSession,
     identity: string,
   ): Promise<void> {
+    const logical = identity.match(
+      /^(page|database_row|dictionary_term):([^:]+)$/,
+    );
+    if (logical && session.ragScope.qualityProfile) {
+      await this.retireSourceParts(
+        session,
+        logical[1] as RagSyncSourceType,
+        logical[2],
+        new Set(),
+      );
+      return;
+    }
     const existing = await this.state.getMapping(
       session.context.lease,
       identity,

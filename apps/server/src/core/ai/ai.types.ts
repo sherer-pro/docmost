@@ -64,6 +64,8 @@ export type AiRetrievalConfig = {
   maxResults: number;
   queryMode: import('@docmost/api-contract').AiRetrievalQueryMode;
   followUpRewriteEnabled: boolean;
+  qualityProfile?: 'legacy-v1' | 'evidence-v1';
+  queryExpansionEnabled?: boolean;
 };
 
 export type AiRetrievalRequest = {
@@ -80,6 +82,8 @@ export type AiRetrievalRequest = {
   limit: number;
   candidateLimit: number;
   deadlineAtMs?: number;
+  additionalQueries?: string[];
+  canary?: { sourceId: string; expectedText: string };
 };
 
 export type AiRetrievalHit = {
@@ -89,6 +93,18 @@ export type AiRetrievalHit = {
   text: string;
   score?: number;
   partKey?: string;
+  sectionId?: string;
+  sourceVersion?: string;
+  contentHash?: string;
+  scoreKind?: 'vector_similarity' | 'reranker' | 'unknown' | 'local_rank';
+  retrievalMode?:
+    | 'vector'
+    | 'hybrid'
+    | 'hybrid_unverified'
+    | 'vector_fallback'
+    | 'local';
+  local?: boolean;
+  effectiveProfile?: import('@docmost/api-contract').AiRetrievalTestResult['effectiveProfile'];
 };
 
 export type AiSafeRetrievalSource = {
@@ -103,6 +119,10 @@ export type AiSafeRetrievalSource = {
   customFields?: import('@docmost/api-contract').RagDocumentCustomFields;
   sectionId?: string | null;
   sectionTitle?: string | null;
+  sourceVersion?: string;
+  contentHash?: string;
+  headingPath?: string[];
+  scoreKind?: AiRetrievalHit['scoreKind'];
 };
 
 export type AiCitationCandidate = {
@@ -124,6 +144,8 @@ export type AiCitationCandidate = {
   sectionId: string | null;
   sectionTitle: string | null;
   root: boolean;
+  sourceVersion?: string;
+  contentHash?: string;
 };
 
 export type AiPromptBuildResult = {

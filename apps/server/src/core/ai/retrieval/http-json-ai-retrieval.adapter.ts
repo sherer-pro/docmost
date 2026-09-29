@@ -8,6 +8,7 @@ import {
 } from '../ai.types';
 import { AiRetrievalAdapter } from './ai-retrieval.adapter';
 import { AiRetrievalHttpClient } from './ai-retrieval-http-client.service';
+import { evidenceHash, normalizeEvidence } from '../../rag/rag-evidence.util';
 
 @Injectable()
 export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
@@ -50,7 +51,11 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
       apiKey: config.apiKey,
       timeoutMs: config.timeoutMs,
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(
+        (({ additionalQueries, deadlineAtMs, canary, ...wire }) => wire)(
+          request,
+        ),
+      ),
       maxRequestBytes: AI_RETRIEVAL_DEFAULTS.maxRequestChars,
       maxResponseBytes: AI_RETRIEVAL_DEFAULTS.maxResponseChars,
       signal,
@@ -69,7 +74,7 @@ export class HttpJsonAiRetrievalAdapter implements AiRetrievalAdapter {
       .filter((hit): hit is AiRetrievalHit => Boolean(hit));
     const deduplicated = new Map<string, AiRetrievalHit>();
     for (const hit of parsed) {
-      const key = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}`;
+      const key = `${hit.sourceType}:${hit.sourceId}:${hit.pageId}:${evidenceHash(normalizeEvidence(hit.text))}`;
       const previous = deduplicated.get(key);
       if (
         !previous ||

@@ -9,6 +9,8 @@ export interface RagSourceLocator {
   databaseId?: string;
   attachmentId?: string;
   sectionId?: string;
+  headingPath?: string[];
+  links?: string[];
   pageNumber?: number;
   region?: { x: number; y: number; width: number; height: number };
 }
@@ -44,6 +46,8 @@ export interface RagAttachmentTextProjectionInput {
 }
 
 export interface RagStructuredKnowledgeProjectionInput {
+  qualityProfile?: 'legacy-v1' | 'evidence-v1';
+  headings?: import('./structured-knowledge.util').KnowledgeHeading[];
   sourceType: Exclude<RagSyncSourceType, 'attachment'>;
   sourceId: string;
   pageId: string | null;

@@ -108,7 +108,10 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     settingsPath: "/settings/ai/spaces",
     diagram: "rag",
     showKnowledgeAccessPolicy: true,
-    controls: [{ kind: "environment", value: "AI_RETRIEVAL_ALLOWED_ORIGINS" }],
+    controls: [
+      { kind: "environment", value: "AI_RETRIEVAL_ALLOWED_ORIGINS" },
+      { kind: "environment", value: "RAG_SYNC_METADATA_WRITE_VERSION" },
+    ],
   },
   {
     anchor: "rag-api",

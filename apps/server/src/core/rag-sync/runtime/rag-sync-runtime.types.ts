@@ -209,6 +209,8 @@ export type RagSyncDocmostMetadataV3 = {
     databaseId?: string;
     attachmentId?: string;
     sectionId?: string;
+    headingPath?: string[];
+    links?: string[];
     pageNumber?: number;
     region?: { x: number; y: number; width: number; height: number };
   };

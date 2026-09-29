@@ -1655,7 +1655,7 @@
           },
           "success": "测试返回候选人，答案仅保留可读的、非排除的来源",
           "rollback": "禁用外部搜索； Chat 继续而不检索",
-          "technical": "Docmost 会在生成前和生成过程中、复用聊天历史时以及返回选中文本的结果前，重新检查来源实时状态、排除策略和 ACL。页面附件和私聊文件也受同样保护，选中文本始终视为不可信输入。访问权限变化时，会清除部分文本、推理和引用，并将消息标记为受限。 Open WebUI 支持 `vector` 和 `hybrid_with_vector_fallback`。启用 `retrievalFollowUpRewriteEnabled` 时，仅根据安全的用户历史和仍可读取的引用标题重写检索查询，不包含助手正文或页面、文件内容。rewrite 上限为 30000 ms，失败时回退到原始查询且生成继续。"
+          "technical": "Docmost 会在生成前和生成过程中、复用聊天历史时以及返回选中文本的结果前，重新检查来源实时状态、排除策略和 ACL。页面附件和私聊文件也受同样保护，选中文本始终视为不可信输入。访问权限变化时，会清除部分文本、推理和引用，并将消息标记为受限。 Open WebUI 支持 `vector` 和 `hybrid_with_vector_fallback`。启用 `retrievalFollowUpRewriteEnabled` 时，仅根据安全的用户历史和仍可读取的引用标题重写检索查询，不包含助手正文或页面、文件内容。rewrite 上限为 2000 ms，失败时回退到原始查询且生成继续。 证据来自 Docmost 的当前内容，只有已传递的片段才能被引用。试点配置 evidence-v1 使用 structured-knowledge-v3、本地回退搜索和 10000 ms 的准备时间限制。没有证据时，回答会区分信息缺失与搜索不可用。"
         },
         "ragApi": {
           "description": "只读 /api/rag/* API 将完整和增量源导出到外部索引器，并可以在授权后返回受保护的附件流。它不搜索或回答问题；每个 RAG 密钥的范围仅限于一个空格。",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "每位成员每天可以发出的最大请求数。",
       "spaceTokenLimitDescription": "此空间每天使用的最大输入和输出令牌数。",
       "retentionDaysDescription": "保留私人 AI 聊天数据的天数。",
-      "loading": "正在加载 AI 设置…"
+      "loading": "正在加载 AI 设置…",
+      "qualityProfile": "搜索质量配置",
+      "qualityProfileDescription": "试点配置使用结构化片段和本地搜索。同步需要元数据 v3。",
+      "qualityProfileLegacy": "原搜索配置",
+      "qualityProfileEvidence": "证据质量试点",
+      "queryExpansion": "扩展复合问题",
+      "queryExpansionDescription": "最多增加两次搜索；请在测量质量和延迟后启用。",
+      "searchProfileVerified": "搜索配置已验证",
+      "searchProfileUnverified": "搜索配置未验证",
+      "rerankerDisabled": "重排序已禁用"
     },
     "cancel": "取消",
     "delete": "删除",

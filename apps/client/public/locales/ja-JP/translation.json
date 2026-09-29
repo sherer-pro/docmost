@@ -1655,7 +1655,7 @@
           },
           "success": "テストでは候補が返され、回答には読み取り可能な除外されていないソースのみが保持されます。",
           "rollback": "外部検索を無効にします。 Chat は取得せずに続行します",
-          "technical": "Docmost は生成前と生成中、チャット履歴の再利用時、選択範囲の結果を返す前に、ソースの現在状態、除外設定、ACL を再確認します。ページ添付ファイルと非公開チャットファイルも保護され、選択テキストは信頼できない入力として扱われます。アクセスが変わると、途中の本文、推論、引用を消去し、メッセージを制限状態にします。 Open WebUI は `vector` と `hybrid_with_vector_fallback` をサポートします。`retrievalFollowUpRewriteEnabled` が有効な場合、安全なユーザー履歴と現在も読める引用タイトルから検索クエリだけを書き換え、アシスタント本文やページ・ファイル内容は含めません。rewrite の上限は 30000 ms で、失敗時は元のクエリに戻り生成を継続します。"
+          "technical": "Docmost は生成前と生成中、チャット履歴の再利用時、選択範囲の結果を返す前に、ソースの現在状態、除外設定、ACL を再確認します。ページ添付ファイルと非公開チャットファイルも保護され、選択テキストは信頼できない入力として扱われます。アクセスが変わると、途中の本文、推論、引用を消去し、メッセージを制限状態にします。 Open WebUI は `vector` と `hybrid_with_vector_fallback` をサポートします。`retrievalFollowUpRewriteEnabled` が有効な場合、安全なユーザー履歴と現在も読める引用タイトルから検索クエリだけを書き換え、アシスタント本文やページ・ファイル内容は含めません。rewrite の上限は 2000 ms で、失敗時は元のクエリに戻り生成を継続します。 根拠には現在の Docmost の内容を使用し、送信済みの断片だけを引用できます。試験プロファイル evidence-v1 は structured-knowledge-v3、ローカル検索への切り替え、10000 ms の準備時間上限を使用します。根拠がない場合は情報不足と検索不能を区別します。"
         },
         "ragApi": {
           "description": "読み取り専用の /api/rag/* API は、完全フィードと増分フィードを外部インデクサーにエクスポートし、承認後に保護された添付ファイル ストリームを返すことができます。質問を検索したり答えたりするものではありません。すべての RAG キーのスコープは 1 つのスペースです。",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "メンバー 1 人が 1 日に実行できるリクエストの最大数です。",
       "spaceTokenLimitDescription": "このスペースが 1 日に使用できる入出力トークンの最大数です。",
       "retentionDaysDescription": "プライベート AI チャットデータを保持する日数です。",
-      "loading": "AI設定を読み込んでいます…"
+      "loading": "AI設定を読み込んでいます…",
+      "qualityProfile": "検索品質プロファイル",
+      "qualityProfileDescription": "試験プロファイルは構造化した断片とローカル検索を使います。同期にはメタデータ v3 が必要です。",
+      "qualityProfileLegacy": "従来の検索プロファイル",
+      "qualityProfileEvidence": "根拠を重視する試験プロファイル",
+      "queryExpansion": "複合質問の検索を拡張",
+      "queryExpansionDescription": "追加検索は最大2件です。品質と遅延を測定してから有効にしてください。",
+      "searchProfileVerified": "検索設定を確認済み",
+      "searchProfileUnverified": "検索設定は未確認",
+      "rerankerDisabled": "再ランキング無効"
     },
     "cancel": "キャンセル",
     "delete": "削除",

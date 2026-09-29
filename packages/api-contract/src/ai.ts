@@ -270,6 +270,8 @@ export interface AiPageResponse<T> extends AiListResponse<T> {
 }
 
 export interface AiRetrievalConfig {
+  qualityProfile?: "legacy-v1" | "evidence-v1";
+  queryExpansionEnabled?: boolean;
   adapter: AiRetrievalAdapter;
   url: string | null;
   apiKeyConfigured: boolean;
@@ -285,6 +287,8 @@ export interface AiRetrievalConfig {
 }
 
 export interface AiRetrievalConfigUpdate {
+  qualityProfile?: "legacy-v1" | "evidence-v1";
+  queryExpansionEnabled?: boolean;
   adapter?: AiRetrievalAdapter;
   url?: string | null;
   apiKey?: string;
@@ -514,6 +518,7 @@ export interface AiApplyContext {
 }
 
 export interface AiRun {
+  retrievalDiagnostics?: AiRetrievalDiagnostics | null;
   id: string;
   conversationId: string;
   userId: string;
@@ -797,7 +802,35 @@ export interface AiAgentTestResult {
   providerFingerprint: string;
 }
 
+export interface AiRetrievalDiagnostics {
+  profile?: string;
+  mode?: string;
+  received?: number;
+  rejected?: number;
+  rejectedAcl?: number;
+  stale?: number;
+  refreshed?: number;
+  merged?: number;
+  admitted?: number;
+  transmitted?: number;
+  cited?: number;
+  latencyMs?: number;
+  preparationMs?: number;
+  degradation?: string;
+  effectiveProfile?: AiRetrievalTestResult["effectiveProfile"];
+}
+
 export interface AiRetrievalTestResult {
+  canary?: "passed" | "failed" | "not_requested";
+  effectiveProfile?: {
+    verified: boolean;
+    hybrid: boolean | null;
+    embeddingModel: string | null;
+    rerankerModel: string | null;
+    splitter: string | null;
+    candidateLimit: number;
+    evidenceLimit: number;
+  };
   ok: boolean;
   skipped?: boolean;
   itemCount?: number;
@@ -807,6 +840,10 @@ export interface AiRetrievalTestResult {
   candidateCount?: number;
   validCandidateCount?: number;
   state?: "ready" | "empty";
+}
+
+export interface AiRetrievalTestRequest extends AiSpaceConfigUpdate {
+  canary?: { query: string; sourceId: string; expectedText: string };
 }
 
 export interface AiPageAttachment {

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AiCitationCandidate } from '../ai.types';
+import { evidenceHash } from '../../rag/rag-evidence.util';
 
 export const AI_CITATION_CANDIDATE_LIMIT = 512;
 
@@ -7,6 +8,39 @@ type CitationState = 'cited' | 'context';
 
 @Injectable()
 export class AiCitationService {
+  transmittedCandidates(
+    candidates: AiCitationCandidate[],
+    content: string,
+  ): AiCitationCandidate[] {
+    const markers = [...content.matchAll(/\[(S\d+)\]/g)];
+    const transmitted = new Map<string, string>();
+    for (const [index, match] of markers.entries()) {
+      const start = match.index! + match[0].length;
+      const end = markers[index + 1]?.index ?? content.length;
+      const fragment = content.slice(start, end);
+      // The first line is the source label, not evidence. A heading marker is
+      // alone on its line, so its following line is retained.
+      if (!fragment.includes('\n')) continue;
+      const body = fragment.slice(fragment.indexOf('\n') + 1).trim();
+      const substantive = body
+        .replace(/^#{1,6}\s+.*$/gm, '')
+        .replace(/\[Evidence truncated at a block boundary\]/g, '')
+        .trim();
+      if (substantive)
+        transmitted.set(
+          match[1],
+          [transmitted.get(match[1]), body].filter(Boolean).join('\n\n'),
+        );
+    }
+    return candidates
+      .filter((candidate) => transmitted.has(candidate.marker))
+      .map((candidate) => ({
+        ...candidate,
+        excerpt: transmitted.get(candidate.marker)!,
+        contentHash: evidenceHash(transmitted.get(candidate.marker)!),
+      }));
+  }
+
   neutralizeUntrustedMarkers(value: string): string {
     return value.replace(
       /\[(S\d+|C\d+)\]/g,

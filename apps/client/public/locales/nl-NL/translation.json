@@ -1655,7 +1655,7 @@
           },
           "success": "De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen",
           "rollback": "Schakel extern zoeken uit; Chat gaat verder zonder ophalen",
-          "technical": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt. Open WebUI ondersteunt `vector` en `hybrid_with_vector_fallback`. Met `retrievalFollowUpRewriteEnabled` wordt alleen de zoekquery herschreven vanuit veilige gebruikersgeschiedenis en titels van nog leesbare citaten; assistenttekst en pagina- of bestandsinhoud worden uitgesloten. De rewrite-limiet is 30000 ms en bij fouten wordt de oorspronkelijke query gebruikt zonder generatie te blokkeren."
+          "technical": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt. Open WebUI ondersteunt `vector` en `hybrid_with_vector_fallback`. Met `retrievalFollowUpRewriteEnabled` wordt alleen de zoekquery herschreven vanuit veilige gebruikersgeschiedenis en titels van nog leesbare citaten; assistenttekst en pagina- of bestandsinhoud worden uitgesloten. De rewrite-limiet is 2000 ms en bij fouten wordt de oorspronkelijke query gebruikt zonder generatie te blokkeren. Bewijs komt uit actuele Docmost-inhoud; alleen verzonden fragmenten mogen worden geciteerd. Het proefprofiel evidence-v1 gebruikt structured-knowledge-v3, lokaal terugvalzoeken en een voorbereidingsbudget van 10000 ms. Zonder bewijs worden ontbrekende gegevens en niet-beschikbare zoekdiensten onderscheiden."
         },
         "ragApi": {
           "description": "De alleen-lezen /api/rag/* API exporteert volledige en incrementele feeds naar een externe indexeerder en kan na autorisatie beveiligde bijlagestromen retourneren.",
@@ -2301,7 +2301,16 @@
       "userDailyLimitDescription": "Maximum aantal aanvragen per lid per dag.",
       "spaceTokenLimitDescription": "Maximum aantal invoer- en uitvoertokens voor deze ruimte per dag.",
       "retentionDaysDescription": "Aantal dagen dat privégegevens van AI-chats worden bewaard.",
-      "loading": "AI-instellingen laden…"
+      "loading": "AI-instellingen laden…",
+      "qualityProfile": "Kwaliteitsprofiel voor zoeken",
+      "qualityProfileDescription": "Het proefprofiel gebruikt gestructureerde fragmenten en lokaal zoeken. Synchronisatie vereist metadata v3.",
+      "qualityProfileLegacy": "Vorig zoekprofiel",
+      "qualityProfileEvidence": "Proefprofiel voor onderbouwde antwoorden",
+      "queryExpansion": "Samengestelde vragen uitbreiden",
+      "queryExpansionDescription": "Maximaal twee extra zoekopdrachten; pas inschakelen na meting van kwaliteit en vertraging.",
+      "searchProfileVerified": "Zoekconfiguratie gecontroleerd",
+      "searchProfileUnverified": "Zoekconfiguratie niet gecontroleerd",
+      "rerankerDisabled": "Reranker uitgeschakeld"
     },
     "cancel": "Annuleer",
     "delete": "Verwijderen",

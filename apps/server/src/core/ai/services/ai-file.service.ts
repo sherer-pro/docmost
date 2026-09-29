@@ -41,6 +41,10 @@ import {
   AI_CHAT_LIMITS,
 } from '../ai.constants';
 import { AiProviderMessage } from '../ai.types';
+import {
+  evidenceTokenUpperBound,
+  fitEvidence,
+} from '../../rag/rag-evidence.util';
 import { AiConversationService } from './ai-conversation.service';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { AiOperationalMetricsService } from './ai-operational-metrics.service';
@@ -73,6 +77,8 @@ type FileContext = {
     sourceUrl: string | null;
     excerpt: string | null;
     relevanceScore: number | null;
+    evidenceText?: string;
+    imageEvidence?: boolean;
   }>;
 };
 
@@ -549,8 +555,10 @@ export class AiFileService {
       visionEnabled: boolean;
       maxTextChars: number;
       maxImageBytes: number;
+      signal?: AbortSignal;
     },
   ): Promise<FileContext> {
+    params.signal?.throwIfAborted();
     const chatFiles = chatFileIds.length
       ? await this.db
           .selectFrom('aiChatFiles')
@@ -602,14 +610,15 @@ export class AiFileService {
     let remainingImageBytes = params.maxImageBytes;
     const appendText = (label: string, value: string) => {
       if (remainingTextChars <= 0) return false;
-      const block = `${label}\n${value}`.slice(0, remainingTextChars);
+      const block = fitEvidence(`${label}\n${value}`, remainingTextChars);
       if (!block.trim()) return false;
       textParts.push(block);
-      remainingTextChars -= block.length;
+      remainingTextChars -= evidenceTokenUpperBound(block);
       return true;
     };
 
     for (const file of chatFiles) {
+      params.signal?.throwIfAborted();
       const buffer =
         params.visionEnabled &&
         (file.mimeType.startsWith('image/') ||
@@ -642,11 +651,14 @@ export class AiFileService {
         sourceTitle: file.name,
         sourceUrl: `/api/ai/conversations/${encodeURIComponent(params.conversationId)}/files/${encodeURIComponent(file.id)}`,
         excerpt: file.extractedText?.slice(0, 2000) ?? null,
+        evidenceText: file.extractedText ? textParts.at(-1) : undefined,
+        imageEvidence: !file.extractedText,
         relevanceScore: null,
       });
     }
 
     for (const file of attachments) {
+      params.signal?.throwIfAborted();
       if (file.textContent) {
         if (!appendText(`Attachment "${file.fileName}":`, file.textContent)) {
           continue;
@@ -675,6 +687,8 @@ export class AiFileService {
         sourceTitle: file.fileName,
         sourceUrl: `/api/attachments/files/${encodeURIComponent(file.id)}/${encodeURIComponent(file.fileName)}`,
         excerpt: file.textContent?.slice(0, 2000) ?? null,
+        evidenceText: file.textContent ? textParts.at(-1) : undefined,
+        imageEvidence: !file.textContent,
         relevanceScore: null,
       });
     }

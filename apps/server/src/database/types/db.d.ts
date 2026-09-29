@@ -376,6 +376,8 @@ export interface AiBuiltinToolWorkspacePolicies {
 }
 
 export interface AiRuns {
+  evidenceSnapshot: Json | null;
+  retrievalDiagnostics: Json | null;
   assistantMessageId: string;
   assistantProfileFingerprint: string | null;
   assistantProfileSnapshot: Json | null;
@@ -473,6 +475,8 @@ export interface AiRunSteps {
 }
 
 export interface AiSpaceConfigs {
+  retrievalQualityProfile: Generated<string>;
+  retrievalQueryExpansionEnabled: Generated<boolean>;
   agentEnabled: Generated<boolean>;
   agentVerifiedAt: Timestamp | null;
   agentVerifiedProviderFingerprint: string | null;

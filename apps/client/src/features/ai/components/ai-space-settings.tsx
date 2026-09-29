@@ -104,6 +104,8 @@ type AiSettingsForm = {
   retrievalMaxResults: number;
   retrievalQueryMode: AiRetrievalQueryMode;
   followUpRewriteEnabled: boolean;
+  qualityProfile: "legacy-v1" | "evidence-v1";
+  queryExpansionEnabled: boolean;
   quickCommands: AiQuickCommand[];
 };
 
@@ -137,6 +139,8 @@ const DEFAULT_FORM: AiSettingsForm = {
   retrievalMaxResults: AI_RETRIEVAL_CONFIG_DEFAULTS.maxResults,
   retrievalQueryMode: "vector",
   followUpRewriteEnabled: false,
+  qualityProfile: "legacy-v1",
+  queryExpansionEnabled: false,
   quickCommands: [],
 };
 
@@ -315,6 +319,8 @@ function AiSpaceProviderSettings({
       retrievalMaxResults: config.retrieval.maxResults,
       retrievalQueryMode: config.retrieval.queryMode,
       followUpRewriteEnabled: config.retrieval.followUpRewriteEnabled,
+      qualityProfile: config.retrieval.qualityProfile ?? "legacy-v1",
+      queryExpansionEnabled: config.retrieval.queryExpansionEnabled ?? false,
       quickCommands: config.quickCommands ?? [],
     });
     form.resetDirty();
@@ -372,6 +378,8 @@ function AiSpaceProviderSettings({
     maxResults: values.retrievalMaxResults,
     queryMode: values.retrievalQueryMode,
     followUpRewriteEnabled: values.followUpRewriteEnabled,
+    qualityProfile: values.qualityProfile,
+    queryExpansionEnabled: values.queryExpansionEnabled,
   });
 
   const toPayload = (
@@ -1228,6 +1236,29 @@ function AiSpaceProviderSettings({
                       type: "checkbox",
                     })}
                   />
+                  <Select
+                    label={t("ai.settings.qualityProfile")}
+                    description={t("ai.settings.qualityProfileDescription")}
+                    data={[
+                      {
+                        value: "legacy-v1",
+                        label: t("ai.settings.qualityProfileLegacy"),
+                      },
+                      {
+                        value: "evidence-v1",
+                        label: t("ai.settings.qualityProfileEvidence"),
+                      },
+                    ]}
+                    allowDeselect={false}
+                    {...form.getInputProps("qualityProfile")}
+                  />
+                  <Switch
+                    label={t("ai.settings.queryExpansion")}
+                    description={t("ai.settings.queryExpansionDescription")}
+                    {...form.getInputProps("queryExpansionEnabled", {
+                      type: "checkbox",
+                    })}
+                  />
                   <Text size="xs" c="dimmed">
                     {t("ai.settings.ragSupportedContent")}
                   </Text>
@@ -1288,6 +1319,17 @@ function AiSpaceProviderSettings({
                               },
                             )
                           : t("ai.settings.retrievalTestFailed")}
+                      {!("errorMessage" in retrievalTestResult) && (
+                        <Text size="xs">
+                          {t(
+                            retrievalTestResult.effectiveProfile?.verified
+                              ? "ai.settings.searchProfileVerified"
+                              : "ai.settings.searchProfileUnverified",
+                          )}
+                          {retrievalTestResult.effectiveProfile?.verified &&
+                            `: hybrid=${retrievalTestResult.effectiveProfile.hybrid}, ${retrievalTestResult.effectiveProfile.embeddingModel}, ${retrievalTestResult.effectiveProfile.rerankerModel || t("ai.settings.rerankerDisabled")}`}
+                        </Text>
+                      )}
                     </Alert>
                   )}
                 </Stack>

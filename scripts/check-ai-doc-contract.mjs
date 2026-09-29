@@ -52,6 +52,7 @@ export const AI_GUIDE_MIGRATION_FILES = [
   "20260820T130000-knowledge-projection-dictionary-search.ts",
   "20260820T140000-search-dictionary-database-projection.ts",
   "20260919T180000-space-owned-template-policy.ts",
+  "20260929T120000-rag-evidence-quality.ts",
 ];
 
 const LOGIC_PATH_PATTERNS = [
