@@ -289,6 +289,11 @@ describe("PageTemplateSpacePolicySettings", () => {
     render();
     await settle();
     await settle();
+    await vi.waitFor(() => {
+      expect(
+        container!.querySelector('select option[value="group-a"]'),
+      ).not.toBeNull();
+    });
     await act(async () =>
       setSelectValue(container!.querySelector("select"), "group-a"),
     );
