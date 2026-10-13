@@ -9,7 +9,8 @@
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "cwd": "apps/client",
-        "command": "tsc && vite build"
+        "command": "tsc && vite build",
+        "env": { "NODE_ENV": "production" }
       }
     },
     "dev": {
