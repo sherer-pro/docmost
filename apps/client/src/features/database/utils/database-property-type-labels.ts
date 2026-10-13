@@ -6,11 +6,20 @@ import { DatabasePropertyType } from '@docmost/api-contract';
  * We keep raw contract values like `multiline_text` and `page_reference`
  * out of the UI by mapping each type to a localized label key.
  */
-export const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<DatabasePropertyType, string> = {
+export const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<
+  DatabasePropertyType,
+  string
+> = {
   multiline_text: 'Text',
   checkbox: 'Checkbox',
   code: 'Code',
   select: 'Select',
   user: 'User',
   page_reference: 'Page',
+  number: 'dbTable.number',
+  date: 'dbTable.date',
+  multi_select: 'dbTable.multiSelect',
+  url: 'dbTable.url',
+  email: 'dbTable.email',
+  phone: 'dbTable.phone',
 };

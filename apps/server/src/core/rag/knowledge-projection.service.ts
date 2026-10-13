@@ -1,3 +1,4 @@
+import { formatDatabaseValue } from '@docmost/api-contract';
 import { Injectable, Optional } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import {
@@ -247,7 +248,7 @@ export class KnowledgeProjectionService {
           ? `## Database fields\n\n${namedCells
               .map(
                 (cell) =>
-                  `- ${cell.propertyName}: ${this.stringifyValue(cell.value) || 'Not set'}`,
+                  `- ${cell.propertyName}: ${(['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(cell.propertyType) ? formatDatabaseValue(cell.propertyType, cell.value, properties.find((property) => property.id === cell.propertyId)?.settings) : this.stringifyValue(cell.value)) || 'Not set'}`,
               )
               .join('\n')}`
           : '',

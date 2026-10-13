@@ -11,6 +11,12 @@ const INDEXABLE_PROPERTY_TYPES = new Set<DatabasePropertyType>([
   'code',
   'select',
   'user',
+  'multi_select',
+  'number',
+  'date',
+  'url',
+  'email',
+  'phone',
 ]);
 const MAX_CELL_BYTES = 20_000;
 const MAX_ROW_BYTES = 1_000_000;
@@ -115,11 +121,7 @@ export class DatabaseSearchProjectionService {
               eb.or([
                 eb('databaseRows.workspaceId', '>', cursor.workspaceId),
                 eb.and([
-                  eb(
-                    'databaseRows.workspaceId',
-                    '=',
-                    cursor.workspaceId,
-                  ),
+                  eb('databaseRows.workspaceId', '=', cursor.workspaceId),
                   eb('databaseRows.pageId', '>', cursor.pageId),
                 ]),
               ]),
@@ -337,6 +339,32 @@ export class DatabaseSearchProjectionService {
       return UUID_PATTERN.test(displayValue) ? '' : displayValue;
     }
 
+    if (propertyType === 'multi_select') {
+      const current = this.unwrapValue(cell.value);
+      const options = this.extractSelectOptions(cell.propertySettings);
+      return Array.isArray(current)
+        ? current
+            .map(
+              (value) =>
+                options.find((option) => option.value === value)?.label ??
+                value,
+            )
+            .filter(
+              (value) => typeof value === 'string' && !UUID_PATTERN.test(value),
+            )
+            .join(', ')
+        : '';
+    }
+    if (propertyType === 'number') {
+      const value = this.unwrapValue(cell.value);
+      return typeof value === 'number' ? String(value) : '';
+    }
+    if (propertyType === 'date') {
+      const value = this.unwrapValue(cell.value) as any;
+      return value && typeof value.start === 'string'
+        ? [value.start, value.end].filter(Boolean).join(' - ')
+        : '';
+    }
     const current = this.unwrapValue(cell.value);
     if (typeof current !== 'string') return '';
     const normalized = this.normalizeSerializedString(current).trim();

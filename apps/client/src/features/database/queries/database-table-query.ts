@@ -1,4 +1,10 @@
-import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
+import {
+  useMutation,
+  useQuery,
+  useInfiniteQuery,
+  UseQueryResult,
+} from "@tanstack/react-query";
 import {
   batchUpdateDatabaseRows,
   batchUpdateDatabaseCells,
@@ -81,15 +87,49 @@ export function useDatabasePropertiesQuery(
 export function useDatabaseRowsQuery(
   databaseId?: string,
   params?: IDatabaseRowsQueryParams,
-): UseQueryResult<IDatabaseRowsPage, Error> {
-  return useQuery({
-    queryKey: DATABASE_QUERY_KEYS.rows(databaseId, params ?? null),
-    queryFn: async () =>
+) {
+  const { cursor, ...stableParams } = params ?? {};
+  const query = useInfiniteQuery({
+    queryKey: DATABASE_QUERY_KEYS.rows(databaseId, stableParams),
+    queryFn: async ({ pageParam }) =>
       normalizeDatabaseRowsResponse(
-        await getDatabaseRows(databaseId as string, params),
+        await getDatabaseRows(databaseId as string, {
+          ...stableParams,
+          cursor: pageParam,
+        }),
       ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) =>
+      page.hasMore ? (page.nextCursor ?? undefined) : undefined,
     enabled: Boolean(databaseId),
   });
+  const requestedCursor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cursor) {
+      requestedCursor.current = null;
+      return;
+    }
+    if (
+      cursor !== requestedCursor.current &&
+      query.hasNextPage &&
+      !query.isFetching
+    ) {
+      requestedCursor.current = cursor;
+      void query.fetchNextPage();
+    }
+  }, [cursor, query.hasNextPage, query.isFetching]);
+  const data = useMemo(
+    () =>
+      query.data
+        ? {
+            items: query.data.pages.flatMap((page) => page.items),
+            nextCursor: query.data.pages.at(-1)?.nextCursor ?? null,
+            hasMore: query.data.pages.at(-1)?.hasMore ?? false,
+          }
+        : undefined,
+    [query.data],
+  );
+  return { ...query, data };
 }
 
 export function useDatabaseViewsQuery(

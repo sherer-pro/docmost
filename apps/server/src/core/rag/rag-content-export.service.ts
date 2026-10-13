@@ -1,3 +1,4 @@
+import { formatDatabaseValue } from '@docmost/api-contract';
 import {
   BadRequestException,
   ForbiddenException,
@@ -462,7 +463,15 @@ export class RagContentExportService {
       return [
         row.page?.title || row.pageTitle || '',
         ...properties.map((property) =>
-          this.stringifyCellValue(valueByPropertyId.get(property.id)),
+          ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+            property.type,
+          )
+            ? formatDatabaseValue(
+                property.type,
+                valueByPropertyId.get(property.id),
+                property.settings,
+              )
+            : this.stringifyCellValue(valueByPropertyId.get(property.id)),
         ),
       ];
     });

@@ -226,6 +226,9 @@ export default function DatabaseHeaderMenu({
   const getCurrentViewSnapshot = (): NonNullable<
     IExportDatabasePayload["currentView"]
   > => ({
+    viewState: rowsExportQueryParams?.viewState
+      ? JSON.parse(rowsExportQueryParams.viewState)
+      : undefined,
     filters: rowsExportQueryParams?.filters,
     sortPropertyId: rowsExportQueryParams?.sortPropertyId,
     sortDirection: rowsExportQueryParams?.sortDirection,

@@ -17,8 +17,10 @@ export class DatabaseCellRepo {
    * Converts any cell value into a jsonb expression to keep insert and
    * conflict-update branches on the same PostgreSQL serialization strategy.
    */
-  private toJsonbValue(value: InsertableDatabaseCell['value']): RawBuilder<unknown> {
-    return sql`${JSON.stringify(value ?? null)}::jsonb`;
+  private toJsonbValue(
+    value: InsertableDatabaseCell['value'],
+  ): RawBuilder<unknown> {
+    return sql`${JSON.stringify(value ?? null)}::text::jsonb`;
   }
 
   /**
@@ -30,7 +32,7 @@ export class DatabaseCellRepo {
   ): Promise<DatabaseCell> {
     return dbOrTx(this.db, trx)
       .insertInto('databaseCells')
-      .values(payload)
+      .values({ ...payload, value: this.toJsonbValue(payload.value) as never })
       .returningAll()
       .executeTakeFirst();
   }
@@ -41,8 +43,9 @@ export class DatabaseCellRepo {
   async findByDatabaseAndPage(
     databaseId: string,
     pageId: string,
+    trx?: KyselyTransaction,
   ): Promise<DatabaseCell[]> {
-    return this.db
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseCells')
       .selectAll()
       .where('databaseId', '=', databaseId)
@@ -61,7 +64,14 @@ export class DatabaseCellRepo {
   ): Promise<DatabaseCell> {
     return dbOrTx(this.db, trx)
       .updateTable('databaseCells')
-      .set({ ...payload, updatedAt: new Date() })
+      .set({
+        ...payload,
+        ...(Object.prototype.hasOwnProperty.call(payload, 'value')
+          ? { value: this.toJsonbValue(payload.value) as never }
+          : {}),
+        revision: sql`revision + 1`,
+        updatedAt: new Date(),
+      })
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirst();
@@ -83,15 +93,14 @@ export class DatabaseCellRepo {
         value: serializedValue as never,
       })
       .onConflict((oc) =>
-        oc
-          .columns(['databaseId', 'pageId', 'propertyId'])
-          .doUpdateSet({
-            value: serializedValue as never,
-            attachmentId: payload.attachmentId ?? null,
-            updatedById: payload.updatedById ?? null,
-            updatedAt: new Date(),
-            deletedAt: null,
-          }),
+        oc.columns(['databaseId', 'pageId', 'propertyId']).doUpdateSet({
+          value: serializedValue as never,
+          attachmentId: payload.attachmentId ?? null,
+          updatedById: payload.updatedById ?? null,
+          updatedAt: new Date(),
+          revision: sql`database_cells.revision + 1`,
+          deletedAt: null,
+        }),
       )
       .returningAll()
       .executeTakeFirst();
@@ -130,5 +139,4 @@ export class DatabaseCellRepo {
       .where('deletedAt', 'is not', null)
       .execute();
   }
-
 }

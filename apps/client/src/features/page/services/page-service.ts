@@ -14,7 +14,6 @@ import {
   SidebarPagesParams,
   PageAccessUserEntry,
   PageAccessGroupRuleEntry,
-  PageAccessResolvedUser,
 } from "@/features/page/types/page.types";
 import { QueryParams } from "@/lib/types";
 import { IPagination } from "@/lib/types.ts";
@@ -443,17 +442,6 @@ export async function getPageAccessGroups(
   const req = await api.post(
     `/pages/${pageId}/actions/access/groups`,
     params ?? {},
-  );
-  return req.data;
-}
-
-export async function resolvePageAccessUsers(
-  pageId: string,
-  payload: { userIds: string[] },
-): Promise<PageAccessResolvedUser[]> {
-  const req = await api.post(
-    `/pages/${pageId}/actions/access/resolve-users`,
-    payload,
   );
   return req.data;
 }

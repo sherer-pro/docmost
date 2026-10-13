@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -16,7 +17,7 @@ import { PageService } from '../../page/services/page.service';
 import { InjectKysely } from 'nestjs-kysely';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -39,6 +40,13 @@ import {
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
 } from '../dto/database.dto';
+import {
+  normalizeDatabaseValue,
+  formatDatabaseValue,
+  validateDatabaseSettings,
+  normalizeDatabaseViewState,
+} from '@docmost/api-contract';
+import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 import type {
   DatabaseExportViewSnapshot,
   DatabasePropertyType,
@@ -47,10 +55,11 @@ import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 import { IPageRecipientNotificationJob } from '../../../integrations/queue/constants/queue.interface';
 import { PageHistoryRecorderService } from '../../page/services/page-history-recorder.service';
 import { generateSlugId } from '../../../common/helpers';
-import { validate as isValidUuid } from 'uuid';
+import { validate as isValidUuid, v7 as uuid7 } from 'uuid';
 import { UserRole } from '../../../common/helpers/types/permission';
 import { DatabaseExportService } from './database-export.service';
 import type { DatabaseExportTableState } from './database-export.types';
+import { DatabaseViewQueryService } from './database-view-query.service';
 import { DatabaseSearchProjectionService } from './database-search-projection.service';
 
 interface IDatabaseCellValueWithFallback {
@@ -130,6 +139,8 @@ export class DatabaseService {
     @Optional()
     @InjectQueue(QueueName.SEARCH_QUEUE)
     private readonly searchQueue?: Queue,
+    @Optional() private readonly queueOutbox?: QueueOutboxService,
+    @Optional() private readonly viewQuery?: DatabaseViewQueryService,
   ) {}
 
   /**
@@ -576,6 +587,14 @@ export class DatabaseService {
 
       return selectValue ?? this.extractCurrentCellValue(params.value);
     }
+    if (params.propertyType === 'multi_select') {
+      const value = this.extractCurrentCellValue(params.value);
+      return Array.isArray(value)
+        ? value.map((option) =>
+            this.resolveHistorySelectValue(option, params.propertySettings),
+          )
+        : value;
+    }
 
     return this.extractCurrentCellValue(params.value);
   }
@@ -859,6 +878,16 @@ export class DatabaseService {
     }
 
     const normalizedPropertyType = this.normalizePropertyType(property.type);
+    if (
+      ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+        normalizedPropertyType,
+      )
+    )
+      return formatDatabaseValue(
+        normalizedPropertyType,
+        currentValue,
+        property.settings,
+      );
     if (normalizedPropertyType === 'user') {
       const userName = this.extractUserNameFromCellValue(rawCellValue);
       if (userName) {
@@ -1151,12 +1180,15 @@ export class DatabaseService {
     toType: DatabasePropertyType,
     workspaceId: string,
     spaceId: string,
+    trx: KyselyTransaction,
+    settings?: unknown,
   ): Promise<void> {
     const rows =
       (await this.databaseRowRepo.findByDatabaseId(
         databaseId,
         workspaceId,
         spaceId,
+        trx,
       )) ?? [];
     const userDisplayCache = new Map<string, string>();
 
@@ -1164,6 +1196,7 @@ export class DatabaseService {
       const cells = await this.databaseCellRepo.findByDatabaseAndPage(
         databaseId,
         row.pageId,
+        trx,
       );
       const targetCell = cells.find((cell) => cell.propertyId === propertyId);
 
@@ -1171,15 +1204,27 @@ export class DatabaseService {
         continue;
       }
 
-      const { converted, isConvertible, isRollback } =
-        await this.convertCellValueByPropertyType(
-          targetCell.value,
-          fromType,
-          toType,
-          workspaceId,
-          userDisplayCache,
-        );
+      const conversion = await this.convertCellValueByPropertyType(
+        targetCell.value,
+        fromType,
+        toType,
+        workspaceId,
+        userDisplayCache,
+      );
 
+      let { converted, isConvertible } = conversion;
+      const { isRollback } = conversion;
+      if (isConvertible && !isRollback) {
+        try {
+          converted = normalizeDatabaseValue(
+            toType,
+            converted,
+            settings as never,
+          );
+        } catch {
+          isConvertible = false;
+        }
+      }
       const nextValue = isRollback
         ? converted
         : {
@@ -1190,9 +1235,13 @@ export class DatabaseService {
             rawTypeBeforeTypeChange: fromType,
           };
 
-      await this.databaseCellRepo.updateCell(targetCell.id, {
-        value: nextValue as never,
-      });
+      await this.databaseCellRepo.updateCell(
+        targetCell.id,
+        {
+          value: nextValue as never,
+        },
+        trx,
+      );
     }
   }
 
@@ -1235,14 +1284,23 @@ export class DatabaseService {
     }
     await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
-    const [properties, rows] = await Promise.all([
-      this.databasePropertyRepo.findByDatabaseId(databaseId),
-      this.databaseRowRepo.findByDatabaseId(
+    const properties =
+      await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    let rows: any[];
+    if (currentView?.viewState) {
+      const input = await this.getViewQueryInput(
+        database,
+        user,
+        workspaceId,
+        currentView.viewState,
+      );
+      rows = (await this.viewQuery.list(input, {})).items;
+    } else
+      rows = await this.databaseRowRepo.findByDatabaseId(
         databaseId,
         workspaceId,
         database.spaceId,
-      ),
-    ]);
+      );
 
     const normalizedProperties = this.normalizeProperties(properties);
     const propertiesById = new Map(
@@ -1286,16 +1344,17 @@ export class DatabaseService {
       propertiesById,
       workspaceId,
     );
-    const preparedRows = currentView
-      ? this.applyRowsServerState({
-          rows: normalizedRows,
-          filters: rowsFilters,
-          sortPropertyId: currentView.sortPropertyId,
-          sortDirection: currentView.sortDirection,
-          propertiesById,
-          pageTitleById,
-        })
-      : normalizedRows;
+    const preparedRows =
+      currentView && !currentView.viewState
+        ? this.applyRowsServerState({
+            rows: normalizedRows,
+            filters: rowsFilters,
+            sortPropertyId: currentView.sortPropertyId,
+            sortDirection: currentView.sortDirection,
+            propertiesById,
+            pageTitleById,
+          })
+        : normalizedRows;
     const visiblePropertyIds = currentView?.visiblePropertyIds
       ? new Set(currentView.visiblePropertyIds)
       : null;
@@ -1644,17 +1703,30 @@ export class DatabaseService {
       'write',
     );
 
-    const currentProperties =
-      await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    try {
+      validateDatabaseSettings(dto.type, dto.settings);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid database input',
+      );
+    }
 
-    const property = await this.databasePropertyRepo.insertProperty({
-      databaseId,
-      workspaceId,
-      creatorId: actor.id,
-      name: dto.name,
-      type: dto.type,
-      settings: (dto.settings as never) ?? null,
-      position: currentProperties.length,
+    const property = await executeTx(this.db, async (trx) => {
+      await this.databaseRepo.lockForMutation(databaseId, trx);
+      const currentProperties =
+        await this.databasePropertyRepo.findByDatabaseId(databaseId, trx);
+      return this.databasePropertyRepo.insertProperty(
+        {
+          databaseId,
+          workspaceId,
+          creatorId: actor.id,
+          name: dto.name,
+          type: dto.type,
+          settings: (dto.settings as never) ?? null,
+          position: currentProperties.length,
+        },
+        trx,
+      );
     });
 
     await this.recordDatabaseHistoryEvent({
@@ -1706,81 +1778,69 @@ export class DatabaseService {
       'write',
     );
 
-    const property = await this.databasePropertyRepo.findById(propertyId);
-    if (!property || property.databaseId !== databaseId) {
-      throw new NotFoundException('Database property not found');
-    }
-
-    const propertyPayload = {
-      ...(typeof dto.name === 'string' ? { name: dto.name } : {}),
-      ...(dto.type ? { type: dto.type } : {}),
-      ...(typeof dto.settings !== 'undefined'
-        ? { settings: dto.settings as never }
-        : {}),
-    };
-    let updatedProperty = property;
-
-    if (typeof dto.position === 'number') {
-      const currentProperties =
-        await this.databasePropertyRepo.findByDatabaseId(databaseId);
-      const currentIndex = currentProperties.findIndex(
-        (currentProperty) => currentProperty.id === propertyId,
-      );
-
-      if (currentIndex < 0) {
+    let property: Awaited<ReturnType<DatabasePropertyRepo['findById']>>;
+    let updatedProperty: typeof property;
+    await executeTx(this.db, async (trx) => {
+      await this.databaseRepo.lockForMutation(databaseId, trx);
+      property = await this.databasePropertyRepo.findById(propertyId, trx);
+      if (!property || property.databaseId !== databaseId)
         throw new NotFoundException('Database property not found');
-      }
-
-      if (dto.position >= currentProperties.length) {
+      const nextType = dto.type ?? this.normalizePropertyType(property.type);
+      const nextSettings =
+        dto.settings ??
+        (dto.type && dto.type !== property.type ? null : property.settings);
+      try {
+        validateDatabaseSettings(nextType, nextSettings);
+      } catch (error) {
         throw new BadRequestException(
-          'Database property position is out of range',
+          error instanceof Error ? error.message : 'Invalid database input',
         );
       }
-
-      const reorderedProperties = [...currentProperties];
-      const movedProperty = reorderedProperties[currentIndex];
-      if (!movedProperty) {
-        throw new NotFoundException('Database property not found');
-      }
-
-      reorderedProperties.splice(currentIndex, 1);
-      reorderedProperties.splice(dto.position, 0, movedProperty);
-
-      await executeTx(this.db, async (trx) => {
-        for (const [
-          position,
-          currentProperty,
-        ] of reorderedProperties.entries()) {
-          const nextProperty = await this.databasePropertyRepo.updateProperty(
-            currentProperty.id,
-            currentProperty.id === propertyId
-              ? { ...propertyPayload, position }
-              : { position },
+      const payload = {
+        ...(typeof dto.name === 'string' ? { name: dto.name } : {}),
+        ...(dto.type ? { type: dto.type } : {}),
+        ...(dto.settings !== undefined || dto.type
+          ? { settings: nextSettings as never }
+          : {}),
+      };
+      if (dto.position !== undefined) {
+        const current = await this.databasePropertyRepo.findByDatabaseId(
+          databaseId,
+          trx,
+        );
+        const index = current.findIndex((item) => item.id === propertyId);
+        if (index < 0 || dto.position >= current.length)
+          throw new BadRequestException(
+            'Database property position is out of range',
+          );
+        const reordered = [...current];
+        reordered.splice(dto.position, 0, reordered.splice(index, 1)[0]);
+        for (const [position, item] of reordered.entries()) {
+          const updated = await this.databasePropertyRepo.updateProperty(
+            item.id,
+            { ...(item.id === propertyId ? payload : {}), position },
             trx,
           );
-
-          if (currentProperty.id === propertyId) {
-            updatedProperty = nextProperty;
-          }
+          if (item.id === propertyId) updatedProperty = updated;
         }
-      });
-    } else {
-      updatedProperty = await this.databasePropertyRepo.updateProperty(
-        propertyId,
-        propertyPayload,
-      );
-    }
-
-    if (dto.type && dto.type !== property.type) {
-      await this.convertPropertyCellValues(
-        databaseId,
-        propertyId,
-        this.normalizePropertyType(property.type),
-        dto.type,
-        workspaceId,
-        database.spaceId,
-      );
-    }
+      } else
+        updatedProperty = await this.databasePropertyRepo.updateProperty(
+          propertyId,
+          payload,
+          trx,
+        );
+      if (dto.type && dto.type !== property.type)
+        await this.convertPropertyCellValues(
+          databaseId,
+          propertyId,
+          this.normalizePropertyType(property.type),
+          dto.type,
+          workspaceId,
+          database.spaceId,
+          trx,
+          nextSettings,
+        );
+    });
 
     const propertyChanges: Array<{
       field: 'name' | 'type' | 'position' | 'settings';
@@ -1863,12 +1923,14 @@ export class DatabaseService {
       'write',
     );
 
-    const property = await this.databasePropertyRepo.findById(propertyId);
-    if (!property || property.databaseId !== databaseId) {
-      throw new NotFoundException('Database property not found');
-    }
-
-    await this.databasePropertyRepo.softDeleteProperty(propertyId);
+    const property = await executeTx(this.db, async (trx) => {
+      await this.databaseRepo.lockForMutation(databaseId, trx);
+      const current = await this.databasePropertyRepo.findById(propertyId, trx);
+      if (!current || current.databaseId !== databaseId)
+        throw new NotFoundException('Database property not found');
+      await this.databasePropertyRepo.softDeleteProperty(propertyId, trx);
+      return current;
+    });
 
     await this.recordDatabaseHistoryEvent({
       pageIds: database.pageId ? [database.pageId] : [],
@@ -2020,6 +2082,55 @@ export class DatabaseService {
   /**
    * Returns all rows in the database.
    */
+  private async getViewQueryInput(
+    database: { id: string; spaceId: string },
+    user: User,
+    workspaceId: string,
+    rawState: string | unknown,
+    groupKey?: string,
+  ) {
+    let parsed: unknown;
+    try {
+      parsed = typeof rawState === 'string' ? JSON.parse(rawState) : rawState;
+    } catch {
+      throw new BadRequestException('Invalid view state');
+    }
+    const [properties, snapshot] = await Promise.all([
+      this.databasePropertyRepo.findByDatabaseId(database.id),
+      this.pageAccessService.getSidebarAccessSnapshot(user, database.spaceId),
+    ]);
+    const normalized = this.normalizeProperties(properties);
+    const state = this.viewQuery.validateState(parsed, normalized);
+    return {
+      databaseId: database.id,
+      workspaceId,
+      spaceId: database.spaceId,
+      readablePageIds: [...snapshot.readablePageIds],
+      writablePageIds: Array.from(snapshot.writablePageIds ?? []),
+      properties: normalized,
+      state,
+      groupKey,
+    };
+  }
+
+  async summarizeRows(
+    databaseId: string,
+    user: User,
+    workspaceId: string,
+    query: ListDatabaseRowsQueryDto,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanReadDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(database, workspaceId, user);
+    const input = await this.getViewQueryInput(
+      database,
+      user,
+      workspaceId,
+      query.viewState ?? {},
+    );
+    return this.viewQuery.summary(input);
+  }
+
   async listRows(
     databaseId: string,
     user: User,
@@ -2029,6 +2140,31 @@ export class DatabaseService {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanReadDatabasePages(user, database.spaceId);
     await this.assertCanAccessDatabasePage(database, workspaceId, user);
+
+    if (query?.viewState) {
+      const input = await this.getViewQueryInput(
+        database,
+        user,
+        workspaceId,
+        query.viewState,
+        query.groupKey,
+      );
+      const result = await this.viewQuery.list(input, query);
+      const users = new Set(
+        input.properties.filter((p) => p.type === 'user').map((p) => p.id),
+      );
+      const items = await this.enrichRowsWithUserNames(
+        result.items,
+        users,
+        workspaceId,
+      );
+      const writable = new Set(input.writablePageIds);
+      const projected = items.map((row) => ({
+        ...row,
+        canWrite: writable.has(row.pageId),
+      }));
+      return query.limit ? { ...result, items: projected } : projected;
+    }
 
     const properties =
       await this.databasePropertyRepo.findByDatabaseId(databaseId);
@@ -2081,12 +2217,18 @@ export class DatabaseService {
       });
     }
 
+    const accessSnapshot =
+      await this.pageAccessService.getSidebarAccessSnapshot(
+        user,
+        database.spaceId,
+      );
     const paginatedRows = await this.databaseRowRepo.findByDatabaseIdPaginated(
       databaseId,
       workspaceId,
       database.spaceId,
       {
         limit: query.limit,
+        readablePageIds: Array.from(accessSnapshot.readablePageIds),
         cursor: query.cursor,
         sortField: query.sortField,
         sortDirection: query.sortDirection,
@@ -2343,61 +2485,63 @@ export class DatabaseService {
       user,
     );
 
-    const [existingRow, existingCells, properties] = await Promise.all([
-      this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId),
-      this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId),
-      this.databasePropertyRepo.findByDatabaseId(databaseId),
-    ]);
-
-    const normalizedProperties = this.normalizeProperties(properties);
-    const propertyById = new Map(
-      normalizedProperties.map((property) => [property.id, property]),
-    );
-    for (const cell of dto.cells) {
-      if (!propertyById.has(cell.propertyId)) {
-        throw new BadRequestException(
-          'Database cell property does not belong to this database',
-        );
-      }
-    }
-
-    const currentUserIds = new Map(
-      existingCells.map((cell) => [
-        cell.propertyId,
-        this.extractUserIdFromCellValue(cell.value),
-      ]),
-    );
-    const newUserIds: string[] = [];
-    for (const cell of dto.cells) {
-      if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
-      const nextUserId =
-        cell.operation === 'delete'
-          ? null
-          : this.extractUserIdFromCellValue(cell.value);
-      if (nextUserId && nextUserId !== currentUserIds.get(cell.propertyId)) {
-        newUserIds.push(nextUserId);
-      }
-      currentUserIds.set(cell.propertyId, nextUserId);
-    }
-    if (newUserIds.length > 0) {
-      const assignableIds = await this.pageAccessService.getAssignableSpaceUserIds(
-        newUserIds,
-        database.spaceId,
-        workspaceId,
-      );
-      if (newUserIds.some((id) => !assignableIds.has(id))) {
-        throw new BadRequestException(
-          'Database user must be an active space member',
-        );
-      }
-    }
-
-    const historyUserNameCache = new Map<string, string>();
-    const historyPageReferenceCache = new Map<
-      string,
-      IDatabasePageReferenceCellValue
-    >();
     const mutation = await executeTx(this.db, async (trx) => {
+      await this.databaseRepo.lockForMutation(databaseId, trx);
+      const [existingRow, existingCells, properties] = await Promise.all([
+        this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId, trx),
+        this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId, trx),
+        this.databasePropertyRepo.findByDatabaseId(databaseId, trx),
+      ]);
+
+      const normalizedProperties = this.normalizeProperties(properties);
+      const propertyById = new Map(
+        normalizedProperties.map((property) => [property.id, property]),
+      );
+      for (const cell of dto.cells) {
+        if (!propertyById.has(cell.propertyId)) {
+          throw new BadRequestException(
+            'Database cell property does not belong to this database',
+          );
+        }
+      }
+
+      const currentUserIds = new Map(
+        existingCells.map((cell) => [
+          cell.propertyId,
+          this.extractUserIdFromCellValue(cell.value),
+        ]),
+      );
+      const newUserIds: string[] = [];
+      for (const cell of dto.cells) {
+        if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
+        const nextUserId =
+          cell.operation === 'delete'
+            ? null
+            : this.extractUserIdFromCellValue(cell.value);
+        if (nextUserId && nextUserId !== currentUserIds.get(cell.propertyId)) {
+          newUserIds.push(nextUserId);
+        }
+        currentUserIds.set(cell.propertyId, nextUserId);
+      }
+      if (newUserIds.length > 0) {
+        const assignableIds =
+          await this.pageAccessService.getAssignableSpaceUserIds(
+            newUserIds,
+            database.spaceId,
+            workspaceId,
+          );
+        if (newUserIds.some((id) => !assignableIds.has(id))) {
+          throw new BadRequestException(
+            'Database user must be an active space member',
+          );
+        }
+      }
+
+      const historyUserNameCache = new Map<string, string>();
+      const historyPageReferenceCache = new Map<
+        string,
+        IDatabasePageReferenceCellValue
+      >();
       const row =
         existingRow ??
         (await this.databaseRowRepo.insertRow(
@@ -2429,6 +2573,11 @@ export class DatabaseService {
       for (const cell of dto.cells) {
         const property = propertyById.get(cell.propertyId);
         const previousCell = previousCellsByPropertyId.get(cell.propertyId);
+        if (
+          cell.expectedRevision !== undefined &&
+          cell.expectedRevision !== (previousCell?.revision ?? 0)
+        )
+          throw new ConflictException('Database cell was changed');
         const previousUserId =
           property?.type === 'user'
             ? this.extractUserIdFromCellValue(previousCell?.value)
@@ -2481,7 +2630,27 @@ export class DatabaseService {
           continue;
         }
 
-        const normalizedValue = this.normalizeInputCellValue(cell.value);
+        let normalizedValue: unknown;
+        try {
+          normalizedValue = normalizeDatabaseValue(
+            propertyType,
+            cell.value,
+            property?.settings as never,
+          );
+        } catch (error) {
+          throw new BadRequestException(
+            error instanceof Error ? error.message : 'Invalid database input',
+          );
+        }
+        if (propertyType === 'page_reference' && normalizedValue) {
+          await this.assertCanAccessTargetPage(
+            normalizedValue as string,
+            workspaceId,
+            database.spaceId,
+            user,
+            'read',
+          );
+        }
         const upserted = await this.databaseCellRepo.upsertCell(
           {
             databaseId,
@@ -2503,14 +2672,17 @@ export class DatabaseService {
             nextUserId !== previousUserId &&
             nextUserId !== user.id
           ) {
-            await this.notifyDatabaseUserAssignment({
-              eventId: generateSlugId(),
-              actorId: user.id,
-              pageId,
-              spaceId: database.spaceId,
-              workspaceId,
-              recipientId: nextUserId,
-            });
+            await this.notifyDatabaseUserAssignment(
+              {
+                eventId: uuid7(),
+                actorId: user.id,
+                pageId,
+                spaceId: database.spaceId,
+                workspaceId,
+                recipientId: nextUserId,
+              },
+              trx,
+            );
           }
         }
 
@@ -2573,6 +2745,10 @@ export class DatabaseService {
     updatedRows: string[];
     deletedRows: string[];
     failedRows: string[];
+    failures: Array<{
+      pageId: string;
+      code: 'conflict' | 'invalid_value' | 'forbidden' | 'failed';
+    }>;
   }> {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
@@ -2586,6 +2762,7 @@ export class DatabaseService {
     const updatedRows: string[] = [];
     const deletedRows: string[] = [];
     const failedRows: string[] = [];
+    const failures = [];
 
     for (const rowOperation of dto.rows ?? []) {
       try {
@@ -2613,8 +2790,20 @@ export class DatabaseService {
           workspaceId,
         );
         updatedRows.push(rowOperation.pageId);
-      } catch {
+      } catch (error) {
         failedRows.push(rowOperation.pageId);
+        failures.push({
+          pageId: rowOperation.pageId,
+          code:
+            error instanceof ConflictException
+              ? 'conflict'
+              : error instanceof BadRequestException
+                ? 'invalid_value'
+                : error instanceof ForbiddenException ||
+                    error instanceof NotFoundException
+                  ? 'forbidden'
+                  : 'failed',
+        });
       }
     }
 
@@ -2622,6 +2811,7 @@ export class DatabaseService {
       updatedRows,
       deletedRows,
       failedRows,
+      failures,
     };
   }
 
@@ -2667,15 +2857,18 @@ export class DatabaseService {
   /**
    * Notifies the new executor when the user cell changes.
    */
-  private async notifyDatabaseUserAssignment(params: {
-    eventId: string;
-    actorId: string;
-    pageId: string;
-    spaceId: string;
-    workspaceId: string;
-    recipientId: string;
-  }): Promise<void> {
-    await this.notificationQueue.add(QueueJob.PAGE_RECIPIENT_NOTIFICATION, {
+  private async notifyDatabaseUserAssignment(
+    params: {
+      eventId: string;
+      actorId: string;
+      pageId: string;
+      spaceId: string;
+      workspaceId: string;
+      recipientId: string;
+    },
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    const jobData: IPageRecipientNotificationJob = {
       eventId: params.eventId,
       reason: 'database-user-assigned',
       actorId: params.actorId,
@@ -2683,7 +2876,12 @@ export class DatabaseService {
       spaceId: params.spaceId,
       workspaceId: params.workspaceId,
       candidateUserIds: [params.recipientId],
-    } as IPageRecipientNotificationJob);
+    };
+    if (!this.queueOutbox) throw new Error('Notification outbox is required');
+    await this.queueOutbox.enqueueNotificationDispatch(
+      { jobName: QueueJob.PAGE_RECIPIENT_NOTIFICATION, jobData },
+      trx,
+    );
   }
 
   private async enqueuePageSearchRefresh(pageId: string): Promise<void> {
@@ -2739,13 +2937,19 @@ export class DatabaseService {
       'write',
     );
 
+    const properties =
+      await this.databasePropertyRepo.findByDatabaseId(databaseId);
+    const config = this.viewQuery.validateState(
+      dto.config,
+      this.normalizeProperties(properties),
+    );
     return this.databaseViewRepo.insertView({
       databaseId,
       workspaceId,
       creatorId: actor.id,
       name: dto.name,
       type: dto.type,
-      config: (dto.config as never) ?? null,
+      config: config as never,
     });
   }
 
@@ -2784,10 +2988,27 @@ export class DatabaseService {
       throw new NotFoundException('Database view not found');
     }
 
-    return this.databaseViewRepo.updateView(viewId, {
-      ...dto,
-      config: dto.config as never,
-    });
+    let normalizedConfig;
+    if (dto.config !== undefined) {
+      const properties =
+        await this.databasePropertyRepo.findByDatabaseId(databaseId);
+      normalizedConfig = this.viewQuery.validateState(
+        dto.config,
+        this.normalizeProperties(properties),
+      );
+    }
+    const { expectedRevision, config, ...payload } = dto;
+    return this.databaseViewRepo.updateView(
+      viewId,
+      {
+        ...payload,
+        ...(dto.config !== undefined
+          ? { config: normalizedConfig as never }
+          : {}),
+      },
+      undefined,
+      expectedRevision,
+    );
   }
 
   /**

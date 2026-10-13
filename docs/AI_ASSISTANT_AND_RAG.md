@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 26 -->
+<!-- ai-admin-guide-contract-version: 27 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -1949,3 +1949,9 @@ codes include `retrieval_request_too_large`, `retrieval_timeout`,
 `source_access_changed` means a previously accepted source became inaccessible
 during execution; clients discard streamed state and reload the scrubbed,
 access-restricted message.
+
+## Database table property contract
+
+Database row sources support `number`, `date`, `multi_select`, `url`, `email`, and `phone` in addition to existing properties. Numbers remain JSON numbers; dates carry a start, optional end, and a time zone when time is included; multi-select values contain option identifiers. Text projections resolve option labels and render dates explicitly. View filters and grouping do not restrict RAG: page ACL and the AI content policy remain authoritative. The read-only AI/MCP tool boundary is unchanged.
+
+Migration `20261013T120000-database-revisions.ts` adds integer revisions to cells and views with default 1 and a read-only SQL value adapter. It does not rewrite cell values. Its `down` removes the adapter and conflict-detection metadata; older application versions do not understand newly introduced property types, so reverting the schema alone is not a safe application downgrade. See [Database tables](DATABASE_TABLES.md) for UI/API query and recovery contracts.

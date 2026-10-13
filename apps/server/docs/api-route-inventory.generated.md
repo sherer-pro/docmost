@@ -86,6 +86,7 @@
 | PATCH | `/databases/:databaseId/rows/:pageId` | `apps/server/src/core/database/database.controller.ts` |
 | PATCH | `/databases/:databaseId/rows/:pageId/cells` | `apps/server/src/core/database/database.controller.ts` |
 | PATCH | `/databases/:databaseId/rows/batch` | `apps/server/src/core/database/database.controller.ts` |
+| GET | `/databases/:databaseId/summary` | `apps/server/src/core/database/database.controller.ts` |
 | GET | `/databases/:databaseId/views` | `apps/server/src/core/database/database.controller.ts` |
 | POST | `/databases/:databaseId/views` | `apps/server/src/core/database/database.controller.ts` |
 | DELETE | `/databases/:databaseId/views/:viewId` | `apps/server/src/core/database/database.controller.ts` |

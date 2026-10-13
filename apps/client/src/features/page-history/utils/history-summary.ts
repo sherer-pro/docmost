@@ -1,5 +1,5 @@
 import { IPageHistory } from "@/features/page-history/types/page.types";
-import { PAGE_AI_ROLE } from "@docmost/api-contract";
+import { PAGE_AI_ROLE, formatDatabaseValue } from "@docmost/api-contract";
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -47,6 +47,12 @@ const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<string, string> = {
   user: "history.event.property-type.user",
   page_reference: "history.event.property-type.page_reference",
   text: "history.event.property-type.multiline_text",
+  number: "dbTable.number",
+  date: "dbTable.date",
+  multi_select: "dbTable.multiSelect",
+  url: "dbTable.url",
+  email: "dbTable.email",
+  phone: "dbTable.phone",
 };
 
 const AI_ROLE_LABEL_KEYS: Record<string, string> = {
@@ -112,11 +118,24 @@ function formatDatabasePropertyType(value: unknown, t: TranslateFn): string {
     return normalizedType;
   }
 
-  const translatedLabel = tHistory(t, labelKey);
+  const translatedLabel = labelKey.startsWith("dbTable.")
+    ? t(labelKey)
+    : tHistory(t, labelKey);
   return translatedLabel === labelKey ? normalizedType : translatedLabel;
 }
 
 function formatSelectSettingsValue(value: unknown, t: TranslateFn): string {
+  if (isRecord(value) && typeof value.format === "string") {
+    return [
+      t(`dbTable.${value.format}`),
+      value.currency,
+      value.precision !== undefined
+        ? `${t("dbTable.precision")}: ${value.precision}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
   if (!isRecord(value) || !Array.isArray(value.options)) {
     return JSON.stringify(value);
   }
@@ -189,6 +208,16 @@ function formatValue(
 
   if (typeof value === "object") {
     const candidate = value as Record<string, unknown>;
+    if (
+      context.propertyType === "date" &&
+      typeof candidate.start === "string"
+    ) {
+      try {
+        return formatDatabaseValue("date", candidate);
+      } catch {
+        return [candidate.start, candidate.end].filter(Boolean).join(" - ");
+      }
+    }
 
     if (context.field === "settings") {
       return formatSelectSettingsValue(candidate, t);

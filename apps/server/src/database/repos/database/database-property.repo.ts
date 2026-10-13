@@ -29,8 +29,11 @@ export class DatabasePropertyRepo {
   /**
    * Returns active database properties, sorted by position.
    */
-  async findByDatabaseId(databaseId: string): Promise<DatabaseProperty[]> {
-    return this.db
+  async findByDatabaseId(
+    databaseId: string,
+    trx?: KyselyTransaction,
+  ): Promise<DatabaseProperty[]> {
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseProperties')
       .selectAll()
       .where('databaseId', '=', databaseId)
@@ -43,8 +46,11 @@ export class DatabasePropertyRepo {
   /**
    * Returns one property by identifier.
    */
-  async findById(propertyId: string): Promise<DatabaseProperty> {
-    return this.db
+  async findById(
+    propertyId: string,
+    trx?: KyselyTransaction,
+  ): Promise<DatabaseProperty> {
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseProperties')
       .selectAll()
       .where('id', '=', propertyId)
@@ -114,5 +120,4 @@ export class DatabasePropertyRepo {
       .where('deletedAt', 'is not', null)
       .execute();
   }
-
 }

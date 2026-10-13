@@ -329,6 +329,7 @@ export default function DatabasePage() {
 
         {database?.spaceId && (
           <DatabaseTableView
+            key={databaseId}
             databaseId={databaseId}
             spaceId={database.spaceId}
             spaceSlug={spaceSlug}

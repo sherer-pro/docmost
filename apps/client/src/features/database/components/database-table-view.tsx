@@ -1,4 +1,21 @@
+import { NumberPropertySettingsModal } from "./number-property-settings-modal";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
+  normalizeDatabaseViewState,
+  normalizeDatabaseValue,
+  type DatabaseViewState,
+} from "@docmost/api-contract";
+import { DatabaseViewControls } from "./database-view-controls";
+import { useDatabaseViewAutosave } from "../hooks/use-database-view-autosave";
+import { useDatabaseBatchOperations } from "../hooks/use-database-batch-operations";
+import {
+  DatabaseCellSaveCoordinator,
+  parseDatabaseTsv,
+} from "../utils/database-editing";
+import { getDatabaseSummary } from "../services/database-service";
+import {
+  Alert,
+  Loader,
   Checkbox,
   Button,
   Drawer,
@@ -159,6 +176,7 @@ interface DatabaseTableViewProps {
 }
 
 interface SelectPropertyCreationDraft {
+  type: "select" | "multi_select";
   name: string;
   initialSettings: IDatabaseSelectPropertySettings;
 }
@@ -167,6 +185,7 @@ interface IPersistedDatabaseTableState {
   filters: IDatabaseFilterCondition[];
   sortState: IDatabaseSortState | null;
   selectedViewId?: string | null;
+  viewState?: DatabaseViewState;
 }
 
 const DEFAULT_FILTER: IDatabaseFilterCondition =
@@ -185,6 +204,12 @@ const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, TablerIcon> = {
   code: IconCode,
   select: IconList,
   page_reference: IconFileDescription,
+  number: IconAlignJustified,
+  date: IconFileDescription,
+  multi_select: IconList,
+  url: IconFileDescription,
+  email: IconFileDescription,
+  phone: IconFileDescription,
 };
 
 const getPropertyTypeIcon = (
@@ -228,7 +253,11 @@ export function DatabaseTableView({
   canManageDictionary = false,
 }: DatabaseTableViewProps) {
   const { t } = useTranslation();
-  const { data: properties = [] } = useDatabasePropertiesQuery(databaseId);
+  const {
+    data: properties = [],
+    isSuccess: arePropertiesLoaded,
+    isError: propertiesError,
+  } = useDatabasePropertiesQuery(databaseId);
   const { data: databaseViews = [], isSuccess: areDatabaseViewsLoaded } =
     useDatabaseViewsQuery(databaseId);
   const { data: dictionaryTerms = [] } = useDictionaryTermsQuery(
@@ -281,6 +310,75 @@ export function DatabaseTableView({
   const [sortState, setSortState] = useState<IDatabaseSortState | null>(null);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const [viewNameDraft, setViewNameDraft] = useState("");
+  const [viewStateDraft, setViewStateDraft] = useState<DatabaseViewState>(() =>
+    normalizeDatabaseViewState(null),
+  );
+  const [activeGroupKey, setActiveGroupKey] = useState<string | undefined>();
+  const cellSaveCoordinator = useRef(new DatabaseCellSaveCoordinator());
+  const editingSession = useRef(0);
+  const cellRevisions = useRef(new Map<string, number>());
+  const [cellSaveState, setCellSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const batchOperations = useDatabaseBatchOperations(databaseId);
+  const viewState = useMemo(
+    () => ({ ...viewStateDraft, visibleColumns }),
+    [viewStateDraft, visibleColumns],
+  );
+  const queryViewState = useMemo(() => {
+    const clean = (group: any): any => ({
+      ...group,
+      conditions: group.conditions
+        .map((rule: any) =>
+          "conjunction" in rule
+            ? clean(rule)
+            : (() => {
+                const property = properties.find(
+                  (property) => property.id === rule.propertyId,
+                );
+                if (property?.type !== "number") return rule;
+                try {
+                  return {
+                    ...rule,
+                    value: Array.isArray(rule.value)
+                      ? rule.value.map((value) =>
+                          normalizeDatabaseValue("number", value),
+                        )
+                      : normalizeDatabaseValue("number", rule.value),
+                  };
+                } catch {
+                  return { ...rule, value: undefined };
+                }
+              })(),
+        )
+        .filter((rule: any) =>
+          "conjunction" in rule
+            ? rule.conditions.length > 0
+            : ["is_empty", "is_not_empty"].includes(rule.operator) ||
+              (Array.isArray(rule.value)
+                ? rule.value.length > 0 &&
+                  rule.value.every(
+                    (v: unknown) => v !== "" && v !== null && v !== undefined,
+                  )
+                : rule.value !== "" &&
+                  rule.value !== null &&
+                  rule.value !== undefined),
+        ),
+    });
+    return {
+      ...viewState,
+      filter: viewState.filter ? clean(viewState.filter) : undefined,
+    };
+  }, [viewState, properties]);
+  const serializedViewState = useMemo(
+    () => JSON.stringify(queryViewState),
+    [queryViewState],
+  );
+  const summaryQuery = useQuery({
+    queryKey: ["database", databaseId, "summary", serializedViewState],
+    queryFn: () => getDatabaseSummary(databaseId, serializedViewState),
+    enabled: arePropertiesLoaded,
+  });
   const activeServerFilters = useMemo(
     () =>
       filters.filter((condition) => condition.propertyId && condition.value),
@@ -294,31 +392,28 @@ export function DatabaseTableView({
     [activeServerFilters],
   );
   const rowsExportQueryParams = useMemo<IDatabaseRowsQueryParams>(
-    () => ({
-      sortField: sortState ? undefined : "position",
-      sortDirection: sortState?.direction ?? "asc",
-      sortPropertyId: sortState?.propertyId ?? undefined,
-      filters: serializedServerFilters,
-    }),
-    [serializedServerFilters, sortState],
+    () => ({ viewState: serializedViewState }),
+    [serializedViewState],
   );
   const rowsQueryParams = useMemo<IDatabaseRowsQueryParams>(
     () => ({
       ...rowsExportQueryParams,
+      groupKey: activeGroupKey,
       limit: ROWS_PAGE_SIZE,
       cursor: rowsCursor ?? undefined,
     }),
-    [rowsCursor, rowsExportQueryParams],
+    [rowsCursor, rowsExportQueryParams, activeGroupKey],
   );
-  const rowsServerStateSignature = useMemo(
-    () =>
-      `${serializedServerFilters ?? ""}|${sortState?.propertyId ?? ""}|${sortState?.direction ?? ""}`,
-    [serializedServerFilters, sortState],
-  );
-  const { data: rowsPage, isFetching: isRowsFetching } = useDatabaseRowsQuery(
-    databaseId,
-    rowsQueryParams,
-  );
+  const rowsServerStateSignature = `${serializedViewState}|${activeGroupKey ?? ""}`;
+  const {
+    data: rowsPage,
+    isFetching: isRowsFetching,
+    isPending: isRowsPending,
+    isError: rowsError,
+    refetch: refetchRows,
+  } = useDatabaseRowsQuery(databaseId, rowsQueryParams);
+  const [numberSettingsProperty, setNumberSettingsProperty] =
+    useState<IDatabaseProperty | null>(null);
   const [settingsProperty, setSettingsProperty] =
     useState<IDatabaseProperty | null>(null);
   const [propertyNameDrafts, setPropertyNameDrafts] = useState<
@@ -348,7 +443,7 @@ export function DatabaseTableView({
     Record<string, boolean>
   >({});
   const [bulkPropertyId, setBulkPropertyId] = useState<string | null>(null);
-  const [bulkValue, setBulkValue] = useState("");
+  const [bulkValue, setBulkValue] = useState<unknown>("");
   const [bulkCheckboxValue, setBulkCheckboxValue] = useState<"true" | "false">(
     "true",
   );
@@ -444,6 +539,7 @@ export function DatabaseTableView({
 
   const resetRowsPagination = useCallback(() => {
     setRowsCursor(null);
+    setRows([]);
     setTableScrollTop(0);
     if (tableViewportRef.current) {
       tableViewportRef.current.scrollTop = 0;
@@ -530,6 +626,16 @@ export function DatabaseTableView({
             }
           : null;
 
+      {
+        const state = normalizeDatabaseViewState(
+          parsedState.viewState ?? {
+            filters: normalizedFilters.filter((filter) => filter.propertyId),
+            sortState: normalizedSortState,
+          },
+        );
+        setViewStateDraft(state);
+        setVisibleColumns(state.visibleColumns);
+      }
       setFilters(
         normalizedFilters.length > 0 ? normalizedFilters : fallbackFilters,
       );
@@ -558,13 +664,14 @@ export function DatabaseTableView({
       filters,
       sortState,
       selectedViewId,
+      viewState,
     };
 
     window.localStorage.setItem(
       tableStateStorageKey,
       JSON.stringify(stateToPersist),
     );
-  }, [filters, selectedViewId, sortState, tableStateStorageKey]);
+  }, [filters, selectedViewId, sortState, tableStateStorageKey, viewState]);
 
   useEffect(() => {
     if (!hasRestoredTableStateRef.current) {
@@ -620,56 +727,7 @@ export function DatabaseTableView({
     });
   }, [rowsCursor, rowsPage]);
 
-  useEffect(
-    () => () => {
-      const pendingRowDeletions = [...pendingRowDeletionsRef.current.entries()];
-      pendingRowDeletionsRef.current.clear();
-      for (const [token, pendingDeletion] of pendingRowDeletions) {
-        clearTimeout(pendingDeletion.timeoutId);
-        notifications.hide(`database-row-delete-${token}`);
-      }
-
-      const pendingRowIds = [
-        ...new Set(
-          pendingRowDeletions.flatMap(
-            ([, pendingDeletion]) => pendingDeletion.rowIds,
-          ),
-        ),
-      ];
-
-      if (pendingRowIds.length > 0) {
-        void batchUpdateRowsMutationRef.current
-          .mutateAsync({
-            rows: pendingRowIds.map((pageId) => ({
-              pageId,
-              operation: "delete_row" as const,
-            })),
-          })
-          .catch(() => undefined);
-      }
-
-      const pendingPropertyDeletions = [
-        ...pendingPropertyDeletionsRef.current.entries(),
-      ];
-      pendingPropertyDeletionsRef.current.clear();
-      const pendingPropertyIds = pendingPropertyDeletions.map(
-        ([propertyId]) => propertyId,
-      );
-      for (const [propertyId, timeoutId] of pendingPropertyDeletions) {
-        clearTimeout(timeoutId);
-        notifications.hide(`database-property-delete-${propertyId}`);
-      }
-
-      if (pendingPropertyIds.length > 0) {
-        void Promise.allSettled(
-          pendingPropertyIds.map((propertyId) =>
-            deletePropertyMutationRef.current.mutateAsync(propertyId),
-          ),
-        );
-      }
-    },
-    [],
-  );
+  // Pending deletes retain their original database closures and six-second undo window after unmount.
 
   const handleCreateRow = async () => {
     if (createRowMutation.isPending || pinnedCreatedRow) {
@@ -911,10 +969,17 @@ export function DatabaseTableView({
       property.type,
       normalizedValue,
     );
-    const currentNormalizedValue = buildDatabaseCellPayloadValue(
-      property,
-      getRawCellValue(row, property.id),
-    );
+    let currentNormalizedValue: unknown;
+    try {
+      currentNormalizedValue = buildDatabaseCellPayloadValue(
+        property,
+        getRawCellValue(row, property.id),
+      );
+    } catch {
+      currentNormalizedValue = extractCurrentDatabaseCellValue(
+        getRawCellValue(row, property.id),
+      );
+    }
     const currentShouldDelete = shouldDeleteCellPayload(
       property.type,
       currentNormalizedValue,
@@ -946,33 +1011,93 @@ export function DatabaseTableView({
     [optimisticallyDeletedPropertyIds, properties],
   );
 
+  const applySelectedView = (view: (typeof databaseViews)[number]) => {
+    const state = normalizeDatabaseViewState(view.config);
+    const valid = new Set(activeProperties.map((property) => property.id));
+    const prune = (group: any): any => ({
+      ...group,
+      conditions: group.conditions
+        .map((rule: any) => ("conjunction" in rule ? prune(rule) : rule))
+        .filter((rule: any) =>
+          "conjunction" in rule
+            ? rule.conditions.length > 0
+            : rule.propertyId === "title" || valid.has(rule.propertyId),
+        ),
+    });
+    const normalized = {
+      ...state,
+      filter: state.filter ? prune(state.filter) : undefined,
+      sorts: state.sorts.filter(
+        (sort) => sort.propertyId === "title" || valid.has(sort.propertyId),
+      ),
+      groupBy: state.groupBy && valid.has(state.groupBy) ? state.groupBy : null,
+      visibleColumns: Object.fromEntries(
+        Object.entries(state.visibleColumns).filter(([id]) => valid.has(id)),
+      ),
+      calculations: Object.fromEntries(
+        Object.entries(state.calculations).filter(([id]) => valid.has(id)),
+      ),
+    };
+    setViewNameDraft(view.name);
+    setViewStateDraft(normalized);
+    setVisibleColumns(normalized.visibleColumns);
+    setFilters([{ ...DEFAULT_FILTER }]);
+    setSortState(null);
+    setActiveGroupKey(undefined);
+    return { name: view.name, config: normalized };
+  };
+  const viewAutosave = useDatabaseViewAutosave({
+    view:
+      arePropertiesLoaded && areDatabaseViewsLoaded
+        ? databaseViews.find((view) => view.id === selectedViewId)
+        : undefined,
+    draft: { name: viewNameDraft, config: viewState },
+    enabled: isEditable,
+    save: updateViewMutation.mutateAsync,
+    apply: applySelectedView,
+  });
+
   useEffect(() => {
-    if (!selectedViewId || !areDatabaseViewsLoaded) {
-      return;
-    }
-
-    const selectedView = databaseViews.find(
-      (view) => view.id === selectedViewId,
-    );
-    if (!selectedView) {
-      setSelectedViewId(null);
-      setViewNameDraft("");
-      return;
-    }
-
-    const normalizedConfig = normalizeDatabaseViewConfig(
-      selectedView.config,
-      activeProperties.map((property) => property.id),
-    );
-    setViewNameDraft(selectedView.name);
-    setFilters(
-      normalizedConfig.filters.length > 0
-        ? normalizedConfig.filters
-        : [{ ...DEFAULT_FILTER }],
-    );
-    setSortState(normalizedConfig.sortState);
-    setVisibleColumns(normalizedConfig.visibleColumns);
-  }, [activeProperties, areDatabaseViewsLoaded, databaseViews, selectedViewId]);
+    if (!arePropertiesLoaded) return;
+    const ids = new Set(properties.map((property) => property.id));
+    const prune = (group: any): any => ({
+      ...group,
+      conditions: group.conditions
+        .map((rule: any) => ("conjunction" in rule ? prune(rule) : rule))
+        .filter((rule: any) =>
+          "conjunction" in rule
+            ? rule.conditions.length
+            : rule.propertyId === "title" || ids.has(rule.propertyId),
+        ),
+    });
+    setViewStateDraft((previous) => {
+      const next = {
+        ...previous,
+        filter: previous.filter ? prune(previous.filter) : undefined,
+        sorts: previous.sorts.filter(
+          (sort) => sort.propertyId === "title" || ids.has(sort.propertyId),
+        ),
+        groupBy:
+          previous.groupBy && ids.has(previous.groupBy)
+            ? previous.groupBy
+            : null,
+        calculations: Object.fromEntries(
+          Object.entries(previous.calculations).filter(([id]) => ids.has(id)),
+        ),
+      };
+      return JSON.stringify(previous) === JSON.stringify(next)
+        ? previous
+        : next;
+    });
+    setVisibleColumns((previous) => {
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([id]) => ids.has(id)),
+      );
+      return Object.keys(previous).length === Object.keys(next).length
+        ? previous
+        : next;
+    });
+  }, [properties, arePropertiesLoaded]);
 
   const saveCurrentView = async () => {
     const name = viewNameDraft.trim();
@@ -980,16 +1105,20 @@ export function DatabaseTableView({
       return;
     }
 
-    const config = normalizeDatabaseViewConfig(
-      { filters, sortState, visibleColumns },
-      activeProperties.map((property) => property.id),
-    );
+    const config = viewState;
 
     try {
       if (selectedViewId) {
         await updateViewMutation.mutateAsync({
           viewId: selectedViewId,
-          payload: { name, type: "table", config },
+          payload: {
+            name,
+            type: "table",
+            config,
+            expectedRevision: databaseViews.find(
+              (view) => view.id === selectedViewId,
+            )?.revision,
+          },
         });
         return;
       }
@@ -1244,7 +1373,11 @@ export function DatabaseTableView({
   const activeFilterCount = activeServerFilters.length;
 
   const selectedRowIds = useMemo(
-    () => getSelectedPreparedRowIds(selectedRowPageIds, preparedRows),
+    () =>
+      getSelectedPreparedRowIds(
+        selectedRowPageIds,
+        preparedRows.filter((row) => row.canWrite !== false),
+      ),
     [preparedRows, selectedRowPageIds],
   );
 
@@ -1306,7 +1439,7 @@ export function DatabaseTableView({
     }
 
     const nextSelection: Record<string, boolean> = {};
-    for (const row of preparedRows) {
+    for (const row of preparedRows.filter((row) => row.canWrite !== false)) {
       nextSelection[row.pageId] = true;
     }
     setSelectedRowPageIds(nextSelection);
@@ -1316,11 +1449,12 @@ export function DatabaseTableView({
     row: IDatabaseRowWithCells,
     property: IDatabaseProperty,
   ) => {
-    if (!isEditable) {
+    if (!isEditable || row.canWrite === false) {
       return;
     }
 
     const key = `${row.pageId}:${property.id}`;
+    editingSession.current += 1;
     setEditingCellKey(key);
     setEditingValue(
       extractCurrentDatabaseCellValue(getRawCellValue(row, property.id)),
@@ -1342,40 +1476,87 @@ export function DatabaseTableView({
 
     const sourceValue =
       typeof nextValue === "undefined" ? editingValue : nextValue;
-    const nextCellChange = hasEffectiveCellValueChange(
-      row,
-      property,
-      sourceValue,
-    );
+    let nextCellChange: ReturnType<typeof hasEffectiveCellValueChange>;
+    try {
+      nextCellChange = hasEffectiveCellValueChange(row, property, sourceValue);
+    } catch {
+      setCellSaveState("error");
+      notifications.show({ color: "red", message: t("dbTable.invalidValue") });
+      return false;
+    }
     if (!nextCellChange) {
       setEditingCellKey(null);
       setEditingValue("");
       return;
     }
 
-    await updateCellsMutation.mutateAsync({
-      pageId: row.pageId,
-      payload: {
-        cells: [
-          {
-            propertyId: property.id,
-            value: nextCellChange.shouldDelete
-              ? null
-              : nextCellChange.normalizedValue,
-            operation: nextCellChange.shouldDelete ? "delete" : "upsert",
-          },
-        ],
-      },
-    });
-
-    emitDatabaseInvalidation({
-      invalidateRows: true,
-      invalidateRowContext: true,
-    });
-    resetRowsPagination();
-
-    setEditingCellKey(null);
-    setEditingValue("");
+    const key = `${row.pageId}:${property.id}`;
+    const session = editingSession.current;
+    setCellSaveState("saving");
+    try {
+      await cellSaveCoordinator.current.save(
+        key,
+        async () => {
+          const result = await updateCellsMutation.mutateAsync({
+            pageId: row.pageId,
+            payload: {
+              cells: [
+                {
+                  propertyId: property.id,
+                  value: nextCellChange.shouldDelete
+                    ? null
+                    : nextCellChange.normalizedValue,
+                  operation: nextCellChange.shouldDelete ? "delete" : "upsert",
+                  expectedRevision:
+                    cellRevisions.current.get(key) ??
+                    row.cells?.find((cell) => cell.propertyId === property.id)
+                      ?.revision ??
+                    0,
+                },
+              ],
+            },
+          });
+          const updatedCells = (result as any)?.cells ?? [];
+          for (const cell of updatedCells)
+            cellRevisions.current.set(
+              `${row.pageId}:${cell.propertyId}`,
+              cell.deletedAt ? 0 : cell.revision,
+            );
+          setRows((previous) =>
+            previous.map((item) =>
+              item.pageId === row.pageId
+                ? {
+                    ...item,
+                    cells: [
+                      ...(item.cells ?? []).filter(
+                        (cell) => cell.propertyId !== property.id,
+                      ),
+                      ...updatedCells.filter((cell: any) => !cell.deletedAt),
+                    ],
+                  }
+                : item,
+            ),
+          );
+          return result;
+        },
+        JSON.stringify(nextCellChange),
+      );
+      emitDatabaseInvalidation({
+        invalidateRows: true,
+        invalidateRowContext: true,
+      });
+      void summaryQuery.refetch();
+      if (session === editingSession.current) {
+        setEditingCellKey(null);
+        setEditingValue("");
+      }
+      setCellSaveState("saved");
+      return true;
+    } catch {
+      setCellSaveState("error");
+      notifications.show({ color: "red", message: t("Failed to update data") });
+      return false;
+    }
   };
 
   const navigateEditingCell = (
@@ -1440,14 +1621,7 @@ export function DatabaseTableView({
     };
   };
 
-  const parseTsvMatrix = (rawText: string): string[][] => {
-    return rawText
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => line.split("\t"));
-  };
+  const parseTsvMatrix = parseDatabaseTsv;
 
   const applyPastedMatrix = async (
     startRowIndex: number,
@@ -1458,12 +1632,22 @@ export function DatabaseTableView({
       return;
     }
 
+    if (
+      startRowIndex + matrix.length > preparedRows.length ||
+      matrix.some(
+        (line) => startPropertyIndex + line.length > displayedProperties.length,
+      )
+    ) {
+      notifications.show({ color: "red", message: t("dbTable.pasteBounds") });
+      return;
+    }
     const rowsPayloadByPageId = new Map<
       string,
       Array<{
         propertyId: string;
         value: unknown;
         operation: "upsert" | "delete";
+        expectedRevision?: number;
       }>
     >();
 
@@ -1502,6 +1686,10 @@ export function DatabaseTableView({
           propertyId: targetProperty.id,
           value: nextChange.shouldDelete ? null : nextChange.normalizedValue,
           operation: nextChange.shouldDelete ? "delete" : "upsert",
+          expectedRevision:
+            targetRow.cells?.find(
+              (cell) => cell.propertyId === targetProperty.id,
+            )?.revision ?? 0,
         });
         rowsPayloadByPageId.set(targetRow.pageId, existingPayload);
       }
@@ -1522,20 +1710,12 @@ export function DatabaseTableView({
       }),
     );
 
-    const chunkSize = 25;
-    for (let index = 0; index < rowOperations.length; index += chunkSize) {
-      const chunk = rowOperations.slice(index, index + chunkSize);
-      await batchUpdateRowsMutation.mutateAsync({
-        rows: chunk,
-      });
-    }
-
+    const failed = await batchOperations.run(rowOperations);
     emitDatabaseInvalidation({
       invalidateRows: true,
       invalidateRowContext: true,
     });
-    setSelectedRowPageIds({});
-    resetRowsPagination();
+    setSelectedRowPageIds(Object.fromEntries(failed.map((id) => [id, true])));
   };
 
   const updatePropertyNameDraft = (propertyId: string, value: string) => {
@@ -1704,8 +1884,9 @@ export function DatabaseTableView({
       return;
     }
 
-    if (newPropertyType === "select") {
+    if (newPropertyType === "select" || newPropertyType === "multi_select") {
       setSelectPropertyDraft({
+        type: newPropertyType,
         name: trimmedName,
         initialSettings: {
           options: [{ label: "", value: "", color: "gray" }],
@@ -1822,27 +2003,16 @@ export function DatabaseTableView({
       return;
     }
 
-    await batchUpdateRowsMutation.mutateAsync({
-      rows: uniqueRowPageIds.map((pageId) => ({
-        pageId,
-        operation: "delete_row",
-      })),
-    });
-
+    const failed = await batchOperations.run(
+      uniqueRowPageIds.map((pageId) => ({ pageId, operation: "delete_row" })),
+    );
     emitDatabaseInvalidation({
       invalidateRows: true,
       invalidateRowContext: true,
     });
-    removeRowsFromTree(uniqueRowPageIds);
-    setSelectedRowPageIds((previous) => {
-      const next = { ...previous };
-      for (const rowPageId of uniqueRowPageIds) {
-        delete next[rowPageId];
-      }
-      return next;
-    });
+    removeRowsFromTree(uniqueRowPageIds.filter((id) => !failed.includes(id)));
+    setSelectedRowPageIds(Object.fromEntries(failed.map((id) => [id, true])));
     restoreRowsAfterUndo(uniqueRowPageIds);
-    resetRowsPagination();
   };
 
   const scheduleDeleteRows = (rowPageIds: string[]) => {
@@ -2101,8 +2271,7 @@ export function DatabaseTableView({
       return;
     }
 
-    const sourceValue =
-      targetProperty.type === "checkbox" ? bulkCheckboxValue : bulkValue;
+    const sourceValue = bulkValue;
     const rowByPageId = new Map(rows.map((row) => [row.pageId, row]));
     const rowsToUpdate: Array<{
       pageId: string;
@@ -2139,29 +2308,29 @@ export function DatabaseTableView({
       return;
     }
 
-    const chunkSize = 25;
-    for (let index = 0; index < rowsToUpdate.length; index += chunkSize) {
-      const rowChunk = rowsToUpdate.slice(index, index + chunkSize);
-      await batchUpdateRowsMutation.mutateAsync({
-        rows: rowChunk.map((row) => ({
-          pageId: row.pageId,
-          operation: "upsert_cells",
-          cells: [
-            {
-              propertyId: targetProperty.id,
-              value: row.shouldDelete ? null : row.value,
-              operation: row.shouldDelete ? "delete" : "upsert",
-            },
-          ],
-        })),
-      });
-    }
-
+    const failed = await batchOperations.run(
+      rowsToUpdate.map((row) => ({
+        pageId: row.pageId,
+        operation: "upsert_cells",
+        cells: [
+          {
+            propertyId: targetProperty.id,
+            value: row.shouldDelete ? null : row.value,
+            operation: row.shouldDelete ? "delete" : "upsert",
+            expectedRevision:
+              rowByPageId
+                .get(row.pageId)
+                ?.cells?.find((cell) => cell.propertyId === targetProperty.id)
+                ?.revision ?? 0,
+          },
+        ],
+      })),
+    );
     emitDatabaseInvalidation({
       invalidateRows: true,
       invalidateRowContext: true,
     });
-    resetRowsPagination();
+    setSelectedRowPageIds(Object.fromEntries(failed.map((id) => [id, true])));
   };
 
   const bulkDeleteSelectedRows = () => {
@@ -2236,6 +2405,7 @@ export function DatabaseTableView({
                 label: view.name,
               }))}
               value={selectedViewId}
+              allowDeselect={false}
               onChange={(viewId) => {
                 setSelectedViewId(viewId);
                 if (!viewId) {
@@ -2255,16 +2425,19 @@ export function DatabaseTableView({
                     setViewNameDraft(event.currentTarget.value)
                   }
                 />
-                <Button
-                  variant="default"
-                  onClick={() => void saveCurrentView()}
-                  loading={
-                    createViewMutation.isPending || updateViewMutation.isPending
-                  }
-                  disabled={!viewNameDraft.trim()}
-                >
-                  {t("Save")}
-                </Button>
+                {!selectedViewId && (
+                  <Button
+                    variant="default"
+                    onClick={() => void saveCurrentView()}
+                    loading={
+                      createViewMutation.isPending ||
+                      updateViewMutation.isPending
+                    }
+                    disabled={!viewNameDraft.trim()}
+                  >
+                    {t("Create")}
+                  </Button>
+                )}
                 {selectedViewId && (
                   <AccessibleActionIcon
                     label={t("Delete")}
@@ -2280,208 +2453,97 @@ export function DatabaseTableView({
             )}
           </Group>
 
-          {isMobileViewport && (
-            <Button
-              variant="default"
-              leftSection={<IconSettings size={14} />}
-              onClick={() => setViewControlsOpened(true)}
-            >
-              {`${t("View")} (${activeFilterCount})`}
+          <DatabaseViewControls
+            state={viewState}
+            properties={activeProperties}
+            onChange={(state) => {
+              setViewStateDraft(state);
+              setVisibleColumns(state.visibleColumns);
+              setActiveGroupKey(undefined);
+            }}
+          />
+        </Group>
+      </Group>
+      <Group mb="sm">
+        {selectedViewId && (
+          <Text size="sm" role="status">
+            {t(`dbTable.${viewAutosave.status}`)}
+          </Text>
+        )}
+        {viewAutosave.status === "error" && (
+          <Button size="xs" onClick={viewAutosave.retry}>
+            {t("Retry")}
+          </Button>
+        )}
+        {viewAutosave.status === "conflict" && (
+          <>
+            <Button size="xs" onClick={viewAutosave.reload}>
+              {t("dbTable.loadLatest")}
             </Button>
+            <Button size="xs" onClick={viewAutosave.overwrite}>
+              {t("dbTable.applyMine")}
+            </Button>
+          </>
+        )}
+        {cellSaveState !== "idle" && (
+          <Text size="sm" role="status">
+            {t(`dbTable.${cellSaveState}`)}
+          </Text>
+        )}
+      </Group>
+      {(rowsError || propertiesError || summaryQuery.isError) && (
+        <Alert color="red" mb="sm" role="alert">
+          {t("Failed to load data")}{" "}
+          <Button
+            size="xs"
+            onClick={() => {
+              void refetchRows();
+              void summaryQuery.refetch();
+            }}
+          >
+            {t("Retry")}
+          </Button>
+        </Alert>
+      )}
+      {isRowsPending && <Loader aria-label={t("Loading...")} />}
+      {!isRowsPending && !rowsError && rows.length === 0 && (
+        <EmptyState
+          compact
+          icon={IconList}
+          title={t(
+            queryViewState.filter?.conditions.length
+              ? "dbTable.noResults"
+              : "dbTable.emptyDatabase",
           )}
-
-          {!isMobileViewport && (
+        />
+      )}
+      {summaryQuery.data && (
+        <Group mb="sm">
+          <Text size="sm">
+            {t("Rows")}: {summaryQuery.data.count}
+          </Text>
+          {viewState.groupBy && (
             <>
-              <Select
-                aria-label={t("Sort property")}
-                placeholder={t("Sort")}
-                data={activeProperties.map((property) => ({
-                  value: property.id,
-                  label: property.name,
-                }))}
-                value={sortState?.propertyId || null}
-                onChange={handleChangeSortProperty}
-                clearable
-              />
-
-              <Select
-                aria-label={t("Sort direction")}
-                w={130}
-                placeholder={t("Sort")}
-                value={sortState?.direction || null}
-                data={[
-                  { value: "asc", label: t("Ascending") },
-                  { value: "desc", label: t("Descending") },
-                ]}
-                onChange={handleSortDirectionChange}
-                disabled={!sortState}
-                allowDeselect={false}
-              />
-
-              <Menu shadow="md" width={220}>
-                <Menu.Target>
-                  <Button
-                    variant="default"
-                    disabled={activeProperties.length === 0}
-                  >
-                    {t("Columns")}
-                  </Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  {activeProperties.map((property) => {
-                    const isVisible =
-                      typeof visibleColumns[property.id] === "boolean"
-                        ? visibleColumns[property.id]
-                        : true;
-
-                    return (
-                      <Menu.Item
-                        key={property.id}
-                        leftSection={
-                          isVisible ? (
-                            <IconEye size={14} />
-                          ) : (
-                            <IconEyeOff size={14} />
-                          )
-                        }
-                        onClick={() =>
-                          setVisibleColumns((prev) => ({
-                            ...prev,
-                            [property.id]: !isVisible,
-                          }))
-                        }
-                      >
-                        {property.name}
-                      </Menu.Item>
-                    );
-                  })}
-
-                  {isEditable && activeProperties.length > 0 && (
-                    <Menu.Divider />
-                  )}
-
-                  {isEditable &&
-                    activeProperties.map((property) => (
-                      <Menu.Item
-                        key={`${property.id}-delete`}
-                        color="red"
-                        leftSection={<IconTrash size={14} />}
-                        onClick={() => confirmDeleteProperty(property)}
-                      >
-                        {t("Delete property with name", {
-                          name: property.name,
-                        })}
-                      </Menu.Item>
-                    ))}
-                </Menu.Dropdown>
-              </Menu>
+              <Button
+                size="compact-sm"
+                variant={activeGroupKey === undefined ? "filled" : "default"}
+                onClick={() => setActiveGroupKey(undefined)}
+              >
+                {t("dbTable.allRows")}
+              </Button>
+              {summaryQuery.data.groups.map((group) => (
+                <Button
+                  key={group.key}
+                  size="compact-sm"
+                  variant={activeGroupKey === group.key ? "filled" : "default"}
+                  onClick={() => setActiveGroupKey(group.key)}
+                >
+                  {group.label || t("Empty value")} ({group.count})
+                </Button>
+              ))}
             </>
           )}
         </Group>
-      </Group>
-
-      <Drawer
-        opened={viewControlsOpened}
-        onClose={() => setViewControlsOpened(false)}
-        title={t("View")}
-        closeButtonProps={{ "aria-label": t("Close") }}
-        position="bottom"
-        size="85dvh"
-        styles={{
-          body: {
-            maxHeight: "calc(85dvh - 60px)",
-            overflowY: "auto",
-          },
-        }}
-      >
-        <Stack>
-          <Select
-            aria-label={t("Sort property")}
-            placeholder={t("Sort")}
-            data={activeProperties.map((property) => ({
-              value: property.id,
-              label: property.name,
-            }))}
-            value={sortState?.propertyId || null}
-            onChange={handleChangeSortProperty}
-            clearable
-          />
-          <Select
-            aria-label={t("Sort direction")}
-            value={sortState?.direction || null}
-            data={[
-              { value: "asc", label: t("Ascending") },
-              { value: "desc", label: t("Descending") },
-            ]}
-            onChange={handleSortDirectionChange}
-            disabled={!sortState}
-            allowDeselect={false}
-          />
-          <Menu shadow="md" width={260}>
-            <Menu.Target>
-              <Button
-                variant="default"
-                disabled={activeProperties.length === 0}
-              >
-                {t("Columns")}
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {activeProperties.map((property) => {
-                const isVisible =
-                  typeof visibleColumns[property.id] === "boolean"
-                    ? visibleColumns[property.id]
-                    : true;
-
-                return (
-                  <Menu.Item
-                    key={`mobile-${property.id}`}
-                    leftSection={
-                      isVisible ? (
-                        <IconEye size={14} />
-                      ) : (
-                        <IconEyeOff size={14} />
-                      )
-                    }
-                    onClick={() =>
-                      setVisibleColumns((previousColumns) => ({
-                        ...previousColumns,
-                        [property.id]: !isVisible,
-                      }))
-                    }
-                  >
-                    {property.name}
-                  </Menu.Item>
-                );
-              })}
-            </Menu.Dropdown>
-          </Menu>
-          <DatabaseFilterEditor
-            filters={filters}
-            properties={activeProperties}
-            checkboxOptions={checkboxFilterOptions}
-            maxFilters={MAX_FILTERS}
-            layout="stacked"
-            createFilter={cloneDefaultFilter}
-            onChange={setFilters}
-            onClear={clearFilters}
-            onReset={resetTableViewState}
-          />
-        </Stack>
-      </Drawer>
-
-      {isDatabaseFilterControlsVisible(isMobileViewport) && (
-        <DatabaseFilterEditor
-          filters={filters}
-          properties={activeProperties}
-          checkboxOptions={checkboxFilterOptions}
-          maxFilters={MAX_FILTERS}
-          layout="inline"
-          createFilter={cloneDefaultFilter}
-          onChange={setFilters}
-          onClear={clearFilters}
-          onReset={resetTableViewState}
-        />
       )}
 
       {isEditable && selectedRowIds.length > 0 && (
@@ -2501,27 +2563,38 @@ export function DatabaseTableView({
               value={bulkPropertyId}
               onChange={(value) => setBulkPropertyId(value)}
             />
-            {activeProperties.find((property) => property.id === bulkPropertyId)
-              ?.type === "checkbox" ? (
-              <Select
-                aria-label={t("Bulk checkbox value")}
-                w={140}
-                value={bulkCheckboxValue}
-                data={checkboxFilterOptions}
-                onChange={(value) =>
-                  setBulkCheckboxValue((value as "true" | "false") || "true")
+            {activeProperties.find(
+              (property) => property.id === bulkPropertyId,
+            ) && (
+              <DatabaseCellRenderer
+                property={
+                  activeProperties.find(
+                    (property) => property.id === bulkPropertyId,
+                  )!
                 }
-                allowDeselect={false}
-              />
-            ) : (
-              <TextInput
-                aria-label={t("Bulk update value")}
-                placeholder={t("Value")}
                 value={bulkValue}
-                onChange={(event) => setBulkValue(event.currentTarget.value)}
+                isEditable
+                isEditing
+                editingValue={bulkValue}
+                spaceId={spaceId}
+                pageOptions={pageReferenceOptions}
+                pageReferenceUrlById={pageReferenceUrlById}
+                onStartEdit={() => undefined}
+                onChange={setBulkValue}
+                onSave={() => undefined}
               />
             )}
-            <Button onClick={() => void applyBulkUpdate()}>
+            <Button
+              loading={batchOperations.pending}
+              onClick={() =>
+                void applyBulkUpdate().catch(() =>
+                  notifications.show({
+                    color: "red",
+                    message: t("dbTable.invalidValue"),
+                  }),
+                )
+              }
+            >
               {t("Update")}
             </Button>
             <Button
@@ -2855,7 +2928,17 @@ export function DatabaseTableView({
                                 ))}
                               </Menu.Sub.Dropdown>
                             </Menu.Sub>
-                            {property.type === "select" && (
+                            {property.type === "number" && (
+                              <Menu.Item
+                                onClick={() =>
+                                  setNumberSettingsProperty(property)
+                                }
+                              >
+                                {t("dbTable.numberFormat")}
+                              </Menu.Item>
+                            )}
+                            {(property.type === "select" ||
+                              property.type === "multi_select") && (
                               <Menu.Item
                                 leftSection={<IconSettings size={14} />}
                                 onClick={() => setSettingsProperty(property)}
@@ -2891,6 +2974,7 @@ export function DatabaseTableView({
                 </Table.Tr>
               )}
               {virtualizedRows.rows.map((row, virtualRowIndex) => {
+                const rowIsEditable = isEditable && row.canWrite !== false;
                 const rowIndex = virtualizedRows.startIndex + virtualRowIndex;
                 return (
                   <Table.Tr key={row.id}>
@@ -2898,6 +2982,7 @@ export function DatabaseTableView({
                       <Table.Td className={classes.selectColumn}>
                         <Checkbox
                           aria-label={t("Select row")}
+                          disabled={!rowIsEditable}
                           checked={Boolean(selectedRowPageIds[row.pageId])}
                           onChange={(event) =>
                             setSelectedRowPageIds((previousSelection) => ({
@@ -2965,7 +3050,7 @@ export function DatabaseTableView({
                           </Menu.Target>
 
                           <Menu.Dropdown>
-                            {isEditable && (
+                            {rowIsEditable && (
                               <Menu.Item
                                 leftSection={<IconPencil size={14} />}
                                 onClick={() => openRowRenameFromMenu(row)}
@@ -2974,7 +3059,7 @@ export function DatabaseTableView({
                               </Menu.Item>
                             )}
 
-                            {isEditable && (
+                            {rowIsEditable && (
                               <PageOperationMenuItems
                                 onDuplicate={() => void handleDuplicateRow(row)}
                                 onMove={() => setMovingRow(row)}
@@ -2996,7 +3081,7 @@ export function DatabaseTableView({
                               {t("Row comments")}
                             </Menu.Item>
 
-                            {isEditable && (
+                            {rowIsEditable && (
                               <Menu.Item
                                 color="red"
                                 leftSection={<IconTrash size={14} />}
@@ -3042,6 +3127,9 @@ export function DatabaseTableView({
 
                             const canHandleEnter =
                               event.key === "Enter" &&
+                              !(event.target as HTMLElement).closest(
+                                '[aria-expanded="true"]',
+                              ) &&
                               property.type !== "multiline_text" &&
                               property.type !== "code";
                             const canHandleTab = event.key === "Tab";
@@ -3050,8 +3138,12 @@ export function DatabaseTableView({
                             }
 
                             event.preventDefault();
+                            const navigationSession = editingSession.current;
                             void (async () => {
-                              await saveEditing(row, property);
+                              if ((await saveEditing(row, property)) === false)
+                                return;
+                              if (editingSession.current !== navigationSession)
+                                return;
                               const nextCell = navigateEditingCell(
                                 rowIndex,
                                 propertyIndex,
@@ -3098,16 +3190,22 @@ export function DatabaseTableView({
                               rowIndex,
                               propertyIndex,
                               matrix,
+                            ).catch(() =>
+                              notifications.show({
+                                color: "red",
+                                message: t("dbTable.invalidValue"),
+                              }),
                             );
                           }}
                         >
                           <DatabaseCellRenderer
                             property={property}
                             value={getRawCellValue(row, property.id)}
-                            isEditable={isEditable}
+                            isEditable={rowIsEditable}
                             isEditing={isEditing}
                             editingValue={editingValue}
                             spaceId={spaceId}
+                            pageId={row.pageId}
                             dictionaryTerms={activeDictionaryTerms}
                             dictionaryMatcherIndex={dictionaryMatcherIndex}
                             dictionaryEnabled={dictionaryEnabled}
@@ -3141,6 +3239,22 @@ export function DatabaseTableView({
           </Table>
         </ScrollArea>
       </DictionaryHighlightLayer>
+      {summaryQuery.data && Object.keys(viewState.calculations).length > 0 && (
+        <Group mt="sm" role="status">
+          {Object.entries(
+            (activeGroupKey
+              ? summaryQuery.data.groups.find(
+                  (group) => group.key === activeGroupKey,
+                )?.values
+              : summaryQuery.data.values) ?? {},
+          ).map(([id, value]) => (
+            <Text key={id} size="sm">
+              {properties.find((property) => property.id === id)?.name}:{" "}
+              {value ?? t("Empty value")}
+            </Text>
+          ))}
+        </Group>
+      )}
       {rowsPage?.hasMore && (
         <Group justify="center" mt="md">
           <Button
@@ -3152,6 +3266,17 @@ export function DatabaseTableView({
           </Button>
         </Group>
       )}
+      <NumberPropertySettingsModal
+        property={numberSettingsProperty}
+        onClose={() => setNumberSettingsProperty(null)}
+        onSave={async (settings) => {
+          if (numberSettingsProperty)
+            await updatePropertyMutation.mutateAsync({
+              propertyId: numberSettingsProperty.id,
+              payload: { settings },
+            });
+        }}
+      />
       <SelectPropertySettingsModal
         opened={Boolean(settingsProperty || selectPropertyDraft)}
         propertyName={settingsProperty?.name || selectPropertyDraft?.name || ""}
@@ -3185,7 +3310,7 @@ export function DatabaseTableView({
 
           await createPropertyMutation.mutateAsync({
             name: selectPropertyDraft.name,
-            type: "select",
+            type: selectPropertyDraft.type,
             settings: {
               options: settings.options,
             },

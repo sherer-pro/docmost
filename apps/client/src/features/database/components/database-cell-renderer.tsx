@@ -1,4 +1,15 @@
-import { alpha, Badge, Checkbox, Group, Select, Text, TextInput, useMantineTheme } from '@mantine/core';
+import { DatabaseValueEditor } from './database-value-editor';
+import { getDatabaseCellDisplayValue } from '../utils/database-cell-value';
+import {
+  alpha,
+  Badge,
+  Checkbox,
+  Group,
+  Select,
+  Text,
+  TextInput,
+  useMantineTheme,
+} from '@mantine/core';
 import { DatabasePropertyType } from '@docmost/api-contract';
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
@@ -57,14 +68,23 @@ function getSelectedUserIdentity(
 ): SpaceMemberSelectOption[] {
   if (!userId || !value || typeof value !== 'object') return [];
   const candidate = value as { name?: unknown; avatarUrl?: unknown };
-  if (typeof candidate.name !== 'string' || !candidate.name || candidate.name === userId) {
+  if (
+    typeof candidate.name !== 'string' ||
+    !candidate.name ||
+    candidate.name === userId
+  ) {
     return [];
   }
-  return [{
-    value: userId,
-    label: candidate.name,
-    avatarUrl: typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : undefined,
-  }];
+  return [
+    {
+      value: userId,
+      label: candidate.name,
+      avatarUrl:
+        typeof candidate.avatarUrl === 'string'
+          ? candidate.avatarUrl
+          : undefined,
+    },
+  ];
 }
 
 function DatabaseUserViewValue({
@@ -76,7 +96,7 @@ function DatabaseUserViewValue({
   spaceId: string;
   pageId?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
 
   if (!selectedUserId) {
@@ -104,16 +124,16 @@ function ResolvedDatabaseUserViewValue({
   spaceId: string;
   pageId?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const selectedUsers = useMemo(
     () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
     [pageId, value, selectedUserId],
   );
-  const { options: memberOptions, knownUsersById } = useSpaceMemberSelectOptions(
-    spaceId,
-    [selectedUserId],
-    { pageId, selectedUsers },
-  );
+  const { options: memberOptions, knownUsersById } =
+    useSpaceMemberSelectOptions(spaceId, [selectedUserId], {
+      pageId,
+      selectedUsers,
+    });
   const selectedMember = useMemo(
     () =>
       knownUsersById[selectedUserId] ??
@@ -159,7 +179,7 @@ function DatabaseUserEditor({
   onSave: (value?: unknown) => void;
   onBlur: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
   const selectedUsers = useMemo(
     () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
@@ -179,8 +199,8 @@ function DatabaseUserEditor({
   const selectedMember = useMemo(
     () =>
       selectedUserId
-        ? knownUsersById[selectedUserId] ??
-          memberOptions.find((option) => option.value === selectedUserId)
+        ? (knownUsersById[selectedUserId] ??
+          memberOptions.find((option) => option.value === selectedUserId))
         : null,
     [knownUsersById, memberOptions, selectedUserId],
   );
@@ -240,7 +260,7 @@ export function DatabaseCellRenderer({
   onChange,
   onSave,
 }: DatabaseCellRendererProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useMantineTheme();
   const editorValue = isEditing ? editingValue : value;
   const activeDictionaryTerms = dictionaryEnabled ? dictionaryTerms : [];
@@ -249,11 +269,18 @@ export function DatabaseCellRenderer({
     : undefined;
 
   const isDropdownPropertyType = (type: DatabasePropertyType) => {
-    return type === 'select' || type === 'user' || type === 'page_reference';
+    return (
+      type === 'select' ||
+      type === 'multi_select' ||
+      type === 'user' ||
+      type === 'page_reference'
+    );
   };
 
-  const shouldRenderDropdownEditor = isEditable && isDropdownPropertyType(property.type);
-  const shouldRenderEditor = isEditable && (isEditing || shouldRenderDropdownEditor);
+  const shouldRenderDropdownEditor =
+    isEditable && isDropdownPropertyType(property.type);
+  const shouldRenderEditor =
+    isEditable && (isEditing || shouldRenderDropdownEditor);
 
   const handleBlurSave = () => {
     if (isEditing) {
@@ -331,7 +358,13 @@ export function DatabaseCellRenderer({
     }
 
     if (property.type === 'user') {
-      return <DatabaseUserViewValue value={value} spaceId={spaceId} pageId={pageId} />;
+      return (
+        <DatabaseUserViewValue
+          value={value}
+          spaceId={spaceId}
+          pageId={pageId}
+        />
+      );
     }
 
     if (property.type === 'page_reference') {
@@ -354,6 +387,58 @@ export function DatabaseCellRenderer({
       return <Text>{targetPage?.label || refId}</Text>;
     }
 
+    if (property.type === 'multi_select')
+      return (
+        <Group gap="xs">
+          {(Array.isArray(value) ? value : []).map((id) => {
+            const option = (property.settings as any)?.options?.find(
+              (option) => option.value === id,
+            );
+            return (
+              <Badge key={id} color={option?.color ?? 'gray'}>
+                {option?.label ?? id}
+              </Badge>
+            );
+          })}
+        </Group>
+      );
+    if (['number', 'date', 'url', 'email', 'phone'].includes(property.type)) {
+      const display = getDatabaseCellDisplayValue({
+        property,
+        value,
+        locale: i18n.language,
+      });
+      if (display && ['url', 'email', 'phone'].includes(property.type)) {
+        const href =
+          property.type === 'email'
+            ? `mailto:${display}`
+            : property.type === 'phone'
+              ? `tel:${display.replace(/[^+\d]/g, '')}`
+              : /^https?:\/\//i.test(display)
+                ? display
+                : undefined;
+        return (
+          <Text
+            component="a"
+            href={href}
+            target={property.type === 'url' ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {display}
+          </Text>
+        );
+      }
+      return (
+        <Text
+          style={{
+            textAlign: property.type === 'number' ? 'right' : undefined,
+          }}
+        >
+          {display || t('Empty value')}
+        </Text>
+      );
+    }
     const textValue = normalizeDatabaseStringValue(value);
 
     return textValue ? (
@@ -371,6 +456,20 @@ export function DatabaseCellRenderer({
   };
 
   const renderEditorByType = (type: DatabasePropertyType) => {
+    if (
+      ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(type)
+    )
+      return (
+        <DatabaseValueEditor
+          property={property}
+          value={editorValue}
+          onChange={onChange}
+          onSave={onSave}
+          onBlur={handleBlurSave}
+          label={cellLabel}
+          autoFocus={isEditing}
+        />
+      );
     if (type === 'checkbox') {
       const checked = normalizeDatabaseCheckboxValue(editorValue);
       const checkboxLabel = cellLabel
@@ -431,14 +530,16 @@ export function DatabaseCellRenderer({
 
     if (type === 'select') {
       const settings =
-        property.settings && 'options' in property.settings ? property.settings.options : [];
+        property.settings && 'options' in property.settings
+          ? property.settings.options
+          : [];
       const selectValue = normalizeDatabaseSelectValue(editorValue);
       const selectOptionByValue = new Map(
         settings.map((option) => [option.value, option]),
       );
       const selectedOption = selectOptionByValue.get(selectValue);
       const selectedColorScale = selectedOption?.color
-        ? theme.colors[selectedOption.color] ?? theme.colors.gray
+        ? (theme.colors[selectedOption.color] ?? theme.colors.gray)
         : null;
       const selectInputStyles = selectedColorScale
         ? {
@@ -453,7 +554,10 @@ export function DatabaseCellRenderer({
         <Select
           autoFocus={isEditing}
           aria-label={cellLabel ?? property.name}
-          data={settings.map((option) => ({ value: option.value, label: option.label }))}
+          data={settings.map((option) => ({
+            value: option.value,
+            label: option.label,
+          }))}
           value={selectValue || null}
           onChange={(nextValue) => {
             const normalizedValue = nextValue || '';
@@ -492,7 +596,8 @@ export function DatabaseCellRenderer({
     }
 
     if (type === 'page_reference') {
-      const pageReferenceValue = normalizeDatabasePageReferenceValue(editorValue);
+      const pageReferenceValue =
+        normalizeDatabasePageReferenceValue(editorValue);
 
       return (
         <Select
@@ -507,7 +612,9 @@ export function DatabaseCellRenderer({
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
-          nothingFoundMessage={isPageOptionsLoading ? t('Loading...') : t('No pages found')}
+          nothingFoundMessage={
+            isPageOptionsLoading ? t('Loading...') : t('No pages found')
+          }
           onBlur={handleBlurSave}
         />
       );
@@ -551,7 +658,9 @@ export function DatabaseCellRenderer({
           : 'default',
       }}
     >
-      {shouldRenderEditor ? renderEditorByType(property.type) : renderViewValue()}
+      {shouldRenderEditor
+        ? renderEditorByType(property.type)
+        : renderViewValue()}
     </div>
   );
 }
