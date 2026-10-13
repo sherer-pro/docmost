@@ -731,6 +731,7 @@ export interface Comments {
 }
 
 export interface DatabaseCells {
+  revision: Generated<number>;
   attachmentId: string | null;
   createdAt: Generated<Timestamp>;
   createdById: string | null;
@@ -788,6 +789,7 @@ export interface Databases {
 }
 
 export interface DatabaseViews {
+  revision: Generated<number>;
   config: Json | null;
   createdAt: Generated<Timestamp>;
   creatorId: string | null;

@@ -227,6 +227,22 @@ export class DatabaseController {
    * Returns a list of database rows.
    */
   @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
+  @Get(':databaseId/summary')
+  async summarizeRows(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Query() query: ListDatabaseRowsQueryDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.summarizeRows(
+      databaseId,
+      user,
+      workspace.id,
+      query,
+    );
+  }
+
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
   @Get(':databaseId/rows')
   async listRows(
     @Param('databaseId', ParseUUIDPipe) databaseId: string,

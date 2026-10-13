@@ -12,6 +12,16 @@ import {
 export class DatabaseRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
+  async lockForMutation(id: string, trx: KyselyTransaction): Promise<void> {
+    await trx
+      .selectFrom('databases')
+      .select('id')
+      .where('id', '=', id)
+      .where('deletedAt', 'is', null)
+      .forUpdate()
+      .executeTakeFirstOrThrow();
+  }
+
   /**
    * Creates a new database entry in the space.
    */
@@ -73,7 +83,10 @@ export class DatabaseRepo {
   /**
    * Returns a list of databases in the specified space.
    */
-  async findBySpaceId(spaceId: string, workspaceId: string): Promise<Database[]> {
+  async findBySpaceId(
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<Database[]> {
     return this.db
       .selectFrom('databases')
       .selectAll()

@@ -31,12 +31,24 @@ interface IDatabaseRowsComparableProperty {
 export class DatabaseRowRepo {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
+  createViewQuery(
+    databaseId: string,
+    workspaceId: string,
+    spaceId: string,
+    readablePageIds: string[],
+  ) {
+    return this.buildRowsQuery(databaseId, workspaceId, spaceId).where(
+      sql<boolean>`${sql.ref('databaseRows.pageId')} = any(${readablePageIds}::uuid[])`,
+    );
+  }
+
   private buildRowsQuery(
     databaseId: string,
     workspaceId: string,
     spaceId: string,
+    trx?: KyselyTransaction,
   ) {
-    return this.db
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseRows')
       .innerJoin('pages', 'pages.id', 'databaseRows.pageId')
       .select('databaseRows.id')
@@ -56,7 +68,14 @@ export class DatabaseRowRepo {
           eb
             .selectFrom('pages as p')
             .innerJoin('spaces as s', 's.id', 'p.spaceId')
-            .select(['p.id', 'p.slugId', 'p.title', 'p.icon', 'p.parentPageId', 'p.position'])
+            .select([
+              'p.id',
+              'p.slugId',
+              'p.title',
+              'p.icon',
+              'p.parentPageId',
+              'p.position',
+            ])
             /**
              * We create customFields using the same scheme as the page API:
              * data source - page.settings.
@@ -109,8 +128,13 @@ export class DatabaseRowRepo {
               'createdAt',
               'updatedAt',
               'deletedAt',
+              'revision',
             ])
-            .whereRef('databaseCells.databaseId', '=', 'databaseRows.databaseId')
+            .whereRef(
+              'databaseCells.databaseId',
+              '=',
+              'databaseRows.databaseId',
+            )
             .whereRef('databaseCells.pageId', '=', 'databaseRows.pageId')
             .where('databaseCells.deletedAt', 'is', null),
         ).as('cells'),
@@ -295,11 +319,7 @@ export class DatabaseRowRepo {
         '=',
         `${params.rowAlias}.databaseId` as any,
       )
-      .whereRef(
-        'filterCell.pageId',
-        '=',
-        `${params.rowAlias}.pageId` as any,
-      )
+      .whereRef('filterCell.pageId', '=', `${params.rowAlias}.pageId` as any)
       .where('filterCell.propertyId', '=', params.propertyId)
       .where('filterCell.deletedAt', 'is', null)
       .limit(1);
@@ -343,17 +363,20 @@ export class DatabaseRowRepo {
     databaseId: string,
     workspaceId: string,
     spaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<any[]> {
-    return this.buildRowsQuery(databaseId, workspaceId, spaceId)
-      /**
-       * The order of rows in the tree is determined by the page position,
-       * and not the creation time of databaseRows.
-       *
-       * COLLATE "C" provides stable lexicographic collation
-       * for fractional indexing of keys.
-       */
-      .orderBy(sql`"pages"."position" collate "C"`, 'asc')
-      .execute();
+    return (
+      this.buildRowsQuery(databaseId, workspaceId, spaceId, trx)
+        /**
+         * The order of rows in the tree is determined by the page position,
+         * and not the creation time of databaseRows.
+         *
+         * COLLATE "C" provides stable lexicographic collation
+         * for fractional indexing of keys.
+         */
+        .orderBy(sql`"pages"."position" collate "C"`, 'asc')
+        .execute()
+    );
   }
 
   async findByDatabaseIdPaginated(
@@ -362,6 +385,7 @@ export class DatabaseRowRepo {
     spaceId: string,
     options: {
       limit: number;
+      readablePageIds?: string[];
       cursor?: string;
       sortField?: 'position' | 'title';
       sortDirection?: 'asc' | 'desc';
@@ -378,6 +402,10 @@ export class DatabaseRowRepo {
     const sortDirection = options.sortDirection ?? 'asc';
 
     let query = this.buildRowsQuery(databaseId, workspaceId, spaceId);
+    if (options.readablePageIds)
+      query = query.where(
+        sql<boolean>`${sql.ref('databaseRows.pageId')} = any(${options.readablePageIds}::uuid[])`,
+      );
     const filters = options.filters ?? [];
     const propertiesById = new Map(
       (options.properties ?? []).map((property) => [property.id, property]),
@@ -412,17 +440,15 @@ export class DatabaseRowRepo {
       );
     }
 
-    const pagePositionExpression =
-      sql<string>`coalesce(${sql.ref('pages.position')}, '') collate "C"`;
-    const pageIdExpression =
-      sql<string>`${sql.ref('databaseRows.pageId')}::text collate "C"`;
+    const pagePositionExpression = sql<string>`coalesce(${sql.ref('pages.position')}, '') collate "C"`;
+    const pageIdExpression = sql<string>`${sql.ref('databaseRows.pageId')}::text collate "C"`;
 
     const isPropertySort = Boolean(options.sortPropertyId);
     const isTitleSort = !isPropertySort && sortField === 'title';
 
     if (isPropertySort || isTitleSort) {
       const sortValueExpression = isPropertySort
-          ? sql<string>`(${this.buildRowCellComparableValueExpression({
+        ? sql<string>`(${this.buildRowCellComparableValueExpression({
             rowAlias: 'databaseRows',
             propertyId: options.sortPropertyId as string,
             property: propertiesById.get(options.sortPropertyId as string),
@@ -437,9 +463,21 @@ export class DatabaseRowRepo {
         perPage: options.limit,
         cursor: options.cursor,
         fields: [
-          { expression: sortValueExpression, direction: sortDirection, key: 'sortValue' },
-          { expression: pagePositionExpression, direction: sortDirection, key: 'pagePosition' },
-          { expression: pageIdExpression, direction: sortDirection, key: 'pageId' },
+          {
+            expression: sortValueExpression,
+            direction: sortDirection,
+            key: 'sortValue',
+          },
+          {
+            expression: pagePositionExpression,
+            direction: sortDirection,
+            key: 'pagePosition',
+          },
+          {
+            expression: pageIdExpression,
+            direction: sortDirection,
+            key: 'pageId',
+          },
         ] as const,
         parseCursor: (cursor) => ({
           sortValue: cursor.sortValue,
@@ -449,7 +487,10 @@ export class DatabaseRowRepo {
       });
 
       const items = paginated.items.map((item) => {
-        const { sortValue: _sortValue, ...row } = item as Record<string, unknown>;
+        const { sortValue: _sortValue, ...row } = item as Record<
+          string,
+          unknown
+        >;
         return row;
       });
 
@@ -463,7 +504,10 @@ export class DatabaseRowRepo {
     let normalizedCursor = options.cursor;
     if (normalizedCursor) {
       try {
-        defaultDecodeCursor(normalizedCursor, ['pagePosition', 'pageId'] as any);
+        defaultDecodeCursor(normalizedCursor, [
+          'pagePosition',
+          'pageId',
+        ] as any);
       } catch {
         normalizedCursor = defaultEncodeCursor([
           ['pagePosition', normalizedCursor],
@@ -477,8 +521,16 @@ export class DatabaseRowRepo {
       perPage: options.limit,
       cursor: normalizedCursor,
       fields: [
-        { expression: pagePositionExpression, direction: sortDirection, key: 'pagePosition' },
-        { expression: pageIdExpression, direction: sortDirection, key: 'pageId' },
+        {
+          expression: pagePositionExpression,
+          direction: sortDirection,
+          key: 'pagePosition',
+        },
+        {
+          expression: pageIdExpression,
+          direction: sortDirection,
+          key: 'pageId',
+        },
       ] as const,
       parseCursor: (cursor) => ({
         pagePosition: cursor.pagePosition,
@@ -492,7 +544,6 @@ export class DatabaseRowRepo {
       hasMore: paginated.meta.hasNextPage,
     };
   }
-
 
   async findActiveByPageId(
     pageId: string,
@@ -514,8 +565,9 @@ export class DatabaseRowRepo {
   async findByDatabaseAndPage(
     databaseId: string,
     pageId: string,
+    trx?: KyselyTransaction,
   ): Promise<DatabaseRow> {
-    return this.db
+    return dbOrTx(this.db, trx)
       .selectFrom('databaseRows')
       .selectAll()
       .where('databaseId', '=', databaseId)
@@ -643,5 +695,4 @@ export class DatabaseRowRepo {
       .where('archivedAt', 'is not', null)
       .execute();
   }
-
 }

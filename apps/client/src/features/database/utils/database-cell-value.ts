@@ -1,4 +1,12 @@
-import { IDatabaseProperty, IDatabaseSelectOption, IDatabaseSelectPropertySettings } from '@/features/database/types/database.types';
+import {
+  normalizeDatabaseValue,
+  formatDatabaseValue,
+} from '@docmost/api-contract';
+import {
+  IDatabaseProperty,
+  IDatabaseSelectOption,
+  IDatabaseSelectPropertySettings,
+} from '@/features/database/types/database.types';
 
 interface LegacyCellValueContainer {
   value: unknown;
@@ -7,6 +15,7 @@ interface LegacyCellValueContainer {
 }
 
 interface DatabaseCellDisplayValueParams {
+  locale?: string;
   property?: IDatabaseProperty;
   value: unknown;
   pageTitleById?: Record<string, string>;
@@ -15,8 +24,21 @@ interface DatabaseCellDisplayValueParams {
 const SERIALIZED_STRING_NORMALIZE_DEPTH = 6;
 const LEGACY_RU_TRUE_TOKEN = '\u0434\u0430';
 const LEGACY_RU_FALSE_TOKEN = '\u043d\u0435\u0442';
-const BOOLEAN_TRUE_TOKENS = new Set(['true', '1', 'yes', 'on', LEGACY_RU_TRUE_TOKEN]);
-const BOOLEAN_FALSE_TOKENS = new Set(['false', '0', 'no', 'off', LEGACY_RU_FALSE_TOKEN, '']);
+const BOOLEAN_TRUE_TOKENS = new Set([
+  'true',
+  '1',
+  'yes',
+  'on',
+  LEGACY_RU_TRUE_TOKEN,
+]);
+const BOOLEAN_FALSE_TOKENS = new Set([
+  'false',
+  '0',
+  'no',
+  'off',
+  LEGACY_RU_FALSE_TOKEN,
+  '',
+]);
 
 /**
  * Unwraps malformed values that were JSON-stringified one or more times.
@@ -52,7 +74,9 @@ function normalizeSerializedDatabaseString(value: string): string {
 }
 
 function normalizeDatabaseBooleanToken(value: string): boolean | null {
-  const normalizedToken = normalizeSerializedDatabaseString(value).trim().toLowerCase();
+  const normalizedToken = normalizeSerializedDatabaseString(value)
+    .trim()
+    .toLowerCase();
 
   if (BOOLEAN_TRUE_TOKENS.has(normalizedToken)) {
     return true;
@@ -118,13 +142,13 @@ function extractDatabaseUserName(value: unknown): string | null {
       return null;
     }
 
-    const normalizedName = normalizeSerializedDatabaseString(candidateName).trim();
+    const normalizedName =
+      normalizeSerializedDatabaseString(candidateName).trim();
     return normalizedName || null;
   }
 
   return null;
 }
-
 
 /**
  * Returns current cell value from fallback container
@@ -192,7 +216,6 @@ export function normalizeDatabaseCheckboxValue(value: unknown): boolean {
   return Boolean(currentValue);
 }
 
-
 /**
  * Normalizes select value to string `value`.
  * Supports both direct string and fallback object after type changes.
@@ -212,7 +235,9 @@ export function normalizeDatabasePageReferenceValue(value: unknown): string {
 /**
  * Returns select property settings in a safe typed format.
  */
-export function getDatabaseSelectSettings(property?: IDatabaseProperty): IDatabaseSelectPropertySettings {
+export function getDatabaseSelectSettings(
+  property?: IDatabaseProperty,
+): IDatabaseSelectPropertySettings {
   if (!property?.settings || typeof property.settings !== 'object') {
     return { options: [] };
   }
@@ -230,7 +255,10 @@ export function getDatabaseSelectSettings(property?: IDatabaseProperty): IDataba
       }
 
       const candidate = option as IDatabaseSelectOption;
-      return typeof candidate.label === 'string' && typeof candidate.value === 'string';
+      return (
+        typeof candidate.label === 'string' &&
+        typeof candidate.value === 'string'
+      );
     })
     .map((option) => ({
       label: option.label,
@@ -255,7 +283,9 @@ export function getDatabaseSelectOption(
   }
 
   const settings = getDatabaseSelectSettings(property);
-  return settings.options.find((option) => option.value === normalizedValue) || null;
+  return (
+    settings.options.find((option) => option.value === normalizedValue) || null
+  );
 }
 
 /**
@@ -266,6 +296,7 @@ export function getDatabaseCellDisplayValue({
   property,
   value,
   pageTitleById,
+  locale,
 }: DatabaseCellDisplayValueParams): string {
   const currentValue = extractCurrentDatabaseCellValue(value);
 
@@ -281,6 +312,17 @@ export function getDatabaseCellDisplayValue({
     return JSON.stringify(currentValue);
   }
 
+  if (
+    ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+      property.type,
+    )
+  )
+    return formatDatabaseValue(
+      property.type,
+      currentValue,
+      property.settings,
+      locale,
+    );
   if (property.type === 'user') {
     const displayName = extractDatabaseUserName(currentValue);
     if (displayName) {
@@ -329,8 +371,31 @@ export function getDatabaseCellDisplayValue({
 /**
  * Builds contract-compatible payload for batch update API by property type.
  */
-export function buildDatabaseCellPayloadValue(property: IDatabaseProperty, value: unknown): unknown {
+export function buildDatabaseCellPayloadValue(
+  property: IDatabaseProperty,
+  value: unknown,
+): unknown {
   const currentValue = extractCurrentDatabaseCellValue(value);
+  if (
+    ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+      property.type,
+    )
+  ) {
+    const input =
+      property.type === 'multi_select' && typeof currentValue === 'string'
+        ? currentValue
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .map(
+              (v) =>
+                (property.settings as any)?.options?.find(
+                  (option) => option.value === v || option.label === v,
+                )?.value ?? v,
+            )
+        : currentValue;
+    return normalizeDatabaseValue(property.type, input, property.settings);
+  }
 
   if (property.type === 'checkbox') {
     return normalizeDatabaseCheckboxValue(currentValue);
@@ -357,4 +422,3 @@ export function buildDatabaseCellPayloadValue(property: IDatabaseProperty, value
 
   return currentValue ?? '';
 }
-

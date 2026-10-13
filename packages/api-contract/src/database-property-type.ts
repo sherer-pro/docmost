@@ -8,6 +8,12 @@ export const DATABASE_PROPERTY_TYPES = [
   'select',
   'user',
   'page_reference',
+  'number',
+  'date',
+  'multi_select',
+  'url',
+  'email',
+  'phone',
 ] as const;
 
 /**

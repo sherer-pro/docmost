@@ -28,6 +28,64 @@ function createHistoryItem(overrides: Partial<IPageHistory>): IPageHistory {
 }
 
 describe("history summary/details formatter", () => {
+  it("localizes new database types in the property timeline", () => {
+    const t = (key: string) => `Translated ${key}`;
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "database.property.updated",
+        changeData: {
+          changes: [
+            "number",
+            "date",
+            "multi_select",
+            "url",
+            "email",
+            "phone",
+          ].map((type) => ({
+            field: "type",
+            oldValue: "multiline_text",
+            newValue: type,
+          })),
+        },
+      }),
+      t,
+    );
+    expect(details[0].rows.map((row) => row.newValue)).toEqual(
+      ["number", "date", "multiSelect", "url", "email", "phone"].map(
+        (key) => `Translated dbTable.${key}`,
+      ),
+    );
+  });
+  it("renders date ranges and tag labels without raw object syntax", () => {
+    const details = formatHistoryEventDetails(
+      createHistoryItem({
+        changeType: "database.row.cells.updated",
+        changeData: {
+          changes: [
+            {
+              propertyName: "Date",
+              propertyType: "date",
+              oldValue: null,
+              newValue: { start: "2026-10-13", end: "2026-10-14" },
+            },
+            {
+              propertyName: "Tags",
+              propertyType: "multi_select",
+              oldValue: [],
+              newValue: [
+                { value: "a", label: "Alpha" },
+                { value: "b", label: "Beta" },
+              ],
+            },
+          ],
+        },
+      }),
+      (key) => key,
+    );
+    expect(details[0].rows[0].newValue).toContain("2026");
+    expect(details[0].rows[0].newValue).not.toContain("{");
+    expect(details[0].rows[1].newValue).toBe("Alpha, Beta");
+  });
   it("formats custom field details with translated history keys", () => {
     const t = vi.fn(
       (key: string, options?: Record<string, unknown>) =>

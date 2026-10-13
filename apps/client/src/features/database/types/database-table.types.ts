@@ -31,6 +31,7 @@ export interface IDatabaseRowPage {
  * Value of a specific cell (pageId + propertyId pair).
  */
 export interface IDatabaseCellValue {
+  revision?: number;
   id: string;
   pageId: string;
   propertyId: string;
@@ -45,6 +46,7 @@ export interface IDatabaseCellValue {
  * handled on the client.
  */
 export interface IDatabaseRowWithCells {
+  canWrite?: boolean;
   id: string;
   pageId: string;
   page?: IDatabaseRowPage;
@@ -57,7 +59,7 @@ export interface IDatabaseRowWithCells {
  */
 export interface IDatabaseFilterCondition {
   propertyId: string;
-  operator: 'contains' | 'equals' | 'not_equals';
+  operator: "contains" | "equals" | "not_equals";
   value: string;
 }
 
@@ -66,14 +68,16 @@ export interface IDatabaseFilterCondition {
  */
 export interface IDatabaseSortState {
   propertyId: string;
-  direction: 'asc' | 'desc';
+  direction: "asc" | "desc";
 }
 
-export type IDatabaseRowsSortField = 'position' | 'title';
+export type IDatabaseRowsSortField = "position" | "title";
 
-export type IDatabaseRowsSortDirection = 'asc' | 'desc';
+export type IDatabaseRowsSortDirection = "asc" | "desc";
 
 export interface IDatabaseRowsQueryParams {
+  viewState?: string;
+  groupKey?: string;
   limit?: number;
   /**
    * Opaque keyset cursor from backend pagination.

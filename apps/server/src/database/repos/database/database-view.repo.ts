@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
@@ -58,14 +59,19 @@ export class DatabaseViewRepo {
     id: string,
     payload: UpdatableDatabaseView,
     trx?: KyselyTransaction,
+    expectedRevision?: number,
   ): Promise<DatabaseView> {
-    return dbOrTx(this.db, trx)
+    let query = dbOrTx(this.db, trx)
       .updateTable('databaseViews')
-      .set({ ...payload, updatedAt: new Date() })
+      .set({ ...payload, revision: sql`revision + 1`, updatedAt: new Date() })
       .where('id', '=', id)
-      .where('deletedAt', 'is', null)
-      .returningAll()
-      .executeTakeFirst();
+      .where('deletedAt', 'is', null);
+    if (expectedRevision !== undefined)
+      query = query.where('revision', '=', expectedRevision);
+    const view = await query.returningAll().executeTakeFirst();
+    if (!view && expectedRevision !== undefined)
+      throw new ConflictException('Database view was changed');
+    return view;
   }
 
   /**
@@ -116,5 +122,4 @@ export class DatabaseViewRepo {
       .where('deletedAt', 'is not', null)
       .execute();
   }
-
 }

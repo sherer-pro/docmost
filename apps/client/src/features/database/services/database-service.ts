@@ -149,7 +149,10 @@ export async function createDatabaseRow(
   databaseId: string,
   payload: ICreateDatabaseRowPayload,
 ): Promise<IDatabaseRow> {
-  const req = await api.post<IDatabaseRow>(`/databases/${databaseId}/rows`, payload);
+  const req = await api.post<IDatabaseRow>(
+    `/databases/${databaseId}/rows`,
+    payload,
+  );
   return req.data;
 }
 
@@ -209,7 +212,9 @@ export async function batchUpdateDatabaseRows(
 /**
  * Returns database views.
  */
-export async function getDatabaseViews(databaseId: string): Promise<IDatabaseView[]> {
+export async function getDatabaseViews(
+  databaseId: string,
+): Promise<IDatabaseView[]> {
   const req = await api.get<IDatabaseView[]>(`/databases/${databaseId}/views`);
   return req.data;
 }
@@ -221,7 +226,10 @@ export async function createDatabaseView(
   databaseId: string,
   payload: ICreateDatabaseViewPayload,
 ): Promise<IDatabaseView> {
-  const req = await api.post<IDatabaseView>(`/databases/${databaseId}/views`, payload);
+  const req = await api.post<IDatabaseView>(
+    `/databases/${databaseId}/views`,
+    payload,
+  );
   return req.data;
 }
 
@@ -251,17 +259,17 @@ export async function deleteDatabaseView(
   await api.delete(`/databases/${databaseId}/views/${viewId}`);
 }
 
-
 /**
  * Returns database row context by page id.
  */
 export async function getDatabaseRowContextByPage(
   pageId: string,
 ): Promise<IDatabaseRowContext | null> {
-  const req = await api.get<IDatabaseRowContext | null>(`/databases/rows/${pageId}/context`);
+  const req = await api.get<IDatabaseRowContext | null>(
+    `/databases/rows/${pageId}/context`,
+  );
   return req.data;
 }
-
 
 /**
  * Exports a database as markdown/html/pdf according to backend contract.
@@ -271,14 +279,14 @@ export async function exportDatabase(
   payload: IExportDatabasePayload,
 ): Promise<void> {
   const req = await api.post(`/databases/${databaseId}/export`, payload, {
-    responseType: 'blob',
+    responseType: "blob",
   });
 
-  const fileName = req?.headers['content-disposition']
-    ?.split('filename=')[1]
-    ?.replace(/"/g, '');
+  const fileName = req?.headers["content-disposition"]
+    ?.split("filename=")[1]
+    ?.replace(/"/g, "");
 
-  let decodedFileName = fileName || 'database-export';
+  let decodedFileName = fileName || "database-export";
   try {
     decodedFileName = decodeURIComponent(decodedFileName);
   } catch {
@@ -294,10 +302,11 @@ export async function exportDatabase(
 export async function getDatabaseMarkdown(
   databaseId: string,
 ): Promise<IDatabaseMarkdownResponse> {
-  const req = await api.get<IDatabaseMarkdownResponse>(`/databases/${databaseId}/markdown`);
+  const req = await api.get<IDatabaseMarkdownResponse>(
+    `/databases/${databaseId}/markdown`,
+  );
   return req.data;
 }
-
 
 /**
  * DTO of the conversion result database -> page.
@@ -310,7 +319,20 @@ export interface ConvertDatabaseToPageResult {
 /**
  * Converts the database into a regular page.
  */
-export async function convertDatabaseToPage(databaseId: string): Promise<ConvertDatabaseToPageResult | null> {
-  const req = await api.post<ConvertDatabaseToPageResult | null>(`/databases/${databaseId}/convert-to-page`);
+export async function convertDatabaseToPage(
+  databaseId: string,
+): Promise<ConvertDatabaseToPageResult | null> {
+  const req = await api.post<ConvertDatabaseToPageResult | null>(
+    `/databases/${databaseId}/convert-to-page`,
+  );
   return req.data;
+}
+
+export async function getDatabaseSummary(
+  databaseId: string,
+  viewState: string,
+): Promise<import("@docmost/api-contract").DatabaseSummary> {
+  return (
+    await api.get(`/databases/${databaseId}/summary`, { params: { viewState } })
+  ).data;
 }

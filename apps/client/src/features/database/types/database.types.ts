@@ -105,6 +105,7 @@ export interface IDatabaseRow {
  * Database cell entity.
  */
 export interface IDatabaseCell {
+  revision?: number;
   id: string;
   databaseId: string;
   workspaceId: string;
@@ -123,6 +124,7 @@ export interface IDatabaseCell {
  * Database view entity.
  */
 export interface IDatabaseView {
+  revision?: number;
   id: string;
   databaseId: string;
   workspaceId: string;
@@ -136,6 +138,11 @@ export interface IDatabaseView {
 }
 
 export interface IDatabaseViewConfig {
+  version?: 2;
+  filter?: import("@docmost/api-contract").DatabaseFilterGroup;
+  sorts?: import("@docmost/api-contract").DatabaseSort[];
+  groupBy?: string | null;
+  calculations?: import("@docmost/api-contract").DatabaseViewState["calculations"];
   visibleColumns?: Record<string, boolean>;
   filters?: IDatabaseFilterCondition[];
   sortState?: IDatabaseSortState | null;

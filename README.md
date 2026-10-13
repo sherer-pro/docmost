@@ -303,13 +303,13 @@ The fork includes structured databases:
 
 - database rows are full pages;
 
-- typed properties;
+- typed properties, including numbers with number/percent/currency formats, dates with optional time and ranges, multi-select, URL, email, and phone;
 
-- filtering and sorting;
+- nested AND/OR filters, up to five sort keys, categorical grouping, and server-side totals over accessible rows;
 
 - column reordering;
 
-- row and cell editing;
+- row and cell editing with revision conflicts, partial-batch feedback, and shared-view autosave;
 
 - actions for individual and selected rows;
 

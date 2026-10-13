@@ -1,3 +1,4 @@
+import { normalizeDatabaseValue } from '@docmost/api-contract';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -256,7 +257,11 @@ export class DocmostArchiveImportService {
 
     const rootContainerId =
       data.scope === 'space'
-        ? deterministicImportId(fileTask.id, 'root', data.sourceSpace?.id ?? '*')
+        ? deterministicImportId(
+            fileTask.id,
+            'root',
+            data.sourceSpace?.id ?? '*',
+          )
         : null;
     const createdPageIds: string[] = [];
     try {
@@ -534,9 +539,7 @@ export class DocmostArchiveImportService {
           status: 'pending',
         })
         .onConflict((oc) =>
-          oc
-            .columns(['fileTaskId', 'pageId', 'sourcePath'])
-            .doNothing(),
+          oc.columns(['fileTaskId', 'pageId', 'sourcePath']).doNothing(),
         )
         .execute();
       let lastError: unknown;
@@ -865,36 +868,56 @@ export class DocmostArchiveImportService {
       data.databaseProperties.map((property) => [property.id, property.type]),
     );
     if (data.databaseCells.length > 0) {
-      await trx
-        .insertInto('databaseCells')
-        .values(
-          data.databaseCells.map((cell) => {
-            const type = propertyTypeById.get(cell.propertyId);
-            let value = cell.value;
-            if (type === 'page_reference') {
-              value = remapDatabasePageReference(value, type, pageIdMap, null);
-              if (value === null && cell.value !== null) {
-                report.skipped.pageReferences += 1;
-              }
-            } else if (type === 'user') {
-              value = this.remapDatabaseUserReference(value, userIdMap, report);
-            }
-            return {
-              id: uuid7(),
-              databaseId: databaseIdMap.get(cell.databaseId)!,
-              pageId: pageIdMap.get(cell.pageId)!,
-              propertyId: propertyIdMap.get(cell.propertyId)!,
-              attachmentId: cell.attachmentId
-                ? (attachmentIdMap.get(cell.attachmentId) ?? null)
-                : null,
-              value: value as any,
-              workspaceId: fileTask.workspaceId,
-              createdById: fileTask.creatorId!,
-              updatedById: fileTask.creatorId!,
-            };
-          }),
-        )
-        .execute();
+      const importedCells = data.databaseCells.map((cell) => {
+        const type = propertyTypeById.get(cell.propertyId);
+        let value = cell.value;
+        if (type === 'page_reference') {
+          value = remapDatabasePageReference(value, type, pageIdMap, null);
+          if (value === null && cell.value !== null) {
+            report.skipped.pageReferences += 1;
+          }
+        } else if (type === 'user') {
+          value = this.remapDatabaseUserReference(value, userIdMap, report);
+        }
+        if (
+          ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+            type,
+          ) &&
+          !(
+            value &&
+            typeof value === 'object' &&
+            'rawValueBeforeTypeChange' in value
+          )
+        ) {
+          const settings = data.databaseProperties.find(
+            (property) => property.id === cell.propertyId,
+          )?.settings;
+          value = normalizeDatabaseValue(
+            type as any,
+            value,
+            settings as any,
+          ) as any;
+        }
+        return {
+          id: uuid7(),
+          databaseId: databaseIdMap.get(cell.databaseId)!,
+          pageId: pageIdMap.get(cell.pageId)!,
+          propertyId: propertyIdMap.get(cell.propertyId)!,
+          attachmentId: cell.attachmentId
+            ? (attachmentIdMap.get(cell.attachmentId) ?? null)
+            : null,
+          value: sql`${JSON.stringify(value ?? null)}::text::jsonb` as any,
+          workspaceId: fileTask.workspaceId,
+          createdById: fileTask.creatorId!,
+          updatedById: fileTask.creatorId!,
+        };
+      });
+      for (let index = 0; index < importedCells.length; index += 1000) {
+        await trx
+          .insertInto('databaseCells')
+          .values(importedCells.slice(index, index + 1000))
+          .execute();
+      }
     }
     if (data.databaseViews.length > 0) {
       await trx

@@ -20,6 +20,7 @@ import { ExportFormat } from '../../../integrations/export/dto/export-dto';
 
 describe('DatabaseService mixed tree flows', () => {
   const databaseRepo = {
+    lockForMutation: jest.fn(async () => undefined),
     insertDatabase: jest.fn(),
     findById: jest.fn(),
     softDeleteDatabase: jest.fn(),
@@ -92,6 +93,7 @@ describe('DatabaseService mixed tree flows', () => {
     recordPageEvent: jest.fn(),
     enqueuePageEvents: jest.fn(),
   };
+  const notificationOutbox = { enqueueNotificationDispatch: jest.fn() };
   const notificationQueue = {
     add: jest.fn(),
   };
@@ -129,9 +131,16 @@ describe('DatabaseService mixed tree flows', () => {
     pageHistoryRecorder as any,
     notificationQueue as any,
     db as any,
+    undefined,
+    undefined,
+    notificationOutbox as any,
   );
 
-  const user = { id: 'u-1', locale: 'ru-RU', workspaceId: 'ws-1' } as any;
+  const user = {
+    id: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
+    locale: 'ru-RU',
+    workspaceId: 'ws-1',
+  } as any;
 
   const streamToBuffer = async (
     stream: NodeJS.ReadableStream,
@@ -237,8 +246,8 @@ describe('DatabaseService mixed tree flows', () => {
       spaceId: 'space-1',
       workspaceId: 'ws-1',
       pageId: 'db-root-page',
-      creatorId: 'u-1',
-      lastUpdatedById: 'u-2',
+      creatorId: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
+      lastUpdatedById: '84423bb3-fd06-5a18-91ce-0badb5da1139',
     });
     pageRepo.findById.mockResolvedValue({
       id: 'db-root-page',
@@ -411,7 +420,7 @@ describe('DatabaseService mixed tree flows', () => {
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith(
       'row-page-1',
-      'u-1',
+      '794c4fdd-593f-5179-9391-85a7e55d9ad2',
       'ws-1',
     );
   });
@@ -806,8 +815,8 @@ describe('DatabaseService mixed tree flows', () => {
       spaceId: 'space-1',
       workspaceId: 'ws-1',
       pageId: 'db-root-page',
-      creatorId: 'u-1',
-      lastUpdatedById: 'u-2',
+      creatorId: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
+      lastUpdatedById: '84423bb3-fd06-5a18-91ce-0badb5da1139',
     });
 
     const pagesZip = new JSZip();
@@ -998,7 +1007,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(pageRepo.updatePage).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Renamed row title',
-        lastUpdatedById: 'u-1',
+        lastUpdatedById: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
         workspaceId: 'ws-1',
       }),
       'row-page-1',
@@ -1083,7 +1092,12 @@ describe('DatabaseService mixed tree flows', () => {
       },
     ]);
     userRepo.findByIds.mockResolvedValue([
-      { id: userId, name: 'Jane Doe', avatarUrl: '/avatars/jane', workspaceId: 'ws-1' },
+      {
+        id: userId,
+        name: 'Jane Doe',
+        avatarUrl: '/avatars/jane',
+        workspaceId: 'ws-1',
+      },
     ]);
 
     const rows = await service.listRows('db-1', user, 'ws-1');
@@ -1302,12 +1316,12 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseRepo.updateDatabase).toHaveBeenCalledWith('db-1', 'ws-1', {
       name: 'Renamed database',
       descriptionContent: undefined,
-      lastUpdatedById: 'u-1',
+      lastUpdatedById: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
     });
     expect(pageRepo.updatePage).toHaveBeenCalledWith(
       {
         title: 'Renamed database',
-        lastUpdatedById: 'u-1',
+        lastUpdatedById: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
         workspaceId: 'ws-1',
       },
       'db-root-page',
@@ -1378,7 +1392,7 @@ describe('DatabaseService mixed tree flows', () => {
     );
     expect(pageRepo.removePage).toHaveBeenCalledWith(
       'db-root-page',
-      'u-2',
+      '84423bb3-fd06-5a18-91ce-0badb5da1139',
       'ws-1',
     );
     expect(databaseRepo.softDeleteDatabase).toHaveBeenCalledWith(
@@ -1440,13 +1454,17 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: {
-        value: 'Yes',
-        rawValueBeforeTypeChange: true,
-        rawTypeBeforeTypeChange: 'checkbox',
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
+      'cell-1',
+      {
+        value: {
+          value: 'Yes',
+          rawValueBeforeTypeChange: true,
+          rawTypeBeforeTypeChange: 'checkbox',
+        },
       },
-    });
+      trx,
+    );
   });
 
   it('converts user value to member name when changing user -> multiline_text', async () => {
@@ -1477,13 +1495,17 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: {
-        value: 'Jane Doe',
-        rawValueBeforeTypeChange: { id: 'user-42' },
-        rawTypeBeforeTypeChange: 'user',
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
+      'cell-1',
+      {
+        value: {
+          value: 'Jane Doe',
+          rawValueBeforeTypeChange: { id: 'user-42' },
+          rawTypeBeforeTypeChange: 'user',
+        },
       },
-    });
+      trx,
+    );
   });
 
   it('stores fallback payload for non-convertible transitions', async () => {
@@ -1509,13 +1531,17 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: {
-        value: null,
-        rawValueBeforeTypeChange: 'legacy',
-        rawTypeBeforeTypeChange: 'multiline_text',
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
+      'cell-1',
+      {
+        value: {
+          value: null,
+          rawValueBeforeTypeChange: 'legacy',
+          rawTypeBeforeTypeChange: 'multiline_text',
+        },
       },
-    });
+      trx,
+    );
   });
 
   it('rolls back to source type using preserved fallback value', async () => {
@@ -1548,9 +1574,13 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith('cell-1', {
-      value: 'legacy',
-    });
+    expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
+      'cell-1',
+      {
+        value: 'legacy',
+      },
+      trx,
+    );
   });
 
   it('restores original values for every A->B->A type pair before manual edits', async () => {
@@ -1677,7 +1707,11 @@ describe('DatabaseService mixed tree flows', () => {
       archivedAt: null,
     });
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([
-      { id: 'prop-1', type: 'select' },
+      {
+        id: 'prop-1',
+        type: 'select',
+        settings: { options: [{ value: 'in_progress', label: 'In progress' }] },
+      },
     ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       {
@@ -1728,13 +1762,17 @@ describe('DatabaseService mixed tree flows', () => {
       'ws-1',
     );
 
-    expect(databaseCellRepo.updateCell).toHaveBeenLastCalledWith('cell-1', {
-      value: {
-        value: 'in_progress',
-        rawValueBeforeTypeChange: 'in_progress',
-        rawTypeBeforeTypeChange: 'select',
+    expect(databaseCellRepo.updateCell).toHaveBeenLastCalledWith(
+      'cell-1',
+      {
+        value: {
+          value: 'in_progress',
+          rawValueBeforeTypeChange: 'in_progress',
+          rawTypeBeforeTypeChange: 'select',
+        },
       },
-    });
+      trx,
+    );
   });
 
   it('sends notification when user cell assignee changes', async () => {
@@ -1754,29 +1792,49 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'prop-user', type: 'user' },
     ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
-      { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
+      {
+        id: 'cell-old',
+        propertyId: 'prop-user',
+        value: { id: 'fba523af-45bf-54c3-95ee-ad9a278583d1' },
+      },
     ]);
     databaseCellRepo.upsertCell.mockResolvedValue({
       id: 'cell-new',
       propertyId: 'prop-user',
-      value: { id: 'user-new' },
+      value: { id: 'f511a9bd-3d20-53ad-924f-70916223a92b' },
     });
 
     await service.batchUpdateRowCells(
       'db-1',
       'row-page-1',
-      { cells: [{ propertyId: 'prop-user', value: { id: 'user-new' } }] },
+      {
+        cells: [
+          {
+            propertyId: 'prop-user',
+            value: { id: 'f511a9bd-3d20-53ad-924f-70916223a92b' },
+          },
+        ],
+      },
       user,
       'ws-1',
     );
 
-    expect(notificationQueue.add).toHaveBeenCalledWith(
-      'page-recipient-notification',
+    expect(notificationOutbox.enqueueNotificationDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        reason: 'database-user-assigned',
-        candidateUserIds: ['user-new'],
+        jobName: 'page-recipient-notification',
+        jobData: expect.objectContaining({
+          reason: 'database-user-assigned',
+          candidateUserIds: ['f511a9bd-3d20-53ad-924f-70916223a92b'],
+        }),
       }),
+      trx,
     );
+    expect(
+      isValidUuid(
+        notificationOutbox.enqueueNotificationDispatch.mock.calls[0][0].jobData
+          .eventId,
+      ),
+    ).toBe(true);
   });
 
   it('rejects a new user cell assignment after space membership ends', async () => {
@@ -1798,7 +1856,9 @@ describe('DatabaseService mixed tree flows', () => {
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-old', propertyId: 'prop-user', value: null },
     ]);
-    pageAccessService.getAssignableSpaceUserIds.mockResolvedValueOnce(new Set());
+    pageAccessService.getAssignableSpaceUserIds.mockResolvedValueOnce(
+      new Set(),
+    );
 
     await expect(
       service.batchUpdateRowCells(
@@ -1829,26 +1889,39 @@ describe('DatabaseService mixed tree flows', () => {
       { id: 'prop-user', type: 'user' },
     ]);
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
-      { id: 'cell-old', propertyId: 'prop-user', value: { id: 'user-old' } },
+      {
+        id: 'cell-old',
+        propertyId: 'prop-user',
+        value: { id: 'fba523af-45bf-54c3-95ee-ad9a278583d1' },
+      },
     ]);
     databaseCellRepo.upsertCell.mockResolvedValue({
       id: 'cell-new',
       propertyId: 'prop-user',
-      value: { id: 'user-old' },
+      value: { id: 'fba523af-45bf-54c3-95ee-ad9a278583d1' },
     });
 
     await service.batchUpdateRowCells(
       'db-1',
       'row-page-1',
-      { cells: [{ propertyId: 'prop-user', value: { id: 'user-old' } }] },
+      {
+        cells: [
+          {
+            propertyId: 'prop-user',
+            value: { id: 'fba523af-45bf-54c3-95ee-ad9a278583d1' },
+          },
+        ],
+      },
       user,
       'ws-1',
     );
 
-    expect(notificationQueue.add).not.toHaveBeenCalled();
+    expect(
+      notificationOutbox.enqueueNotificationDispatch,
+    ).not.toHaveBeenCalled();
   });
 
-  it('updates row cells for checkbox and text/object payloads through batch endpoint flow', async () => {
+  it('updates checkbox, text, and canonical user cells through the batch endpoint', async () => {
     pageRepo.findById.mockResolvedValue({
       id: 'row-page-1',
       workspaceId: 'ws-1',
@@ -1864,7 +1937,7 @@ describe('DatabaseService mixed tree flows', () => {
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([
       { id: 'prop-checkbox', type: 'checkbox', name: 'Checkbox' },
       { id: 'prop-text', type: 'multiline_text', name: 'Text' },
-      { id: 'prop-object', type: 'multiline_text', name: 'Object' },
+      { id: 'prop-object', type: 'user', name: 'User' },
     ]);
 
     databaseCellRepo.upsertCell
@@ -1886,7 +1959,7 @@ describe('DatabaseService mixed tree flows', () => {
       .mockResolvedValueOnce({
         id: 'cell-object',
         propertyId: 'prop-object',
-        value: { id: 'user-2' },
+        value: { id: 'd62a47ee-ddba-509e-8d73-e02168c7a35e' },
       });
 
     await service.batchUpdateRowCells(
@@ -1897,7 +1970,10 @@ describe('DatabaseService mixed tree flows', () => {
           { propertyId: 'prop-checkbox', value: true },
           { propertyId: 'prop-checkbox', value: false },
           { propertyId: 'prop-text', value: 'plain text value' },
-          { propertyId: 'prop-object', value: { id: 'user-2' } },
+          {
+            propertyId: 'prop-object',
+            value: { id: 'd62a47ee-ddba-509e-8d73-e02168c7a35e' },
+          },
         ],
       },
       user,
@@ -1932,7 +2008,7 @@ describe('DatabaseService mixed tree flows', () => {
       4,
       expect.objectContaining({
         propertyId: 'prop-object',
-        value: { id: 'user-2' },
+        value: { id: 'd62a47ee-ddba-509e-8d73-e02168c7a35e' },
       }),
       trx,
     );
@@ -1989,9 +2065,68 @@ describe('DatabaseService mixed tree flows', () => {
       expect.objectContaining({
         value: null,
         attachmentId: null,
-        updatedById: 'u-1',
+        updatedById: '794c4fdd-593f-5179-9391-85a7e55d9ad2',
       }),
       trx,
+    );
+  });
+
+  it('records multi-select labels while keeping canonical cell identifiers', async () => {
+    pageRepo.findById.mockResolvedValue({
+      id: 'row-page-1',
+      workspaceId: 'ws-1',
+      spaceId: 'space-1',
+      deletedAt: null,
+    });
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      {
+        id: 'prop-tags',
+        type: 'multi_select',
+        name: 'Tags',
+        settings: {
+          options: [
+            { value: 'a', label: 'Alpha' },
+            { value: 'b', label: 'Beta' },
+          ],
+        },
+      },
+    ]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-tags', propertyId: 'prop-tags', value: ['a'] },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-tags',
+      propertyId: 'prop-tags',
+      value: ['b'],
+    });
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      { cells: [{ propertyId: 'prop-tags', value: ['b'] }] },
+      user,
+      'ws-1',
+    );
+    expect(databaseCellRepo.upsertCell).toHaveBeenCalledWith(
+      expect.objectContaining({ value: ['b'] }),
+      trx,
+    );
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeData: expect.objectContaining({
+          changes: [
+            expect.objectContaining({
+              oldValue: [{ value: 'a', label: 'Alpha' }],
+              newValue: [{ value: 'b', label: 'Beta' }],
+            }),
+          ],
+        }),
+      }),
     );
   });
 
@@ -2126,16 +2261,16 @@ describe('DatabaseService mixed tree flows', () => {
           spaceId: 'space-1',
           deletedAt: null,
         },
-        'ref-page-1': {
-          id: 'ref-page-1',
+        '3640ce9f-1277-5710-8198-b173642887bb': {
+          id: '3640ce9f-1277-5710-8198-b173642887bb',
           workspaceId: 'ws-1',
           spaceId: 'space-1',
           deletedAt: null,
           title: 'Reference page one',
           slugId: 'ref-page-one',
         },
-        'ref-page-2': {
-          id: 'ref-page-2',
+        '1f7fb9bb-55e6-53e6-ae77-c7db783a756f': {
+          id: '1f7fb9bb-55e6-53e6-ae77-c7db783a756f',
           workspaceId: 'ws-1',
           spaceId: 'space-1',
           deletedAt: null,
@@ -2178,15 +2313,19 @@ describe('DatabaseService mixed tree flows', () => {
     databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
       { id: 'cell-select', propertyId: 'prop-select', value: 'metka-2-r311' },
       { id: 'cell-user', propertyId: 'prop-user', value: null },
-      { id: 'cell-page', propertyId: 'prop-page', value: 'ref-page-1' },
+      {
+        id: 'cell-page',
+        propertyId: 'prop-page',
+        value: '3640ce9f-1277-5710-8198-b173642887bb',
+      },
     ]);
 
     databaseCellRepo.upsertCell.mockImplementation(
       async (payload: { propertyId: string }) => {
         const valueByPropertyId: Record<string, unknown> = {
           'prop-select': 'metka-4-2ejm',
-          'prop-user': { id: 'user-new' },
-          'prop-page': 'ref-page-2',
+          'prop-user': { id: 'f511a9bd-3d20-53ad-924f-70916223a92b' },
+          'prop-page': '1f7fb9bb-55e6-53e6-ae77-c7db783a756f',
         };
 
         return {
@@ -2198,12 +2337,12 @@ describe('DatabaseService mixed tree flows', () => {
     );
 
     userRepo.findById.mockImplementation(async (userId: string) => {
-      if (userId !== 'user-new') {
+      if (userId !== 'f511a9bd-3d20-53ad-924f-70916223a92b') {
         return null;
       }
 
       return {
-        id: 'user-new',
+        id: 'f511a9bd-3d20-53ad-924f-70916223a92b',
         name: 'Pavel',
         workspaceId: 'ws-1',
       };
@@ -2215,8 +2354,14 @@ describe('DatabaseService mixed tree flows', () => {
       {
         cells: [
           { propertyId: 'prop-select', value: 'metka-4-2ejm' },
-          { propertyId: 'prop-user', value: { id: 'user-new' } },
-          { propertyId: 'prop-page', value: 'ref-page-2' },
+          {
+            propertyId: 'prop-user',
+            value: { id: 'f511a9bd-3d20-53ad-924f-70916223a92b' },
+          },
+          {
+            propertyId: 'prop-page',
+            value: '1f7fb9bb-55e6-53e6-ae77-c7db783a756f',
+          },
         ],
       },
       user,
@@ -2236,12 +2381,15 @@ describe('DatabaseService mixed tree flows', () => {
             expect.objectContaining({
               propertyId: 'prop-user',
               oldValue: null,
-              newValue: { id: 'user-new', name: 'Pavel' },
+              newValue: {
+                id: 'f511a9bd-3d20-53ad-924f-70916223a92b',
+                name: 'Pavel',
+              },
             }),
             expect.objectContaining({
               propertyId: 'prop-page',
-              oldValue: { id: 'ref-page-1' },
-              newValue: { id: 'ref-page-2' },
+              oldValue: { id: '3640ce9f-1277-5710-8198-b173642887bb' },
+              newValue: { id: '1f7fb9bb-55e6-53e6-ae77-c7db783a756f' },
             }),
           ]),
         }),
@@ -2249,3 +2397,4 @@ describe('DatabaseService mixed tree flows', () => {
     );
   });
 });
+import { validate as isValidUuid } from 'uuid';

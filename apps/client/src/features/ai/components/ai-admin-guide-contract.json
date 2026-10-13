@@ -1,5 +1,5 @@
 {
-  "version": 26,
+  "version": 27,
   "anchors": [
     "assistant",
     "retrieval",
@@ -296,6 +296,7 @@
     "troubleshooting.rows.targetMismatch.signal",
     "troubleshooting.rows.writerVerification.action",
     "troubleshooting.rows.writerVerification.signal",
-    "troubleshooting.title"
+    "troubleshooting.title",
+    "scenario.retrieval.steps.step4"
   ]
 }

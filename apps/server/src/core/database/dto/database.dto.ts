@@ -24,6 +24,8 @@ import {
   DatabaseExportFormat,
   type DatabaseExportViewSnapshot,
   type DatabasePropertyType,
+  type DatabasePropertySettings,
+  type DatabaseViewState,
 } from '@docmost/api-contract';
 import type { JsonValue } from '../../../database/types/db';
 
@@ -205,6 +207,15 @@ export class ListDatabasesQueryDto {
 
 export class ListDatabaseRowsQueryDto {
   @IsOptional()
+  @IsString()
+  @MaxLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
+  viewState?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  groupKey?: string;
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -233,7 +244,7 @@ export class ListDatabaseRowsQueryDto {
   filters?: string;
 }
 
-export class SelectPropertyOptionDto {
+class SelectPropertyOptionDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
@@ -250,13 +261,29 @@ export class SelectPropertyOptionDto {
   color?: string;
 }
 
-export class SelectPropertySettingsDto {
+class DatabasePropertySettingsDto {
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_SELECT_PROPERTY_OPTIONS)
   @ArrayUnique((option: SelectPropertyOptionDto) => option.value)
   @ValidateNested({ each: true })
   @Type(() => SelectPropertyOptionDto)
-  options: SelectPropertyOptionDto[];
+  options?: SelectPropertyOptionDto[];
+
+  @IsOptional()
+  @IsIn(['number', 'percent', 'currency'])
+  format?: 'number' | 'percent' | 'currency';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  currency?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  precision?: number;
 }
 
 /**
@@ -275,10 +302,10 @@ export class CreateDatabasePropertyDto {
   type: DatabasePropertyType;
 
   @IsOptional()
-  @ValidateIf((_, value) => typeof value !== 'undefined')
+  @MaxJsonStringifiedLength(MAX_DATABASE_CELL_VALUE_BYTES)
   @ValidateNested()
-  @Type(() => SelectPropertySettingsDto)
-  settings?: SelectPropertySettingsDto;
+  @Type(() => DatabasePropertySettingsDto)
+  settings?: DatabasePropertySettings;
 }
 
 /**
@@ -304,10 +331,10 @@ export class UpdateDatabasePropertyDto {
   position?: number;
 
   @IsOptional()
-  @ValidateIf((_, value) => typeof value !== 'undefined')
+  @MaxJsonStringifiedLength(MAX_DATABASE_CELL_VALUE_BYTES)
   @ValidateNested()
-  @Type(() => SelectPropertySettingsDto)
-  settings?: SelectPropertySettingsDto;
+  @Type(() => DatabasePropertySettingsDto)
+  settings?: DatabasePropertySettings;
 }
 
 /**
@@ -340,21 +367,17 @@ export class UpdateDatabaseRowDto {
   title: string;
 }
 
-export class DatabaseUserCellValueDto {
-  @IsUUID()
-  id: string;
-}
-
-/**
- * DTO of one cell value during batch update.
- */
 export class BatchUpdateDatabaseCellValueDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  expectedRevision?: number;
   @IsUUID()
   propertyId: string;
 
   @IsOptional()
   @MaxJsonStringifiedLength(MAX_DATABASE_CELL_VALUE_BYTES)
-  value?: string | boolean | DatabaseUserCellValueDto | null;
+  value?: unknown;
 
   @IsOptional()
   @IsUUID()
@@ -425,6 +448,10 @@ export class CreateDatabaseViewDto {
  */
 export class UpdateDatabaseViewDto {
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  expectedRevision?: number;
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
@@ -450,6 +477,10 @@ export class DatabaseRowPageIdDto {
 export class DatabaseExportViewSnapshotDto
   implements DatabaseExportViewSnapshot
 {
+  @IsOptional()
+  @MaxJsonStringifiedLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
+  @MaxJsonDepth(MAX_DATABASE_VIEW_CONFIG_DEPTH)
+  viewState?: DatabaseViewState;
   @IsOptional()
   @IsString()
   @MaxLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
