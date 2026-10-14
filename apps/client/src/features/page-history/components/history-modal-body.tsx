@@ -49,7 +49,7 @@ export default function HistoryModalBody({ pageId }: Props) {
         </div>
       </nav>
 
-      <div style={{ position: "relative", flex: 1 }}>
+      <div className={classes.historyPreview} data-page-full-width="true">
         <ScrollArea
           h={650}
           w="100%"

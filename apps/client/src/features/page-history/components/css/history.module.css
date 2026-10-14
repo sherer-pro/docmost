@@ -77,6 +77,12 @@
   display: flex;
 }
 
+.historyPreview {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
 .sidebarMain {
   flex: 1;
 }
