@@ -3093,5 +3093,6 @@
     "saving": "Saving...",
     "saved": "Saved",
     "error": "Failed to update data"
-  }
+  },
+  "Move block": "Move block"
 }

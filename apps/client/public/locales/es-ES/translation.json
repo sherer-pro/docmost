@@ -3093,5 +3093,6 @@
     "saving": "Guardando...",
     "saved": "Guardado",
     "error": "No se pudo actualizar los datos"
-  }
+  },
+  "Move block": "Mover bloque"
 }

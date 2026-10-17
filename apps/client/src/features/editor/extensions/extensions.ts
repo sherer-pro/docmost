@@ -7,7 +7,7 @@ import SubScript from "@tiptap/extension-subscript";
 import { Typography } from "@tiptap/extension-typography";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
-import GlobalDragHandle from "tiptap-extension-global-drag-handle";
+import { BlockDragHandle } from "./block-drag-handle";
 import { Youtube } from "@tiptap/extension-youtube";
 import SlashCommand from "@/features/editor/extensions/slash-command";
 import { Collaboration, isChangeOrigin } from "@tiptap/extension-collaboration";
@@ -173,9 +173,7 @@ export const mainExtensions = [
   }),
   Typography,
   TrailingNode,
-  GlobalDragHandle.configure({
-    customNodes: ["transclusionSource", "transclusionReference"],
-  }),
+  BlockDragHandle.configure({ getLabel: () => i18n.t("Move block") }),
   TextStyle,
   Color,
   SlashCommand,
@@ -358,7 +356,7 @@ export const mainExtensions = [
 
 const readOnlyExcludedExtensions = new Set([
   "uniqueID",
-  "globalDragHandle",
+  "blockDragHandle",
   "placeholder",
   "trailingNode",
   "slash-command",
