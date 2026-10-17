@@ -63,38 +63,13 @@
 }
 
 .modalDiagram[role="img"] {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start !important;
   width: 100%;
   height: 100%;
-  overflow: auto;
-}
-
-.modalDiagram.modalDiagram svg {
-  flex: 0 0 rem(880px);
-  width: rem(880px) !important;
-  height: auto !important;
-  max-width: none !important;
-  max-height: none !important;
 }
 
 @media (min-width: 48em) {
   .scrollOnNarrow svg {
     min-width: 0;
-  }
-
-  .modalDiagram[role="img"] {
-    justify-content: center !important;
-    overflow: hidden !important;
-  }
-
-  .modalDiagram.modalDiagram svg {
-    flex: 0 1 auto;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
   }
 }
 

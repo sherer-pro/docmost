@@ -157,6 +157,7 @@
 - Space administration PostgreSQL acceptance: set `SPACES_ADMIN_TEST_DATABASE_URL` to an isolated localhost database ending in `_test`, then run `pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/space-administration.e2e-spec.ts`. The suite owns a unique schema and never loads the application `.env`.
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
 - Editor browser acceptance matrix: `pnpm test:editor:e2e`; a full run verifies downloaded Markdown/HTML/PDF/Docmost artifacts and deletes its audit space only after both Playwright and artifact verification pass. Focused runs skip the necessarily incomplete artifact check. Any failed full run retains its audit space for inspection.
+- Image preview zoom browser acceptance: `node apps/client/e2e/image-preview/run.mjs` (isolated Vite on port 5197; image/SVG/Mermaid buttons, Alt+wheel, pinch, pan, reset, keyboard, and mobile sizing; no application login required).
 - AI assistant browser acceptance matrix: `pnpm test:ai:e2e`
 - AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
 - Outbound external-MCP live audit: `pnpm test:ai-external-mcp:e2e`; this mutation-heavy Docker audit is intentionally separate from `verify:release`. It accepts runtime auth cookies or `DOCMOST_ADMIN_EMAIL`/`DOCMOST_ADMIN_PASSWORD`, temporarily recreates the application container and mutates MCP settings, then restores settings/environment and removes its synthetic containers and records. See `apps/client/e2e/ai-external-mcp/README.md`.
