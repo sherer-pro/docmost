@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const MCP_SHIM_VERSION = '0.9.28';
 const FALLBACK_URL = 'http://127.0.0.1:9';
+const SHARED_LAUNCHER = join(homedir(), '.agentmemory', 'bin', 'codex-mcp.mjs');
+const useSharedLauncher = existsSync(SHARED_LAUNCHER);
 
 function parseEnvFile(path) {
   const values = {};
@@ -67,11 +69,13 @@ function shimEnvironment(url) {
 
 function listTools(url) {
   return new Promise((resolvePromise, reject) => {
-    const command =
-      process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'npx';
+    const command = useSharedLauncher
+      ? process.execPath
+      : process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'npx';
     const packageSpec = `@agentmemory/mcp@${MCP_SHIM_VERSION}`;
-    const args =
-      process.platform === 'win32'
+    const args = useSharedLauncher
+      ? [SHARED_LAUNCHER]
+      : process.platform === 'win32'
         ? ['/d', '/s', '/c', `npx.cmd -y ${packageSpec}`]
         : ['-y', packageSpec];
     const child = spawn(command, args, {
@@ -86,7 +90,12 @@ function listTools(url) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      child.kill();
+      if (useSharedLauncher) {
+        child.stdin.end();
+        const cleanup = setTimeout(() => child.kill(), 2_000);
+        cleanup.unref();
+        child.once('exit', () => clearTimeout(cleanup));
+      } else child.kill();
       if (error) reject(error);
       else resolvePromise(tools);
     };
@@ -125,6 +134,7 @@ function listTools(url) {
     child.stderr.on('data', (chunk) => {
       stderr += chunk;
     });
+    child.stdin.on('error', (error) => finish(error));
     child.on('error', (error) => finish(error));
     child.on('exit', (code) => {
       if (!settled) finish(new Error(`MCP exited before tools/list (${code}). ${stderr.trim()}`));
@@ -143,22 +153,30 @@ function listTools(url) {
 }
 
 const serverUrl = loopbackUrl();
-const [fallbackTools, serverTools] = await Promise.all([
-  listTools(FALLBACK_URL),
-  listTools(serverUrl),
-]);
-const extraTools = serverTools.filter((name) => !fallbackTools.includes(name));
+if (useSharedLauncher) {
+  const tools = await listTools(serverUrl);
+  if (!tools.includes('memory_smart_search')) {
+    throw new Error('The shared MCP proxy did not expose server-backed search.');
+  }
+  console.log(`AgentMemory shared MCP proxy: ${tools.length} server-backed tools; no npm launch or local fallback.`);
+} else {
+  const [fallbackTools, serverTools] = await Promise.all([
+    listTools(FALLBACK_URL),
+    listTools(serverUrl),
+  ]);
+  const extraTools = serverTools.filter((name) => !fallbackTools.includes(name));
 
-console.log(
-  `AgentMemory MCP shim ${MCP_SHIM_VERSION}: fallback=${fallbackTools.length}, server=${serverTools.length}.`,
-);
-if (fallbackTools.length === 0) {
-  throw new Error('The autonomous MCP fallback exposed no tools.');
+  console.log(
+    `AgentMemory MCP shim ${MCP_SHIM_VERSION}: fallback=${fallbackTools.length}, server=${serverTools.length}.`,
+  );
+  if (fallbackTools.length === 0) {
+    throw new Error('The autonomous MCP fallback exposed no tools.');
+  }
+  if (!serverTools.includes('memory_smart_search')) {
+    throw new Error('The server-backed MCP surface is missing memory_smart_search.');
+  }
+  if (extraTools.length === 0 || serverTools.length <= fallbackTools.length) {
+    throw new Error('The MCP shim did not expose a distinct server-backed tool surface.');
+  }
+  console.log(`AgentMemory MCP server-backed profile confirmed with ${extraTools.length} extra tools.`);
 }
-if (!serverTools.includes('memory_smart_search')) {
-  throw new Error('The server-backed MCP surface is missing memory_smart_search.');
-}
-if (extraTools.length === 0 || serverTools.length <= fallbackTools.length) {
-  throw new Error('The MCP shim did not expose a distinct server-backed tool surface.');
-}
-console.log(`AgentMemory MCP server-backed profile confirmed with ${extraTools.length} extra tools.`);

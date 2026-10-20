@@ -875,17 +875,24 @@ async function verify() {
     mcpServers = JSON.parse(result.stdout);
     const agentMemory = mcpServers.filter((server) => server.name === 'agentmemory');
     const configured = agentMemory[0];
+    const sharedLauncher = join(homedir(), '.agentmemory', 'bin', 'codex-mcp.mjs');
+    const sharedTransport =
+      configured?.transport?.command?.toLowerCase() === process.execPath.toLowerCase() &&
+      JSON.stringify(configured?.transport?.args) === JSON.stringify([sharedLauncher]) &&
+      existsSync(sharedLauncher);
+    const legacyTransport =
+      configured?.transport?.command === 'npx' &&
+      JSON.stringify(configured?.transport?.args) ===
+        JSON.stringify(['-y', `@agentmemory/mcp@${MCP_SHIM_VERSION}`]);
     check(
       'Exactly one AgentMemory MCP server',
       agentMemory.length === 1 &&
         configured?.enabled === true &&
-        configured?.transport?.command === 'npx' &&
-        JSON.stringify(configured?.transport?.args) ===
-          JSON.stringify(['-y', `@agentmemory/mcp@${MCP_SHIM_VERSION}`]) &&
+        (sharedTransport || legacyTransport) &&
         configured?.transport?.env?.AGENTMEMORY_URL === profile.url &&
         configured?.transport?.env?.AGENTMEMORY_TOOLS === 'core' &&
         mcpServers.filter((server) => server.name === 'node_repl').length === 1,
-      'restore .codex/config.toml from the repository and restart Codex',
+      'check the shared AgentMemory registration in ~/.codex/config.toml and restart Codex',
       `agentmemory=${agentMemory.length}, other=${mcpServers.filter((server) => server.name !== 'agentmemory').map((server) => server.name).join(',') || '<none>'}`,
     );
   } catch (error) {
