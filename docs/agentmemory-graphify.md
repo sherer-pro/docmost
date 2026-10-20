@@ -11,9 +11,11 @@ integrity gates, and promotes only a valid graph. This large corpus uses
 
 Query memory lives outside the corpus at `~/.graphify/query-memory/docmost` and
 the save/reflect scripts pass it explicitly. AgentMemory stays on the shared
-loopback `0.9.29` noop/local profile with the project MCP pin
-`@agentmemory/mcp@0.9.28` and a 120-second startup timeout. Git and Codex hooks
-never launch the LLM. Use `context:rebuild`, `context:refresh`, and
+loopback `0.9.29` noop/local profile. This PC uses one optional, user-level MCP
+registration with a 120-second startup timeout and the local
+`~/.agentmemory/bin/codex-mcp.mjs` REST proxy. The proxy neither starts the
+service nor writes to a separate fallback database. Start the service manually.
+Git and Codex hooks never launch the LLM. Use `context:rebuild`, `context:refresh`, and
 `context:verify` for the combined flows.
 
 This document describes the development-only AgentMemory integration that complements the existing Graphify knowledge graph. It does not change Docmost application runtime dependencies or Graphify's model/backend configuration.
@@ -25,10 +27,10 @@ This document describes the development-only AgentMemory integration that comple
 | Codex CLI/Desktop CLI | `0.147.0` at initial setup | Existing user installation |
 | Graphify | `0.9.33` at initial setup | Existing `uv tool` installation (`graphifyy`) |
 | AgentMemory server | `0.9.29` | Global user npm prefix, built from official commit `2973e4ec4c40d323a08daa34220118010e73a2c3` |
-| AgentMemory MCP shim | `0.9.28` | Published package pinned in `.codex/config.toml` |
+| AgentMemory MCP transport | Local REST proxy | Shared user registration; legacy shim `0.9.28` remains supported by diagnostics |
 | iii-engine worker | `0.11.2` | AgentMemory private user runtime under `~/.agentmemory/bin` |
 
-At setup time, the npm `latest` tag for `@agentmemory/agentmemory` was still `0.9.28`. That release does not include `POST /agentmemory/graph/import-graphify`; the endpoint first appears in the official `0.9.29` source. The installed server is therefore pinned to the official commit above. The separately published `@agentmemory/mcp` package has no `0.9.29` release, so the manual Codex registration pins the verified `0.9.28` shim.
+At setup time, the npm `latest` tag for `@agentmemory/agentmemory` was still `0.9.28`. That release does not include `POST /agentmemory/graph/import-graphify`; the endpoint first appears in the official `0.9.29` source. The installed server is therefore pinned to the official commit above. The original project registration used the verified `0.9.28` shim. The shared local proxy now connects directly to the server without loading that shim.
 
 Graphify remains unchanged because it is working. Do not alter its local LLM backend, endpoint, model, context window, token budget, `GRAPHIFY_MAX_RETRIES`, or `GRAPHIFY_API_TIMEOUT` as part of AgentMemory maintenance.
 
@@ -46,9 +48,9 @@ shared loopback AgentMemory service
     |-- local embeddings, no LLM provider
     `-- bounded copy of Graphify entities
 
-Codex in this trusted repository
-    |-- project .codex/config.toml
-    |-- pinned @agentmemory/mcp@0.9.28 shim
+Codex in this repository
+    |-- shared ~/.codex/config.toml registration
+    |-- ~/.agentmemory/bin/codex-mcp.mjs REST-only proxy
     `-- shared ~/.codex/hooks.json plus project Graphify hook
 ```
 
@@ -127,7 +129,7 @@ corepack pnpm context:verify
 
 - `context:memory:start` is idempotent. It reuses a healthy service, otherwise starts the global AgentMemory CLI with the validated child environment and writes logs under `~/.agentmemory/logs`.
 - `context:memory:status` and `context:memory:doctor` validate the profile before invoking the AgentMemory CLI.
-- `context:memory:smoke` starts the pinned MCP shim twice, measures the autonomous fallback and live-server tool surfaces, and requires a distinct server-backed surface containing `memory_smart_search`. It does not rely on a hard-coded tool count.
+- `context:memory:smoke` uses the installed shared proxy directly, checks its live tool surface, requires `memory_smart_search`, and closes stdin to release the MCP process. It does not invoke npm or start the service. On machines without the shared proxy, the previous pinned-shim diagnostic remains available and compares autonomous fallback with live-server tools; this legacy path does not provide the proxy's no-fallback guarantee.
 - `context:memory:selftest` writes a unique `agentmemory-selftest-<timestamp>` memory, finds it with `/agentmemory/smart-search`, deletes it through the governance API, and verifies cleanup.
 - `context:graph-import` validates non-empty nodes and edges in `graphify-out/graph.json` before calling `/agentmemory/graph/import-graphify` with the absolute Git root, then waits for stable health after the heavy import. `--assert-idempotent` repeats the import, waits again, and requires zero `newNodes` and zero `newEdges`.
 - `context:refresh -- --dry-run` is read-only. A real refresh enumerates `git ls-files graphify-out`, backs up every tracked artifact under a repository-hash directory in `~/.agentmemory/graphify-backups`, runs the existing `graphify update .`, validates the graph, and imports it. A failed update/validation/import restores the complete tracked set and retains that single backup for inspection or retry. Re-running after a failure reuses it only when its hashes still match the current tracked artifacts, so backups do not accumulate. The backup is removed only after the full operation succeeds and only after its resolved path is verified beneath the expected backup parent.
@@ -139,19 +141,25 @@ Do not run a full `graphify .` merely to test this integration. Use the current 
 
 The earlier setup documentation incorrectly claimed that `agentmemory@agentmemory 0.9.29` was installed as a Codex plugin. It was not present in `codex plugin list --json`, its marketplace was absent, and `codex mcp list` initially contained only `node_repl`.
 
-This repository now uses the supported project-scoped manual registration in `.codex/config.toml`:
+This PC now uses a user-level registration in `~/.codex/config.toml`. The repository's `.codex/config.toml` contains no transport override, so new repositories and Docmost resolve the same effective server. Other repositories can still override that transport; inspect `codex mcp list --json` in the target directory. Replace the example paths with the actual absolute paths on your machine:
 
 ```toml
+# Top-level setting, before any TOML table.
+mcp_optional_startup_grace_ms = 5000
+
 [mcp_servers.agentmemory]
-command = "npx"
-args = ["-y", "@agentmemory/mcp@0.9.28"]
+command = 'C:\Program Files\nodejs\node.exe'
+args = ['C:\Users\<user>\.agentmemory\bin\codex-mcp.mjs']
 env = { AGENTMEMORY_URL = "http://127.0.0.1:3111", AGENTMEMORY_TOOLS = "core" }
 enabled = true
-required = true
+required = false
 startup_timeout_sec = 120
+tool_timeout_sec = 60
 ```
 
-This choice avoids inventing a missing plugin/marketplace and pins the last published shim version that was tested against the live `0.9.29` server. Do not install or enable the plugin while this manual section is active; plugin plus manual registration would duplicate the server.
+The shared proxy forwards tool discovery and calls to the running server. HTTP and transport errors are returned explicitly, POST operations are not retried, and no local KV fallback is opened. Its optional registration lets Codex open while the manually managed service is stopped. The five-second optional startup grace gives MCP initialization time under load before Codex builds its initial tool catalog. A fresh MCP connection is needed after starting the service if the previous connection failed. Do not install or enable a second AgentMemory plugin or registration with another server name.
+
+The proxy and six existing lifecycle hooks do not start AgentMemory. No scheduled recovery or OS startup entry is required. The diagnostics also accept the legacy project `npx -y @agentmemory/mcp@0.9.28` transport, which can still need npm cache/network access and can use upstream fallback storage.
 
 The six existing AgentMemory hooks are user-level entries in `~/.codex/hooks.json`. They invoke scripts under the global npm package at `%APPDATA%\npm\node_modules\@agentmemory\agentmemory\plugin\scripts\*.mjs` for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`, and `Stop`. The repository's `.codex/hooks.json` remains separate and retains the existing `graphify.EXE hook-check` `PreToolUse` hook.
 
@@ -185,7 +193,7 @@ This truncation is why AgentMemory's copy is only a retrieval cache. Graphify an
 2. Read `~/.agentmemory/.env`, `~/.codex/config.toml`, and `~/.codex/hooks.json`; merge changes atomically and back up a file only when its content will change. Preserve AgentMemory data and unrelated Codex entries.
 3. Read the official AgentMemory README, changelog, `.env.example`, pairing recipe, and the published MCP shim versions for the target release.
 4. Prefer a published server package that contains Graphify import. If npm still lags and an official pinned commit is required, build only that reviewed commit and never install an unpinned fork or third-party binary.
-5. Keep exactly one Codex registration method. Update the pinned project shim only after testing its fallback and server-backed surfaces. Do not add the server package to any Docmost workspace dependency.
+5. Keep exactly one effective Codex registration. Test server-backed tool discovery, calls, explicit failure without fallback, and process cleanup before replacing the shared proxy. Do not add the server package to any Docmost workspace dependency.
 6. Restart AgentMemory, run status/doctor/verify/selftest, import the graph with `--assert-idempotent`, restart Codex, and inspect `/hooks` without bypassing trust.
 
 ## Rollback
