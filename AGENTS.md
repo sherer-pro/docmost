@@ -511,3 +511,11 @@ AgentMemory is a shared machine service: one database, one port set, one `~/.age
 - Validate the 200-question synthetic corpus and evaluator with `node --test scripts/rag-quality-benchmark.test.mjs`. Regenerate fixtures with `node scripts/generate-rag-quality-corpus.mjs`.
 - Score recorded, human-reviewed runs with `node scripts/rag-quality-benchmark.mjs results.jsonl report.json holdout evidence-v1`; read `tests/rag-quality/README.md` before running a quality experiment. Unit tests do not establish production relevance or faithfulness.
 - Isolated Open WebUI first startup may download embeddings; `OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS` accepts 1000-900000 ms. Use a unique `COMPOSE_PROJECT_NAME`; the runner removes only that test stack.
+
+## Локальные результаты и графы
+
+Сгенерированные графы `graphify-out/`, отчёты, captures и результаты прогонов
+хранятся локально в игнорируемых каталогах. Не добавляйте их в Git, включая
+`git add -f`. Исходники, необходимые тестовые данные и эталоны остаются в Git.
+После нового клонирования создайте граф штатной командой проекта перед его
+использованием; наличие сохранённого графа в истории Git не требуется.

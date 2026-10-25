@@ -1015,3 +1015,11 @@ Special thanks to;
 <img width="48" alt="Algolia-mark-square-white" src="https://github.com/user-attachments/assets/6ccad04a-9589-4965-b6a1-d5cb1f4f9e94" />
 
 [Algolia](https://www.algolia.com/) for providing full-text search to the docs.
+
+## Локальные результаты и графы
+
+Сгенерированные графы `graphify-out/`, отчёты, captures и результаты прогонов
+хранятся локально в игнорируемых каталогах. Не добавляйте их в Git, включая
+`git add -f`. Исходники, необходимые тестовые данные и эталоны остаются в Git.
+После нового клонирования создайте граф штатной командой проекта перед его
+использованием; наличие сохранённого графа в истории Git не требуется.
