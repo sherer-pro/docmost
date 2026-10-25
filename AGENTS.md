@@ -500,3 +500,11 @@ Local commands:
 - `pnpm context:verify` performs the read-only health, profile, listener, MCP, hook, smoke, and graph contract checks.
 
 AgentMemory is a shared machine service: one database, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository. Merge shared user configuration with read -> merge -> atomic write, preserve unrelated entries, and create a backup only when content changes. This repository registers the pinned `@agentmemory/mcp@0.9.28` shim once through `.codex/config.toml`; do not enable a duplicate AgentMemory plugin. Preserve the project `.codex/hooks.json` Graphify hook and never bypass hook trust.
+
+## Локальные результаты и графы
+
+Сгенерированные графы `graphify-out/`, отчёты, captures и результаты прогонов
+хранятся локально в игнорируемых каталогах. Не добавляйте их в Git, включая
+`git add -f`. Исходники, необходимые тестовые данные и эталоны остаются в Git.
+После нового клонирования создайте граф штатной командой проекта перед его
+использованием; наличие сохранённого графа в истории Git не требуется.

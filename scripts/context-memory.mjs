@@ -617,22 +617,18 @@ async function importGraph({ assertIdempotent = false } = {}) {
   return result;
 }
 
-function trackedGraphifyArtifacts(root) {
-  const result = commandResult('git', ['ls-files', '-z', '--', 'graphify-out'], { cwd: root });
-  if (result.status !== 0) {
-    throw new Error('Unable to enumerate tracked graphify-out artifacts.');
+function localGraphifyArtifacts(root) {
+  const outputDirectory = join(root, 'graphify-out');
+  const files = ['graph.json', 'graph.html', 'GRAPH_REPORT.md', 'manifest.json', 'corpus-hashes.json', '.graphify_analysis.json', '.graphify_labels.json', '.graphify_labels.json.sig', '.graphify_root'].map((name) => join(outputDirectory, name)).filter((path) => existsSync(path));
+  if (!files.includes(join(outputDirectory, 'graph.json'))) {
+    throw new Error('Local graphify-out/graph.json is required for refresh backups.');
   }
-  const files = result.stdout.split('\0').filter(Boolean);
-  if (!files.includes('graphify-out/graph.json')) {
-    throw new Error('Tracked graphify-out/graph.json is required for refresh backups.');
-  }
-  for (const relativePath of files) {
-    const source = resolve(root, relativePath);
-    if (!isPathInside(join(root, 'graphify-out'), source) || !existsSync(source)) {
-      throw new Error(`Tracked Graphify artifact is missing or outside graphify-out: ${relativePath}`);
+  for (const source of files) {
+    if (!isPathInside(outputDirectory, source) || lstatSync(source).isSymbolicLink()) {
+      throw new Error('Local Graphify artifact is unsafe or outside graphify-out.');
     }
   }
-  return files;
+  return files.map((source) => relative(root, source).replaceAll('\\', '/'));
 }
 
 function fileHash(path) {
@@ -704,10 +700,10 @@ async function refresh({ dryRun }) {
   currentProfile();
   const root = gitRoot();
   const source = validateGraph(root);
-  const files = trackedGraphifyArtifacts(root);
+  const files = localGraphifyArtifacts(root);
   if (dryRun) {
     console.log(
-      `Dry run: back up ${files.length} tracked graphify-out artifacts, run graphify update . in ${basename(root)}, then validate and import ${source.nodes} current nodes / ${source.edges} current edges.`,
+      `Dry run: back up ${files.length} local graphify-out artifacts, run graphify update . in ${basename(root)}, then validate and import ${source.nodes} current nodes / ${source.edges} current edges.`,
     );
     return;
   }
@@ -732,7 +728,7 @@ async function refresh({ dryRun }) {
       restoreGraphifyBackup(root, files, backup.backupDir);
     }
     throw new Error(
-      `${error instanceof Error ? error.message : String(error)} All ${files.length} tracked Graphify artifacts were restored; the backup was retained at ${backup.backupDir}.`,
+      `${error instanceof Error ? error.message : String(error)} All ${files.length} local Graphify artifacts were restored; the backup was retained at ${backup.backupDir}.`,
     );
   }
 }
