@@ -77,13 +77,6 @@ lerna-debug.log*
 /.junie/
 
 # Graphify
-graphify-out/*
-!graphify-out/graph.json
-!graphify-out/GRAPH_REPORT.md
-!graphify-out/graph.html
-!graphify-out/.graphify_analysis.json
-!graphify-out/manifest.json
-!graphify-out/.graphify_labels.json
 .claude/settings.local.json
 
 # TypeScript incremental build metadata
@@ -95,3 +88,10 @@ graphify-out/*
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Generated graphs remain local, including nested corpus roots.
+graphify-out/
+graphify-out.next/
+/artifacts/
+/docs/audits/
+/docs/reports/
