@@ -21,10 +21,44 @@ import {
   importLegacySecret,
   streamProcess,
 } from "./backup.mjs";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { withDeploymentLock } from "./deployment-lock.mjs";
+
+test("owns streamed backup files privately and refuses to overwrite them", async () => {
+  const root = mkdtempSync(join(tmpdir(), "docmost-stream-output-test-"));
+  const output = join(root, "synthetic.dump");
+  try {
+    await streamProcess(
+      process.execPath,
+      ["-e", "process.stdout.write('synthetic backup payload')"],
+      { outputPath: output },
+    );
+    assert.equal(readFileSync(output, "utf8"), "synthetic backup payload");
+    if (process.getuid) {
+      const metadata = statSync(output);
+      assert.equal(metadata.uid, process.getuid());
+      assert.equal(metadata.gid, process.getgid());
+      assert.equal(metadata.mode & 0o777, 0o600);
+    }
+    await assert.rejects(
+      streamProcess(process.execPath, ["-e", "process.stdout.write('other')"], {
+        outputPath: output,
+      }),
+      { code: "EEXIST" },
+    );
+    assert.equal(readFileSync(output, "utf8"), "synthetic backup payload");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("reaps an early failed restore reader without an unhandled EPIPE", async () => {
   const root = mkdtempSync(join(tmpdir(), "docmost-stream-test-"));

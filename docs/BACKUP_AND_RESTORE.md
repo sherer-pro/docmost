@@ -11,6 +11,15 @@ work from Windows PowerShell and Linux shells. It resolves the concrete volume
 names from the rendered Compose configuration and never accepts caller-supplied
 volume names.
 
+The CLI creates its working directories as the invoking operator with mode
+`0700` and streams container output into operator-owned files with mode `0600`.
+Archive extraction follows the same rule, so a non-root Linux operator does
+not need access to root-owned host files. Windows uses the operator's existing
+filesystem ACLs. Storage helpers retain root access inside the container to
+read restricted source-volume files without changing their permissions.
+Restore waits for the final PostgreSQL TCP listener after initialization;
+the entrypoint's temporary Unix-socket-only server is not accepted as ready.
+
 ## Ownership and prerequisites
 
 The operator running these commands owns the backup location, downtime window,

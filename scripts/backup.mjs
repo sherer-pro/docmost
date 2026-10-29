@@ -5,6 +5,7 @@ import {
   createReadStream,
   createWriteStream,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
   readFileSync,
@@ -495,27 +496,28 @@ function listTar(path, gzip = false) {
   return parseTarListings(names, verbose);
 }
 
-function extractSelectedTar(path, outputDirectory, members) {
+async function extractSelectedTar(path, outputDirectory, members) {
   const inputDirectory = dirname(path);
-  const args = [
-    "run",
-    "--rm",
-    "-v",
-    helperMount(inputDirectory, "/input", true),
-    "-v",
-    helperMount(outputDirectory, "/output"),
-    HELPER_IMAGE,
-    "tar",
-    "--extract",
-    "--file",
-    `/input/${basename(path)}`,
-    "--directory",
-    "/output",
-    "--no-same-owner",
-    "--no-same-permissions",
-    ...members,
-  ];
-  run("docker", args);
+  for (const member of members) {
+    await streamProcess(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "-v",
+        helperMount(inputDirectory, "/input", true),
+        HELPER_IMAGE,
+        "tar",
+        "--extract",
+        "--to-stdout",
+        "--file",
+        `/input/${basename(path)}`,
+        "--",
+        member,
+      ],
+      { outputPath: join(outputDirectory, basename(member)) },
+    );
+  }
 }
 
 function validatePostgresDump(path) {
@@ -557,7 +559,7 @@ async function verifyArchive(path, repositoryRoot) {
     const selected = outerEntries
       .filter((entry) => entry.type === "-")
       .map((entry) => entry.path);
-    extractSelectedTar(archive, temporaryDirectory, selected);
+    await extractSelectedTar(archive, temporaryDirectory, selected);
     const postgresDump = join(temporaryDirectory, "postgres.dump");
     const database = validatePostgresDump(postgresDump);
     const storageMember = format === "v1" ? "storage.tar.gz" : "storage.tar";
@@ -759,21 +761,11 @@ async function createBackup(options, providedContext) {
       `Temporary backup path already exists: ${temporaryDirectory}`,
     );
   }
-  run("docker", [
-    "run",
-    "--rm",
-    "-v",
-    helperMount(dirname(archive), "/output"),
-    HELPER_IMAGE,
-    "mkdir",
-    "-m",
-    "700",
-    `/output/${basename(temporaryDirectory)}`,
-  ]);
+  mkdirSync(temporaryDirectory, { mode: 0o700 });
   const stoppedWriters = ["docmost", "collab"].filter((service) =>
     runningBefore.includes(service),
   );
-  let partial;
+  const partial = join(temporaryDirectory, "archive.tar.part");
   try {
     if (stoppedWriters.length > 0)
       compose(context, ["stop", ...stoppedWriters]);
@@ -800,21 +792,23 @@ async function createBackup(options, providedContext) {
       { outputPath: dumpPath },
     );
     const storageArchive = join(temporaryDirectory, "storage.tar.gz");
-    run("docker", [
-      "run",
-      "--rm",
-      "-v",
-      `${volumes.storage}:/source:ro`,
-      "-v",
-      helperMount(temporaryDirectory, "/work"),
-      HELPER_IMAGE,
-      "tar",
-      "-czf",
-      "/work/storage.tar.gz",
-      "-C",
-      "/source",
-      ".",
-    ]);
+    await streamProcess(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "-v",
+        `${volumes.storage}:/source:ro`,
+        HELPER_IMAGE,
+        "tar",
+        "-czf",
+        "-",
+        "-C",
+        "/source",
+        ".",
+      ],
+      { outputPath: storageArchive },
+    );
     const inventory = databaseInventory(context);
     const storage = storageInventory(volumes.storage);
     const databaseValidation = validatePostgresDump(dumpPath);
@@ -865,22 +859,25 @@ async function createBackup(options, providedContext) {
       `${JSON.stringify(manifest, null, 2)}\n`,
       { encoding: "utf8", mode: 0o600, flag: "wx" },
     );
-    partial = `${archive}.part-${process.pid}`;
-    run("docker", [
-      "run",
-      "--rm",
-      "-v",
-      helperMount(dirname(archive), "/output"),
-      HELPER_IMAGE,
-      "tar",
-      "-cf",
-      `/output/${basename(partial)}`,
-      "-C",
-      `/output/${basename(temporaryDirectory)}`,
-      "manifest.json",
-      "postgres.dump",
-      "storage.tar.gz",
-    ]);
+    await streamProcess(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "-v",
+        helperMount(temporaryDirectory, "/work", true),
+        HELPER_IMAGE,
+        "tar",
+        "-cf",
+        "-",
+        "-C",
+        "/work",
+        "manifest.json",
+        "postgres.dump",
+        "storage.tar.gz",
+      ],
+      { outputPath: partial },
+    );
     const verified = await verifyArchive(partial, context.repositoryRoot);
     rmSync(verified.temporaryDirectory, { recursive: true, force: true });
     renameSync(partial, archive);
@@ -894,9 +891,6 @@ async function createBackup(options, providedContext) {
     if (existsSync(temporaryDirectory)) {
       rmSync(temporaryDirectory, { recursive: true, force: true });
     }
-    if (partial && existsSync(partial)) {
-      rmSync(partial, { force: true });
-    }
     if (stoppedWriters.length > 0) {
       compose(context, ["start", ...stoppedWriters]);
     }
@@ -909,7 +903,18 @@ async function waitForDatabase(context) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const result = compose(
       context,
-      ["exec", "-T", "db", "pg_isready", "-U", user, "-d", database],
+      [
+        "exec",
+        "-T",
+        "db",
+        "pg_isready",
+        "-h",
+        "127.0.0.1",
+        "-U",
+        user,
+        "-d",
+        database,
+      ],
       { allowedStatuses: [0, 1, 2] },
     );
     if (result.status === 0) return;

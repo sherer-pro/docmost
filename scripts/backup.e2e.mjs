@@ -9,6 +9,7 @@ import {
   rmSync,
   readdirSync,
   existsSync,
+  statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
@@ -35,6 +36,9 @@ const sourceVolumes = {
 };
 const typesenseVolume = `${project}-typesense`;
 const environment = { ...process.env };
+const hostUserArgs = process.getuid
+  ? ["--user", `${process.getuid()}:${process.getgid()}`]
+  : [];
 for (const file of ["compose.production.yml", "compose.typesense.yml"]) {
   for (const match of readFileSync(join(repository, file), "utf8").matchAll(
     /\$\{([A-Z][A-Z0-9_]*)/gu,
@@ -98,10 +102,11 @@ const cliInputs = [
 ];
 const compose = (...args) =>
   run("docker", ["compose", ...composeInputs, ...args]);
-const cli = (command, file, extra = [], fail = false) => {
+const cli = (command, file, extra = [], fail = false, preload) => {
   const result = run(
     process.execPath,
     [
+      ...(preload ? ["--import", preload] : []),
       join(repository, "scripts/backup.mjs"),
       command,
       "--archive",
@@ -167,6 +172,8 @@ async function ready() {
         "-T",
         "db",
         "pg_isready",
+        "-h",
+        "127.0.0.1",
         "-U",
         "docmost",
         "-d",
@@ -185,6 +192,7 @@ function mutateManifest(target, update) {
   run("docker", [
     "run",
     "--rm",
+    ...hostUserArgs,
     "-v",
     mount(root, "/source"),
     postgres,
@@ -201,6 +209,7 @@ function mutateManifest(target, update) {
   run("docker", [
     "run",
     "--rm",
+    ...hostUserArgs,
     "-v",
     mount(root, "/source"),
     postgres,
@@ -455,8 +464,35 @@ try {
     "mkdir -p /data/private/nested; printf restricted > /data/private/nested/private.txt; chmod 700 /data/private /data/private/nested; chmod 600 /data/private/nested/private.txt",
   ]);
   console.log("backup-e2e: create, writer resume, archive verification");
-  const backup = cli("create", archive, ["--yes"]);
+  const partialCollisionProbe = join(root, "partial-collision.mjs");
+  writeFileSync(
+    partialCollisionProbe,
+    `import { writeFileSync } from 'node:fs';
+const archive = process.argv[process.argv.indexOf('--archive') + 1];
+const sentinel = archive + '.part-' + process.pid;
+writeFileSync(sentinel, 'existing partial must survive', { flag: 'wx', mode: 0o600 });
+writeFileSync(archive + '.sentinel-path', sentinel, { flag: 'wx', mode: 0o600 });
+`,
+  );
+  const backup = cli(
+    "create",
+    archive,
+    ["--yes"],
+    false,
+    partialCollisionProbe,
+  );
   assert.equal(backup.status, "created");
+  const partialSentinel = readFileSync(`${archive}.sentinel-path`, "utf8");
+  assert.equal(
+    readFileSync(partialSentinel, "utf8"),
+    "existing partial must survive",
+  );
+  if (process.getuid) {
+    const metadata = statSync(archive);
+    assert.equal(metadata.uid, process.getuid());
+    assert.equal(metadata.gid, process.getgid());
+    assert.equal(metadata.mode & 0o777, 0o600);
+  }
   assert.equal(cli("verify", archive).manifest.database.counts.pages, 1);
   assertRestorePreflightCleanup(archive);
   assert.ok(
@@ -480,6 +516,40 @@ try {
       .sort(),
     ["manifest.json", "postgres.dump", "storage.tar.gz"],
   );
+  console.log("backup-e2e: failed creation cleans outputs and resumes writers");
+  const rejectedArchive = join(root, "unsafe-storage.tar");
+  run("docker", [
+    "run",
+    "--rm",
+    "-v",
+    `${sourceVolumes.storage}:/data`,
+    postgres,
+    "ln",
+    "-s",
+    "/outside",
+    "/data/rejected-link",
+  ]);
+  try {
+    const rejected = cli("create", rejectedArchive, ["--yes"], true);
+    assert.match(rejected.stderr, /Archive entry type is not allowed/u);
+    assert.equal(existsSync(rejectedArchive), false);
+    assert.ok(
+      !readdirSync(root).some((name) => name.startsWith("unsafe-storage.tar")),
+    );
+    const running = compose("ps", "--status", "running", "--services").stdout;
+    for (const writer of ["docmost", "collab"])
+      assert.ok(running.split(/\r?\n/u).includes(writer));
+  } finally {
+    run("docker", [
+      "run",
+      "--rm",
+      "-v",
+      `${sourceVolumes.storage}:/data`,
+      postgres,
+      "rm",
+      "/data/rejected-link",
+    ]);
+  }
   query("INSERT INTO pages VALUES(2);");
   storageWrite(sourceVolumes.storage, "after-backup-source-data");
   console.log("backup-e2e: preflight negatives preserve source state and data");
@@ -544,7 +614,7 @@ try {
   mutateManifest(badCounts, (manifest) => {
     manifest.database.counts.pages = 999;
   });
-  cli(
+  const badCountsFailure = cli(
     "restore",
     badCounts,
     [
@@ -555,6 +625,10 @@ try {
       "--no-snapshot",
     ],
     true,
+  );
+  assert.match(
+    badCountsFailure.stderr,
+    /restored invariants: Restored row counts differ/u,
   );
   await ready();
   assert.equal(readFileSync(stateFile, "utf8"), initialState);
@@ -690,6 +764,12 @@ try {
       invariantFailureRollback: true,
       preRestoreSnapshotVerified: true,
       relativePathsAndInputPrecedence: true,
+      hostPermissions: {
+        platform: process.platform,
+        uid: process.getuid?.(),
+        gid: process.getgid?.(),
+        privateOperatorOwnedArchive: Boolean(process.getuid),
+      },
     }),
   );
   passed = true;
