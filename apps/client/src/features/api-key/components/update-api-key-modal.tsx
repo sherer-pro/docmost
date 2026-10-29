@@ -9,7 +9,7 @@ import {
   Text,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
 import { useUpdateApiKeyMutation } from "@/features/api-key/queries/api-key-query";

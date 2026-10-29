@@ -12,7 +12,8 @@ import { useAtom } from "jotai";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { useDisclosure } from "@mantine/hooks";
 import * as React from "react";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { requiredString, zodResolver } from "@/lib/zod-resolver";
 import { useTranslation } from "react-i18next";
 
 export default function ChangeEmail() {
@@ -48,10 +49,8 @@ export default function ChangeEmail() {
 }
 
 const formSchema = z.object({
-  email: z.string({ required_error: "New email is required" }).email(),
-  password: z
-    .string({ required_error: "your current password is required" })
-    .min(8),
+  email: requiredString("New email is required").email(),
+  password: requiredString("your current password is required").min(8),
 });
 
 type FormValues = z.infer<typeof formSchema>;

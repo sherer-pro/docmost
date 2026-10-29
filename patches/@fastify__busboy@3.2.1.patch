@@ -1,0 +1,35 @@
+diff --git a/types/index.d.ts b/types/index.d.ts
+index 7c6c51380b0d8c5cc75d29ebd65a3b66108ce895..adf4511c5ca7ba8ad589f48b9d767126aae517fb 100644
+--- a/types/index.d.ts
++++ b/types/index.d.ts
+@@ -6,17 +6,6 @@
+ import * as http from 'node:http'
+ import { Readable, Writable } from 'node:stream'
+ 
+-declare module 'stream' {
+-  interface Readable {
+-    /**
+-     * Emitted when the configured file size limit is reached.
+-     */
+-    on(event: 'limit', listener: () => void): this;
+-    once(event: 'limit', listener: () => void): this;
+-    addListener(event: 'limit', listener: () => void): this;
+-    removeListener(event: 'limit', listener: () => void): this;
+-  }
+-}
+ export { Dicer } from '../deps/dicer/lib/dicer'
+ 
+ export const Busboy: BusboyConstructor
+@@ -112,6 +101,12 @@ export type BusboyHeaders = { 'content-type': string } & http.IncomingHttpHeader
+ export interface BusboyFileStream extends
+   Readable {
+ 
++  /** File limits belong to Busboy streams, preserving native Readable events. */
++  on: Readable['on'] & ((event: 'limit', listener: () => void) => this);
++  once: Readable['once'] & ((event: 'limit', listener: () => void) => this);
++  addListener: Readable['addListener'] & ((event: 'limit', listener: () => void) => this);
++  removeListener: Readable['removeListener'] & ((event: 'limit', listener: () => void) => this);
++
+   truncated: boolean;
+ 
+   /**

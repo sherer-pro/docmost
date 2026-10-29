@@ -1,6 +1,6 @@
 import { MailDriver } from './interfaces/mail-driver.interface';
 import { SMTPConfig } from '../interfaces';
-import { Transporter } from 'nodemailer';
+import type Mail from 'nodemailer/lib/mailer';
 import * as nodemailer from 'nodemailer';
 import { MailMessage } from '../interfaces/mail.message';
 import { Logger } from '@nestjs/common';
@@ -12,7 +12,7 @@ import {
 
 export class SmtpDriver implements MailDriver {
   private readonly logger = new Logger(mailLogName(SmtpDriver.name));
-  private readonly transporter: Transporter;
+  private readonly transporter: Mail;
 
   constructor(config: SMTPConfig) {
     this.transporter = nodemailer.createTransport(config);

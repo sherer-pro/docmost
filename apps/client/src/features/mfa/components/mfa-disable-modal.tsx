@@ -9,7 +9,7 @@ import {
 } from "@mantine/core";
 import { IconShieldOff, IconAlertTriangle } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";

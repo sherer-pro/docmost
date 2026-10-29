@@ -1,4 +1,4 @@
-import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import type { SMTPTransportOptions } from 'nodemailer/lib/smtp-transport';
 
 export enum MailOption {
   SMTP = 'smtp',
@@ -11,7 +11,7 @@ export type MailConfig =
   | { driver: MailOption.Postmark; config: PostmarkConfig }
   | { driver: MailOption.Log; config: LogConfig };
 
-export interface SMTPConfig extends SMTPTransport.Options {}
+export interface SMTPConfig extends SMTPTransportOptions {}
 export interface PostmarkConfig {
   postmarkToken: string;
 }

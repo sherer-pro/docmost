@@ -1,5 +1,5 @@
 {
-  "version": 27,
+  "version": 28,
   "anchors": [
     "assistant",
     "retrieval",
@@ -12,34 +12,29 @@
   ],
   "requiredFacts": [
     {
+      "id": "inbound-mcp-batch-bound",
+      "key": "scenario.inboundMcp.technical",
+      "needles": ["100", "400"]
+    },
+    {
       "id": "rag-sync-writer-marker-ownership",
       "key": "scenario.ragSync.technical",
-      "needles": [
-        "target-test"
-      ]
+      "needles": ["target-test"]
     },
     {
       "id": "knowledge-projection-dictionary-source",
       "key": "scenario.assistant.technical",
-      "needles": [
-        "dictionary_term"
-      ]
+      "needles": ["dictionary_term"]
     },
     {
       "id": "assistant-profile-icon-count",
       "key": "scenario.assistant.technical",
-      "needles": [
-        "AI_ASSISTANT_PROFILE_ICONS",
-        "profileIconCount"
-      ]
+      "needles": ["AI_ASSISTANT_PROFILE_ICONS", "profileIconCount"]
     },
     {
       "id": "knowledge-projection-version",
       "key": "scenario.ragApi.technical",
-      "needles": [
-        "projectionVersion: 2",
-        "schemaVersion: 4"
-      ]
+      "needles": ["projectionVersion: 2", "schemaVersion: 4"]
     },
     {
       "id": "retrieval-hybrid-follow-up-rewrite",
@@ -64,17 +59,12 @@
     {
       "id": "rag-sync-source-removal",
       "key": "troubleshooting.rows.sourceRemoved.action",
-      "needles": [
-        "database_row",
-        "dictionary_term"
-      ]
+      "needles": ["database_row", "dictionary_term"]
     },
     {
       "id": "rag-sync-target-mismatch",
       "key": "troubleshooting.rows.targetMismatch.signal",
-      "needles": [
-        "rag_sync_target_mismatch"
-      ]
+      "needles": ["rag_sync_target_mismatch"]
     },
     {
       "id": "rag-search-done-only-policy",
@@ -90,16 +80,12 @@
     {
       "id": "agent-normalized-approval-hash",
       "key": "scenario.assistant.technical",
-      "needles": [
-        "Yjs"
-      ]
+      "needles": ["Yjs"]
     },
     {
       "id": "rag-sync-dictionary-ownership-projection",
       "key": "scenario.ragSync.technical",
-      "needles": [
-        "pageId: null"
-      ]
+      "needles": ["pageId: null"]
     },
     {
       "id": "production-rag-content-controls",
@@ -112,11 +98,7 @@
     {
       "id": "rag-evidence-quality",
       "key": "scenario.retrieval.technical",
-      "needles": [
-        "evidence-v1",
-        "structured-knowledge-v3",
-        "10000 ms"
-      ]
+      "needles": ["evidence-v1", "structured-knowledge-v3", "10000 ms"]
     }
   ],
   "requiredKeys": [

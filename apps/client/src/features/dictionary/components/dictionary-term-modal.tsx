@@ -8,7 +8,8 @@ import {
   TextInput,
   Textarea,
 } from "@mantine/core";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";

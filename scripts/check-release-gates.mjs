@@ -156,7 +156,11 @@ const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
     "node scripts/check-fork-docs-contract.mjs",
   ],
   "test:security": [
+    "corepack pnpm run test:security:dependencies",
     "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
+  ],
+  "test:security:dependencies": [
+    "node --import tsx --test --test-timeout=15000 scripts/security-dependencies.test.mjs",
   ],
 };
 

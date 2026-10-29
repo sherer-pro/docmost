@@ -1,7 +1,7 @@
 import React from "react";
 import { z } from "zod";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import {
   Box,
   Group,

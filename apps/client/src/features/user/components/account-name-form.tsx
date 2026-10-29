@@ -1,7 +1,8 @@
 import { useAtom } from "jotai";
 import { focusAtom } from "jotai-optics";
 import * as z from "zod";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { zodResolver } from "@/lib/zod-resolver";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { updateUser } from "@/features/user/services/user-service.ts";
 import { IUser } from "@/features/user/types/user.types.ts";

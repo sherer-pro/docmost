@@ -148,7 +148,8 @@
 
 - Combined default test stage (backend + frontend smoke): `pnpm test`
 - Full root test stage (default + frontend unit): `pnpm test:all`
-- Security regression suite (hostile external-MCP contract + server/client targeted tests): `pnpm test:security`
+- Security regression suite (real dependency acceptance, hostile external-MCP contract, and server/client targeted tests): `pnpm test:security`
+- Dependency security acceptance: `pnpm test:security:dependencies` runs real HTML conversion, DOM resource isolation, SMTP, pinned HTTP, multipart limits, and stateless MCP against synthetic loopback fixtures without loading `.env`.
 - Backend unit/integration: `pnpm --filter ./apps/server test`
 - Backend security subset (share SEO, cloud host parsing, CSRF origin checks, ZIP traversal/quotas/decompression budget, attachment token/MIME handling, attachment image path resolution, import embed formatting, PDF resource allowlist, page ACL resolution, space abilities, API key scoping, JWT session binding, collab token session binding, WebSocket room authorization, credential protection, sensitive-log redaction, transactional invitation outbox, collaboration lease ownership, trusted proxies, database-module page access, and page move cycle guard): `pnpm --filter ./apps/server test:security`
 - Frontend smoke test equivalent (build-based temporary target): `pnpm --filter ./apps/client build`

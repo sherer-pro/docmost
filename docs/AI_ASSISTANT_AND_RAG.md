@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 27 -->
+<!-- ai-admin-guide-contract-version: 28 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -1841,6 +1841,10 @@ All MCP lifecycle, `tools/list`, and `tools/call` messages use the root
 `/mcp` Streamable HTTP endpoint described in section 6. This is a protocol
 surface rather than a conventional REST route and is intentionally outside the
 global `/api` prefix.
+
+JSON-RPC batch arrays containing more than 100 messages are rejected with HTTP
+`400` before protocol-message validation. This bound also applies when the HTTP
+body was already parsed by Fastify. Clients should send individual MCP messages.
 
 ## 9. Contracts
 

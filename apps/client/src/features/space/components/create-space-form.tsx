@@ -9,7 +9,7 @@ import {
 } from "@mantine/core";
 import React, { useEffect } from "react";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import * as z from "zod";
 import { useNavigate } from "react-router-dom";
 import { useCreateSpaceMutation } from "@/features/space/queries/space-query.ts";

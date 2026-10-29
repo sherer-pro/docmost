@@ -1702,7 +1702,7 @@
           },
           "success": "Les outils autorisés fonctionnent ; les capacités refusées et les lectures de pièces jointes binaires restent indisponibles",
           "rollback": "Révoquer la clé ou supprimer le créateur de l'espace ; l'accès actif se ferme à la prochaine demande",
-          "technical": "Les accès entrants à /mcp et /api/rag/* acceptent uniquement leur propre type de clé. Les sessions utilisateur et l’autre type de clé sont rejetés. Les clés restent limitées par l’accès actuel de leur créateur à l’espace et par la visibilité des pages. L’archivage de l’espace associé invalide immédiatement ses clés. Le jeton n’est renvoyé qu’à la création ; son type, son espace, son créateur et son expiration ne peuvent pas être modifiés."
+          "technical": "Les accès entrants à /mcp et /api/rag/* acceptent uniquement leur propre type de clé. Les sessions utilisateur et l’autre type de clé sont rejetés. Les clés restent limitées par l’accès actuel de leur créateur à l’espace et par la visibilité des pages. L’archivage de l’espace associé invalide immédiatement ses clés. Le jeton n’est renvoyé qu’à la création ; son type, son espace, son créateur et son expiration ne peuvent pas être modifiés. Les lots JSON-RPC contenant plus de 100 messages sont rejetés avec HTTP 400 avant la validation du protocole ; envoyez des messages MCP individuels."
         },
         "outboundMcp": {
           "description": "Docmost Agent peut appeler des outils sur des serveurs MCP distants approuvés.",

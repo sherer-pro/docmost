@@ -23,7 +23,7 @@ import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { regenerateBackupCodes } from "@/features/mfa/services/mfa-service";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import useCurrentUser from "@/features/user/hooks/use-current-user";
 

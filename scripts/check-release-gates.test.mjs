@@ -758,6 +758,38 @@ test("rejects test:security without the hostile external MCP contract", () => {
   );
 });
 
+test("rejects security verification without real dependency acceptance", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["test:security"] = mutatedPackage.scripts[
+    "test:security"
+  ].replace(
+    "corepack pnpm run test:security:dependencies",
+    "removed-dependency-acceptance",
+  );
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes(
+      "test:security must include corepack pnpm run test:security:dependencies",
+    ),
+  );
+});
+
+test("rejects dependency acceptance without the real runtime fixture", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["test:security:dependencies"] =
+    "node --test unrelated-fixture.mjs";
+  const errors = validateReleaseGateContract(
+    inputs({ packageJson: mutatedPackage }),
+  );
+  assert.ok(
+    errors.includes(
+      "test:security:dependencies must include node --import tsx --test --test-timeout=15000 scripts/security-dependencies.test.mjs",
+    ),
+  );
+});
+
 test("rejects a fork documentation gate without its contract tests", () => {
   const mutatedPackage = structuredClone(packageJson);
   mutatedPackage.scripts["check:fork-docs"] = mutatedPackage.scripts[

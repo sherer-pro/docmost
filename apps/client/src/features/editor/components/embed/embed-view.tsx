@@ -14,7 +14,7 @@ import {
 import { IconEdit } from "@tabler/icons-react";
 import { z } from "zod";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";

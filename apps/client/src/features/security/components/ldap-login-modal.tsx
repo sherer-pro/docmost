@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Modal, TextInput, PasswordInput, Button, Stack } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import { notifications } from "@mantine/notifications";
 import { useNavigate } from "react-router-dom";

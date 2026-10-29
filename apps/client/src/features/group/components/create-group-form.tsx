@@ -6,7 +6,7 @@ import * as z from "zod";
 import { useNavigate } from "react-router-dom";
 import { MultiUserSelect } from "@/features/group/components/multi-user-select.tsx";
 import { useTranslation } from "react-i18next";
-import { zodResolver } from 'mantine-form-zod-resolver';
+import { zodResolver } from '@/lib/zod-resolver';
 
 const formSchema = z.object({
   name: z.string().trim().min(2).max(100),

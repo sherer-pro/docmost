@@ -1702,7 +1702,7 @@
           },
           "success": "As ferramentas permitidas funcionam; recursos negados e leituras de anexos binários permanecem indisponíveis",
           "rollback": "Revogar a chave ou retirar o criador do espaço; o acesso ativo fecha na próxima solicitação",
-          "technical": "Os endpoints de entrada /mcp e /api/rag/* aceitam somente seus próprios tipos de chave; sessões de usuário e outro tipo de chave são rejeitados. As chaves continuam limitadas ao acesso atual de seu criador ao espaço e à visibilidade das páginas. Arquivar o espaço associado invalida imediatamente suas chaves. O token é retornado apenas na criação; tipo, espaço, criador e expiração não podem ser alterados."
+          "technical": "Os endpoints de entrada /mcp e /api/rag/* aceitam somente seus próprios tipos de chave; sessões de usuário e outro tipo de chave são rejeitados. As chaves continuam limitadas ao acesso atual de seu criador ao espaço e à visibilidade das páginas. Arquivar o espaço associado invalida imediatamente suas chaves. O token é retornado apenas na criação; tipo, espaço, criador e expiração não podem ser alterados. Lotes JSON-RPC com mais de 100 mensagens são rejeitados com HTTP 400 antes da validação do protocolo; envie mensagens MCP individuais."
         },
         "outboundMcp": {
           "description": "O agente do Docmost pode chamar ferramentas em servidores MCP remotos aprovados.",

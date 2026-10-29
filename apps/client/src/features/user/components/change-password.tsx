@@ -3,7 +3,8 @@ import * as z from "zod";
 import { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
 import * as React from "react";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { requiredString, zodResolver } from "@/lib/zod-resolver";
 import { changePassword } from "@/features/auth/services/auth-service.ts";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
@@ -41,10 +42,8 @@ export default function ChangePassword() {
 }
 
 const formSchema = z.object({
-  oldPassword: z
-    .string({ required_error: "your current password is required" })
-    .min(8),
-  newPassword: z.string({ required_error: "New password is required" }).min(8),
+  oldPassword: requiredString("your current password is required").min(8),
+  newPassword: requiredString("New password is required").min(8),
 });
 
 type FormValues = z.infer<typeof formSchema>;

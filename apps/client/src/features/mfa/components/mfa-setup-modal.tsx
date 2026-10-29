@@ -41,7 +41,7 @@ import {
   setupMfa,
   setupRequiredMfa,
 } from "@/features/mfa/services/mfa-service";
-import { zodResolver } from "mantine-form-zod-resolver";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 
 interface MfaSetupModalProps {

@@ -1702,7 +1702,7 @@
           },
           "success": "Las herramientas permitidas funcionan; Las capacidades denegadas y las lecturas de archivos adjuntos binarios siguen no disponibles.",
           "rollback": "Revocar la clave o eliminar al creador del espacio; el acceso activo se cierra en la siguiente solicitud",
-          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad."
+          "technical": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad. Los lotes JSON-RPC con más de 100 mensajes se rechazan con HTTP 400 antes de validar el protocolo; envíe mensajes MCP individuales."
         },
         "outboundMcp": {
           "description": "Docmost Agent puede invocar herramientas en servidores MCP remotos aprobados.",

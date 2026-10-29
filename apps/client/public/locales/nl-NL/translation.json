@@ -1702,7 +1702,7 @@
           },
           "success": "Toegestane tools werken; geweigerde mogelijkheden en het lezen van binaire bijlagen blijven niet beschikbaar",
           "rollback": "Trek de sleutel in of verwijder de maker uit de ruimte; actieve toegang wordt gesloten bij het volgende verzoek",
-          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd."
+          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. JSON-RPC-batches met meer dan 100 berichten worden vóór de protocolvalidatie geweigerd met HTTP 400; verstuur afzonderlijke MCP-berichten."
         },
         "outboundMcp": {
           "description": "De Docmost Agent kan tools op goedgekeurde externe MCP-servers aanroepen.",

@@ -1702,7 +1702,7 @@
           },
           "success": "Zulässige Werkzeuge funktionieren; verweigerte Funktionen und Lesevorgänge für binäre Anhänge bleiben weiterhin nicht verfügbar",
           "rollback": "Den Schlüssel widerrufen oder den Ersteller aus dem Space entfernen; Der aktive Zugriff wird bei der nächsten Anfrage geschlossen",
-          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden."
+          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. JSON-RPC-Batches mit mehr als 100 Nachrichten werden vor der Protokollvalidierung mit HTTP 400 abgewiesen; senden Sie einzelne MCP-Nachrichten."
         },
         "outboundMcp": {
           "description": "Der Docmost Agent kann Werkzeuge auf genehmigten entfernten MCP-Servern aufrufen.",

@@ -4,7 +4,7 @@ import { SmtpDriver, PostmarkDriver, LogDriver } from '../drivers';
 import { MailDriver } from '../drivers/interfaces/mail-driver.interface';
 import { MailConfig } from '../interfaces';
 import { MAIL_CONFIG_TOKEN, MAIL_DRIVER_TOKEN } from '../mail.constants';
-import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import type { SMTPTransportOptions } from 'nodemailer/lib/smtp-transport';
 
 function createMailDriver(mail: MailConfig): MailDriver {
   switch (mail.driver) {
@@ -45,7 +45,7 @@ export const mailDriverConfigProvider = {
             auth,
             secure: environmentService.getSmtpSecure(),
             ignoreTLS: environmentService.getSmtpIgnoreTLS(),
-          } as SMTPTransport.Options,
+          } as SMTPTransportOptions,
         };
       }
 

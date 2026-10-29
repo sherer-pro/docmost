@@ -1,5 +1,6 @@
 import * as z from "zod";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { zodResolver } from "@/lib/zod-resolver";
 import useAuth from "@/features/auth/hooks/use-auth";
 import { IPasswordReset } from "@/features/auth/types/auth.types";
 import { Box, Button, Container, PasswordInput, Title } from "@mantine/core";

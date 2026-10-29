@@ -1702,7 +1702,7 @@
           },
           "success": "Gli strumenti consentiti funzionano; le funzionalità negate e le letture degli allegati binari rimangono non disponibili",
           "rollback": "Revoca la chiave o rimuovi il creatore dallo spazio; l'accesso attivo si chiude alla richiesta successiva",
-          "technical": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati."
+          "technical": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati. I batch JSON-RPC con più di 100 messaggi vengono rifiutati con HTTP 400 prima della convalida del protocollo; inviate messaggi MCP singoli."
         },
         "outboundMcp": {
           "description": "Docmost Agent può richiamare strumenti su server MCP remoti approvati.",

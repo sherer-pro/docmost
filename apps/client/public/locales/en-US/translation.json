@@ -1702,7 +1702,7 @@
           },
           "success": "Allowed tools work; denied capabilities and binary attachment reads remain unavailable",
           "rollback": "Revoke the key or remove the creator from the space; active access closes on the next request",
-          "technical": "The /mcp endpoint is stateless. Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Every request checks the key type and expiry, the creator's current space membership, capability allowlist, and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated."
+          "technical": "The /mcp endpoint is stateless. Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Every request checks the key type and expiry, the creator's current space membership, capability allowlist, and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated. JSON-RPC batches containing more than 100 messages are rejected with HTTP 400 before protocol validation; send individual MCP messages."
         },
         "outboundMcp": {
           "description": "The Docmost Agent can call tools on approved remote MCP servers.",

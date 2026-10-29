@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as z from "zod";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { zodResolver } from "@/lib/zod-resolver";
 import useAuth from "@/features/auth/hooks/use-auth";
 import { IForgotPassword } from "@/features/auth/types/auth.types";
 import { Box, Button, Container, Text, TextInput, Title } from "@mantine/core";

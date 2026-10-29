@@ -10,7 +10,8 @@ import {
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSettingsDirty, SettingsSaveBar } from "./settings/settings-draft";
-import { useForm, zodResolver } from "@mantine/form";
+import { useForm } from "@mantine/form";
+import { zodResolver } from "@/lib/zod-resolver";
 import * as z from "zod";
 import { useUpdateSpaceMutation } from "@/features/space/queries/space-query.ts";
 import { ISpace } from "@/features/space/types/space.types.ts";
