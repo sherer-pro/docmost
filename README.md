@@ -808,8 +808,15 @@ before any production database migration or PostgreSQL runtime change.
 For coordinated application backups and restore rehearsals, including the
 legacy archive boundary and separate-secret requirement, follow the
 [backup and restore runbook](./docs/BACKUP_AND_RESTORE.md). The short commands
-are `corepack pnpm backup -- create|verify|restore`; restore never reuses Redis
-or a partially restored database volume.
+are `corepack pnpm backup -- create|verify|restore`; create/restore currently
+support development Compose only. Production is blocked by the documented
+ordered-input and external-volume limitations. Restore never reuses Redis or a
+partially restored database volume.
+
+[Operations ownership and evidence](./docs/OPERATIONS.md) defines the private
+installation-state and history store, including imported source mappings.
+Private operator records are excluded from Git and must be preserved separately
+when replacing a checkout.
 
 Typesense is a rebuildable projection and is not part of the required archive.
 Production deployments that enable it must include the checked-in hardened

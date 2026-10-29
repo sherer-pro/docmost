@@ -9,6 +9,9 @@ rag-sync.config.json
 **/DOCMOST_RAG_KEY
 **/OPEN_WEBUI_KEY
 secrets/
+# Persistent, operator-owned installation records and imported private history.
+# This is not a scratch/report directory. Preserve it before removing a checkout.
+/operator-data/
 data
 # Local audit, e2e and scratch artifacts. These runs produce gigabytes of
 # Playwright reports, traces and downloads. Curated evidence that must live in

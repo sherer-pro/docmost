@@ -1,7 +1,8 @@
 # Backup and restore runbook
 
-This runbook covers the repository Docker Compose stack with local file
-storage. The supported archive is a coordinated PostgreSQL and storage-volume
+The executable create/restore examples in this runbook cover the repository
+development Docker Compose stack with local file storage. The supported archive
+is a coordinated PostgreSQL and storage-volume
 snapshot created while the API and collaboration writers are stopped. Redis is
 ephemeral recovery state and is deliberately recreated empty during restore.
 
@@ -16,7 +17,8 @@ The operator running these commands owns the backup location, downtime window,
 secret escrow, restore decision, and post-restore acceptance. Before starting:
 
 - run from the repository root with Docker Engine available;
-- use the same `--compose-file` and `--env-file` as the target deployment;
+- use the same `--compose-file` and `--env-file` as the target development stack;
+  production has additional requirements and is blocked as described below;
 - confirm `STORAGE_DRIVER=local`; S3 storage needs an independent bucket
   snapshot and is rejected by this workflow;
 - keep `APP_SECRET`, `COLLAB_INTERNAL_SECRET`, `POSTGRES_PASSWORD`, and any
@@ -33,9 +35,77 @@ rebuildable projection of PostgreSQL; after restore, use
 `search:reindex -- --workspace=all --entities=pages,attachments,dictionary` as
 documented in [the search runbook](./SEARCH.md).
 
+## Production contract and current CLI limitation
+
+Production uses the exact release's `compose.production.yml`, its required
+overlays, runtime configuration, and a separate deployment state file. Follow
+[deployment](./DEPLOYMENT.md) and the
+[PostgreSQL migration runbook](../apps/server/docs/postgresql-production-migration.md)
+for their ownership and compatibility boundaries. Keep installation records in
+the [private operations store](./OPERATIONS.md#private-operator-store).
+
+As checked against `scripts/backup.mjs` on 2026-10-29, `--env-file` and
+`--compose-file` each accept **one** file. Repeating either option replaces the
+previous value; it does not build the ordered Compose input set.
+`--state-file` is rejected as an unknown argument. The defaults `.env` and
+`docker-compose.yml` select development configuration.
+
+Consequently, do not use the current CLI's `create` or `restore` against the
+production stack. In particular:
+
+- passing only the production runtime env omits the state-selected PostgreSQL
+  and storage volume names;
+- passing only the state file omits runtime configuration and credentials;
+- passing only `compose.production.yml` omits Typesense and any mandatory
+  deployment-owned overlays;
+- restore deletes the resolved volumes and immediately starts `db` and `redis`.
+  Production PostgreSQL and file storage use external volumes; the CLI has no
+  step to recreate the external PostgreSQL volume before that start.
+
+A merged temporary env, shell-exported state, a development Compose file, or
+a flattened manifest is not a supported production workaround. Those approaches
+also risk changing interpolation, relative paths, secret sources, or migration
+and rollback boundaries.
+
+For **configuration validation only**, Compose itself supports the ordered input
+set. Run from the exact release checkout on the authorized operator host:
+
+```bash
+docker compose \
+  --env-file /etc/docmost/docmost.env \
+  --env-file /var/lib/docmost/deployment/postgres.env \
+  -f compose.production.yml \
+  -f compose.typesense.yml \
+  config --quiet
+```
+
+Include `compose.typesense.yml` only when `SEARCH_DRIVER=typesense`; append every
+mandatory host overlay in its original order. `config --quiet` must exit zero
+without rendering secrets. Missing variables or invalid input are stop
+conditions. This validates configuration and does not prove volume existence,
+archive integrity, backup creation, or restore readiness. Do not run lifecycle
+commands as part of this check. The paths above are runbook defaults, not a
+claim about any installed host.
+
+The archive-only `verify --archive ABSOLUTE_PATH --json` command below is
+independent of the deployment input set. It uses temporary Docker helpers and
+does not stop or restore the application. It still requires Docker, available
+helper images, and sufficient temporary space; it is not an application drill.
+
+The minimal proposed CLI change is ordered, repeatable `--env-file` and
+`--compose-file` inputs with explicit state support and validation, preserving
+Compose precedence and relative-path semantics. Production restore additionally
+needs an explicit external-volume recovery contract, migration/ingress controls,
+and a disposable rehearsal that verifies failure recovery. Argument parsing
+alone does not make it safe. These are follow-up implementation requirements;
+this documentation change does not implement or validate them. Until then,
+operators must resolve the production backup/recovery prerequisite with the
+deployment owner before proceeding with an upgrade. The `production:db` workflow
+is not a replacement for a coordinated PostgreSQL-plus-storage backup.
+
 ## Create and verify
 
-Create a new archive:
+Create a new archive of the supported development stack:
 
 ```bash
 corepack pnpm backup -- create \
@@ -80,7 +150,8 @@ create on the same machine is not off-host durability evidence.
 
 Restore is destructive and requires both `--replace` and `--yes`. By default it
 first creates a sibling pre-restore snapshot. Its secrets must still be kept
-separately.
+separately. The following example is for development-managed volumes, not the
+production external-volume topology described above.
 
 ```bash
 corepack pnpm backup -- restore \
