@@ -252,7 +252,7 @@ function blockSelection(doc: PMNode, range: BlockDragRange): Selection {
     : new BlockRangeSelection($from, doc.resolve(range.to));
 }
 
-export function createBlockDragHandlePlugin(
+function createBlockDragHandlePlugin(
   label: string | (() => string),
 ): Plugin<DragState> {
   let handle: HTMLElement;

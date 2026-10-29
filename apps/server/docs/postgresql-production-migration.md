@@ -238,3 +238,13 @@ volume into an Alpine runtime and proves preflight exits `20`, then performs a
 fresh Debian dump/restore, rejects a corrupt/interrupted restore, reruns schema
 migration idempotently, validates data, and starts both application processes
 in external migration mode.
+
+## Coordination with backup and restore
+
+The migration CLI shares `<canonical-state-file>.operation.lock` with the backup
+CLI. Concurrent operations fail closed; stale locks require owner diagnosis.
+A pending `RESTORE_PHASE` blocks migration/rollback/accept mutations until the
+application restore is accepted; read-only preflight remains available. Preserve
+`REDIS_VOLUME_NAME` when a restore selected a fresh Redis volume. Follow the
+[backup recovery boundary](../../../docs/BACKUP_AND_RESTORE.md#production-inputs-and-recovery-boundary);
+data-plane restore does not authorize a schema migration or reopen ingress.

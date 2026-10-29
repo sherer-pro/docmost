@@ -1,8 +1,8 @@
 # Backup and restore runbook
 
-The executable create/restore examples in this runbook cover the repository
-development Docker Compose stack with local file storage. The supported archive
-is a coordinated PostgreSQL and storage-volume
+This runbook covers coordinated local-file-storage backups for development
+Compose and the production deployment-state workflow. The supported archive is
+a coordinated PostgreSQL and storage-volume
 snapshot created while the API and collaboration writers are stopped. Redis is
 ephemeral recovery state and is deliberately recreated empty during restore.
 
@@ -17,8 +17,8 @@ The operator running these commands owns the backup location, downtime window,
 secret escrow, restore decision, and post-restore acceptance. Before starting:
 
 - run from the repository root with Docker Engine available;
-- use the same `--compose-file` and `--env-file` as the target development stack;
-  production has additional requirements and is blocked as described below;
+- use every runtime `--env-file` and `--compose-file` from the target deployment,
+  in their original order; production additionally requires `--state-file`;
 - confirm `STORAGE_DRIVER=local`; S3 storage needs an independent bucket
   snapshot and is rejected by this workflow;
 - keep `APP_SECRET`, `COLLAB_INTERNAL_SECRET`, `POSTGRES_PASSWORD`, and any
@@ -35,73 +35,122 @@ rebuildable projection of PostgreSQL; after restore, use
 `search:reindex -- --workspace=all --entities=pages,attachments,dictionary` as
 documented in [the search runbook](./SEARCH.md).
 
-## Production contract and current CLI limitation
+## Production inputs and recovery boundary
 
-Production uses the exact release's `compose.production.yml`, its required
-overlays, runtime configuration, and a separate deployment state file. Follow
+Run from the exact release checkout. Repeat `--env-file` for ordered runtime
+inputs and `--compose-file` for ordered manifests/overlays. `--state-file` is
+separate, contains no credentials, and is passed to Compose after the runtime
+env inputs regardless of its CLI position. Repeating `--state-file` is rejected.
+Relative paths retain Compose semantics: the first Compose file defines the
+project directory. No temporary merged env or flattened manifest is used.
+
+Use the production runtime configuration and state described in
 [deployment](./DEPLOYMENT.md) and the
-[PostgreSQL migration runbook](../apps/server/docs/postgresql-production-migration.md)
-for their ownership and compatibility boundaries. Keep installation records in
-the [private operations store](./OPERATIONS.md#private-operator-store).
-
-As checked against `scripts/backup.mjs` on 2026-10-29, `--env-file` and
-`--compose-file` each accept **one** file. Repeating either option replaces the
-previous value; it does not build the ordered Compose input set.
-`--state-file` is rejected as an unknown argument. The defaults `.env` and
-`docker-compose.yml` select development configuration.
-
-Consequently, do not use the current CLI's `create` or `restore` against the
-production stack. In particular:
-
-- passing only the production runtime env omits the state-selected PostgreSQL
-  and storage volume names;
-- passing only the state file omits runtime configuration and credentials;
-- passing only `compose.production.yml` omits Typesense and any mandatory
-  deployment-owned overlays;
-- restore deletes the resolved volumes and immediately starts `db` and `redis`.
-  Production PostgreSQL and file storage use external volumes; the CLI has no
-  step to recreate the external PostgreSQL volume before that start.
-
-A merged temporary env, shell-exported state, a development Compose file, or
-a flattened manifest is not a supported production workaround. Those approaches
-also risk changing interpolation, relative paths, secret sources, or migration
-and rollback boundaries.
-
-For **configuration validation only**, Compose itself supports the ordered input
-set. Run from the exact release checkout on the authorized operator host:
+[PostgreSQL migration runbook](../apps/server/docs/postgresql-production-migration.md).
+Example production backup inputs are:
 
 ```bash
-docker compose \
+corepack pnpm backup -- create \
+  --archive /absolute/off-host-staging/docmost-coordinated.tar \
   --env-file /etc/docmost/docmost.env \
-  --env-file /var/lib/docmost/deployment/postgres.env \
-  -f compose.production.yml \
-  -f compose.typesense.yml \
-  config --quiet
+  --state-file /var/lib/docmost/deployment/postgres.env \
+  --compose-file compose.production.yml \
+  --compose-file compose.typesense.yml \
+  --yes
 ```
 
-Include `compose.typesense.yml` only when `SEARCH_DRIVER=typesense`; append every
-mandatory host overlay in its original order. `config --quiet` must exit zero
-without rendering secrets. Missing variables or invalid input are stop
-conditions. This validates configuration and does not prove volume existence,
-archive integrity, backup creation, or restore readiness. Do not run lifecycle
-commands as part of this check. The paths above are runbook defaults, not a
-claim about any installed host.
+Include Typesense only when enabled and append every mandatory host overlay in
+its original order. The paths above are runbook defaults, not an installation
+snapshot. The defaults `.env` and `docker-compose.yml` still select development.
+State must select PostgreSQL/storage volumes and a `ready` or `accepted`
+`MIGRATION_PHASE`. Conflicting shell overrides, secret-bearing state keys,
+missing inputs, shared/mismatched service mounts, and missing source volumes
+fail before writers are stopped. All three source volumes must be distinct,
+ordinary local Docker volumes. Missing source storage is never implicitly
+created by a read-only helper mount.
 
-The archive-only `verify --archive ABSOLUTE_PATH --json` command below is
-independent of the deployment input set. It uses temporary Docker helpers and
-does not stop or restore the application. It still requires Docker, available
-helper images, and sufficient temporary space; it is not an application drill.
+Backup and migration CLIs share an exclusive lock adjacent to the canonical
+state file (`<state-file>.operation.lock`). A concurrent operation fails closed;
+an existing lock is never stolen or automatically expired. After a crashed
+process, verify the owner and absence of active operations before a separately
+authorized stale-lock removal. External host tools must participate in this
+contract or remain inactive; this file lock does not coordinate arbitrary
+third-party scripts.
 
-The minimal proposed CLI change is ordered, repeatable `--env-file` and
-`--compose-file` inputs with explicit state support and validation, preserving
-Compose precedence and relative-path semantics. Production restore additionally
-needs an explicit external-volume recovery contract, migration/ingress controls,
-and a disposable rehearsal that verifies failure recovery. Argument parsing
-alone does not make it safe. These are follow-up implementation requirements;
-this documentation change does not implement or validate them. Until then,
-operators must resolve the production backup/recovery prerequisite with the
-deployment owner before proceeding with an upgrade. The `production:db` workflow
-is not a replacement for a coordinated PostgreSQL-plus-storage backup.
+Production restore is a data-plane operation with ingress already closed. It
+requires `--replace --yes --no-start --maintenance-confirmed`, the same ordered
+inputs, and an explicitly selected state file. Verify the archive first:
+
+```bash
+corepack pnpm backup -- verify --archive /absolute/off-host-staging/docmost-coordinated.tar --json
+corepack pnpm backup -- restore \
+  --archive /absolute/off-host-staging/docmost-coordinated.tar \
+  --env-file /etc/docmost/docmost.env \
+  --state-file /var/lib/docmost/deployment/postgres.env \
+  --compose-file compose.production.yml \
+  --compose-file compose.typesense.yml \
+  --replace --yes --no-start --maintenance-confirmed
+```
+
+The configured application image must match the archive image. Keep that
+immutable image available locally; restore does not pull a replacement. The CLI
+validates the archive before stopping services, then creates fresh external
+PostgreSQL, storage, and Redis candidate volumes. It never deletes the original
+production volumes. A temporary volume-only overlay selects candidates while
+the protected runtime inputs remain untouched. No migration or application
+process is started by this restore path.
+
+After actual `pg_restore`, planner analysis, and storage extraction, the CLI
+checks row counts, migration boundary, storage inventory, and access by the
+API/collaboration runtime UID/GID. Ownership is restored to that identity and
+owner read/write/directory-search rights are ensured without granting world
+access. API and collaboration must share the storage identity. On failure,
+original state/volumes are retained, candidate database/Redis services are
+removed, and previously running source services are resumed without migration
+or image pull. A failure to resume is reported; keep ingress closed and use the
+retained source volumes and state for recovery.
+
+On success, the state is switched atomically to all three candidate volumes.
+`MIGRATION_PHASE`, image fields, and other existing state are preserved; a
+root-readable `before-restore` state file records the rollback input.
+`RESTORE_PHASE=awaiting-acceptance` makes pending acceptance explicit. Only
+database/Redis are left running. PostgreSQL migration mutations and another
+backup/restore are blocked until the operator accepts the application; read-only
+database preflight remains available.
+
+With ingress closed, perform the exact release's readiness and authenticated
+application acceptance, including attachment writes, collaboration, and a
+Typesense rebuild/search when enabled. Backup CLI checks do not establish those
+results. Stop writers before changing protected state, record the acceptance,
+and set `RESTORE_PHASE=accepted` through an atomic owner-controlled state update;
+resume the accepted services before reopening ingress. Before accepting new
+writes, rollback can select the retained `before-restore` state and original
+volumes. After accepting writes, do not roll back to the old volumes: they lack
+the new writes. Retain both state/volume sets under the deployment owner's
+policy and perform any eventual deletion separately.
+
+On a cold host with no original volumes, supply valid deployment state and
+`--no-snapshot` explicitly. Only fresh candidate volumes are created; nonexistent
+source names are not materialized. The default pre-restore snapshot requires an
+existing running source database/Redis and source storage. Runtime secrets,
+images, external ingress network, and any enabled Typesense volume/credential
+must be provisioned independently. This CLI is not an infrastructure installer.
+
+Legacy archives are not accepted by the production state workflow. Restore
+them first in an isolated compatible environment, inspect their migration
+boundary, then create a v1 archive with the approved application image. In the
+development legacy workflow, `APP_SECRET` is updated only in the last runtime
+input that defines it (or the last runtime input if none does), never in state.
+A shell `APP_SECRET` override is rejected for that import.
+
+Archive-only `verify` does not load deployment env/state or render Compose. It
+uses temporary Docker helpers and does not stop or restore applications. Docker,
+the pinned helper image, temporary capacity, and an absolute archive outside the
+repository are still required. The exact isolated contract test is
+`corepack pnpm test:backup:e2e`; it uses production Compose plus the canonical
+Typesense overlay and synthetic lifecycle fixtures, real data services, fresh
+volumes, and no published ports. It verifies data-plane recovery and failure
+rollback, not production application acceptance, RPO/RTO, or off-host durability.
 
 ## Create and verify
 
@@ -125,7 +174,8 @@ The exact outer member set is:
 - `postgres.dump`;
 - `storage.tar.gz`.
 
-`manifest.json` records the application version/revision/image, PostgreSQL dump
+`manifest.json` records the application image identity and OCI version/revision
+labels (explicitly `unknown` when absent), separate tool checkout provenance, PostgreSQL dump
 metadata, migration boundary, non-sensitive row counts, storage file/byte/path
 inventory, and SHA-256 plus size for both payloads. It explicitly records that
 secrets and Redis are absent.

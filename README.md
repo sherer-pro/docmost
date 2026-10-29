@@ -808,15 +808,14 @@ before any production database migration or PostgreSQL runtime change.
 For coordinated application backups and restore rehearsals, including the
 legacy archive boundary and separate-secret requirement, follow the
 [backup and restore runbook](./docs/BACKUP_AND_RESTORE.md). The short commands
-are `corepack pnpm backup -- create|verify|restore`; create/restore currently
-support development Compose only. Production is blocked by the documented
-ordered-input and external-volume limitations. Restore never reuses Redis or a
-partially restored database volume.
+are `corepack pnpm backup -- create|verify|restore`. Production uses ordered
+repeatable env/Compose inputs and explicit deployment state. Its restore uses
+fresh candidate volumes, retains the originals, and leaves writers stopped for
+application acceptance. Redis starts empty; partially restored candidates are
+not reused.
 
-[Operations ownership and evidence](./docs/OPERATIONS.md) defines the private
-installation-state and history store, including imported source mappings.
-Private operator records are excluded from Git and must be preserved separately
-when replacing a checkout.
+The [operations index](./docs/OPERATIONS.md) links the supported deployment,
+backup, database migration, and search procedures.
 
 Typesense is a rebuildable projection and is not part of the required archive.
 Production deployments that enable it must include the checked-in hardened
@@ -1023,10 +1022,10 @@ Special thanks to;
 
 [Algolia](https://www.algolia.com/) for providing full-text search to the docs.
 
-## Локальные результаты и графы
+## Local results and graphs
 
-Сгенерированные графы `graphify-out/`, отчёты, captures и результаты прогонов
-хранятся локально в игнорируемых каталогах. Не добавляйте их в Git, включая
-`git add -f`. Исходники, необходимые тестовые данные и эталоны остаются в Git.
-После нового клонирования создайте граф штатной командой проекта перед его
-использованием; наличие сохранённого графа в истории Git не требуется.
+Generated `graphify-out/` graphs, reports, captures, and run results stay in
+local ignored directories. Do not add them to Git, including with `git add -f`.
+Source files, required test fixtures, and reference data remain in Git.
+After cloning, generate the graph with the standard project command before
+using it; a graph preserved in Git history is not required.

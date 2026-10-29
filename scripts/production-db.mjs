@@ -18,6 +18,7 @@ import { constants as fsConstants } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withDeploymentLock } from "./deployment-lock.mjs";
 
 export const POSTGRES_IMAGE =
   "postgres:18@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636";
@@ -277,6 +278,14 @@ function createContext(options) {
   const backupDir = resolve(options.backupDir);
   const baseEnv = readEnvFile(envFile);
   const storedState = readEnvFile(stateFile);
+  if (
+    storedState.RESTORE_PHASE &&
+    storedState.RESTORE_PHASE !== "accepted" &&
+    ["migrate", "rollback", "accept"].includes(options.command)
+  )
+    throw new Error(
+      "Restore requires application acceptance before migration operations",
+    );
   const state = commandState(options.command, storedState);
   const effective = { ...baseEnv, ...state, ...process.env };
 
@@ -1548,33 +1557,35 @@ async function main() {
     console.log(usage());
     return;
   }
-  const context = createContext(options);
-  if (options.command === "preflight") {
-    ensureRunningDatabase(context);
-    const report = runPreflight(context, false);
-    printResult(report, options.json);
-    process.exitCode = report.exitCode;
-    return;
-  }
-  if (options.command === "plan") {
-    const plan = buildPlan(context);
-    printResult(plan, options.json);
-    if (plan.status !== "ready") process.exitCode = 1;
-    return;
-  }
-  if (options.command === "migrate") {
-    printResult(await migrate(context), options.json);
-    return;
-  }
-  if (options.command === "rollback") {
-    printResult(rollback(context), options.json);
-    return;
-  }
-  if (options.command === "accept") {
-    printResult(accept(context), options.json);
-    return;
-  }
-  throw new Error(`Unknown command: ${options.command}`);
+  return withDeploymentLock(options.stateFile, options.command, async () => {
+    const context = createContext(options);
+    if (options.command === "preflight") {
+      ensureRunningDatabase(context);
+      const report = runPreflight(context, false);
+      printResult(report, options.json);
+      process.exitCode = report.exitCode;
+      return;
+    }
+    if (options.command === "plan") {
+      const plan = buildPlan(context);
+      printResult(plan, options.json);
+      if (plan.status !== "ready") process.exitCode = 1;
+      return;
+    }
+    if (options.command === "migrate") {
+      printResult(await migrate(context), options.json);
+      return;
+    }
+    if (options.command === "rollback") {
+      printResult(rollback(context), options.json);
+      return;
+    }
+    if (options.command === "accept") {
+      printResult(accept(context), options.json);
+      return;
+    }
+    throw new Error(`Unknown command: ${options.command}`);
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

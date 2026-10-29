@@ -52,8 +52,8 @@
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
 - `apps/server/src/integrations/{import,export,static,security}` — import/export jobs, static frontend serving, and security/version/robots helpers.
 - `ARCHITECTURE.md` — high-level repository architecture and verification map.
-- `docs/OPERATIONS.md` — application operations ownership and private evidence policy; `docs/operations/{STATE,HISTORY}.md` define the public navigation contracts. Persistent private installation records and imported source-to-fragment maps belong in ignored `operator-data/`, not generated QA directories or public Git. Preserve that store before replacing a checkout.
-- `docs/BACKUP_AND_RESTORE.md` — archive format and development Compose recovery. The current backup CLI accepts only one env file and one Compose file and cannot recreate production external PostgreSQL volumes; production create/restore is blocked pending the documented CLI/recovery contract change.
+- `docs/OPERATIONS.md` — navigation to supported application runbooks. `docs/operations/{STATE,HISTORY}.md` retain inbound links to deployment-state procedures and archived sources; they do not define a separate registry.
+- `docs/BACKUP_AND_RESTORE.md` — coordinated backups and recovery. Repeat `--env-file`/`--compose-file` in Compose order; production uses a separate `--state-file`. Its restore requires closed ingress, `--no-start --maintenance-confirmed`, and fresh candidate volumes; original volumes/state are retained and application acceptance remains explicit. Backup and migration CLIs share `<state-file>.operation.lock`.
 - `docs/AI_ASSISTANT_AND_RAG.md` — current technical documentation for the core AI assistant, query-time retrieval, RAG sync API, Open WebUI integration, and their public contracts. The administrator-facing projection is `/settings/ai/guide`, implemented by `apps/client/src/features/ai/components/ai-admin-guide.tsx`; its structured scenarios and Mermaid sources live in `ai-admin-guide-content.ts`, while stable anchors, the explicit `ai.adminGuide.*` locale manifest, and shared version live in `ai-admin-guide-contract.json`. Whenever changing production AI/RAG/RAG Sync/MCP/API-key behavior, configuration, routes/contracts, limits, security boundaries, tools, recovery procedures, related migrations, shared API contracts, or environment contracts, update the canonical document, structured guide, contract version, and all 12 locales in the same change. CI passes `AI_GUIDE_BASE_SHA`/`AI_GUIDE_HEAD_SHA` to `check:ai-docs` with full checkout history so the strict diff gate can enforce the coupling; local runs without those variables still validate routes, flags, anchors, manifest coverage, localized field structure, and version equality.
 - `docs/AI_INTEGRATION.md` — operator setup and troubleshooting guide; link to the canonical AI document instead of copying changing limits and recovery rules.
 - `docs/RAG_API.md` and `docs/Docmost RAG API.postman_collection.json` — external RAG wire contract and executable examples; keep them aligned with the RAG controller, DTOs, and generated route inventory.
@@ -125,6 +125,7 @@
 - Run duplicate-code audit (non-blocking report): `pnpm audit:duplicates`
 - Run all architecture audit reports (non-blocking): `pnpm audit:architecture`
 - Verify the backup CLI contract: `pnpm check:backup`
+- Isolated production-manifest create/verify/restore and failure recovery acceptance: `pnpm test:backup:e2e` (fresh test project/volumes, synthetic lifecycle fixtures, real PostgreSQL/Redis/Typesense, no published ports).
 - Create, verify, or restore a coordinated Compose backup: `pnpm backup -- create|verify|restore ...`; use absolute archive paths outside the repository and follow `docs/BACKUP_AND_RESTORE.md`.
 
 ### Development
@@ -514,10 +515,10 @@ AgentMemory is a shared machine service: one database, one port set, one `~/.age
 - Score recorded, human-reviewed runs with `node scripts/rag-quality-benchmark.mjs results.jsonl report.json holdout evidence-v1`; read `tests/rag-quality/README.md` before running a quality experiment. Unit tests do not establish production relevance or faithfulness.
 - Isolated Open WebUI first startup may download embeddings; `OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS` accepts 1000-900000 ms. Use a unique `COMPOSE_PROJECT_NAME`; the runner removes only that test stack.
 
-## Локальные результаты и графы
+## Local results and graphs
 
-Сгенерированные графы `graphify-out/`, отчёты, captures и результаты прогонов
-хранятся локально в игнорируемых каталогах. Не добавляйте их в Git, включая
-`git add -f`. Исходники, необходимые тестовые данные и эталоны остаются в Git.
-После нового клонирования создайте граф штатной командой проекта перед его
-использованием; наличие сохранённого графа в истории Git не требуется.
+Generated `graphify-out/` graphs, reports, captures, and run results stay in
+local ignored directories. Do not add them to Git, including with `git add -f`.
+Source files, required test fixtures, and reference data remain in Git.
+After cloning, generate the graph with the standard project command before
+using it; a graph preserved in Git history is not required.

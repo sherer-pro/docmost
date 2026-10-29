@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   createReadStream,
@@ -7,6 +8,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -22,6 +24,7 @@ import {
   resolve,
 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withDeploymentLock } from "./deployment-lock.mjs";
 import {
   BACKUP_SCHEMA,
   assertSafeTarEntries,
@@ -49,8 +52,10 @@ function usage() {
   corepack pnpm backup -- restore --archive PATH --replace --yes [options]
 
 Options:
-  --compose-file PATH      Default: ${DEFAULT_COMPOSE_FILE}
-  --env-file PATH          Default: ${DEFAULT_ENV_FILE}
+  --compose-file PATH      Repeat in Compose order; default: ${DEFAULT_COMPOSE_FILE}
+  --env-file PATH          Repeat in Compose order; default: ${DEFAULT_ENV_FILE}
+  --state-file PATH        Non-secret deployment state, after runtime env inputs
+  --maintenance-confirmed  Confirm ingress is closed for production restore
   --snapshot-archive PATH  Pre-restore snapshot target
   --no-snapshot            Explicitly discard the current Compose data
   --allow-legacy-env       Import only APP_SECRET from a legacy archive
@@ -66,6 +71,10 @@ export function parseArguments(argv) {
     command: normalizedArgv[0],
     composeFile: DEFAULT_COMPOSE_FILE,
     envFile: DEFAULT_ENV_FILE,
+    composeFiles: [],
+    envFiles: [],
+    stateFile: undefined,
+    maintenanceConfirmed: false,
     archive: undefined,
     snapshotArchive: undefined,
     noSnapshot: false,
@@ -83,28 +92,40 @@ export function parseArguments(argv) {
     else if (argument === "--replace") options.replace = true;
     else if (argument === "--yes") options.yes = true;
     else if (argument === "--json") options.json = true;
+    else if (argument === "--maintenance-confirmed")
+      options.maintenanceConfirmed = true;
     else if (
       [
         "--archive",
         "--compose-file",
         "--env-file",
+        "--state-file",
         "--snapshot-archive",
       ].includes(argument)
     ) {
       const value = normalizedArgv[index + 1];
-      if (!value) throw new Error(`${argument} requires a value`);
+      if (!value || value.startsWith("--"))
+        throw new Error(`${argument} requires a value`);
       index += 1;
       const key = {
         "--archive": "archive",
         "--compose-file": "composeFile",
         "--env-file": "envFile",
+        "--state-file": "stateFile",
         "--snapshot-archive": "snapshotArchive",
       }[argument];
+      if (key === "stateFile" && options.stateFile)
+        throw new Error("--state-file may be specified only once");
       options[key] = value;
+      if (key === "envFile") options.envFiles.push(value);
+      if (key === "composeFile") options.composeFiles.push(value);
     } else {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
+  if (!options.envFiles.length) options.envFiles.push(DEFAULT_ENV_FILE);
+  if (!options.composeFiles.length)
+    options.composeFiles.push(DEFAULT_COMPOSE_FILE);
   return options;
 }
 
@@ -125,17 +146,14 @@ function run(binary, args, options = {}) {
     const stdout = Buffer.isBuffer(result.stdout)
       ? result.stdout.toString("utf8")
       : result.stdout;
-    const detail = (stderr || stdout || "").trim().slice(0, 1000);
     throw new Error(
-      `${binary} ${args[0] || ""} failed with exit ${result.status}${
-        detail ? `: ${detail}` : ""
-      }`,
+      `${binary} ${args.filter((argument) => /^(?:compose|run|volume|inspect|create|rm|up|start|stop|ps|exec|config|pg_restore|pg_dump|psql|vacuumdb)$/u.test(argument)).join(" ")} failed with exit ${result.status}; output suppressed to protect credentials`,
     );
   }
   return result;
 }
 
-function streamProcess(binary, args, options = {}) {
+export function streamProcess(binary, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(binary, args, {
       cwd: options.cwd,
@@ -163,7 +181,17 @@ function streamProcess(binary, args, options = {}) {
     let output;
     if (options.inputPath) {
       input = createReadStream(options.inputPath);
-      input.on("error", reject);
+      input.on("error", () => {
+        child.kill();
+        reject(new Error("Backup input stream failed"));
+      });
+      child.stdin.on("error", (error) => {
+        input.destroy();
+        if (error.code !== "EPIPE") {
+          child.kill();
+          reject(new Error("Backup child input stream failed"));
+        }
+      });
       input.pipe(child.stdin);
     }
     if (options.outputPath) {
@@ -180,16 +208,10 @@ function streamProcess(binary, args, options = {}) {
     }
     child.on("error", reject);
     child.on("close", (status) => {
+      input?.destroy();
       if (status !== 0) {
         reject(
-          new Error(
-            `${binary} ${args[0] || ""} failed with exit ${status}: ${Buffer.concat(
-              errors,
-            )
-              .toString("utf8")
-              .trim()
-              .slice(0, 1000)}`,
-          ),
+          new Error(`${binary} ${args[0] || ""} failed with exit ${status}`),
         );
       } else {
         childClosed = true;
@@ -199,13 +221,18 @@ function streamProcess(binary, args, options = {}) {
   });
 }
 
-function composeArgs(context, ...args) {
+export function composeArgs(context, ...args) {
   return [
     "compose",
-    "--env-file",
-    context.envFile,
-    "-f",
-    context.composeFile,
+    ...(context.envFiles || [context.envFile]).flatMap((file) => [
+      "--env-file",
+      file,
+    ]),
+    ...(context.stateFile ? ["--env-file", context.stateFile] : []),
+    ...(context.composeFiles || [context.composeFile]).flatMap((file) => [
+      "-f",
+      file,
+    ]),
     ...args,
   ];
 }
@@ -254,23 +281,70 @@ function assertSafeDockerName(name, label) {
   }
 }
 
-function createContext(options, requireEnvironment = true) {
+export function createContext(options, requireEnvironment = true) {
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const composeFile = resolve(options.composeFile);
-  const envFile = resolve(options.envFile);
-  if (!existsSync(composeFile)) {
-    throw new Error(`Compose file is missing: ${composeFile}`);
+  const composeFiles = (options.composeFiles || [options.composeFile]).map(
+    (file) => resolve(file),
+  );
+  const envFiles = (options.envFiles || [options.envFile]).map((file) =>
+    resolve(file),
+  );
+  const stateFile = options.stateFile
+    ? realpathSync(resolve(options.stateFile))
+    : undefined;
+  for (const file of composeFiles)
+    if (!existsSync(file) || !statSync(file).isFile())
+      throw new Error("Compose input is missing or not a file");
+  for (const file of envFiles)
+    if (requireEnvironment && (!existsSync(file) || !statSync(file).isFile()))
+      throw new Error("Runtime environment input is missing or not a file");
+  if (stateFile && envFiles.includes(stateFile))
+    throw new Error(
+      "Deployment state must be separate from runtime env inputs",
+    );
+  const state = stateFile ? parseEnvFile(readFileSync(stateFile, "utf8")) : {};
+  for (const [key, value] of Object.entries(state)) {
+    if (
+      !/^(?:(?:POSTGRES|DOCMOST_STORAGE|REDIS)_VOLUME_NAME|(?:MIGRATION|RESTORE)_[A-Z0-9_]+|(?:PREVIOUS|SOURCE|TARGET|CANDIDATE)_[A-Z0-9_]+|DOCMOST_IMAGE|POSTGRES_IMAGE)$/u.test(
+        key,
+      ) ||
+      !/^[A-Za-z0-9_./:@-]*$/u.test(value)
+    )
+      throw new Error("Deployment state contains unsupported keys or values");
+    if (process.env[key] !== undefined && process.env[key] !== value)
+      throw new Error(
+        `Shell environment conflicts with deployment state key ${key}`,
+      );
   }
-  if (requireEnvironment && !existsSync(envFile)) {
-    throw new Error(`Environment file is missing: ${envFile}`);
-  }
+  if (
+    stateFile &&
+    (!state.POSTGRES_VOLUME_NAME ||
+      !state.DOCMOST_STORAGE_VOLUME_NAME ||
+      !["ready", "accepted"].includes(state.MIGRATION_PHASE))
+  )
+    throw new Error(
+      "Deployment state requires volume names and ready/accepted phase",
+    );
+  if (state.RESTORE_PHASE && state.RESTORE_PHASE !== "accepted")
+    throw new Error(
+      "Deployment restore still awaits operator application acceptance",
+    );
+  const runtime = envFiles.map((file) =>
+    existsSync(file) ? parseEnvFile(readFileSync(file, "utf8")) : {},
+  );
   return {
     repositoryRoot,
-    composeFile,
-    envFile,
-    environment: existsSync(envFile)
-      ? parseEnvFile(readFileSync(envFile, "utf8"))
-      : {},
+    composeFile: composeFiles[0],
+    composeFiles,
+    envFile: envFiles.at(-1),
+    envFiles,
+    stateFile,
+    state,
+    legacyEnvFile:
+      envFiles.findLast((file, index) =>
+        Object.hasOwn(runtime[index], "APP_SECRET"),
+      ) || envFiles.at(-1),
+    environment: Object.assign({}, ...runtime, state, process.env),
   };
 }
 
@@ -278,7 +352,7 @@ function composeConfig(context) {
   return JSON.parse(compose(context, ["config", "--format", "json"]).stdout);
 }
 
-function resolveComposeResources(context) {
+function resolveComposeResources(context, requireSourceVolumes = true) {
   const config = composeConfig(context);
   const volumeForTarget = (service, target) => {
     const source = config.services?.[service]?.volumes?.find(
@@ -293,13 +367,104 @@ function resolveComposeResources(context) {
   };
   for (const [label, name] of Object.entries(volumes)) {
     assertSafeDockerName(name, `${label} volume`);
+    const result = run("docker", ["volume", "inspect", name], {
+      allowedStatuses: [0, 1],
+    });
+    if (result.status !== 0) {
+      if (requireSourceVolumes)
+        throw new Error(`${label} source volume is missing`);
+      continue;
+    }
+    const inspected = JSON.parse(result.stdout)[0];
+    if (
+      inspected.Driver !== "local" ||
+      Object.keys(inspected.Options || {}).length
+    )
+      throw new Error("Backup requires ordinary local Docker volumes");
   }
+  if (new Set(Object.values(volumes)).size !== 3)
+    throw new Error("Database, storage and Redis volumes must be distinct");
   for (const service of ["db", "redis", "docmost", "collab"]) {
     if (!config.services?.[service]) {
       throw new Error(`Compose service is required: ${service}`);
     }
   }
-  return { config, volumes };
+  context.environment.POSTGRES_USER =
+    config.services.db.environment?.POSTGRES_USER || "docmost";
+  context.environment.POSTGRES_DB =
+    config.services.db.environment?.POSTGRES_DB || "docmost";
+  context.environment.STORAGE_DRIVER =
+    config.services.docmost.environment?.STORAGE_DRIVER || "local";
+  if (context.environment.STORAGE_DRIVER !== "local")
+    throw new Error("Compose backup supports only STORAGE_DRIVER=local");
+  const sourceKeys = Object.fromEntries(
+    Object.entries(volumes).map(([role, name]) => [
+      role,
+      Object.keys(config.volumes).find(
+        (key) => config.volumes[key].name === name,
+      ),
+    ]),
+  );
+  const external = Object.values(sourceKeys).some(
+    (key) => config.volumes[key].external,
+  );
+  if (external && !context.stateFile)
+    throw new Error(
+      "External-volume recovery requires an explicit deployment --state-file",
+    );
+  if (
+    context.stateFile &&
+    (volumes.database !== context.state.POSTGRES_VOLUME_NAME ||
+      volumes.storage !== context.state.DOCMOST_STORAGE_VOLUME_NAME ||
+      (context.state.REDIS_VOLUME_NAME &&
+        volumes.redis !== context.state.REDIS_VOLUME_NAME))
+  )
+    throw new Error("Compose volumes differ from deployment state");
+  for (const name of Object.values(volumes)) {
+    const ids = run("docker", ["ps", "-a", "-q", "--filter", `volume=${name}`])
+      .stdout.trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    for (const id of ids) {
+      const container = JSON.parse(run("docker", ["inspect", id]).stdout)[0];
+      if (
+        container.Config.Labels?.["com.docker.compose.project"] !== config.name
+      )
+        throw new Error(
+          "A selected volume is shared outside the Compose project",
+        );
+    }
+  }
+  for (const [service, target, role] of [
+    ["db", "/var/lib/postgresql", "database"],
+    ["docmost", "/app/data/storage", "storage"],
+    ["collab", "/app/data/storage", "storage"],
+    ["redis", "/data", "redis"],
+  ]) {
+    const ids = compose(context, ["ps", "-a", "-q", service])
+      .stdout.trim()
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    for (const id of ids) {
+      const container = JSON.parse(run("docker", ["inspect", id]).stdout)[0];
+      if (
+        container.Mounts.find((mount) => mount.Destination === target)?.Name !==
+        volumes[role]
+      )
+        throw new Error(
+          "Existing service mount differs from selected deployment state",
+        );
+      const image = JSON.parse(
+        run("docker", ["image", "inspect", config.services[service].image])
+          .stdout,
+      )[0];
+      if (container.Image !== image.Id)
+        throw new Error(
+          "Existing service image differs from selected Compose image",
+        );
+    }
+  }
+  return { config, volumes, sourceKeys, external };
 }
 
 function helperMount(path, target, readOnly = false) {
@@ -533,6 +698,38 @@ function storageInventory(volume) {
   return storageInventoryFromNullDelimited(result.stdout);
 }
 
+export function imageProvenance(image) {
+  const labels = image.Config?.Labels || {};
+  return {
+    version: labels["org.opencontainers.image.version"] || "unknown",
+    revision: labels["org.opencontainers.image.revision"] || "unknown",
+    imageId: image.Id,
+    provenance: "image-metadata; tool checkout identity is recorded separately",
+  };
+}
+
+export function importLegacySecret(context, secret) {
+  if (process.env.APP_SECRET !== undefined)
+    throw new Error("Legacy env import rejects a shell APP_SECRET override");
+  const target = context.legacyEnvFile;
+  if (target === context.stateFile)
+    throw new Error("Legacy env import cannot update deployment state");
+  const next = replaceEnvValue(
+    readFileSync(target, "utf8"),
+    "APP_SECRET",
+    secret,
+  );
+  const temporary = `${target}.tmp-${randomUUID()}`;
+  const descriptor = openSync(temporary, "wx", 0o600);
+  try {
+    writeFileSync(descriptor, next, "utf8");
+  } finally {
+    closeSync(descriptor);
+  }
+  renameSync(temporary, target);
+  context.environment.APP_SECRET = secret;
+}
+
 function runningServices(context) {
   return compose(context, ["ps", "--status", "running", "--services"])
     .stdout.split(/\r?\n/u)
@@ -625,13 +822,21 @@ async function createBackup(options, providedContext) {
       schema: BACKUP_SCHEMA,
       createdAt: new Date().toISOString(),
       application: {
+        ...imageProvenance(
+          JSON.parse(
+            run("docker", ["image", "inspect", config.services.docmost.image])
+              .stdout,
+          )[0],
+        ),
+        image: config.services.docmost.image,
+      },
+      tool: {
         version: JSON.parse(
           readFileSync(join(context.repositoryRoot, "package.json"), "utf8"),
         ).version,
         revision: run("git", ["rev-parse", "HEAD"], {
           cwd: context.repositoryRoot,
         }).stdout.trim(),
-        image: config.services.docmost.image,
       },
       database: {
         ...databaseValidation,
@@ -693,7 +898,7 @@ async function createBackup(options, providedContext) {
       rmSync(partial, { force: true });
     }
     if (stoppedWriters.length > 0) {
-      compose(context, ["up", "-d", ...stoppedWriters]);
+      compose(context, ["start", ...stoppedWriters]);
     }
   }
 }
@@ -723,6 +928,286 @@ function removeResolvedVolumes(volumes) {
   }
 }
 
+function storageRuntimeIdentity(config) {
+  const identities = ["docmost", "collab"].map((service) => {
+    const settings = config.services[service];
+    const args = ["run", "--rm", "--network", "none", "--pull", "never"];
+    if (settings.user) args.push("--user", settings.user);
+    args.push("--entrypoint", "id", settings.image);
+    const uid = run("docker", [...args, "-u"]).stdout.trim();
+    const gid = run("docker", [...args, "-g"]).stdout.trim();
+    if (!/^\d+$/u.test(uid) || !/^\d+$/u.test(gid))
+      throw new Error("Runtime storage identity is not numeric");
+    return `${uid}:${gid}`;
+  });
+  if (identities[0] !== identities[1])
+    throw new Error("API and collaboration storage identities differ");
+  return identities[0];
+}
+
+function prepareRestoredStorage(volume, identity) {
+  run("docker", [
+    "run",
+    "--rm",
+    "--network",
+    "none",
+    "-v",
+    `${volume}:/target`,
+    HELPER_IMAGE,
+    "sh",
+    "-ceu",
+    'chown -R "$1" /target; chmod -R u+rwX /target',
+    "sh",
+    identity,
+  ]);
+  run("docker", [
+    "run",
+    "--rm",
+    "--network",
+    "none",
+    "--user",
+    identity,
+    "-v",
+    `${volume}:/target`,
+    HELPER_IMAGE,
+    "sh",
+    "-ceu",
+    "test -z \"$(find /target -type f ! -readable -print -quit)\"; test -z \"$(find /target -type d '(' ! -writable -o ! -executable ')' -print -quit)\"",
+  ]);
+}
+
+export function candidateVolumeNames(
+  volumes,
+  nonce = randomUUID().replaceAll("-", ""),
+) {
+  return Object.fromEntries(
+    Object.entries(volumes).map(([role, name]) => [
+      role,
+      `${name.slice(0, 70)}-restore-${role}-${nonce}`,
+    ]),
+  );
+}
+
+async function restoreDeployment(options, context, verified, resources) {
+  if (!options.noStart || !options.maintenanceConfirmed)
+    throw new Error(
+      "Deployment restore requires --no-start and --maintenance-confirmed",
+    );
+  if (verified.format !== "v1")
+    throw new Error(
+      "Convert legacy archives in isolation before deployment restore",
+    );
+  if (
+    verified.manifest.application.image !==
+    resources.config.services.docmost.image
+  )
+    throw new Error(
+      "Deployment image must match the archive image before restore",
+    );
+  const storageIdentity = storageRuntimeIdentity(resources.config);
+  const originalState = readFileSync(context.stateFile, "utf8");
+  const volumes = candidateVolumeNames(resources.volumes);
+  const workingDirectory = mkdtempSync(
+    join(tmpdir(), "docmost-restore-state-"),
+  );
+  const overlay = join(workingDirectory, "volumes.json");
+  const candidate = {
+    ...context,
+    composeFiles: [...context.composeFiles, overlay],
+  };
+  const created = [];
+  let runningBefore;
+  let snapshot;
+  let sourceStopped = false;
+  let stateCommitted = false;
+  let stage = "candidate preflight";
+  try {
+    writeFileSync(
+      overlay,
+      JSON.stringify({
+        volumes: Object.fromEntries(
+          Object.entries(resources.sourceKeys).map(([role, key]) => [
+            key,
+            { name: volumes[role], external: true },
+          ]),
+        ),
+      }),
+      { mode: 0o600, flag: "wx" },
+    );
+    runningBefore = runningServices(context);
+    for (const name of Object.values(volumes)) {
+      if (
+        run("docker", ["volume", "inspect", name], { allowedStatuses: [0, 1] })
+          .status === 0
+      )
+        throw new Error("Restore candidate volume already exists");
+    }
+    stage = "pre-restore snapshot";
+    if (!options.noSnapshot)
+      snapshot = await createBackup(
+        {
+          ...options,
+          archive:
+            options.snapshotArchive ||
+            join(
+              dirname(verified.archive),
+              `docmost-pre-restore-${randomUUID()}.tar`,
+            ),
+        },
+        context,
+      );
+    stage = "candidate allocation";
+    for (const name of Object.values(volumes)) {
+      run("docker", [
+        "volume",
+        "create",
+        "--label",
+        `com.docmost.restore=${resources.config.name}`,
+        name,
+      ]);
+      created.push(name);
+    }
+    sourceStopped = true;
+    stage = "candidate startup";
+    compose(context, ["stop", "docmost", "collab", "db", "redis"]);
+    compose(candidate, [
+      "up",
+      "-d",
+      "--no-deps",
+      "--pull",
+      "never",
+      "db",
+      "redis",
+    ]);
+    await waitForDatabase(candidate);
+    stage = "database restore";
+    const user = context.environment.POSTGRES_USER;
+    const database = context.environment.POSTGRES_DB;
+    await streamProcess(
+      "docker",
+      composeArgs(
+        candidate,
+        "exec",
+        "-T",
+        "db",
+        "pg_restore",
+        "--exit-on-error",
+        "--no-owner",
+        "--no-privileges",
+        "-U",
+        user,
+        "-d",
+        database,
+      ),
+      { inputPath: verified.postgresDump },
+    );
+    run("docker", postRestoreAnalyzeArgs(candidate, user, database));
+    stage = "storage restore";
+    run("docker", [
+      "run",
+      "--rm",
+      "-v",
+      helperMount(dirname(verified.storageArchive), "/input", true),
+      "-v",
+      `${volumes.storage}:/target`,
+      HELPER_IMAGE,
+      "tar",
+      "-xzf",
+      "/input/storage.tar.gz",
+      "-C",
+      "/target",
+      "--no-same-owner",
+      "--no-same-permissions",
+    ]);
+    prepareRestoredStorage(volumes.storage, storageIdentity);
+    const actual = databaseInventory(candidate);
+    stage = "restored invariants";
+    const expected = verified.manifest.database;
+    for (const key of ["users", "spaces", "pages", "attachments"])
+      if (actual[key] !== expected.counts[key])
+        throw new Error("Restored row counts differ from archive manifest");
+    if (
+      actual.migrationCount !== expected.migrationCount ||
+      actual.latestMigration !== expected.latestMigration
+    )
+      throw new Error(
+        "Restored migration boundary differs from archive manifest",
+      );
+    const storage = storageInventory(volumes.storage);
+    for (const key of ["fileCount", "totalBytes", "pathSetSha256"])
+      if (storage[key] !== verified.manifest.storage[key])
+        throw new Error(
+          "Restored storage inventory differs from archive manifest",
+        );
+    if (readFileSync(context.stateFile, "utf8") !== originalState)
+      throw new Error("Deployment state changed during restore");
+    const rollbackStateFile = `${context.stateFile}.before-restore-${randomUUID()}`;
+    stage = "state commit";
+    writeFileSync(rollbackStateFile, originalState, {
+      flag: "wx",
+      mode: 0o600,
+    });
+    let next = originalState;
+    for (const [key, value] of Object.entries({
+      POSTGRES_VOLUME_NAME: volumes.database,
+      DOCMOST_STORAGE_VOLUME_NAME: volumes.storage,
+      REDIS_VOLUME_NAME: volumes.redis,
+      RESTORE_PHASE: "awaiting-acceptance",
+    }))
+      next = replaceEnvValue(next, key, value);
+    const pending = `${context.stateFile}.restore-${randomUUID()}`;
+    writeFileSync(pending, next, { flag: "wx", mode: 0o600 });
+    renameSync(pending, context.stateFile);
+    stateCommitted = true;
+    return {
+      status: "restored",
+      archive: verified.archive,
+      format: verified.format,
+      snapshotArchive: snapshot?.archive,
+      started: false,
+      acceptance: "data-plane-only; keep ingress closed",
+      volumes,
+      sourceVolumes: resources.volumes,
+      rollbackStateFile,
+      redis: "fresh",
+    };
+  } catch (error) {
+    if (sourceStopped && !stateCommitted) {
+      try {
+        compose(candidate, ["stop", "db", "redis"]);
+        compose(candidate, ["rm", "-f", "db", "redis"]);
+        const infrastructure = ["db", "redis"].filter((service) =>
+          runningBefore.includes(service),
+        );
+        if (infrastructure.length)
+          compose(context, [
+            "up",
+            "-d",
+            "--no-deps",
+            "--pull",
+            "never",
+            ...infrastructure,
+          ]);
+        const writers = ["collab", "docmost"].filter((service) =>
+          runningBefore.includes(service),
+        );
+        if (writers.length) compose(context, ["start", ...writers]);
+      } catch {
+        throw new Error(
+          `${error.message}; source restart failed, source volumes and original state retained; keep ingress closed`,
+        );
+      }
+    }
+    throw new Error(`${stage}: ${error.message}`);
+  } finally {
+    if (!stateCommitted)
+      for (const name of created) {
+        run("docker", ["volume", "rm", name], { allowedStatuses: [0, 1] });
+      }
+    rmSync(workingDirectory, { recursive: true, force: true });
+  }
+}
+
 async function restoreBackup(options) {
   if (!options.yes || !options.replace) {
     throw new Error("restore requires both --replace and --yes");
@@ -734,137 +1219,133 @@ async function restoreBackup(options) {
   }
   const context = createContext(options);
   const verified = await verifyArchive(options.archive, context.repositoryRoot);
-  const { volumes } = resolveComposeResources(context);
-  let snapshot;
-  let candidateCreated = false;
-  let legacyAppSecret;
   try {
-    if (verified.format === "legacy") {
-      if (!options.allowLegacyEnv) {
-        throw new Error(
-          "Legacy restore requires --allow-legacy-env to import only APP_SECRET",
+    const resources = resolveComposeResources(context, !options.noSnapshot);
+    const { volumes } = resources;
+    if (context.stateFile) {
+      return await restoreDeployment(options, context, verified, resources);
+    }
+    let snapshot;
+    let candidateCreated = false;
+    let legacyAppSecret;
+    const storageIdentity = storageRuntimeIdentity(resources.config);
+    try {
+      if (verified.format === "legacy") {
+        if (!options.allowLegacyEnv) {
+          throw new Error(
+            "Legacy restore requires --allow-legacy-env to import only APP_SECRET",
+          );
+        }
+        legacyAppSecret = readLegacyAppSecret(
+          readFileSync(verified.legacyEnv, "utf8"),
         );
       }
-      legacyAppSecret = readLegacyAppSecret(
-        readFileSync(verified.legacyEnv, "utf8"),
-      );
-    }
-    if (!options.noSnapshot) {
-      const defaultSnapshot = join(
-        dirname(verified.archive),
-        `docmost-pre-restore-${new Date().toISOString().replace(/[:.]/gu, "-")}.tar`,
-      );
-      const snapshotArchive = options.snapshotArchive || defaultSnapshot;
-      snapshot = await createBackup(
-        { ...options, archive: snapshotArchive },
-        context,
-      );
-    }
-    if (legacyAppSecret) {
-      const currentEnv = readFileSync(context.envFile, "utf8");
-      const nextEnv = replaceEnvValue(
-        currentEnv,
-        "APP_SECRET",
-        legacyAppSecret,
-      );
-      const temporaryEnv = `${context.envFile}.tmp-${process.pid}`;
-      const descriptor = openSync(temporaryEnv, "wx", 0o600);
-      try {
-        writeFileSync(descriptor, nextEnv, "utf8");
-      } finally {
-        closeSync(descriptor);
+      if (!options.noSnapshot) {
+        const defaultSnapshot = join(
+          dirname(verified.archive),
+          `docmost-pre-restore-${new Date().toISOString().replace(/[:.]/gu, "-")}.tar`,
+        );
+        const snapshotArchive = options.snapshotArchive || defaultSnapshot;
+        snapshot = await createBackup(
+          { ...options, archive: snapshotArchive },
+          context,
+        );
       }
-      renameSync(temporaryEnv, context.envFile);
-      context.environment = parseEnvFile(nextEnv);
-    }
-    compose(context, ["down", "--remove-orphans"]);
-    removeResolvedVolumes(volumes);
-    candidateCreated = true;
-    compose(context, ["up", "-d", "db", "redis"]);
-    await waitForDatabase(context);
-    const user = context.environment.POSTGRES_USER || "docmost";
-    const database = context.environment.POSTGRES_DB || "docmost";
-    await streamProcess(
-      "docker",
-      composeArgs(
-        context,
-        "exec",
-        "-T",
-        "db",
-        "pg_restore",
-        "--exit-on-error",
-        "--clean",
-        "--if-exists",
-        "--no-owner",
-        "--no-privileges",
-        "-U",
-        user,
-        "-d",
-        database,
-      ),
-      { inputPath: verified.postgresDump },
-    );
-    run("docker", postRestoreAnalyzeArgs(context, user, database));
-    const storageVolume = run(
-      "docker",
-      ["volume", "inspect", volumes.storage],
-      {
-        allowedStatuses: [0, 1],
-      },
-    );
-    if (storageVolume.status !== 0) {
-      compose(context, ["create", "docmost"]);
-    }
-    const extraction =
-      verified.format === "legacy"
-        ? [
-            "tar",
-            "-xf",
-            "/input/storage.tar",
-            "-C",
-            "/target",
-            "--strip-components=1",
-            "--no-same-owner",
-            "--no-same-permissions",
-          ]
-        : [
-            "tar",
-            "-xzf",
-            "/input/storage.tar.gz",
-            "-C",
-            "/target",
-            "--no-same-owner",
-            "--no-same-permissions",
-          ];
-    run("docker", [
-      "run",
-      "--rm",
-      "-v",
-      helperMount(dirname(verified.storageArchive), "/input", true),
-      "-v",
-      `${volumes.storage}:/target`,
-      HELPER_IMAGE,
-      ...extraction,
-    ]);
-    compose(context, ["rm", "-f", "docmost", "collab"]);
-    if (!options.noStart) compose(context, ["up", "-d"]);
-    return {
-      status: "restored",
-      archive: verified.archive,
-      format: verified.format,
-      snapshotArchive: snapshot?.archive,
-      started: !options.noStart,
-      volumes,
-      redis: "fresh",
-    };
-  } catch (error) {
-    if (candidateCreated) {
-      compose(context, ["down", "--remove-orphans"], {
-        allowedStatuses: [0, 1],
-      });
+      if (legacyAppSecret) {
+        importLegacySecret(context, legacyAppSecret);
+      }
+      compose(context, ["down", "--remove-orphans"]);
       removeResolvedVolumes(volumes);
+      candidateCreated = true;
+      for (const name of Object.values(volumes))
+        run("docker", ["volume", "create", name]);
+      compose(context, ["up", "-d", "db", "redis"]);
+      await waitForDatabase(context);
+      const user = context.environment.POSTGRES_USER || "docmost";
+      const database = context.environment.POSTGRES_DB || "docmost";
+      await streamProcess(
+        "docker",
+        composeArgs(
+          context,
+          "exec",
+          "-T",
+          "db",
+          "pg_restore",
+          "--exit-on-error",
+          "--clean",
+          "--if-exists",
+          "--no-owner",
+          "--no-privileges",
+          "-U",
+          user,
+          "-d",
+          database,
+        ),
+        { inputPath: verified.postgresDump },
+      );
+      run("docker", postRestoreAnalyzeArgs(context, user, database));
+      const storageVolume = run(
+        "docker",
+        ["volume", "inspect", volumes.storage],
+        {
+          allowedStatuses: [0, 1],
+        },
+      );
+      if (storageVolume.status !== 0) {
+        compose(context, ["create", "docmost"]);
+      }
+      const extraction =
+        verified.format === "legacy"
+          ? [
+              "tar",
+              "-xf",
+              "/input/storage.tar",
+              "-C",
+              "/target",
+              "--strip-components=1",
+              "--no-same-owner",
+              "--no-same-permissions",
+            ]
+          : [
+              "tar",
+              "-xzf",
+              "/input/storage.tar.gz",
+              "-C",
+              "/target",
+              "--no-same-owner",
+              "--no-same-permissions",
+            ];
+      run("docker", [
+        "run",
+        "--rm",
+        "-v",
+        helperMount(dirname(verified.storageArchive), "/input", true),
+        "-v",
+        `${volumes.storage}:/target`,
+        HELPER_IMAGE,
+        ...extraction,
+      ]);
+      prepareRestoredStorage(volumes.storage, storageIdentity);
+      compose(context, ["rm", "-f", "docmost", "collab"]);
+      if (!options.noStart) compose(context, ["up", "-d"]);
+      return {
+        status: "restored",
+        archive: verified.archive,
+        format: verified.format,
+        snapshotArchive: snapshot?.archive,
+        started: !options.noStart,
+        volumes,
+        redis: "fresh",
+      };
+    } catch (error) {
+      if (candidateCreated) {
+        compose(context, ["down", "--remove-orphans"], {
+          allowedStatuses: [0, 1],
+        });
+        removeResolvedVolumes(volumes);
+      }
+      throw error;
     }
-    throw error;
   } finally {
     rmSync(verified.temporaryDirectory, { recursive: true, force: true });
   }
@@ -896,10 +1377,9 @@ async function main() {
   }
   if (!options.archive) throw new Error("--archive is required");
   if (options.command === "verify") {
-    const context = createContext(options, false);
     const verified = await verifyArchive(
       options.archive,
-      context.repositoryRoot,
+      resolve(dirname(fileURLToPath(import.meta.url)), ".."),
     );
     try {
       printResult(sanitizedVerification(verified), options.json);
@@ -908,16 +1388,18 @@ async function main() {
     }
     return;
   }
-  if (options.command === "create") {
-    if (!options.yes) throw new Error("create requires --yes");
-    printResult(await createBackup(options), options.json);
-    return;
-  }
-  if (options.command === "restore") {
-    printResult(await restoreBackup(options), options.json);
-    return;
-  }
-  throw new Error(`Unknown command: ${options.command}`);
+  return withDeploymentLock(options.stateFile, options.command, async () => {
+    if (options.command === "create") {
+      if (!options.yes) throw new Error("create requires --yes");
+      printResult(await createBackup(options), options.json);
+      return;
+    }
+    if (options.command === "restore") {
+      printResult(await restoreBackup(options), options.json);
+      return;
+    }
+    throw new Error(`Unknown command: ${options.command}`);
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

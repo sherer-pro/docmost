@@ -235,6 +235,9 @@ jobs:
       - name: PostgreSQL runtime migration negative and positive smoke
         run: node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci
 
+      - name: Coordinated backup and external-volume restore acceptance
+        run: pnpm test:backup:e2e
+
       - name: Start PostgreSQL, Redis, and mock Open WebUI
         run: |
           docker network create docmost-ci

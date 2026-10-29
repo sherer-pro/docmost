@@ -74,6 +74,7 @@
     "check:release-version": "node --test scripts/check-release-version.test.mjs && node scripts/check-release-version.mjs",
     "check:release-gates": "corepack pnpm run check:production-db && corepack pnpm run check:backup && node scripts/check-release-gates.mjs && node --test scripts/check-release-gates.test.mjs scripts/ci-production-smoke-negative.test.mjs scripts/ci-log-sanitization.test.mjs",
     "check:backup": "node --test scripts/backup.test.mjs",
+    "test:backup:e2e": "node scripts/backup.e2e.mjs",
     "backup": "node scripts/backup.mjs",
     "check:production-db": "node --test scripts/check-production-db-contract.test.mjs scripts/production-db.test.mjs && node scripts/check-production-db-contract.mjs",
     "production:db": "node scripts/production-db.mjs",

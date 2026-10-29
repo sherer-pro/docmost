@@ -38,6 +38,7 @@ const REQUIRED_JOB_COMMANDS = {
     'build_version="$(node -p "require(\'./package.json\').version")"',
     'docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${build_version}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t docmost:ci .',
     "node scripts/ci-postgres-runtime-migration-smoke.mjs --app-image docmost:ci",
+    "pnpm test:backup:e2e",
     "apps/server/dist/apps/server/src/database/migrate-latest.js",
     "node scripts/ci-production-smoke.mjs",
     "node scripts/ci-runtime-recovery-smoke.mjs",

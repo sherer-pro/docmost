@@ -10,10 +10,10 @@ Use this guide together with:
 - the [PostgreSQL production migration runbook](../apps/server/docs/postgresql-production-migration.md)
   for database preflight, migration, acceptance, and rollback;
 - the [backup and restore runbook](./BACKUP_AND_RESTORE.md) for coordinated
-  PostgreSQL and local-file-storage recovery, including its current production
-  CLI limitation;
-- [operations ownership and evidence](./OPERATIONS.md) for private installation
-  state, historical receipts, and the source-to-destination acceptance map;
+  PostgreSQL and local-file-storage recovery, including its production
+  state and external-volume workflow;
+- the [operations index](./OPERATIONS.md) for related procedures and archived
+  source navigation;
 - the release notes for every version crossed during an upgrade;
 - the [search runbook](./SEARCH.md) when Typesense is enabled.
 
@@ -186,11 +186,10 @@ repeat `SIGSTOP` fault injection in production.
 Before an upgrade:
 
 1. Read every intervening release note and pin the candidate image by digest.
-2. Create and verify a coordinated backup through a production-approved
-   procedure. The current repository backup CLI cannot safely express the
-   production input set or restore its external volumes; follow its
-   [stop condition](./BACKUP_AND_RESTORE.md#production-contract-and-current-cli-limitation)
-   and resolve this prerequisite with the deployment owner before an upgrade.
+2. Create and verify a coordinated backup with the exact ordered production
+   inputs and explicit deployment state, following the
+   [backup workflow](./BACKUP_AND_RESTORE.md#production-inputs-and-recovery-boundary).
+   Keep the source volumes, image, and separate secret escrow available.
 3. Keep the previous application digest and PostgreSQL volume available.
 4. Rehearse the exact change against a current production copy.
 5. Run `corepack pnpm verify:release` against the candidate environment.

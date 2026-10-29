@@ -245,6 +245,7 @@ volumes:
     external: true
     name: "${DOCMOST_STORAGE_VOLUME_NAME:?Set DOCMOST_STORAGE_VOLUME_NAME in the deployment state file}"
   redis_data:
+    name: "${REDIS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-docmost}_redis_data}"
 
 networks:
   edge:

@@ -11,7 +11,246 @@ import {
   storageInventoryFromTarEntries,
   validateManifest,
 } from "./backup-lib.mjs";
-import { parseArguments, postRestoreAnalyzeArgs } from "./backup.mjs";
+import {
+  parseArguments,
+  postRestoreAnalyzeArgs,
+  composeArgs,
+  createContext,
+  candidateVolumeNames,
+  imageProvenance,
+  importLegacySecret,
+  streamProcess,
+} from "./backup.mjs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { withDeploymentLock } from "./deployment-lock.mjs";
+
+test("reaps an early failed restore reader without an unhandled EPIPE", async () => {
+  const root = mkdtempSync(join(tmpdir(), "docmost-stream-test-"));
+  const input = join(root, "synthetic.dump");
+  writeFileSync(input, Buffer.alloc(2 * 1024 * 1024, 65));
+  try {
+    await assert.rejects(
+      streamProcess(
+        process.execPath,
+        ["-e", "process.stdin.destroy(); process.exit(9)"],
+        { inputPath: input },
+      ),
+      /exit 9/u,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps application image identity independent of the operator checkout", () => {
+  const result = imageProvenance({
+    Id: "sha256:fixture-image",
+    Config: {
+      Labels: {
+        "org.opencontainers.image.version": "2.0.0",
+        "org.opencontainers.image.revision": "fixture-application-revision",
+      },
+    },
+  });
+  assert.equal(result.revision, "fixture-application-revision");
+  assert.equal(result.version, "2.0.0");
+  assert.equal(
+    imageProvenance({ Id: "sha256:fixture-no-labels" }).revision,
+    "unknown",
+  );
+});
+
+test("serializes backup and migration operations without stealing an existing lock", async () => {
+  const root = mkdtempSync(join(tmpdir(), "docmost-lock-test-"));
+  const state = join(root, "state.env");
+  writeFileSync(state, "MIGRATION_PHASE=accepted\n");
+  try {
+    await withDeploymentLock(state, "backup", async () => {
+      await assert.rejects(
+        withDeploymentLock(state, "migrate", async () =>
+          assert.fail("must not run"),
+        ),
+        /locked/u,
+      );
+    });
+    await withDeploymentLock(state, "migrate", async () => {});
+    writeFileSync(`${state}.operation.lock`, "existing-owner");
+    await assert.rejects(
+      withDeploymentLock(state, "backup", async () => {}),
+      /locked/u,
+    );
+    assert.equal(
+      readFileSync(`${state}.operation.lock`, "utf8"),
+      "existing-owner",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("preserves ordered Compose and env inputs with state last", () => {
+  const options = parseArguments([
+    "create",
+    "--env-file",
+    "runtime.env",
+    "--compose-file",
+    "release.yml",
+    "--state-file",
+    "state.env",
+    "--env-file",
+    "override.env",
+    "--compose-file",
+    "search.yml",
+  ]);
+  assert.deepEqual(composeArgs(options, "config", "--quiet"), [
+    "compose",
+    "--env-file",
+    "runtime.env",
+    "--env-file",
+    "override.env",
+    "--env-file",
+    "state.env",
+    "-f",
+    "release.yml",
+    "-f",
+    "search.yml",
+    "config",
+    "--quiet",
+  ]);
+  assert.throws(
+    () => parseArguments(["create", "--env-file", "--yes"]),
+    /requires a value/u,
+  );
+  assert.throws(
+    () => parseArguments(["create", "--state-file", "a", "--state-file", "b"]),
+    /only once/u,
+  );
+});
+
+test("keeps runtime secret ownership separate from validated state", () => {
+  const root = mkdtempSync(join(tmpdir(), "docmost-input-test-"));
+  try {
+    const runtime = join(root, "runtime.env");
+    const override = join(root, "override.env");
+    const state = join(root, "state.env");
+    const compose = join(root, "compose.yml");
+    writeFileSync(compose, "services: {}\n");
+    writeFileSync(runtime, "APP_SECRET=synthetic-only\nPOSTGRES_USER=first\n");
+    writeFileSync(override, "POSTGRES_USER=second\n");
+    writeFileSync(
+      state,
+      "POSTGRES_VOLUME_NAME=test_db\nDOCMOST_STORAGE_VOLUME_NAME=test_storage\nMIGRATION_PHASE=accepted\n",
+    );
+    const args = [
+      "create",
+      "--env-file",
+      runtime,
+      "--env-file",
+      override,
+      "--state-file",
+      state,
+      "--compose-file",
+      compose,
+    ];
+    const context = createContext(parseArguments(args));
+    assert.equal(context.legacyEnvFile, runtime);
+    assert.equal(
+      context.environment.POSTGRES_USER,
+      process.env.POSTGRES_USER || "second",
+    );
+    assert.equal(readFileSync(state, "utf8").includes("APP_SECRET"), false);
+    if (process.env.APP_SECRET === undefined) {
+      const stateBefore = readFileSync(state, "utf8");
+      const overrideBefore = readFileSync(override, "utf8");
+      context.environment.POSTGRES_DB = "compose-rendered-database";
+      importLegacySecret(
+        context,
+        "synthetic-restored-secret-at-least-32-characters",
+      );
+      assert.equal(
+        context.environment.POSTGRES_DB,
+        "compose-rendered-database",
+      );
+      assert.match(
+        readFileSync(runtime, "utf8"),
+        /APP_SECRET=synthetic-restored-secret/u,
+      );
+      assert.equal(readFileSync(state, "utf8"), stateBefore);
+      assert.equal(readFileSync(override, "utf8"), overrideBefore);
+      writeFileSync(
+        override,
+        "APP_SECRET=synthetic-shadowed-secret-at-least-32-characters\n",
+      );
+      const shadowed = createContext(parseArguments(args));
+      assert.equal(shadowed.legacyEnvFile, override);
+      importLegacySecret(
+        shadowed,
+        "synthetic-final-secret-at-least-32-characters",
+      );
+      assert.match(
+        readFileSync(override, "utf8"),
+        /APP_SECRET=synthetic-final-secret/u,
+      );
+      assert.equal(readFileSync(state, "utf8"), stateBefore);
+    }
+    writeFileSync(state, "APP_SECRET=never-a-state-field\n");
+    assert.throws(() => createContext(parseArguments(args)), /unsupported/u);
+    writeFileSync(
+      state,
+      "POSTGRES_VOLUME_NAME=test_db\nDOCMOST_STORAGE_VOLUME_NAME=test_storage\nMIGRATION_PHASE=acceptance\n",
+    );
+    assert.throws(
+      () => createContext(parseArguments(args)),
+      /ready\/accepted/u,
+    );
+    assert.throws(
+      () =>
+        createContext(
+          parseArguments([
+            "create",
+            "--compose-file",
+            compose,
+            "--env-file",
+            state,
+            "--state-file",
+            state,
+          ]),
+        ),
+      /separate/u,
+    );
+    assert.throws(
+      () =>
+        createContext(
+          parseArguments([
+            "create",
+            "--compose-file",
+            compose,
+            "--env-file",
+            join(root, "missing"),
+          ]),
+        ),
+      /missing/u,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allocates distinct bounded candidate names without reusing sources", () => {
+  const sources = {
+    database: "d".repeat(127),
+    storage: "storage",
+    redis: "redis",
+  };
+  const candidates = candidateVolumeNames(sources, "a".repeat(32));
+  assert.equal(new Set(Object.values(candidates)).size, 3);
+  for (const [role, name] of Object.entries(candidates)) {
+    assert.notEqual(name, sources[role]);
+    assert.ok(name.length <= 127);
+  }
+});
 
 test("accepts pnpm's explicit argument separator", () => {
   assert.deepEqual(
@@ -20,6 +259,10 @@ test("accepts pnpm's explicit argument separator", () => {
       command: "verify",
       composeFile: "docker-compose.yml",
       envFile: ".env",
+      composeFiles: ["docker-compose.yml"],
+      envFiles: [".env"],
+      stateFile: undefined,
+      maintenanceConfirmed: false,
       archive: "C:\\backup.tar",
       snapshotArchive: undefined,
       noSnapshot: false,
