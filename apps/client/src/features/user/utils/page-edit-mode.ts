@@ -12,6 +12,7 @@ export function normalizePageEditMode(value?: string | null): PageEditMode {
 
 interface PageEditModePreferences {
   pageEditModeByPageId?: unknown;
+  defaultPageEditMode?: unknown;
 }
 
 interface ResolvePageEditModeInput {
@@ -64,7 +65,11 @@ export function normalizePageEditModeByPageId(
     }
   }
 
-  if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
+  if (
+    !parsedValue ||
+    typeof parsedValue !== "object" ||
+    Array.isArray(parsedValue)
+  ) {
     return {};
   }
 
@@ -94,7 +99,11 @@ export function resolvePageEditMode({
     preferences?.pageEditModeByPageId,
   );
 
-  return pageEditModeByPageId[pageId] ?? PageEditMode.Read;
+  return (
+    pageEditModeByPageId[pageId] ??
+    normalizePageEditModeValue(preferences?.defaultPageEditMode) ??
+    PageEditMode.Read
+  );
 }
 
 export function buildPageEditModeByPageId(

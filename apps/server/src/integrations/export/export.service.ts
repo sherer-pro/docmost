@@ -48,6 +48,7 @@ import {
   htmlToMarkdown,
   detachTemplateContent,
   normalizeBuiltInTagValues,
+  prepareFootnotesForExport,
 } from '@docmost/editor-ext/server';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
@@ -831,8 +832,10 @@ export class ExportService {
       prosemirrorJson.content.unshift(titleNode);
     }
 
+    const footnotes = prepareFootnotesForExport(prosemirrorJson, page.id);
     const pageHtml = this.decorateTransclusionHtml(
-      this.removeColgroupTags(jsonToHtml(prosemirrorJson)),
+      this.removeColgroupTags(jsonToHtml(footnotes.content)) +
+        footnotes.footerHtml,
       this.resolveTransclusionPresentationStrings(locale),
     );
 

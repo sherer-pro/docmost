@@ -2,10 +2,35 @@ import {
   knowledgeSections,
   resolveCurrentEvidence,
   structuredParts,
+  editorKnowledgeHeadings,
 } from './structured-knowledge.util';
 import { fitEvidence } from './rag-evidence.util';
 
 describe('Canonical structured evidence', () => {
+  it('keeps heading anchors when a heading contains a footnote', () => {
+    const headings = editorKnowledgeHeadings({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { id: 'heading-note', level: 2 },
+          content: [
+            { type: 'text', text: 'Evidence' },
+            {
+              type: 'footnote',
+              content: [{ type: 'text', text: 'Explanation' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(headings[0].title).toBe('Evidence');
+    const sections = knowledgeSections(
+      '# Document\n\n## Evidence[^1]\n\nBody\n\n[^1]: Explanation',
+      headings,
+    );
+    expect(sections[1].id).toBe('heading-note');
+  });
   it('keeps editor section IDs across title and value changes', () => {
     const headings = [{ id: 'stable-id', title: 'Updated heading', level: 2 }];
     const markdown = '# Document\n\n## Updated heading\n\nValue is 200.';

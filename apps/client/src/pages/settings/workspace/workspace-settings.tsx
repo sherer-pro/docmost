@@ -8,6 +8,7 @@ import { Helmet } from "react-helmet-async";
 import ManageHostname from "@/features/workspace/components/manage-hostname.tsx";
 import { Divider, Paper, Stack, Text, Title } from "@mantine/core";
 import PageHistoryRetentionForm from "@/features/workspace/components/settings/components/page-history-retention-form";
+import DefaultPageEditModeForm from "@/features/workspace/components/settings/components/default-page-edit-mode-form";
 
 export default function WorkspaceSettings() {
   const { t } = useTranslation();
@@ -33,6 +34,7 @@ export default function WorkspaceSettings() {
               {t("spaceAdmin.iconImmediate")}
             </Text>
             <WorkspaceNameForm />
+            <DefaultPageEditModeForm />
           </Stack>
         </Paper>
         <Paper withBorder p="lg">

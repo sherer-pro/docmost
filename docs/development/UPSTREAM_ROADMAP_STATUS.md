@@ -18,22 +18,24 @@ complete; final release acceptance and CI remain pending.
   and localized slash-command matching.
 - Page attachment gallery, sequential image/audio/video/PDF preview and safe
   asynchronous removal of unused files. See [the attachment contract](../PAGE_ATTACHMENTS.md).
+- Collaborative footnotes, definition editing with conflict protection, search,
+  Markdown/HTML/PDF/Docmost export and archive import; block-level automatic/explicit
+  text direction; workspace initial editing preference copied only to new users.
+  See [document blocks](../EDITOR_BLOCKS.md).
 
-The first two implementation commits are `33a86bf2` and `26d7cf6b`; the attachment
-package follows them on local `main`. These packages have not been pushed or
+The first three implementation commits are `33a86bf2`, `26d7cf6b` and `1c8bb87c`;
+the document blocks package follows them on local `main`. These packages have not been pushed or
 deployed as part of this task.
 
 ## Remaining required work
 
 - Finish the database record editing experience and compact view controls,
   including a collapsible long description.
-- Footnotes across collaboration, copy/paste, search and exports; empty-page
-  template selection; workspace preference for new users' initial edit mode;
-  tabs and page presentation.
+- Empty-page template selection, tabs and page presentation.
 - Database system fields, multiple participants, file properties and a bounded
   formula language with consistent query/export/AI semantics.
 - Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
-  read-only user OAuth for inbound MCP and block-level RTL.
+  read-only user OAuth for inbound MCP.
 - Check the applicability of the listed upstream fixes before changing the
   corresponding fork paths. Keep stack upgrades separate.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
@@ -68,6 +70,15 @@ Local, ignored receipts are under `artifacts/`:
 - `attachments-doc-contracts-final.log`: bilingual fork documentation, comment language and text normalization checks.
 - `attachments-graph-update.log`: successful local Graphify update.
 - `attachments-graph-import.log`: AgentMemory import could not run because the shared service at `http://127.0.0.1:3111` is stopped. Its configuration was not changed and the service was not started.
+- `footnote-live-final.log`: all three browser cases passed (Chromium, Firefox,
+  WebKit), together with 20 PostgreSQL cases and the HTTP/export/import checks.
+- `footnote-direction-browser.log`: editing, undo/redo, search, null-editor
+  lifecycle and mixed-language block direction passed in both themes and sizes.
+- `footnote-direction-editor-tests.log`: 117 shared editor tests passed.
+- `initial-editor-server-tests.log` and `initial-editor-client-tests.log`: 27
+  server and 9 client preference tests passed.
+- `footnote-preference-direction-build.log`: complete monorepo build passed.
+- `footnote-package-lint.log`: lint passed with the existing frontend warnings.
 
 These receipts establish only the checks actually completed for this checkpoint;
 they do not substitute for the remaining roadmap features or final release gate.

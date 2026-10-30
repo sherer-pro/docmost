@@ -26,13 +26,18 @@ import {
   IconRepeat,
   IconPageBreak,
   IconTag,
+  IconNote,
 } from "@tabler/icons-react";
 import {
   CommandProps,
   SlashMenuGroupedItemsType,
   SlashMenuItemType,
 } from "@/features/editor/components/slash-menu/types";
-import { builtInTagDefinitions, type TagDefinition } from "@docmost/editor-ext";
+import {
+  builtInTagDefinitions,
+  footnotePluginKey,
+  type TagDefinition,
+} from "@docmost/editor-ext";
 import { uploadImageAction } from "@/features/editor/components/image/upload-image-action.tsx";
 import { uploadVideoAction } from "@/features/editor/components/video/upload-video-action.tsx";
 import { uploadAudioAction } from "@/features/editor/components/audio/upload-audio-action.tsx";
@@ -85,6 +90,45 @@ function createTagMenuItem(tag: TagDefinition): SlashMenuItemType {
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
+    ...(["auto", "ltr", "rtl"] as const).map((direction) => ({
+      title: `docBlocks.direction.${direction}`,
+      description: "docBlocks.directionDescription",
+      searchTerms: ["direction", direction, "text"],
+      icon: IconTypography,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .setTextDirection(direction)
+          .run(),
+    })),
+    {
+      title: "docBlocks.footnote",
+      description: "docBlocks.footnoteDescription",
+      searchTerms: ["footnote", "note", "reference"],
+      icon: IconNote,
+      command: ({ editor, range }: CommandProps) => {
+        const before = new Set(
+          footnotePluginKey
+            .getState(editor.state)
+            ?.entries.map((entry) => entry.id),
+        );
+        if (!editor.chain().focus().deleteRange(range).insertFootnote().run())
+          return;
+        const created = footnotePluginKey
+          .getState(editor.state)
+          ?.entries.find((entry) => !before.has(entry.id));
+        if (created)
+          requestAnimationFrame(() =>
+            window.dispatchEvent(
+              new CustomEvent("docmost:edit-footnote", {
+                detail: { editor, id: created.id },
+              }),
+            ),
+          );
+      },
+    },
     {
       title: "Time",
       description: "Insert current time",

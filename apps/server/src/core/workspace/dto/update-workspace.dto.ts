@@ -4,13 +4,19 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
+  @ValidateIf((_, value) => value !== undefined)
+  @IsIn(['read', 'edit'])
+  defaultPageEditMode?: 'read' | 'edit';
+
   @IsOptional()
   @IsString()
   logo: string;

@@ -43,6 +43,7 @@ export interface ICurrentUser {
 
 export interface IUserSettings {
   preferences: {
+    defaultPageEditMode?: PageEditMode;
     fullPageWidth: boolean;
     fixedToolbar: boolean;
     fullPageWidthByPageId?: Record<string, boolean>;

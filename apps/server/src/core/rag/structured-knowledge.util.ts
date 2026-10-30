@@ -17,11 +17,13 @@ export type KnowledgeHeading = { id: string; title: string; level: number };
 export function editorKnowledgeHeadings(content: unknown): KnowledgeHeading[] {
   const result: KnowledgeHeading[] = [];
   const text = (node: any): string =>
-    typeof node?.text === 'string'
-      ? node.text
-      : Array.isArray(node?.content)
-        ? node.content.map(text).join('')
-        : '';
+    node?.type === 'footnote'
+      ? ''
+      : typeof node?.text === 'string'
+        ? node.text
+        : Array.isArray(node?.content)
+          ? node.content.map(text).join('')
+          : '';
   const visit = (node: any) => {
     if (!node || result.length >= 500) return;
     if (
@@ -77,9 +79,10 @@ export function knowledgeSections(
     const heading =
       !fence && !delimiter && line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
     if (heading) {
+      const headingTitle = heading[2].replace(/(?<!\\)\[\^\d+\]/g, '');
       flush();
       path.length = heading[1].length - 1;
-      path.push(heading[2]);
+      path.push(headingTitle);
       const key = path.filter(Boolean).join(' / ');
       const occurrence = (occurrences.get(key) ?? 0) + 1;
       occurrences.set(key, occurrence);
@@ -87,7 +90,7 @@ export function knowledgeSections(
       const headingIndex = unused.findIndex(
         (item) =>
           item.level === heading[1].length &&
-          normalizeEvidence(item.title) === normalizeEvidence(heading[2]),
+          normalizeEvidence(item.title) === normalizeEvidence(headingTitle),
       );
       // The first heading of an export is the generated document title.
       if (headingIndex >= 0 && sections.length > 0)

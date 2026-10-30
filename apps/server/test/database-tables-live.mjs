@@ -214,6 +214,9 @@ try {
     MAIL_FROM_ADDRESS: 'qa@example.test',
     SEARCH_DRIVER: 'database',
     STORAGE_DRIVER: 'local',
+    PDF_CHROMIUM_EXECUTABLE_PATH: createRequire(
+      path.join(repo, 'apps/client/package.json'),
+    )('@playwright/test').chromium.executablePath(),
     RAG_SYNC_ENABLED: 'false',
     AI_EXTERNAL_MCP_ENABLED: 'false',
     AI_BUILTIN_TOOL_EXTENSIONS_ENABLED: 'true',

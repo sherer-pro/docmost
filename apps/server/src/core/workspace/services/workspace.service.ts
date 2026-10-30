@@ -372,6 +372,14 @@ export class WorkspaceService {
       delete updateWorkspaceDto.disablePublicSharing;
     }
 
+    if (updateWorkspaceDto.defaultPageEditMode !== undefined) {
+      await this.workspaceRepo.updateDefaultPageEditMode(
+        workspaceId,
+        updateWorkspaceDto.defaultPageEditMode,
+      );
+      delete updateWorkspaceDto.defaultPageEditMode;
+    }
+
     await this.workspaceRepo.updateWorkspace(updateWorkspaceDto, workspaceId);
 
     if (updatesAuthenticationPolicy) {

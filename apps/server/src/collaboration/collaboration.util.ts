@@ -10,6 +10,8 @@ import { TaskList, TaskItem } from '@tiptap/extension-list';
 import {
   Heading,
   DatabaseEmbed,
+  Footnote,
+  TextDirection,
   Callout,
   Comment,
   CustomCodeBlock,
@@ -59,7 +61,9 @@ import { prosemirrorToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import { Logger } from '@nestjs/common';
 
 export const tiptapExtensions = [
+  TextDirection,
   DatabaseEmbed,
+  Footnote,
   StarterKit.configure({
     codeBlock: false,
     link: false,
@@ -68,7 +72,7 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph', 'transclusionSource'],
+    types: ['heading', 'paragraph', 'transclusionSource', 'footnote'],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),

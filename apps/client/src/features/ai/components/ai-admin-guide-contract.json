@@ -1,5 +1,5 @@
 {
-  "version": 29,
+  "version": 30,
   "anchors": [
     "assistant",
     "retrieval",
@@ -146,6 +146,13 @@
         "source_access_changed",
         "REPEATABLE READ",
         "v2/v3"
+      ]
+    },
+    {
+      "id": "footnote-document-evidence",
+      "key": "scenario.assistant.technical",
+      "needles": [
+        "footnote"
       ]
     }
   ],
@@ -328,6 +335,7 @@
     "troubleshooting.rows.writerVerification.signal",
     "troubleshooting.title",
     "scenario.retrieval.steps.step4",
-    "scenario.assistant.steps.step6"
+    "scenario.assistant.steps.step6",
+    "scenario.assistant.steps.step7"
   ]
 }

@@ -16,6 +16,7 @@ describe('WorkspaceService', () => {
     const workspaceRepo = {
       findById: jest.fn(),
       updateWorkspace: jest.fn(),
+      updateDefaultPageEditMode: jest.fn(),
     };
     const userRepo = {
       findById: jest.fn(),
@@ -59,6 +60,17 @@ describe('WorkspaceService', () => {
       ssoEndpointPolicy,
     };
   };
+
+  it('stores the initial editor mode separately without updating existing users', async () => {
+    const { service, workspaceRepo, userRepo } = createService();
+    await service.update(workspaceId, { defaultPageEditMode: 'edit' } as any);
+    expect(workspaceRepo.updateDefaultPageEditMode).toHaveBeenCalledWith(
+      workspaceId,
+      'edit',
+    );
+    expect(workspaceRepo.updateWorkspace).toHaveBeenCalledWith({}, workspaceId);
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+  });
 
   it('publishes only verified SSO providers on the login screen', async () => {
     const where = jest.fn();

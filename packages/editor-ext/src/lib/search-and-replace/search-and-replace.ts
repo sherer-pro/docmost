@@ -79,6 +79,7 @@ declare module '@tiptap/core' {
 interface TextNodesWithPosition {
   text: string;
   pos: number;
+  parent: PMNode;
 }
 
 export const getRegex = (
@@ -107,7 +108,6 @@ function processSearches(
   const results: Range[] = [];
 
   let textNodesWithPosition: TextNodesWithPosition[] = [];
-  let index = 0;
 
   if (!searchTerm) {
     return {
@@ -116,21 +116,18 @@ function processSearches(
     };
   }
 
-  doc?.descendants((node, pos) => {
+  doc?.descendants((node, pos, parent) => {
     if (node.isText) {
-      if (textNodesWithPosition[index]) {
-        textNodesWithPosition[index] = {
-          text: textNodesWithPosition[index].text + node.text,
-          pos: textNodesWithPosition[index].pos,
-        };
+      const previous = textNodesWithPosition.at(-1);
+      if (previous && previous.parent === parent && previous.pos + previous.text.length === pos) {
+        previous.text += node.text;
       } else {
-        textNodesWithPosition[index] = {
+        textNodesWithPosition.push({
           text: `${node.text}`,
           pos,
-        };
+          parent,
+        });
       }
-    } else {
-      index += 1;
     }
   });
 

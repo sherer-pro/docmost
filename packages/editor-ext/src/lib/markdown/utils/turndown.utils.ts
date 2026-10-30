@@ -7,6 +7,8 @@ import {
   TransclusionPresentationStrings,
 } from '../../transclusion/transclusion-presentation';
 import { getBasename } from './basename';
+import { footnoteText } from '../../footnote';
+import { escapeFootnoteMarkdown } from '../../footnote/markdown';
 
 // CJS/ESM interop: .default exists in Vite, not in NestJS
 const TurndownService = (_TurndownService as any).default || _TurndownService;
@@ -41,7 +43,33 @@ export function htmlToMarkdown(
     video,
     (service) => transclusion(service, options.transclusion),
   ]);
-  return turndownService.turndown(html).replaceAll('<br>', ' ');
+  const notes = new Map<string, { number: number; text: string }>();
+  turndownService.addRule('footnote', {
+    filter: (node: HTMLElement) =>
+      node.nodeName === 'SUP' && node.getAttribute('data-type') === 'footnote',
+    replacement: (_content: string, node: HTMLElement) => {
+      const text = footnoteText(node.getAttribute('data-footnote-text'));
+      const id =
+        node.querySelector('a[id]')?.getAttribute('id') ||
+        node.getAttribute('data-footnote-id') ||
+        '';
+      const key = `${id}\u0000${text}`;
+      let note = notes.get(key);
+      if (!note) {
+        note = { number: notes.size + 1, text };
+        notes.set(key, note);
+      }
+      return `[^${note.number}]`;
+    },
+  });
+  turndownService.addRule('footnoteFooter', {
+    filter: (node: HTMLElement) => node.hasAttribute('data-footnotes'),
+    replacement: () => '',
+  });
+  const body = turndownService.turndown(html).replaceAll('<br>', ' ');
+  return notes.size
+    ? `${body}\n\n${[...notes.values()].map((note) => `[^${note.number}]: ${escapeFootnoteMarkdown(note.text)}`).join('\n\n')}`
+    : body;
 }
 
 function transclusion(

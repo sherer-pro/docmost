@@ -446,6 +446,10 @@ The editor includes the following additional capabilities:
 
 - full-size image previews;
 
+- numbered footnotes with editable definitions, reference navigation, search and portable Markdown/HTML/PDF exports;
+
+- automatic block text direction for mixed languages, with explicit left-to-right/right-to-left slash commands, and a workspace initial editing preference copied only to new accounts;
+
 - a searchable page attachment gallery with sequential image, audio, video and PDF previews, download and navigation to usage; space administrators with page write access may queue removal of files unused by documents, history, templates or database cells;
 
 - width settings for individual blocks;

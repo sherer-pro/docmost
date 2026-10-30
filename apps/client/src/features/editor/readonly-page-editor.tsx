@@ -13,6 +13,7 @@ import { TransclusionLookupProvider } from "@/features/editor/components/transcl
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 import editorClasses from "@/features/editor/styles/editor.module.css";
 import { PublicDocumentContext } from "./components/database-embed/database-embed-context";
+import { Footnotes } from "./components/footnote/footnotes";
 
 interface PageEditorProps {
   title: string;
@@ -112,7 +113,9 @@ export default function ReadonlyPageEditor({
               editorCreated.current = true;
             }
           }}
-        ></EditorProvider>
+        >
+          <Footnotes />
+        </EditorProvider>
         <div style={{ paddingBottom: "20vh" }}></div>
       </TransclusionLookupProvider>
     </PublicDocumentContext.Provider>

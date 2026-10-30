@@ -6,6 +6,7 @@ import { once } from 'node:events';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
+import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
 
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -655,6 +656,17 @@ export async function runLiveAcceptance({
       sql,
       exactSecrets,
       report,
+    });
+    await runEditorBlocksAcceptance({
+      api,
+      fetchApi,
+      actors,
+      space,
+      parent,
+      fixture,
+      test,
+      output,
+      sql,
     });
     await test('CSV exports the complete filtered accessible view in its visible column order', async () => {
       const amount = properties[1].id;

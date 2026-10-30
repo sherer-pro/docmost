@@ -17,6 +17,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEditor } from "@tiptap/react";
+import type { Range } from "@tiptap/core";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { searchAndReplaceStateAtom } from "@/features/editor/components/search-and-replace/atoms/search-and-replace-state-atom.ts";
 import { useAtom } from "jotai";
@@ -86,8 +87,13 @@ function SearchAndReplaceDialog({
 
     // @ts-ignore
     editor.commands.setTextSelection(position);
+    document.dispatchEvent(
+      new CustomEvent("docmost:reveal-search-match", {
+        detail: { editor, position: position.from },
+      }),
+    );
 
-    const element = document.querySelector(".search-result-current");
+    const element = editor.view.dom.querySelector(".search-result-current");
     if (element)
       element.scrollIntoView({ behavior: "smooth", block: "center" });
 
@@ -199,6 +205,17 @@ function SearchAndReplaceDialog({
       const match = editor.view?.dom?.querySelector(
         ".search-result-current",
       ) as HTMLElement | null;
+      const position =
+        editor.storage.searchAndReplace?.results[
+          editor.storage.searchAndReplace?.resultIndex
+        ]?.from;
+      if (typeof position === "number") {
+        const event = new CustomEvent("docmost:reveal-search-match", {
+          cancelable: true,
+          detail: { editor, position },
+        });
+        if (!document.dispatchEvent(event) && !match) revealed = true;
+      }
       if (!match) return;
       revealed = true;
       for (

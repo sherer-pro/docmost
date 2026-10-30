@@ -154,6 +154,29 @@ export class UserRepo {
     };
 
     const db = dbOrTx(this.db, trx);
+    if (insertableUser.workspaceId) {
+      const workspace = await db
+        .selectFrom('workspaces')
+        .select('settings')
+        .where('id', '=', insertableUser.workspaceId)
+        .executeTakeFirst();
+      const settings = (insertableUser.settings ?? {}) as any;
+      const preferences = settings.preferences ?? {};
+      const configured = (workspace?.settings as any)?.editor?.defaultPageEditMode;
+      user.settings = {
+        ...settings,
+        preferences: {
+          ...preferences,
+          defaultPageEditMode:
+            preferences.defaultPageEditMode === 'read' ||
+            preferences.defaultPageEditMode === 'edit'
+              ? preferences.defaultPageEditMode
+              : configured === 'edit'
+                ? 'edit'
+                : 'read',
+        },
+      };
+    }
     return db
       .insertInto('users')
       .values({ ...insertableUser, ...user })

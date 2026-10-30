@@ -12,6 +12,36 @@ const PAGE_ID = "00000000-0000-4000-8000-000000000001";
 const OTHER_PAGE_ID = "00000000-0000-4000-8000-000000000002";
 
 describe("page edit mode preferences", () => {
+  it("uses a copied new-user default while preserving explicit page choices", () => {
+    assert.equal(
+      resolvePageEditMode({
+        pageId: PAGE_ID,
+        preferences: {
+          defaultPageEditMode: "edit",
+        },
+      }),
+      PageEditMode.Edit,
+    );
+    assert.equal(
+      resolvePageEditMode({
+        pageId: PAGE_ID,
+        preferences: {
+          defaultPageEditMode: "edit",
+          pageEditModeByPageId: { [PAGE_ID]: "read" },
+        },
+      }),
+      PageEditMode.Read,
+    );
+    assert.equal(
+      resolvePageEditMode({
+        pageId: PAGE_ID,
+        preferences: {
+          defaultPageEditMode: "invalid",
+        },
+      }),
+      PageEditMode.Read,
+    );
+  });
   it("falls back to read mode when page override is missing", () => {
     assert.equal(
       resolvePageEditMode({

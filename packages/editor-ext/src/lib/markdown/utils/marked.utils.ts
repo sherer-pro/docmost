@@ -1,42 +1,48 @@
-import { marked } from "marked";
-import { calloutExtension } from "./callout.marked";
-import { mathBlockExtension } from "./math-block.marked";
-import { mathInlineExtension } from "./math-inline.marked";
-import { tagExtension } from "./tag.marked";
+import { Marked } from 'marked';
+import { calloutExtension } from './callout.marked';
+import { mathBlockExtension } from './math-block.marked';
+import { mathInlineExtension } from './math-inline.marked';
+import { tagExtension } from './tag.marked';
+import { footnoteMarkdownExtension } from '../../footnote/markdown';
 
-marked.use({
-  renderer: {
-    // @ts-ignore
-    list(body: string, isOrdered: boolean, start: number) {
-      if (isOrdered) {
-        const startAttr = start !== 1 ? ` start="${start}"` : "";
-        return `<ol ${startAttr}>\n${body}</ol>\n`;
-      }
+function createParser() {
+  const marked = new Marked();
+  marked.use({
+    renderer: {
+      // @ts-ignore
+      list(body: string, isOrdered: boolean, start: number) {
+        if (isOrdered) {
+          const startAttr = start !== 1 ? ` start="${start}"` : '';
+          return `<ol ${startAttr}>\n${body}</ol>\n`;
+        }
 
-      const dataType = body.includes(`<input`) ? ' data-type="taskList"' : "";
-      return `<ul${dataType}>\n${body}</ul>\n`;
+        const dataType = body.includes(`<input`) ? ' data-type="taskList"' : '';
+        return `<ul${dataType}>\n${body}</ul>\n`;
+      },
+      // @ts-ignore
+      listitem({ text, raw, task: isTask, checked: isChecked }): string {
+        if (!isTask) {
+          return `<li>${text}</li>\n`;
+        }
+        const checkedAttr = isChecked
+          ? 'data-checked="true"'
+          : 'data-checked="false"';
+        return `<li data-type="taskItem" ${checkedAttr}>${text}</li>\n`;
+      },
     },
-    // @ts-ignore
-    listitem({ text, raw, task: isTask, checked: isChecked }): string {
-      if (!isTask) {
-        return `<li>${text}</li>\n`;
-      }
-      const checkedAttr = isChecked
-        ? 'data-checked="true"'
-        : 'data-checked="false"';
-      return `<li data-type="taskItem" ${checkedAttr}>${text}</li>\n`;
-    },
-  },
-});
+  });
 
-marked.use({
-  extensions: [
-    tagExtension,
-    calloutExtension,
-    mathBlockExtension,
-    mathInlineExtension,
-  ],
-});
+  marked.use({
+    extensions: [
+      tagExtension,
+      calloutExtension,
+      mathBlockExtension,
+      mathInlineExtension,
+    ],
+  });
+  marked.use(footnoteMarkdownExtension());
+  return marked;
+}
 
 export function markdownToHtml(
   markdownInput: string,
@@ -44,11 +50,8 @@ export function markdownToHtml(
   const YAML_FONT_MATTER_REGEX = /^\s*---[\s\S]*?---\s*/;
 
   const markdown = markdownInput
-    .replace(YAML_FONT_MATTER_REGEX, "")
+    .replace(YAML_FONT_MATTER_REGEX, '')
     .trimStart();
 
-  return marked
-    .options({ breaks: true })
-    .parse(markdown)
-    .toString();
+  return createParser().options({ breaks: true }).parse(markdown).toString();
 }

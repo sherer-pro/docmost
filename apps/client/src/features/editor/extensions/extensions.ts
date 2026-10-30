@@ -16,6 +16,8 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Comment,
   DatabaseEmbed,
+  Footnote,
+  TextDirection,
   Details,
   DetailsContent,
   DetailsSummary,
@@ -64,6 +66,7 @@ import { getUserColor } from "@/features/editor/extensions/utils.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
 import CalloutView from "@/features/editor/components/callout/callout-view.tsx";
 import TagView from "@/features/editor/components/tag/tag-view.tsx";
+import FootnoteReference from "@/features/editor/components/footnote/footnotes";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import {
@@ -120,6 +123,8 @@ lowlight.register("haskell", haskell);
 lowlight.register("scala", scala);
 
 export const mainExtensions = [
+  TextDirection,
+  Footnote.configure({ view: ReactNodeViewRenderer(FootnoteReference) }),
   DatabaseEmbed.configure({
     view: ReactNodeViewRenderer(LazyDatabaseEmbedView),
   }),
@@ -144,7 +149,7 @@ export const mainExtensions = [
   Heading,
   HeadingNumbering,
   UniqueID.configure({
-    types: ["heading", "paragraph", "transclusionSource"],
+    types: ["heading", "paragraph", "transclusionSource", "footnote"],
     filterTransaction: (transaction) => !isChangeOrigin(transaction),
   }),
   Placeholder.configure({

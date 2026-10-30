@@ -18,10 +18,12 @@ export interface IWorkspace {
   enforceMfa?: boolean;
   disablePublicSharing?: boolean;
   pageHistoryRetentionDays: number | null;
+  defaultPageEditMode?: "read" | "edit";
 }
 
 export interface IWorkspaceSettings {
   sharing?: IWorkspaceSharingSettings;
+  editor?: { defaultPageEditMode?: "read" | "edit" };
 }
 
 export interface IWorkspaceSharingSettings {

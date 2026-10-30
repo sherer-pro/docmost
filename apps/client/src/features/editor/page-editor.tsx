@@ -95,6 +95,7 @@ import {
   shouldActivateLiveEditor,
 } from "./page-editor-lifecycle";
 import editorLayoutClasses from "@/features/editor/styles/editor.module.css";
+import { Footnotes } from "./components/footnote/footnotes";
 
 interface PageEditorProps {
   pageId: string;
@@ -760,7 +761,9 @@ export default function PageEditor({
                     headingNumberingEnabled,
                   );
                 }}
-              />
+              >
+                <Footnotes />
+              </EditorProvider>
             </DictionaryHighlightLayer>
           </TransclusionLookupProvider>
         </PageReferenceProvider>
@@ -799,6 +802,7 @@ export default function PageEditor({
                   editor={editor}
                   className={clsx(editorContentClassName)}
                 />
+                <Footnotes editor={editor} />
               </DictionaryHighlightLayer>
 
               {editor && (

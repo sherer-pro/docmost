@@ -130,7 +130,11 @@ test("live subpage order is saved without changing the page tree order", async (
     "Alpha child",
     "Zulu child",
   ]);
-  await page.getByRole("radio", { name: "Edit", exact: true }).check();
+  await page
+    .getByTestId("page-state-segmented-control")
+    .locator("label")
+    .filter({ hasText: /^Edit$/ })
+    .click();
   await block.getByRole("textbox", { name: "Subpage order" }).click();
   await page.getByRole("option", { name: "Manual order", exact: true }).click();
   await expect(block.getByRole("link")).toHaveText([
@@ -235,6 +239,123 @@ for (const theme of ["light", "dark"])
       await expect(details).toHaveCount(0);
       await expect(page.locator(".tiptap img").first()).toBeInViewport();
     });
+
+test("live footnotes create, edit, search, conflict and survive reload", async ({
+  page,
+  browser,
+}, info) => {
+  test.setTimeout(120000);
+  await api(page.request, "/pages/actions/update", "POST", {
+    pageId: fixture.editorBlocks.pageId,
+    format: "json",
+    operation: "replace",
+    content: fixture.editorBlocks.content,
+  });
+  await page.goto(fixture.editorBlocks.route);
+  const footer = page.locator('section[role="doc-endnotes"]');
+  await expect(
+    footer.getByText("First canonical note", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('[role="doc-noteref"]')).toHaveText(["1", "2"]);
+  await page
+    .getByTestId("page-state-segmented-control")
+    .locator("label")
+    .filter({ hasText: /^Edit$/ })
+    .click();
+  await expect(
+    footer.getByRole("button", { name: "Edit", exact: true }).first(),
+  ).toBeVisible();
+  const body = page.getByRole("textbox", { name: "Editor", exact: true });
+  await body.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/Footnote");
+  await page
+    .locator("#slash-command")
+    .getByRole("button", { name: /^Footnote/ })
+    .click();
+  const note = footer.getByRole("textbox", { name: "Footnote 3", exact: true });
+  await expect(note).toBeVisible();
+  await note.fill("Browser-created footnote");
+  await footer.getByRole("button", { name: "Save", exact: true }).click();
+  await body.click({ position: { x: 4, y: 4 } });
+  await page.keyboard.press("Control+z");
+  await expect(
+    footer.getByText("Browser-created footnote", { exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+z");
+  await expect(
+    footer.getByText("Browser-created footnote", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('[role="doc-noteref"]')).toHaveText([
+    "1",
+    "2",
+    "3",
+  ]);
+  await expect
+    .poll(
+      async () =>
+        JSON.stringify(
+          (
+            await api(
+              page.request,
+              `/pages/info?pageId=${fixture.editorBlocks.pageId}`,
+            )
+          ).content,
+        ),
+      { timeout: 55000 },
+    )
+    .toContain("Browser-created footnote");
+  await page.goto(
+    `${fixture.editorBlocks.route}?find=${encodeURIComponent("Browser-created footnote")}`,
+  );
+  await expect(footer.locator(".search-result-current")).toHaveText(
+    "Browser-created footnote",
+  );
+  await page.screenshot({ path: info.outputPath("footnotes-search.png") });
+  await page
+    .getByRole("button", { name: "Close (Escape)", exact: true })
+    .click();
+  const first = footer.locator("li").first();
+  await first.getByRole("button", { name: "Edit", exact: true }).click();
+  await first.getByRole("textbox").fill("Local unsaved draft");
+  const context = await browser.newContext({ storageState: sessions.editor });
+  try {
+    const other = await context.newPage();
+    await other.goto(fixture.editorBlocks.route);
+    const remote = other.locator('section[role="doc-endnotes"] li').first();
+    await remote.getByRole("button", { name: "Edit", exact: true }).click();
+    await remote.getByRole("textbox").fill("Concurrent canonical note");
+    await remote.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          JSON.stringify(
+            (
+              await api(
+                page.request,
+                `/pages/info?pageId=${fixture.editorBlocks.pageId}`,
+              )
+            ).content,
+          ),
+        { timeout: 55000 },
+      )
+      .toContain("Concurrent canonical note");
+    await first.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(first.getByRole("alert")).toBeVisible();
+    await expect(first.getByRole("textbox")).toHaveValue("Local unsaved draft");
+    await first.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(
+      first.getByText("Concurrent canonical note", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+  await page.reload();
+  await expect(
+    footer.getByText("Browser-created footnote", { exact: true }),
+  ).toBeVisible();
+});
 
 test("live record drawer preserves table context and supports direct links", async ({
   page,

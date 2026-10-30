@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 29 -->
+<!-- ai-admin-guide-contract-version: 30 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -27,6 +27,16 @@ server's request headers.
 
 All HTTP paths below include the global `/api` prefix except `/mcp`, which is
 an explicit root-level protocol endpoint.
+
+Footnote text (`footnote`) is part of the owning document's searchable text and
+Markdown evidence, subject to the same page ACL, AI content policy and context
+budgets. The note is not a separate source grant. Links or bibliographic claims
+inside it are not fetched or independently verified. Heading anchors ignore
+footnote markers when matching canonical sections; a note does not rename the
+heading's source ID. Footnotes use child text nodes and participate in ordinary
+collaboration, search and undo. The shared reader schema is registered on the
+API, collaboration process and client before the editor's creation command is
+enabled. Disabling a creation entry point must not remove the reader extension.
 
 This file is the canonical source for AI/RAG/MCP architecture, security
 boundaries, limits, and recovery behavior. `AI_INTEGRATION.md` is the operator

@@ -184,6 +184,22 @@ export class WorkspaceRepo {
       .executeTakeFirst();
   }
 
+  async updateDefaultPageEditMode(
+    workspaceId: string,
+    mode: 'read' | 'edit',
+  ) {
+    return this.db
+      .updateTable('workspaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('editor', COALESCE(settings->'editor', '{}'::jsonb)
+          || jsonb_build_object('defaultPageEditMode', ${mode}::text))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', workspaceId)
+      .execute();
+  }
+
   async updateSharingSettings(
     workspaceId: string,
     prefKey: WorkspaceSharingSettingsKey,

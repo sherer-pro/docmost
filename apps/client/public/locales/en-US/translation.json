@@ -1642,11 +1642,12 @@
             "step3": "Enable the space model and intended profiles",
             "step4": "On a phone, verify Chat and Agent, the space search switch, the footer, and the message field while the keyboard is open",
             "step5": "Switch between a document and space settings and use Back/Forward; the assistant must use the current document title.",
-            "step6": "Select a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row."
+            "step6": "Select a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row.",
+            "step7": "Check footnote evidence with the same source and access rules as the document body."
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
-          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes.\n\nSelect a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.\n\nAn administrator must explicitly enable the database capabilities. Tool results and previews are withheld if source access is revoked. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
+          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes.\n\nSelect a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.\n\nAn administrator must explicitly enable the database capabilities. Tool results and previews are withheld if source access is revoked. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nFootnote text (footnote) is included as document evidence. It does not fetch or verify external references or widen page access."
         },
         "retrieval": {
           "description": "Space search runs while an answer is generated.",
@@ -3165,5 +3166,18 @@
     "goToUsage": "Go to usage",
     "unused": "Not used on this page",
     "inUse": "The file is still referenced by documents, databases or history. Deletion was refused."
+  },
+  "docBlocks": {
+    "direction": {"auto":"Automatic direction","ltr":"Left to right","rtl":"Right to left"},
+    "directionDescription": "Set the direction of the current text block",
+    "initialEditMode": "Initial editor mode for new users",
+    "initialEditModeDescription": "Copied when an account is created. Existing preferences and page choices are preserved.",
+    "footnote": "Footnote",
+    "footnoteDescription": "Insert a note at the end of the document",
+    "footnotes": "Footnotes",
+    "footnoteReference": "Footnote {{number}}",
+    "backToReference": "Back to reference {{number}}",
+    "emptyFootnote": "Empty footnote",
+    "footnoteChanged": "This footnote changed. Reopen it before saving."
   }
 }
