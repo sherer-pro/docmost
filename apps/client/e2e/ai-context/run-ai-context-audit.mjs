@@ -707,10 +707,17 @@ async function browserEvidenceV2(storageState, state, citedCase) {
       (await citationLink.getAttribute("href")) === expectedSourceUrl,
       "Citation link did not preserve the canonical source URL",
     );
-    await citationLink.click();
-    await page.waitForLoadState("domcontentloaded");
+    const expectedNavigationUrl = new URL(expectedSourceUrl, baseURL);
+    await Promise.all([
+      page.waitForURL((url) =>
+        url.pathname === expectedNavigationUrl.pathname &&
+        url.hash === expectedNavigationUrl.hash,
+      ),
+      citationLink.click(),
+    ]);
     assert(
-      new URL(page.url()).pathname === expectedSourceUrl,
+      new URL(page.url()).pathname === expectedNavigationUrl.pathname &&
+        new URL(page.url()).hash === expectedNavigationUrl.hash,
       "Citation navigation did not reach the source page",
     );
 
@@ -844,6 +851,18 @@ try {
   const grandchild = await createPage(admin, space.id, "Tree grandchild", "TREE_GRANDCHILD_MARKER_1003", child.id);
   const duplicate = await createPage(admin, space.id, "Duplicate title", "DUPLICATE_TITLE_MARKER_1004", root.id);
   const sourcePage = await createPage(admin, space.id, "Source page", "SOURCE_PAGE_MARKER_B22D");
+  const retrievalFixtures = [];
+  for (let index = 0; index < 2; index += 1) {
+    const text = `SPACE_SEARCH_RESULT_MARKER_${index} safe deterministic retrieval excerpt`;
+    const page = await createPage(admin, space.id, `Space search result ${index}`, text);
+    retrievalFixtures.push({ pageId: page.id, text });
+  }
+  const registeredRetrieval = await fetch(`${modelUrl}/__retrieval-fixtures`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(retrievalFixtures),
+  });
+  assert(registeredRetrieval.ok, "Canonical retrieval fixtures were not registered");
   const closedPage = await createPage(admin, space.id, "Closed source", "CLOSED_PAGE_MARKER_C33E");
   const deletedPage = await createPage(admin, space.id, "Deleted source", "DELETED_PAGE_MARKER_D44F");
   const revokePage = await createPage(admin, space.id, "Revocable source", "REVOKE_PAGE_MARKER_E55A");

@@ -104,8 +104,22 @@ test("long prompts, message pagination and quota limits remain bounded", async (
   const evidence: Record<string, unknown> = {
     checkedAt: new Date().toISOString(),
   };
+  const configResponse = await ownerApi.get(
+    `/api/spaces/${state.spaceId}/ai/config`,
+  );
+  expect(configResponse.ok()).toBe(true);
+  const originalConfig = unwrap<{ contextWindow: number }>(
+    await configResponse.json(),
+  );
 
   try {
+    // The 32k-character request must fit the conservative UTF-8 byte budget,
+    // including system instructions, framing, and the reserved output tokens.
+    const contextResponse = await ownerApi.patch(
+      `/api/spaces/${state.spaceId}/ai/config`,
+      { data: { contextWindow: 65_536 } },
+    );
+    expect(contextResponse.ok()).toBe(true);
     const paginationConversation = await createConversation(
       ownerApi,
       state.pageId,
@@ -215,6 +229,11 @@ test("long prompts, message pagination and quota limits remain bounded", async (
       `${JSON.stringify(evidence, null, 2)}\n`,
     );
   } finally {
+    await ownerApi
+      .patch(`/api/spaces/${state.spaceId}/ai/config`, {
+        data: { contextWindow: originalConfig.contextWindow },
+      })
+      .catch(() => undefined);
     await patchLimits(ownerApi, state.spaceId, 100, 2_000_000).catch(
       () => undefined,
     );

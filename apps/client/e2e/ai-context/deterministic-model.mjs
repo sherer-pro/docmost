@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 const port = Number(process.env.DOCMOST_AI_CONTEXT_MODEL_PORT ?? 1080);
 const requests = [];
 const retrievalRequests = [];
+let retrievalFixtures = [];
 
 function readBody(request) {
   return new Promise((resolve, reject) => {
@@ -190,6 +191,11 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, { ok: true });
       return;
     }
+    if (request.method === "PUT" && url.pathname === "/__retrieval-fixtures") {
+      retrievalFixtures = JSON.parse(await readBody(request));
+      sendJson(response, 200, { ok: true });
+      return;
+    }
     if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
       await handleCompletion(request, response);
       return;
@@ -206,13 +212,16 @@ const server = createServer(async (request, response) => {
         allowedPageCount: allowedPageIds.length,
       });
       sendJson(response, 200, {
-        items: allowedPageIds.slice(0, 2).map((pageId, index) => ({
-          sourceType: "page",
-          sourceId: pageId,
-          pageId,
-          text: `SPACE_SEARCH_RESULT_MARKER_${index} safe deterministic retrieval excerpt`,
-          score: 1 - index * 0.1,
-        })),
+        items: retrievalFixtures
+          .filter((fixture) => allowedPageIds.includes(fixture.pageId))
+          .slice(0, 2)
+          .map(({ pageId, text }, index) => ({
+            sourceType: "page",
+            sourceId: pageId,
+            pageId,
+            text,
+            score: 1 - index * 0.1,
+          })),
       });
       return;
     }
