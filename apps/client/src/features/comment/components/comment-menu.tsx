@@ -1,5 +1,11 @@
 import { Menu, Tooltip } from "@mantine/core";
-import { IconDots, IconEdit, IconTrash, IconCircleCheck, IconCircleCheckFilled } from "@tabler/icons-react";
+import {
+  IconDots,
+  IconEdit,
+  IconTrash,
+  IconCircleCheck,
+  IconCircleCheckFilled,
+} from "@tabler/icons-react";
 import { modals } from "@mantine/modals";
 import { useTranslation } from "react-i18next";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
@@ -13,17 +19,19 @@ type CommentMenuProps = {
   isResolved?: boolean;
   isParentComment?: boolean;
   canResolve?: boolean;
+  onCopyLink?: () => void;
 };
 
-function CommentMenu({ 
-  onEditComment, 
-  onDeleteComment, 
+function CommentMenu({
+  onEditComment,
+  onDeleteComment,
   onResolveComment,
   canEdit = true,
   canDelete = true,
   isResolved = false,
   isParentComment = false,
-  canResolve = false
+  canResolve = false,
+  onCopyLink,
 }: CommentMenuProps) {
   const { t } = useTranslation();
 
@@ -50,8 +58,14 @@ function CommentMenu({
       </Menu.Target>
 
       <Menu.Dropdown>
+        {onCopyLink && (
+          <Menu.Item onClick={onCopyLink}>{t("Copy link")}</Menu.Item>
+        )}
         {canEdit && (
-          <Menu.Item onClick={onEditComment} leftSection={<IconEdit size={14} />}>
+          <Menu.Item
+            onClick={onEditComment}
+            leftSection={<IconEdit size={14} />}
+          >
             {t("Edit comment")}
           </Menu.Item>
         )}

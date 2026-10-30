@@ -10,7 +10,13 @@ import {
 } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { databaseAiContextAtom } from "@/features/database/atoms/database-ai-context-atom";
 import { buildDatabaseUrl } from "@/features/page/page.utils.ts";
 import { DatabaseTableView } from "@/features/database/components/database-table-view";
 import { DatabaseDescriptionEditor } from "@/features/database/components/editors/database-description-editor.tsx";
@@ -41,9 +47,15 @@ import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-nu
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 import { DeferredAiDocumentContextSync } from "@/features/ai/components/deferred-ai-document-context-sync";
+import { useCommentDeepLink } from "@/features/comment/hooks/use-comment-deep-link";
 
 const LazyPageCommentSection = lazy(
   () => import("@/features/comment/components/page-comment-section"),
+);
+const DatabaseRecordDrawer = lazy(() =>
+  import("@/features/database/components/database-record-drawer").then(
+    (module) => ({ default: module.DatabaseRecordDrawer }),
+  ),
 );
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -53,6 +65,9 @@ export default function DatabasePage() {
   const { spaceSlug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const recordPageId = searchParams.get("record");
+  const databaseContexts = useAtomValue(databaseAiContextAtom);
   const setAsideState = useSetAtom(asideStateAtom);
   const asideState = useAtomValue(asideStateAtom);
   const {
@@ -61,6 +76,7 @@ export default function DatabasePage() {
     pageByRoute: databasePage,
     database,
   } = useDatabasePageContext();
+  useCommentDeepLink(databasePageId ?? undefined);
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { mutateAsync: updateDatabaseMutationAsync } =
     useUpdateDatabaseMutation(space?.id, databaseId);
@@ -96,6 +112,14 @@ export default function DatabasePage() {
   });
 
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
+  const recordScope = databaseId ? databaseContexts[databaseId] : undefined;
+  const showRecord = (pageId?: string) =>
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (pageId) next.set("record", pageId);
+      else next.delete("record");
+      return next;
+    });
   const fixedToolbarEnabled = Boolean(
     isEditable && currentUser?.user?.settings?.preferences?.fixedToolbar,
   );
@@ -248,8 +272,21 @@ export default function DatabasePage() {
 
   return (
     <>
+      {recordPageId && recordScope && (
+        <Suspense fallback={null}>
+          <DatabaseRecordDrawer
+            pageId={recordPageId}
+            scope={recordScope}
+            spaceSlug={spaceSlug}
+            isEditable={isEditable}
+            onNavigate={showRecord}
+            onClose={() => showRecord()}
+          />
+        </Suspense>
+      )}
       {databasePageId && resolvedSpaceId && (
         <DeferredAiDocumentContextSync
+          databaseId={databaseId}
           pageId={databasePageId}
           spaceId={resolvedSpaceId}
           spaceSlug={spaceSlug}

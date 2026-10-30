@@ -226,13 +226,28 @@ export default function DatabaseHeaderMenu({
   const getCurrentViewSnapshot = (): NonNullable<
     IExportDatabasePayload["currentView"]
   > => ({
+    viewId: rowsExportQueryParams?.viewId,
+    groupKey: rowsExportQueryParams?.groupKey,
     viewState: rowsExportQueryParams?.viewState
       ? JSON.parse(rowsExportQueryParams.viewState)
       : undefined,
     filters: rowsExportQueryParams?.filters,
     sortPropertyId: rowsExportQueryParams?.sortPropertyId,
     sortDirection: rowsExportQueryParams?.sortDirection,
-    visiblePropertyIds: properties
+    visiblePropertyIds: [...properties]
+      .sort((a, b) => {
+        const order: string[] = rowsExportQueryParams?.viewState
+          ? (JSON.parse(rowsExportQueryParams.viewState).columnOrder ?? [])
+          : [];
+        return (
+          (order.includes(a.id)
+            ? order.indexOf(a.id)
+            : order.length + properties.indexOf(a)) -
+          (order.includes(b.id)
+            ? order.indexOf(b.id)
+            : order.length + properties.indexOf(b))
+        );
+      })
       .filter((property) => {
         const explicitValue = tableExportState.visibleColumns[property.id];
         return typeof explicitValue === "boolean" ? explicitValue : true;

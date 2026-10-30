@@ -14,9 +14,28 @@
   --database-title-column-left: 0px;
 }
 
+.databaseTable thead {
+  z-index: 5;
+}
+
 .selectColumn,
 .titleColumn {
   background: var(--mantine-color-body);
+}
+
+.titleColumn {
+  position: sticky;
+  left: var(--database-title-column-left);
+  z-index: 3;
+  max-width: rem(240px);
+}
+
+.viewToolbar {
+  position: sticky;
+  top: rem(60px);
+  z-index: 6;
+  background: var(--mantine-color-body);
+  padding-block: rem(8px);
 }
 
 .propertyHeader {
@@ -75,7 +94,8 @@
   }
 
   .titleColumn {
-    position: static;
+    position: sticky;
+    max-width: rem(180px);
     box-shadow: none;
   }
 

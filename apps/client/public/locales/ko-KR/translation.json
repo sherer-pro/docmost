@@ -1641,11 +1641,12 @@
             "step2": "Test Chat 및 Agent",
             "step3": "Enable 공간 모델 및 의도된 프로파일",
             "step4": "휴대전화에서 키보드를 연 상태로 Chat 및 Agent, 공간 검색 스위치, 바닥글과 메시지 필드를 확인하세요",
-            "step5": "문서와 공간 설정 사이를 이동하고 뒤로/앞으로 가기를 사용하세요. 도우미가 현재 문서의 제목을 사용하는지 확인하세요."
+            "step5": "문서와 공간 설정 사이를 이동하고 뒤로/앞으로 가기를 사용하세요. 도우미가 현재 문서의 제목을 사용하는지 확인하세요.",
+            "step6": "데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다."
           },
           "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
           "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",
-          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다."
+          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다.\n\n데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. 접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.\n\n관리자가 데이터베이스 기능을 명시적으로 활성화해야 합니다. 원본 접근 권한이 취소되면 결과와 미리보기가 숨겨집니다. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "스페이스 검색은 답변을 생성하는 동안 수행됩니다.",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "셀 변경 제안"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "현재 페이지의 텍스트 바꾸기",
         "patchNode": "현재 페이지의 블록 바꾸기",
         "insertNode": "현재 페이지에 블록 삽입",
-        "deleteNode": "현재 페이지에서 블록 삭제"
+        "deleteNode": "현재 페이지에서 블록 삭제",
+        "queryDatabaseView": "데이터베이스 보기 조회",
+        "summarizeDatabaseView": "데이터베이스 합계 계산",
+        "proposeDatabaseCells": "셀 변경 제안"
       },
       "category": {
         "search": "검색",
@@ -2645,6 +2650,25 @@
         "history": "기록",
         "attachments": "첨부 파일",
         "sharing": "공개 공유"
+      },
+      "readOnly": "답변만 허용",
+      "readOnlyDescription": "어시스턴트는 내용을 읽을 수 있지만 변경을 제안할 수 없습니다.",
+      "knowledgeOnly": "허용된 출처로 답변",
+      "knowledgeOnlyDescription": "접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.",
+      "preset": "작동 모드",
+      "answersOnly": "답변만",
+      "confirmChanges": "확인 후 변경 제안"
+    },
+    "database": {
+      "row": "레코드",
+      "property": "속성",
+      "scope": "현재 데이터베이스 보기 · 선택한 행: {{count}}",
+      "receipt": "데이터베이스 변경",
+      "appliedRows": "적용된 행: {{count}}",
+      "failure": {
+        "conflict": "셀 버전 또는 스키마가 변경되었습니다. 새 제안을 만드세요.",
+        "forbidden": "쓰기 권한이 취소되었습니다.",
+        "invalid_value": "값이 더 이상 유효하지 않습니다."
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "저장됨",
     "saving": "절약...",
     "saved": "저장됨",
-    "error": "데이터 갱신 실패"
+    "error": "데이터 갱신 실패",
+    "dirty": "개인 초안"
   },
-  "Move block": "블록 이동"
+  "Move block": "블록 이동",
+  "dbBoard": {
+    "board": "칸반",
+    "layout": "레이아웃",
+    "cardFields": "카드 필드",
+    "hiddenColumns": "숨겨진 열",
+    "sorted": "카드는 정렬 순서를 따릅니다. 수동 순서는 비활성화됩니다.",
+    "selectRequired": "보드에 사용할 단일 선택 필드를 선택하세요.",
+    "columnActions": "열 작업",
+    "moveTo": "열로 이동",
+    "moveFailed": "이동하지 못했습니다. 데이터를 새로 고친 후 다시 시도하세요.",
+    "csv": "현재 보기 CSV",
+    "record": "레코드",
+    "openPage": "전체 페이지 열기",
+    "contentPreview": "페이지 미리보기입니다. 내용을 편집하려면 전체 페이지를 여세요.",
+    "saveShared": "모두에게 저장",
+    "columnWidth": "열 너비",
+    "embed": "데이터베이스 보기",
+    "embedDescription": "기존 데이터베이스 또는 보기 연결",
+    "sourceLink": "내부 데이터베이스 링크",
+    "sourceUnavailable": "보기를 사용할 수 없습니다",
+    "openSource": "원본 데이터베이스 열기",
+    "insertView": "이 보기를 삽입할까요?",
+    "emptyColumn": "값 없음"
+  },
+  "Time": "시간",
+  "Insert current time": "현재 시간 삽입",
+  "documentUpdates": {
+    "compareWith": "비교 대상"
+  }
 }

@@ -1,6 +1,7 @@
 jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 
 import { AiRunService } from './ai-run.service';
+import { AiSourceAccessChangedError } from './ai-source-access.service';
 
 describe('AiRunService', () => {
   function createService(queue: any, db?: any) {
@@ -20,6 +21,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      { assertAccessible: jest.fn(async () => undefined) } as any,
     );
   }
 
@@ -38,6 +40,31 @@ describe('AiRunService', () => {
       { runId: 'run-id' },
       expect.objectContaining({ jobId: 'ai-run-run-id', attempts: 1 }),
     );
+  });
+  it('never reads raw tool steps after a database source is revoked', async () => {
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      execute: jest.fn(async () => [{ pageId: 'row' }]),
+    };
+    const db = { selectFrom: jest.fn(() => query) };
+    const service = createService({}, db);
+    jest.spyOn(service, 'getOwnedRun').mockResolvedValue({
+      id: 'run',
+      workspaceId: 'workspace',
+      spaceId: 'space',
+    } as any);
+    (service as any).sourceAccess.assertAccessible.mockRejectedValueOnce(
+      new AiSourceAccessChangedError(),
+    );
+    await expect(
+      service.get('run', {} as any, {} as any),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'source_access_changed' },
+    });
+    expect(db.selectFrom).toHaveBeenCalledWith('aiRunSourceDependencies');
+    expect(db.selectFrom).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a queued run durable when Bull is unavailable', async () => {
@@ -386,6 +413,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      { assertAccessible: jest.fn(async () => undefined) } as any,
     );
     jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
 
@@ -474,6 +502,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      { assertAccessible: jest.fn(async () => undefined) } as any,
     );
     jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
 
@@ -528,6 +557,7 @@ describe('AiRunService', () => {
       {} as any,
       {} as any,
       {} as any,
+      { assertAccessible: jest.fn(async () => undefined) } as any,
     );
     jest.spyOn(service as any, 'getOwnedRun').mockResolvedValue(run);
 

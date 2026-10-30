@@ -15,6 +15,9 @@ export const AI_BUILTIN_TOOL_CAPABILITIES = [
   "database.context.read",
   "database.rows.read",
   "database.row_context.read",
+  "database.view.query",
+  "database.summary.read",
+  "database.cells.propose",
   "page.table.read",
   "page.comments.read",
   "page.history.list",
@@ -73,9 +76,13 @@ export type AiBuiltinToolTargetScope =
   | "workspace"
   | "current_space"
   | "readable_page"
+  | "current_database"
   | "current_page";
 
-export type AiBuiltinToolApprovalMode = "none" | "current_page_hash";
+export type AiBuiltinToolApprovalMode =
+  | "none"
+  | "current_page_hash"
+  | "database_cell_revisions";
 
 export interface AiBuiltinToolAnnotations {
   idempotent: boolean;
@@ -96,6 +103,8 @@ export interface AiBuiltinToolCatalogEntry {
 }
 
 export interface AiBuiltinToolWorkspacePolicyView {
+  readOnly?: boolean;
+  knowledgeOnly?: boolean;
   enabled: boolean;
   allowedCapabilities: AiBuiltinToolCapability[];
   maximumCapabilities: AiBuiltinToolCapability[];
@@ -105,6 +114,10 @@ export interface AiBuiltinToolWorkspacePolicyView {
 }
 
 export interface AiBuiltinToolSpacePolicyView {
+  readOnly?: boolean;
+  knowledgeOnly?: boolean;
+  workspaceReadOnly?: boolean;
+  workspaceKnowledgeOnly?: boolean;
   spaceId: string;
   inherited: boolean;
   allowedCapabilities: AiBuiltinToolCapability[] | null;
@@ -116,10 +129,14 @@ export interface AiBuiltinToolSpacePolicyView {
 }
 
 export interface UpdateAiBuiltinToolWorkspacePolicy {
+  readOnly?: boolean;
+  knowledgeOnly?: boolean;
   enabled: boolean;
   allowedCapabilities: AiBuiltinToolCapability[];
 }
 
 export interface UpdateAiBuiltinToolSpacePolicy {
+  readOnly?: boolean;
+  knowledgeOnly?: boolean;
   allowedCapabilities: AiBuiltinToolCapability[] | null;
 }

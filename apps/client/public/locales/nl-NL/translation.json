@@ -1641,11 +1641,12 @@
             "step2": "Test Chat en Agent",
             "step3": "Enable het ruimtemodel en de beoogde profielen",
             "step4": "Controleer op een telefoon met het toetsenbord open Chat en Agent, de schakelaar voor zoeken in de ruimte, de voettekst en het berichtveld",
-            "step5": "Wissel tussen een document en de ruimte-instellingen en gebruik Terug/Vooruit; de assistent moet de titel van het huidige document gebruiken."
+            "step5": "Wissel tussen een document en de ruimte-instellingen en gebruik Terug/Vooruit; de assistent moet de titel van het huidige document gebruiken.",
+            "step6": "Selecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af."
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
-          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan."
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan.\n\nSelecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.\n\nEen beheerder moet databasefuncties expliciet inschakelen. Resultaten en voorbeelden worden verborgen als brontoegang wordt ingetrokken. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "Celwijzigingen voorstellen"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "Tekst op de huidige pagina vervangen",
         "patchNode": "Een blok op de huidige pagina vervangen",
         "insertNode": "Een blok op de huidige pagina invoegen",
-        "deleteNode": "Een blok van de huidige pagina verwijderen"
+        "deleteNode": "Een blok van de huidige pagina verwijderen",
+        "queryDatabaseView": "Databaseweergave opvragen",
+        "summarizeDatabaseView": "Databasetotalen berekenen",
+        "proposeDatabaseCells": "Celwijzigingen voorstellen"
       },
       "category": {
         "search": "Zoeken",
@@ -2645,6 +2650,25 @@
         "history": "Geschiedenis",
         "attachments": "Bijlagen",
         "sharing": "Openbaar delen"
+      },
+      "readOnly": "Alleen antwoorden",
+      "readOnlyDescription": "De assistent mag inhoud lezen, maar geen wijzigingen voorstellen.",
+      "knowledgeOnly": "Antwoorden uit toegestane bronnen",
+      "knowledgeOnlyDescription": "Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.",
+      "preset": "Werkmodus",
+      "answersOnly": "Alleen antwoorden",
+      "confirmChanges": "Wijzigingen met bevestiging"
+    },
+    "database": {
+      "row": "Record",
+      "property": "Eigenschap",
+      "scope": "Huidige databaseweergave · geselecteerde rijen: {{count}}",
+      "receipt": "Databasewijzigingen",
+      "appliedRows": "Toegepaste rijen: {{count}}",
+      "failure": {
+        "conflict": "Celrevisie of schema gewijzigd. Maak een nieuw voorstel.",
+        "forbidden": "Schrijftoegang is ingetrokken.",
+        "invalid_value": "De waarde is niet meer geldig."
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "Opgeslagen",
     "saving": "Opslaan...",
     "saved": "Opgeslagen",
-    "error": "Bijwerken van gegevens mislukt"
+    "error": "Bijwerken van gegevens mislukt",
+    "dirty": "Persoonlijk concept"
   },
-  "Move block": "Blok verplaatsen"
+  "Move block": "Blok verplaatsen",
+  "dbBoard": {
+    "board": "Kanban",
+    "layout": "Indeling",
+    "cardFields": "Kaartvelden",
+    "hiddenColumns": "Verborgen kolommen",
+    "sorted": "Kaarten volgen de sortering. Handmatige volgorde is uitgeschakeld.",
+    "selectRequired": "Kies een veld met één keuze voor dit bord.",
+    "columnActions": "Kolomacties",
+    "moveTo": "Verplaatsen naar kolom",
+    "moveFailed": "Verplaatsen mislukt. Vernieuw de gegevens voordat u opnieuw probeert.",
+    "csv": "CSV van huidige weergave",
+    "record": "Record",
+    "openPage": "Volledige pagina openen",
+    "contentPreview": "Paginavoorbeeld. Open de volledige pagina om de inhoud te bewerken.",
+    "saveShared": "Opslaan voor iedereen",
+    "columnWidth": "Kolombreedte",
+    "embed": "Databaseweergave",
+    "embedDescription": "Bestaande database of weergave koppelen",
+    "sourceLink": "Interne databaselink",
+    "sourceUnavailable": "Databaseweergave niet beschikbaar",
+    "openSource": "Brondatabase openen",
+    "insertView": "Deze databaseweergave invoegen?",
+    "emptyColumn": "Zonder waarde"
+  },
+  "Time": "Tijd",
+  "Insert current time": "Huidige tijd invoegen",
+  "documentUpdates": {
+    "compareWith": "Vergelijken met"
+  }
 }

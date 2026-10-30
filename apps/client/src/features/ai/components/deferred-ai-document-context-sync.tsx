@@ -9,6 +9,7 @@ const LazyAiDocumentContextSync = lazy(() =>
 );
 
 interface DeferredAiDocumentContextSyncProps {
+  databaseId?: string;
   pageId: string;
   spaceId: string;
   spaceSlug?: string;

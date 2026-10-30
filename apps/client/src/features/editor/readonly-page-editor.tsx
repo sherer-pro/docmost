@@ -12,6 +12,7 @@ import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { TransclusionLookupProvider } from "@/features/editor/components/transclusion/transclusion-lookup-context";
 import { PageReadingTime } from "@/features/page/components/reading-time/page-reading-time.tsx";
 import editorClasses from "@/features/editor/styles/editor.module.css";
+import { PublicDocumentContext } from "./components/database-embed/database-embed-context";
 
 interface PageEditorProps {
   title: string;
@@ -74,42 +75,46 @@ export default function ReadonlyPageEditor({
   ];
 
   return (
-    <TransclusionLookupProvider shareId={shareId}>
-      <EditorProvider
-        editable={false}
-        immediatelyRender={true}
-        extensions={titleExtensions}
-        content={title}
-      ></EditorProvider>
+    <PublicDocumentContext.Provider value={Boolean(shareId)}>
+      <TransclusionLookupProvider shareId={shareId}>
+        <EditorProvider
+          editable={false}
+          immediatelyRender={true}
+          extensions={titleExtensions}
+          content={title}
+        ></EditorProvider>
 
-      <PageReadingTime
-        editor={readOnlyEditor}
-        enabled={readingTimeEnabled}
-        pageId={pageId}
-        className={editorClasses.readingTime}
-      />
+        <PageReadingTime
+          editor={readOnlyEditor}
+          enabled={readingTimeEnabled}
+          pageId={pageId}
+          className={editorClasses.readingTime}
+        />
 
-      <EditorProvider
-        editable={false}
-        immediatelyRender={true}
-        extensions={extensions}
-        content={content}
-        onCreate={({ editor }) => {
-          if (editor) {
-            editor.commands.setHeadingNumberingEnabled(headingNumberingEnabled);
-            if (pageId) {
+        <EditorProvider
+          editable={false}
+          immediatelyRender={true}
+          extensions={extensions}
+          content={content}
+          onCreate={({ editor }) => {
+            if (editor) {
+              editor.commands.setHeadingNumberingEnabled(
+                headingNumberingEnabled,
+              );
+              if (pageId) {
+                // @ts-ignore
+                editor.storage.pageId = pageId;
+              }
               // @ts-ignore
-              editor.storage.pageId = pageId;
-            }
-            // @ts-ignore
-            setReadOnlyEditor(editor);
+              setReadOnlyEditor(editor);
 
-            handleScrollTo(editor);
-            editorCreated.current = true;
-          }
-        }}
-      ></EditorProvider>
-      <div style={{ paddingBottom: "20vh" }}></div>
-    </TransclusionLookupProvider>
+              handleScrollTo(editor);
+              editorCreated.current = true;
+            }
+          }}
+        ></EditorProvider>
+        <div style={{ paddingBottom: "20vh" }}></div>
+      </TransclusionLookupProvider>
+    </PublicDocumentContext.Provider>
   );
 }

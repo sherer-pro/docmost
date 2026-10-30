@@ -35,6 +35,7 @@ import {
   DatabaseRowPageIdDto,
   DatabaseExportFormat,
   ExportDatabaseDto,
+  MoveDatabaseViewRowDto,
 } from './dto/database.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthPolicyScope } from '../../common/decorators/auth-policy-scope.decorator';
@@ -44,6 +45,25 @@ import { createExportRequestLifetime } from '../../integrations/export/export-re
 @Controller('databases')
 export class DatabaseController {
   constructor(private readonly databaseService: DatabaseService) {}
+
+  @HttpCode(HttpStatus.OK)
+  @AuthPolicyScope('resource', { resourceType: 'database', key: 'databaseId' })
+  @Post(':databaseId/views/:viewId/rows/actions/move')
+  async moveViewRow(
+    @Param('databaseId', ParseUUIDPipe) databaseId: string,
+    @Param('viewId', ParseUUIDPipe) viewId: string,
+    @Body() dto: MoveDatabaseViewRowDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.databaseService.moveViewRow(
+      databaseId,
+      viewId,
+      dto,
+      user,
+      workspace.id,
+    );
+  }
 
   /**
    * Creates a database.

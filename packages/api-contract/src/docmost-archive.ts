@@ -102,6 +102,7 @@ export interface DocmostArchiveDatabaseView {
   name: string;
   type: string;
   config: unknown;
+  rowPositions?: Array<{ pageId: string; position: string }>;
 }
 
 export interface DocmostArchiveLabel {

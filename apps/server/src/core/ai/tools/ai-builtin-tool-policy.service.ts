@@ -117,8 +117,17 @@ export class AiBuiltinToolPolicyService {
     const maximumCapabilities = this.systemCapabilities('agent');
     const maximum = new Set(maximumCapabilities);
     const effectiveCapabilities = policy.enabled
-      ? policy.allowedCapabilities.filter((capability) =>
-          maximum.has(capability),
+      ? policy.allowedCapabilities.filter(
+          (capability) =>
+            maximum.has(capability) &&
+            (!policy.readOnly ||
+              this.registry
+                .list('agent')
+                .some(
+                  (tool) =>
+                    tool.capability === capability &&
+                    tool.writeClass === 'read_only',
+                )),
         )
       : [];
     return {
@@ -135,6 +144,12 @@ export class AiBuiltinToolPolicyService {
     workspace: Workspace,
   ): Promise<AiBuiltinToolWorkspacePolicyView> {
     this.assertWorkspaceAdmin(user);
+    const modes = {
+      ...(dto.readOnly === undefined ? {} : { readOnly: dto.readOnly }),
+      ...(dto.knowledgeOnly === undefined
+        ? {}
+        : { knowledgeOnly: dto.knowledgeOnly }),
+    };
     const allowedCapabilities = this.validateCapabilities(
       dto.allowedCapabilities,
       'agent',
@@ -144,12 +159,14 @@ export class AiBuiltinToolPolicyService {
       .values({
         workspaceId: workspace.id,
         enabled: dto.enabled,
+        ...modes,
         allowedCapabilities: postgresJsonb(allowedCapabilities) as never,
         updatedById: user.id,
       })
       .onConflict((oc) =>
         oc.column('workspaceId').doUpdateSet({
           enabled: dto.enabled,
+          ...modes,
           allowedCapabilities: postgresJsonb(allowedCapabilities) as never,
           policyVersion: sql<number>`ai_builtin_tool_workspace_policies.policy_version + 1`,
           updatedById: user.id,
@@ -170,6 +187,10 @@ export class AiBuiltinToolPolicyService {
     return {
       spaceId,
       inherited: resolved.spaceAllowedCapabilities === null,
+      readOnly: resolved.readOnly,
+      knowledgeOnly: resolved.knowledgeOnly,
+      workspaceReadOnly: resolved.workspaceReadOnly,
+      workspaceKnowledgeOnly: resolved.workspaceKnowledgeOnly,
       allowedCapabilities: resolved.spaceAllowedCapabilities,
       workspaceAllowedCapabilities: resolved.workspaceAllowedCapabilities,
       effectiveCapabilities: resolved.capabilities,
@@ -187,6 +208,12 @@ export class AiBuiltinToolPolicyService {
   ): Promise<AiBuiltinToolSpacePolicyView> {
     await this.assertCanManageSpace(user, spaceId);
     const workspacePolicy = await this.readWorkspacePolicy(workspace.id);
+    const modes = {
+      ...(dto.readOnly === undefined ? {} : { readOnly: dto.readOnly }),
+      ...(dto.knowledgeOnly === undefined
+        ? {}
+        : { knowledgeOnly: dto.knowledgeOnly }),
+    };
     const requested =
       dto.allowedCapabilities === null
         ? null
@@ -204,12 +231,14 @@ export class AiBuiltinToolPolicyService {
       .values({
         workspaceId: workspace.id,
         spaceId,
+        ...modes,
         allowedCapabilities:
           requested === null ? null : (postgresJsonb(requested) as never),
         updatedById: user.id,
       })
       .onConflict((oc) =>
         oc.column('spaceId').doUpdateSet({
+          ...modes,
           allowedCapabilities:
             requested === null ? null : (postgresJsonb(requested) as never),
           policyVersion: sql<number>`ai_builtin_tool_space_policies.policy_version + 1`,
@@ -238,6 +267,14 @@ export class AiBuiltinToolPolicyService {
   ): Promise<AiBuiltinToolCapability[]> {
     const resolved = await this.resolve(workspaceId, spaceId, exposure);
     return resolved.capabilities;
+  }
+
+  async getEffectiveModes(workspaceId: string, spaceId: string) {
+    const resolved = await this.resolve(workspaceId, spaceId, 'agent');
+    return {
+      readOnly: resolved.readOnly,
+      knowledgeOnly: resolved.knowledgeOnly,
+    };
   }
 
   async assertMcpToolAllowed(apiKey: ApiKey, toolName: string): Promise<void> {
@@ -343,9 +380,7 @@ export class AiBuiltinToolPolicyService {
     toolName: string,
   ): Promise<AiToolDefinition> {
     const definitions = await this.assertRunPolicyCurrent(run);
-    const definition = definitions.find(
-      (tool) => tool.name === toolName,
-    );
+    const definition = definitions.find((tool) => tool.name === toolName);
     if (!definition) {
       throw new ForbiddenException({
         code: 'agent_tool_policy_changed',
@@ -386,7 +421,12 @@ export class AiBuiltinToolPolicyService {
     const workspace = await this.readWorkspacePolicy(workspaceId, db);
     const space = await db
       .selectFrom('aiBuiltinToolSpacePolicies')
-      .select(['allowedCapabilities', 'policyVersion'])
+      .select([
+        'allowedCapabilities',
+        'policyVersion',
+        'readOnly',
+        'knowledgeOnly',
+      ])
       .where('workspaceId', '=', workspaceId)
       .where('spaceId', '=', spaceId)
       .executeTakeFirst();
@@ -412,8 +452,24 @@ export class AiBuiltinToolPolicyService {
         allowed.has(capability),
       );
     }
+    const readOnly = workspace.readOnly || Boolean(space?.readOnly);
+    const knowledgeOnly =
+      workspace.knowledgeOnly || Boolean(space?.knowledgeOnly);
+    if (readOnly) {
+      const reads = new Set(
+        this.registry
+          .list(exposure)
+          .filter((tool) => tool.writeClass === 'read_only')
+          .map((tool) => tool.capability),
+      );
+      capabilities = capabilities.filter((capability) => reads.has(capability));
+    }
     return {
       capabilities,
+      readOnly,
+      knowledgeOnly,
+      workspaceReadOnly: workspace.readOnly,
+      workspaceKnowledgeOnly: workspace.knowledgeOnly,
       workspaceAllowedCapabilities: workspace.enabled
         ? workspace.allowedCapabilities.filter((capability) =>
             system.has(capability),
@@ -431,11 +487,19 @@ export class AiBuiltinToolPolicyService {
   ) {
     const row = await db
       .selectFrom('aiBuiltinToolWorkspacePolicies')
-      .select(['enabled', 'allowedCapabilities', 'policyVersion'])
+      .select([
+        'enabled',
+        'allowedCapabilities',
+        'policyVersion',
+        'readOnly',
+        'knowledgeOnly',
+      ])
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
     return {
       enabled: row?.enabled ?? true,
+      readOnly: row?.readOnly ?? false,
+      knowledgeOnly: row?.knowledgeOnly ?? false,
       allowedCapabilities: row
         ? this.readCapabilities(row.allowedCapabilities)
         : [...AI_LEGACY_AGENT_CAPABILITIES],

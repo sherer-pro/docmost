@@ -170,6 +170,16 @@ export function formatDatabaseValue(
           )
           .join(", ")
       : "";
+  if (type === "select") {
+    const id =
+      typeof value === "object"
+        ? ((value as { value?: unknown; id?: unknown }).value ??
+          (value as { id?: unknown }).id)
+        : value;
+    return String(
+      options.find((option) => option.value === id)?.label ?? id ?? "",
+    );
+  }
   if (type === "number") {
     if (typeof value !== "number") return "";
     const numberSettings = settings as {

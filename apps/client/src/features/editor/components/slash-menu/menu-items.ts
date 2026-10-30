@@ -42,6 +42,7 @@ import { createLinkPreviewAction } from "@/features/editor/components/link-previ
 import IconExcalidraw from "@/components/icons/icon-excalidraw";
 import IconMermaid from "@/components/icons/icon-mermaid";
 import IconDrawio from "@/components/icons/icon-drawio";
+import i18n from "@/i18n";
 import {
   AirtableIcon,
   FigmaIcon,
@@ -84,6 +85,37 @@ function createTagMenuItem(tag: TagDefinition): SlashMenuItemType {
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
+    {
+      title: "Time",
+      description: "Insert current time",
+      searchTerms: ["time", "clock"],
+      icon: IconCalendar,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent(
+            new Intl.DateTimeFormat(i18n.language, {
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date()),
+          )
+          .run(),
+    },
+    {
+      title: "dbBoard.embed",
+      description: "dbBoard.embedDescription",
+      searchTerms: ["database", "base", "view"],
+      icon: IconTable,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertContent({ type: "databaseEmbed" })
+          .run(),
+    },
     {
       title: "Text",
       description: "Just start typing with plain text.",
@@ -742,6 +774,8 @@ export const getSuggestionItems = ({
     const filteredItems = items.filter((item) => {
       return (
         fuzzyMatch(search, item.title) ||
+        fuzzyMatch(search, i18n.t(item.title)) ||
+        i18n.t(item.description).toLocaleLowerCase().includes(search) ||
         item.description.toLowerCase().includes(search) ||
         (item.searchTerms &&
           item.searchTerms.some((term: string) => term.includes(search)))

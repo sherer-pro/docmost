@@ -9,6 +9,7 @@ import { Youtube } from '@tiptap/extension-youtube';
 import { TaskList, TaskItem } from '@tiptap/extension-list';
 import {
   Heading,
+  DatabaseEmbed,
   Callout,
   Comment,
   CustomCodeBlock,
@@ -58,6 +59,7 @@ import { prosemirrorToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import { Logger } from '@nestjs/common';
 
 export const tiptapExtensions = [
+  DatabaseEmbed,
   StarterKit.configure({
     codeBlock: false,
     link: false,

@@ -61,6 +61,90 @@ async function selectShared(page: Page) {
   ).toHaveValue("Shared view");
 }
 
+test("live AI cell preview, explicit approval and durable row receipt", async ({
+  page,
+}, info) => {
+  await open(page);
+  await api(
+    page.request,
+    `/ai/conversations/${fixture.aiApproval.conversationId}/actions/open`,
+    "POST",
+    {},
+  );
+  await page.getByRole("button", { name: /Open AI assistant/i }).click();
+  const aside = page.locator("#docmost-context-aside");
+  const preview = aside.getByRole("group", {
+    name: "Proposed page change",
+    exact: true,
+  });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("row")).toHaveCount(3);
+  await expect(preview.getByText("Alpha", { exact: true })).toHaveCount(2);
+  await expect(preview.getByText("Beta", { exact: true })).toHaveCount(2);
+  await preview.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath("ai-database-preview.png") });
+  await aside.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(
+    aside.getByText("Applied rows: 2", { exact: true }),
+  ).toBeVisible();
+  const run = await api(page.request, `/ai/runs/${fixture.aiApproval.runId}`);
+  expect(
+    run.steps.find((step: any) => step.id === fixture.aiApproval.stepId).result
+      .updatedRows,
+  ).toEqual(fixture.ids.slice(154, 156));
+  await aside.getByRole("button", { name: "Close panel", exact: true }).click();
+  await expect(aside).toHaveAttribute("aria-hidden", "true");
+  await expect
+    .poll(
+      async () =>
+        (await api(page.request, "/users/me")).user?.settings?.preferences
+          ?.aiPanelOpen,
+    )
+    .toBe(false);
+});
+
+test("live record drawer preserves table context and supports direct links", async ({
+  page,
+}) => {
+  await open(page);
+  const title = page.getByRole("link", { name: "Row 0101", exact: true });
+  await title.click();
+  const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(
+    drawer.getByText("Synthetic row 101", { exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`record=${fixture.ids[101]}`));
+  await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "Record", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "Record", exact: true })
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(page.getByText("Rows: 900", { exact: true })).toBeVisible();
+  await expect(cell(page, 101)).toBeVisible();
+});
+
+test("live direct record navigation seeks beyond loaded rows", async ({
+  page,
+}) => {
+  await page.goto(`${fixture.route}?record=${fixture.ids[800]}`);
+  const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+  await expect(
+    drawer.getByText("Synthetic row 800", { exact: true }),
+  ).toBeVisible();
+  await drawer.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(
+    drawer.getByText("Synthetic row 801", { exact: true }),
+  ).toBeVisible();
+  await drawer.getByRole("button", { name: "Previous", exact: true }).click();
+  await expect(
+    drawer.getByText("Synthetic row 800", { exact: true }),
+  ).toBeVisible();
+});
+
 for (const theme of ["light", "dark"])
   for (const width of [320, 390, 768, 1440]) {
     test(`live responsive database ${theme} ${width}`, async ({
@@ -398,6 +482,9 @@ test("live two clients preserve view conflicts and explicitly apply the draft", 
     await page
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("First client");
+    await page
+      .getByRole("button", { name: "Save for everyone", exact: true })
+      .click();
     await expect
       .poll(
         async () =>
@@ -409,6 +496,9 @@ test("live two clients preserve view conflicts and explicitly apply the draft", 
     await other
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("Second client");
+    await other
+      .getByRole("button", { name: "Save for everyone", exact: true })
+      .click();
     await expect(
       other.getByText(
         "This view changed in another session. Your draft is preserved.",

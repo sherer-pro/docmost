@@ -110,4 +110,25 @@ describe("Database data entry contracts", () => {
       }),
     ).toThrow();
   });
+  it("preserves format 3 layouts and refuses corrupt or future layouts", () => {
+    const layout = {
+      version: 3,
+      columnOrder: ["a", "b"],
+      columnWidths: { a: 320 },
+      kanban: {
+        columnOrder: ["null", '"done"'],
+        hiddenColumns: ["null"],
+        cardProperties: ["a"],
+      },
+    };
+    expect(normalizeDatabaseViewState(layout)).toMatchObject(layout);
+    expect(normalizeDatabaseViewState({ version: 2 }).version).toBe(2);
+    for (const invalid of [
+      { version: 4 },
+      { columnWidths: { a: Infinity } },
+      { columnOrder: ["a", "a"] },
+      { kanban: { cardProperties: "a" } },
+    ])
+      expect(() => normalizeDatabaseViewState(invalid)).toThrow();
+  });
 });

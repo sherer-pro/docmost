@@ -937,6 +937,8 @@
 }
 
 .approvalPreview {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid
     light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-5));
   border-radius: var(--mantine-radius-md);

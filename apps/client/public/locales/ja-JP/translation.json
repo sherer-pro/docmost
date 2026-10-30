@@ -1641,11 +1641,12 @@
             "step2": "Test Chat および Agent",
             "step3": "Enable 宇宙モデルと対象プロファイル",
             "step4": "スマートフォンでキーボードを開き、Chat と Agent、スペース検索スイッチ、フッター、メッセージ欄を確認します",
-            "step5": "ドキュメントとスペース設定を切り替え、ブラウザーの戻る・進むを使ってください。アシスタントが現在のドキュメントのタイトルを使用することを確認してください。"
+            "step5": "ドキュメントとスペース設定を切り替え、ブラウザーの戻る・進むを使ってください。アシスタントが現在のドキュメントのタイトルを使用することを確認してください。",
+            "step6": "データベースビューと必要な行を選択し、Agentで照会や集計を行います。承認前にすべてのセル変更を確認してください。提案は20行、100セル、32 KiBまでです。セルのリビジョンが競合すると該当行は拒否されます。"
           },
           "success": "テストの解答が完了します。 Agent は許可されたツールのみをリストし、書き込み前に質問します",
           "rollback": "Agent または宇宙モデルを無効にして、前回の正常な設定を復元します。",
-          "technical": "組み込みアシスタントは、スペースに設定されたプロバイダーを介して、ページに紐づく非公開チャットを管理します。スペース設定には、今日と直近7日間のリクエスト数とトークン使用量が表示されます。エージェントモードは許可された Docmost ツールを呼び出せますが、ページの変更は操作を開始したユーザーが確認した後にのみ適用します。変更を適用する直前に、サーバーは現在のページへの書き込み権限と、deployment、workspace、space、profile、group の各レベルのツールポリシーを再確認します。スペースのプロフィール編集画面にはローカライズされたツール名が表示され、有効なモデル上書きポリシーはスペーススコープのプロフィール一覧から取得されます。マスタースイッチを変更できるのはワークスペース管理者だけです。共有知識プロジェクションは、有効な文書フィールドとカスタムフィールド、名前付きデータベースプロパティとセル、有効な辞書用語（`dictionary_term`）を AI 検索とツールコンテキストに追加します。選定済みの `AI_ASSISTANT_PROFILE_ICONS` 契約は、プロフィール編集画面とチャットパネルで一貫して表示される {{profileIconCount}} 個のローカライズ済みアイコンを提供します。 追加メニューを閉じた後もチャットのファイル選択は有効です。選択したファイルがアップロードされるか、検証エラーが表示されます。 Agent の承認ハッシュは、変更の適用前にエディターの既定属性と Yjs の正規化を反映します。 非テキストノードの text フィールドは承認前に拒否されます。段落のテキストには子テキストノードを使用します。"
+          "technical": "組み込みアシスタントは、スペースに設定されたプロバイダーを介して、ページに紐づく非公開チャットを管理します。スペース設定には、今日と直近7日間のリクエスト数とトークン使用量が表示されます。エージェントモードは許可された Docmost ツールを呼び出せますが、ページの変更は操作を開始したユーザーが確認した後にのみ適用します。変更を適用する直前に、サーバーは現在のページへの書き込み権限と、deployment、workspace、space、profile、group の各レベルのツールポリシーを再確認します。スペースのプロフィール編集画面にはローカライズされたツール名が表示され、有効なモデル上書きポリシーはスペーススコープのプロフィール一覧から取得されます。マスタースイッチを変更できるのはワークスペース管理者だけです。共有知識プロジェクションは、有効な文書フィールドとカスタムフィールド、名前付きデータベースプロパティとセル、有効な辞書用語（`dictionary_term`）を AI 検索とツールコンテキストに追加します。選定済みの `AI_ASSISTANT_PROFILE_ICONS` 契約は、プロフィール編集画面とチャットパネルで一貫して表示される {{profileIconCount}} 個のローカライズ済みアイコンを提供します。 追加メニューを閉じた後もチャットのファイル選択は有効です。選択したファイルがアップロードされるか、検証エラーが表示されます。 Agent の承認ハッシュは、変更の適用前にエディターの既定属性と Yjs の正規化を反映します。 非テキストノードの text フィールドは承認前に拒否されます。段落のテキストには子テキストノードを使用します。\n\nデータベースビューと必要な行を選択し、Agentで照会や集計を行います。承認前にすべてのセル変更を確認してください。提案は20行、100セル、32 KiBまでです。セルのリビジョンが競合すると該当行は拒否されます。 queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. アクセス可能なページ、ファイル、ツール結果に基づく回答を必須にします。スペースやプロファイルはワークスペースの制限を緩和できません。\n\n管理者がデータベース機能を明示的に有効にする必要があります。ソースへのアクセスが取り消されると結果とプレビューは非表示になります。 AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "スペース検索は回答の生成中に実行されます。外部インデックスから候補を取得した後、Docmost がデータベース、現在のアクセス権、AI の除外設定に基づいて各ソースを再検証します。検索に失敗してもチャットは中断されません。",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "セルの変更を提案"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "現在のページのテキストを置換",
         "patchNode": "現在のページのブロックを置換",
         "insertNode": "現在のページにブロックを挿入",
-        "deleteNode": "現在のページからブロックを削除"
+        "deleteNode": "現在のページからブロックを削除",
+        "queryDatabaseView": "データベースビューを照会",
+        "summarizeDatabaseView": "データベースの合計を計算",
+        "proposeDatabaseCells": "セルの変更を提案"
       },
       "category": {
         "search": "検索",
@@ -2645,6 +2650,25 @@
         "history": "履歴",
         "attachments": "添付ファイル",
         "sharing": "公開共有"
+      },
+      "readOnly": "回答のみ",
+      "readOnlyDescription": "アシスタントは内容を読めますが、変更を提案できません。",
+      "knowledgeOnly": "許可された情報源から回答",
+      "knowledgeOnlyDescription": "アクセス可能なページ、ファイル、ツール結果に基づく回答を必須にします。スペースやプロファイルはワークスペースの制限を緩和できません。",
+      "preset": "動作モード",
+      "answersOnly": "回答のみ",
+      "confirmChanges": "確認後に変更を提案"
+    },
+    "database": {
+      "row": "レコード",
+      "property": "プロパティ",
+      "scope": "現在のデータベースビュー · 選択行数: {{count}}",
+      "receipt": "データベースの変更",
+      "appliedRows": "適用した行: {{count}}",
+      "failure": {
+        "conflict": "セルのリビジョンまたはスキーマが変更されました。新しい提案を作成してください。",
+        "forbidden": "書き込み権限が取り消されました。",
+        "invalid_value": "値が無効になりました。"
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "保存されました",
     "saving": "保存中...",
     "saved": "保存されました",
-    "error": "データの更新に失敗しました"
+    "error": "データの更新に失敗しました",
+    "dirty": "個人の下書き"
   },
-  "Move block": "ブロックを移動"
+  "Move block": "ブロックを移動",
+  "dbBoard": {
+    "board": "カンバン",
+    "layout": "レイアウト",
+    "cardFields": "カードの項目",
+    "hiddenColumns": "非表示の列",
+    "sorted": "カードは並び替えに従います。手動の並べ替えは無効です。",
+    "selectRequired": "ボードに使用する単一選択項目を選んでください。",
+    "columnActions": "列の操作",
+    "moveTo": "列へ移動",
+    "moveFailed": "移動に失敗しました。データを更新して再試行してください。",
+    "csv": "現在のビューのCSV",
+    "record": "レコード",
+    "openPage": "ページ全体を開く",
+    "contentPreview": "ページのプレビューです。編集するにはページ全体を開いてください。",
+    "saveShared": "全員に保存",
+    "columnWidth": "列幅",
+    "embed": "データベースビュー",
+    "embedDescription": "既存のデータベースまたはビューをリンク",
+    "sourceLink": "内部データベースリンク",
+    "sourceUnavailable": "ビューを表示できません",
+    "openSource": "元のデータベースを開く",
+    "insertView": "このビューを挿入しますか？",
+    "emptyColumn": "値なし"
+  },
+  "Time": "時刻",
+  "Insert current time": "現在の時刻を挿入",
+  "documentUpdates": {
+    "compareWith": "比較対象"
+  }
 }

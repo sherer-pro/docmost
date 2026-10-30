@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { usePageQuery } from "@/features/page/queries/page-query";
+import { useCommentDeepLink } from "@/features/comment/hooks/use-comment-deep-link";
 import { FullEditor } from "@/features/editor/full-editor";
 import HistoryModal from "@/features/page-history/components/history-modal";
 import { Helmet } from "react-helmet-async";
@@ -97,6 +98,7 @@ function PageContent({
   const templateCapabilitiesQuery = usePageTemplateCapabilitiesQuery(
     page?.spaceId,
   );
+  useCommentDeepLink(page?.id);
   const templateCapabilities = templateCapabilitiesQuery.data;
   const { data: currentSpace } = useSpaceQuery(page?.spaceId ?? "");
   const pageCapabilities = page?.access?.capabilities;

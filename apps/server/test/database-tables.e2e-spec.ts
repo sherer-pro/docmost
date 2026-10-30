@@ -10,6 +10,7 @@ import { CamelCasePlugin, Kysely, sql } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { postgres } from '../src/database/postgres-client';
 import { up as createDatabaseTables } from '../src/database/migrations/20260301T120000-databases';
+import { up as addViewRowOrder } from '../src/database/migrations/20261030T190000-database-view-row-order';
 import {
   up as addRevisions,
   down as removeRevisions,
@@ -21,8 +22,11 @@ import { DatabasePropertyRepo } from '../src/database/repos/database/database-pr
 import { DatabaseViewRepo } from '../src/database/repos/database/database-view.repo';
 import { DatabaseViewQueryService } from '../src/core/database/services/database-view-query.service';
 import { DatabaseService } from '../src/core/database/services/database.service';
+import { AiDatabaseService } from '../src/core/ai/services/ai-database.service';
+import { AiRunStepService } from '../src/core/ai/services/ai-run-step.service';
 import { normalizeDatabaseViewState } from '@docmost/api-contract';
 import { ExportService } from '../src/integrations/export/export.service';
+import { materializeDatabaseEmbeds } from '../src/integrations/export/database-embed-export';
 import { DocmostArchiveImportService } from '../src/integrations/import/services/docmost-archive-import.service';
 import * as JSZip from 'jszip';
 import { ForbiddenException } from '@nestjs/common';
@@ -99,7 +103,7 @@ suite('Database tables PostgreSQL acceptance', () => {
       db,
     );
     await sql`create table workspaces(id uuid primary key)`.execute(db);
-    await sql`create table users(id uuid primary key, workspace_id uuid, name text, email text)`.execute(
+    await sql`create table users(id uuid primary key, workspace_id uuid, name text, email text, deleted_at timestamptz, deactivated_at timestamptz)`.execute(
       db,
     );
     await sql`create table spaces(id uuid primary key, workspace_id uuid, name text, slug text, description text, settings jsonb default '{}')`.execute(
@@ -120,6 +124,13 @@ suite('Database tables PostgreSQL acceptance', () => {
       db,
     );
     await addRevisions(db);
+    await addViewRowOrder(db);
+    await sql`create table ai_runs(id uuid primary key, user_id uuid, workspace_id uuid, space_id uuid, page_id uuid, database_context jsonb, status text, sequence integer default 1, heartbeat_at timestamptz, enqueued_at timestamptz, updated_at timestamptz)`.execute(
+      db,
+    );
+    await sql`create table ai_run_steps(id uuid primary key, run_id uuid, tool_name text, status text, arguments jsonb, result jsonb, target_page_id uuid, decided_by_id uuid, error_code text, error_message text, updated_at timestamptz)`.execute(
+      db,
+    );
     await createOutbox(db);
     await allowNotificationDispatch(db);
     await db.insertInto('workspaces').values({ id: workspaceId }).execute();
@@ -257,7 +268,10 @@ suite('Database tables PostgreSQL acceptance', () => {
         }),
         getAssignableSpaceUserIds: async () => new Set([actorId, assignedId]),
       } as any,
-      { enqueuePageEvents: async () => {} } as any,
+      {
+        enqueuePageEvents: async () => {},
+        recordPageEvents: async () => {},
+      } as any,
       {} as any,
       db as any,
       undefined,
@@ -306,6 +320,123 @@ suite('Database tables PostgreSQL acceptance', () => {
     expect(summary.values[propertyIds[2]]).toBe('2026-10-12');
   });
 
+  it('queries complete AI-allowed views and rolls approved cell batches back with their transaction', async () => {
+    const root = await db
+      .selectFrom('databases')
+      .select('pageId')
+      .where('id', '=', databaseId)
+      .executeTakeFirstOrThrow();
+    await db
+      .updateTable('databases')
+      .set({ pageId: ids[100] })
+      .where('id', '=', databaseId)
+      .execute();
+    const excluded = new Set([ids[101]]);
+    const ai = new AiDatabaseService(
+      db as any,
+      {
+        getSidebarAccessSnapshot: async () => ({
+          readablePageIds: readable,
+          writablePageIds: readable,
+        }),
+      } as any,
+      { getExcludedPageIds: async () => excluded } as any,
+      queryService,
+      service,
+    );
+    const state = normalizeDatabaseViewState({
+      calculations: { [propertyIds[0]]: 'sum' },
+    });
+    const context = {
+      user: actor,
+      workspaceId,
+      spaceId,
+      currentPageId: ids[100],
+      databaseContext: { databaseId, viewState: state, selectedPageIds: [] },
+    };
+    try {
+      const total: any = await ai.read({ databaseId }, context, true);
+      expect(total.count).toBe(899);
+      expect(total.values[propertyIds[0]]).toBe(494449);
+      const selection = {
+        ...context,
+        databaseContext: {
+          ...context.databaseContext,
+          selectedPageIds: [ids[902], ids[903]],
+        },
+      };
+      const before = await cells.findByDatabaseAndPage(databaseId, ids[902]);
+      const current = before.find((cell) => cell.propertyId === propertyIds[0]);
+      const proposal = await ai.propose(
+        {
+          databaseId,
+          rows: [
+            {
+              pageId: ids[902],
+              cells: [
+                {
+                  propertyId: propertyIds[0],
+                  expectedRevision: current.revision,
+                  value: 9999,
+                },
+              ],
+            },
+          ],
+        },
+        selection,
+      );
+      await expect(
+        db.transaction().execute(async (trx) => {
+          expect(
+            (
+              await ai.apply(
+                proposal.writeProposal.operation,
+                selection,
+                trx as any,
+              )
+            ).updatedRows,
+          ).toEqual([ids[902]]);
+          throw new Error('synthetic pre-commit failure');
+        }),
+      ).rejects.toThrow('synthetic pre-commit failure');
+      expect(
+        (await cells.findByDatabaseAndPage(databaseId, ids[902])).find(
+          (cell) => cell.propertyId === propertyIds[0],
+        ),
+      ).toMatchObject({ value: current.value, revision: current.revision });
+      const applied = await db
+        .transaction()
+        .execute((trx) =>
+          ai.apply(proposal.writeProposal.operation, selection, trx as any),
+        );
+      expect(applied.updatedRows).toEqual([ids[902]]);
+      const replay = await db
+        .transaction()
+        .execute((trx) =>
+          ai.apply(proposal.writeProposal.operation, selection, trx as any),
+        );
+      expect(replay.updatedRows).toEqual([]);
+      expect(replay.failedRows).toEqual([
+        { pageId: ids[902], code: 'conflict' },
+      ]);
+      await cells.upsertCell({
+        databaseId,
+        pageId: ids[902],
+        propertyId: propertyIds[0],
+        value: current.value,
+        workspaceId,
+        createdById: actorId,
+        updatedById: actorId,
+      });
+    } finally {
+      await db
+        .updateTable('databases')
+        .set({ pageId: root.pageId })
+        .where('id', '=', databaseId)
+        .execute();
+    }
+  });
+
   it('uses numerical multi-sort and has no duplicates across page boundaries', async () => {
     const view = input();
     view.state.sorts = [
@@ -322,6 +453,55 @@ suite('Database tables PostgreSQL acceptance', () => {
     expect(
       new Set([...first.items, ...second.items].map((row) => row.pageId)).size,
     ).toBe(200);
+  });
+
+  it('seeks record neighbors outside loaded pages using the same sort, filter and ACL', async () => {
+    const view = input();
+    view.state.sorts = [{ propertyId: propertyIds[0], direction: 'desc' }];
+    expect(
+      (
+        await queryService.list(view, {
+          neighborOf: ids[800],
+          neighborDirection: 'previous',
+        })
+      ).items[0].pageId,
+    ).toBe(ids[801]);
+    expect(
+      (
+        await queryService.list(view, {
+          neighborOf: ids[800],
+          neighborDirection: 'next',
+        })
+      ).items[0].pageId,
+    ).toBe(ids[799]);
+    expect(
+      (
+        await queryService.list(view, {
+          neighborOf: ids[50],
+          neighborDirection: 'next',
+        })
+      ).items,
+    ).toEqual([]);
+    view.state.filter = {
+      conjunction: 'and',
+      conditions: [{ propertyId: propertyIds[0], operator: 'gt', value: 850 }],
+    };
+    expect(
+      (
+        await queryService.list(view, {
+          neighborOf: ids[800],
+          neighborDirection: 'next',
+        })
+      ).items,
+    ).toEqual([]);
+    expect(
+      (
+        await queryService.list(view, {
+          neighborOf: ids[851],
+          neighborDirection: 'next',
+        })
+      ).items,
+    ).toEqual([]);
   });
 
   it('supports nested OR filters and tag groups without double-counting global totals', async () => {
@@ -382,6 +562,372 @@ suite('Database tables PostgreSQL acceptance', () => {
         (cell) => cell.propertyId === propertyIds[7],
       ).value,
     ).toBe(JSON.stringify('legacy text'));
+  });
+
+  it('commits AI cells with their step receipt and never replays a committed approval', async () => {
+    const root = await db
+      .selectFrom('databases')
+      .select('pageId')
+      .where('id', '=', databaseId)
+      .executeTakeFirstOrThrow();
+    await db
+      .updateTable('databases')
+      .set({ pageId: ids[100] })
+      .where('id', '=', databaseId)
+      .execute();
+    const selected = ids[970];
+    const before = (
+      await cells.findByDatabaseAndPage(databaseId, selected)
+    ).find((cell) => cell.propertyId === propertyIds[0])!;
+    const access = {
+      getSidebarAccessSnapshot: async () => ({
+        readablePageIds: readable,
+        writablePageIds: readable,
+      }),
+    } as any;
+    const databases = new AiDatabaseService(
+      db as any,
+      access,
+      { getExcludedPageIds: async () => new Set() } as any,
+      queryService,
+      service,
+    );
+    const context = {
+      user: actor,
+      workspaceId,
+      spaceId,
+      currentPageId: ids[100],
+      databaseContext: {
+        databaseId,
+        viewState: normalizeDatabaseViewState({}),
+        selectedPageIds: [selected],
+      },
+    };
+    const proposal = await databases.propose(
+      {
+        databaseId,
+        rows: [
+          {
+            pageId: selected,
+            cells: [
+              {
+                propertyId: propertyIds[0],
+                value: 77,
+                expectedRevision: before.revision,
+              },
+            ],
+          },
+        ],
+      },
+      context,
+    );
+    const runId = randomUUID(),
+      stepId = randomUUID();
+    const executor = new AiRunStepService(
+      db as any,
+      {
+        enqueue: async () => true,
+        assertRunSourcesAccessible: async () => {},
+      } as any,
+      { emitStep: () => {}, emitStatus: () => {} } as any,
+      {} as any,
+      access,
+      {} as any,
+      {} as any,
+      {
+        assertRunToolAllowed: async () => ({
+          writeClass: 'write',
+          targetScope: 'current_database',
+          approvalMode: 'database_cell_revisions',
+        }),
+      } as any,
+      { assertRunProfileCurrent: async () => {} } as any,
+      databases,
+    );
+    try {
+      await db
+        .insertInto('aiRuns')
+        .values({
+          id: runId,
+          userId: actorId,
+          workspaceId,
+          spaceId,
+          pageId: ids[100],
+          databaseContext: sql`${JSON.stringify(context.databaseContext)}::text::jsonb`,
+          status: 'awaiting_approval',
+        })
+        .execute();
+      await db
+        .insertInto('aiRunSteps')
+        .values({
+          id: stepId,
+          runId,
+          toolName: 'proposeDatabaseCells',
+          status: 'approved',
+          arguments: sql`${JSON.stringify({ ...proposal.writeProposal.operation, pageId: ids[100] })}::text::jsonb`,
+          result: sql`${JSON.stringify(proposal.content)}::text::jsonb`,
+          targetPageId: ids[100],
+          decidedById: actorId,
+        })
+        .execute();
+      const transaction = db.transaction.bind(db);
+      const injection = jest.spyOn(db, 'transaction').mockImplementationOnce(
+        () =>
+          ({
+            execute: (fn) =>
+              transaction().execute(async (trx) => {
+                const update = trx.updateTable.bind(trx);
+                (trx as any).updateTable = (table) => {
+                  if (table === 'aiRunSteps')
+                    throw new Error('Synthetic crash before receipt commit');
+                  return update(table);
+                };
+                return fn(trx);
+              }),
+          }) as any,
+      );
+      await expect(
+        (executor as any).recoverApprovedStep(runId, stepId),
+      ).rejects.toThrow('Synthetic crash before receipt commit');
+      injection.mockRestore();
+      expect(
+        (await cells.findByDatabaseAndPage(databaseId, selected)).find(
+          (cell) => cell.propertyId === propertyIds[0],
+        ),
+      ).toMatchObject({ value: before.value, revision: before.revision });
+      await (executor as any).recoverApprovedStep(runId, stepId);
+      const after = (
+        await cells.findByDatabaseAndPage(databaseId, selected)
+      ).find((cell) => cell.propertyId === propertyIds[0]);
+      expect(after).toMatchObject({ value: 77, revision: before.revision + 1 });
+      const receipt = await db
+        .selectFrom('aiRunSteps')
+        .selectAll()
+        .where('id', '=', stepId)
+        .executeTakeFirstOrThrow();
+      expect(receipt.result).toMatchObject({
+        applied: true,
+        updatedRows: [selected],
+        failedRows: [],
+      });
+      expect(
+        await (executor as any).recoverApprovedStep(runId, stepId),
+      ).toBeUndefined();
+      await db
+        .updateTable('aiRuns')
+        .set({ status: 'awaiting_approval' })
+        .where('id', '=', runId)
+        .execute();
+      expect(
+        await (executor as any).recoverApprovedStep(runId, stepId),
+      ).toBeUndefined();
+      expect(
+        (
+          await db
+            .selectFrom('aiRuns')
+            .selectAll()
+            .where('id', '=', runId)
+            .executeTakeFirstOrThrow()
+        ).status,
+      ).toBe('awaiting_approval');
+      expect(
+        (await cells.findByDatabaseAndPage(databaseId, selected)).find(
+          (cell) => cell.propertyId === propertyIds[0],
+        )?.revision,
+      ).toBe(before.revision + 1);
+    } finally {
+      await db
+        .updateTable('databases')
+        .set({ pageId: root.pageId })
+        .where('id', '=', databaseId)
+        .execute();
+      await db
+        .updateTable('databaseCells')
+        .set({ value: before.value, revision: before.revision })
+        .where('id', '=', before.id)
+        .execute();
+      await db.deleteFrom('aiRunSteps').where('runId', '=', runId).execute();
+      await db.deleteFrom('aiRuns').where('id', '=', runId).execute();
+    }
+  });
+
+  it('exports complete linked views with independent source access and hides them publicly', async () => {
+    const content = {
+      type: 'doc',
+      content: [{ type: 'databaseEmbed', attrs: { databaseId } }],
+    };
+    const access = {
+      getSidebarAccessSnapshot: async () => ({ readablePageIds: readable }),
+    } as any;
+    const original = await db
+      .selectFrom('databases')
+      .select('pageId')
+      .where('id', '=', databaseId)
+      .executeTakeFirstOrThrow();
+    await db
+      .updateTable('databases')
+      .set({ pageId: ids[100] })
+      .where('id', '=', databaseId)
+      .execute();
+    try {
+      const publicSnapshot = await materializeDatabaseEmbeds(
+        content,
+        db as any,
+        access,
+      );
+      expect(JSON.stringify(publicSnapshot)).not.toContain(
+        'Synthetic database',
+      );
+      const denied = await materializeDatabaseEmbeds(
+        content,
+        db as any,
+        {
+          getSidebarAccessSnapshot: async () => ({
+            readablePageIds: new Set(),
+          }),
+        } as any,
+        actor,
+      );
+      expect(JSON.stringify(denied)).not.toContain('Row 100');
+      const snapshot = await materializeDatabaseEmbeds(
+        content,
+        db as any,
+        access,
+        actor,
+      );
+      const table = snapshot.content.find((n) => n.type === 'table');
+      expect(table.content).toHaveLength(901);
+      expect(
+        table.content
+          .slice(1)
+          .map((row) => row.content[0].content[0].content[0].text),
+      ).not.toContain('Row 0');
+    } finally {
+      await db
+        .updateTable('databases')
+        .set({ pageId: original.pageId })
+        .where('id', '=', databaseId)
+        .execute();
+    }
+  });
+
+  it('keeps a view-specific order across pages, rejects stale moves and protects format 3', async () => {
+    const selected = ids.slice(930, 933);
+    const previous = await db
+      .selectFrom('pages')
+      .select(['id', 'position', 'title'])
+      .where('id', 'in', selected)
+      .execute();
+    for (const [index, id] of selected.entries())
+      await db
+        .updateTable('pages')
+        .set({ title: `Orderable ${index}`, position: `a${index}` })
+        .where('id', '=', id)
+        .execute();
+    const config = normalizeDatabaseViewState({
+      version: 3,
+      columnOrder: [propertyIds[0]],
+      columnWidths: { [propertyIds[0]]: 310 },
+      filter: {
+        conjunction: 'and',
+        conditions: [
+          { propertyId: 'title', operator: 'contains', value: 'Orderable' },
+        ],
+      },
+    });
+    const view = await service.createView(
+      databaseId,
+      { name: 'Ordered', type: 'table', config },
+      actor,
+      workspaceId,
+    );
+    try {
+      await service.moveViewRow(
+        databaseId,
+        view.id,
+        {
+          pageId: selected[2],
+          beforePageId: selected[1],
+          expectedPosition: 'a2',
+          expectedViewRevision: view.revision,
+        },
+        actor,
+        workspaceId,
+      );
+      const request = { ...input(), state: config, viewId: view.id };
+      const first = await queryService.list(request, { limit: 2 });
+      const next = await queryService.list(request, {
+        limit: 2,
+        cursor: first.nextCursor,
+      });
+      expect([...first.items, ...next.items].map((r: any) => r.pageId)).toEqual(
+        [selected[0], selected[2], selected[1]],
+      );
+      await expect(
+        service.moveViewRow(
+          databaseId,
+          view.id,
+          {
+            pageId: selected[2],
+            beforePageId: selected[0],
+            expectedPosition: 'a2',
+            expectedViewRevision: view.revision,
+          },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(
+        service.updateView(
+          databaseId,
+          view.id,
+          {
+            config: normalizeDatabaseViewState({}),
+            expectedRevision: view.revision,
+          },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      await service.updateView(
+        databaseId,
+        view.id,
+        {
+          config: {
+            ...config,
+            sorts: [{ propertyId: 'title', direction: 'asc' }],
+          },
+          expectedRevision: view.revision,
+        },
+        actor,
+        workspaceId,
+      );
+      await expect(
+        service.moveViewRow(
+          databaseId,
+          view.id,
+          {
+            pageId: selected[1],
+            expectedPosition: 'a1',
+            expectedViewRevision: view.revision + 1,
+          },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await db
+        .deleteFrom('databaseViewRowPositions')
+        .where('viewId', '=', view.id)
+        .execute();
+      await db.deleteFrom('databaseViews').where('id', '=', view.id).execute();
+      for (const page of previous)
+        await db
+          .updateTable('pages')
+          .set({ position: page.position, title: page.title })
+          .where('id', '=', page.id)
+          .execute();
+    }
   });
 
   it('rejects stale cell and view revisions', async () => {
@@ -839,7 +1385,12 @@ suite('Database tables PostgreSQL acceptance', () => {
     await db.transaction().execute(async (trx) =>
       (importer as any).insertDatabases({
         data,
-        fileTask: { workspaceId, spaceId, creatorId: actorId },
+        fileTask: {
+          id: randomUUID(),
+          workspaceId,
+          spaceId,
+          creatorId: actorId,
+        },
         pageIdMap: pageMap,
         slugIdMap: pageMap,
         databaseIdMap: new Map([[databaseId, importedId]]),

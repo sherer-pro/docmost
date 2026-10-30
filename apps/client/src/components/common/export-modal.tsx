@@ -52,13 +52,15 @@ export default function ExportModal({
   const formatOptions = getExportFormatValues(type).map((value) => ({
     value,
     label:
-      value === ExportFormat.Docmost
-        ? t("export.format.docmost")
-        : value === ExportFormat.Markdown
-          ? t("export.format.markdown")
-          : value === ExportFormat.HTML
-            ? t("export.format.html")
-            : t("Print PDF"),
+      value === DatabaseExportFormat.CSV
+        ? t("dbBoard.csv")
+        : value === ExportFormat.Docmost
+          ? t("export.format.docmost")
+          : value === ExportFormat.Markdown
+            ? t("export.format.markdown")
+            : value === ExportFormat.HTML
+              ? t("export.format.html")
+              : t("Print PDF"),
   }));
 
   const modalTitle =

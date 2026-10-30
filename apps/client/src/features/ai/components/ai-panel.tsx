@@ -19,6 +19,7 @@ import {
   Tooltip,
   VisuallyHidden,
 } from "@mantine/core";
+import { AiDatabaseReceipt } from "./ai-database-receipt";
 import {
   IconAlertTriangle,
   IconArrowDown,
@@ -46,6 +47,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type { Editor } from "@tiptap/core";
+import { databaseAiContextAtom } from "@/features/database/atoms/database-ai-context-atom";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery, useReducedMotion } from "@mantine/hooks";
@@ -207,6 +209,7 @@ export function AiPanel() {
     typeof activeSelection === "string" ? activeSelection : undefined;
   const isLocalDraft = activeSelection === null;
   const conversations = conversationsQuery.data ?? [];
+  const databaseContexts = useAtomValue(databaseAiContextAtom);
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   );
@@ -726,6 +729,9 @@ export function AiPanel() {
         content: normalizedContent,
         pageId: documentContext.pageId,
         clientRequestId: crypto.randomUUID(),
+        databaseContext: documentContext.databaseId
+          ? databaseContexts[documentContext.databaseId]
+          : undefined,
         contextRevision: savedContext.revision,
         useSpaceSearch:
           useSpaceSearch && availabilityQuery.data?.retrievalAvailable === true,
@@ -2087,11 +2093,17 @@ export function AiPanel() {
                 />
               )}
 
+            <AiDatabaseReceipt conversationId={activeConversationId} />
             {pendingRun?.status === "awaiting_approval" && (
               <Alert
                 icon={<IconRobot size={18} />}
-                title={t("ai.agent.approvalTitle")}
+                title={t(
+                  pendingApproval?.approvalPreview?.kind === "databaseCells"
+                    ? "ai.toolPolicy.tool.proposeDatabaseCells"
+                    : "ai.agent.approvalTitle",
+                )}
                 color="blue"
+                styles={{ body: { minWidth: 0 }, message: { minWidth: 0 } }}
               >
                 {pendingRunQuery.isLoading ? (
                   <Loader size="xs" />
@@ -2247,6 +2259,31 @@ export function AiPanel() {
                 onRetrySave={retryContextSave}
                 onPrepareConversation={ensureConversation}
               />
+              {documentContext.databaseId &&
+                databaseContexts[documentContext.databaseId] && (
+                  <Text size="xs" c="dimmed" role="status">
+                    {t("ai.database.scope", {
+                      count:
+                        databaseContexts[documentContext.databaseId]
+                          .selectedPageIds.length,
+                    })}
+                  </Text>
+                )}
+              {(availabilityQuery.data?.readOnly ||
+                availabilityQuery.data?.knowledgeOnly) && (
+                <Text size="xs" c="dimmed" role="status">
+                  {availabilityQuery.data.readOnly
+                    ? t("ai.toolPolicy.readOnly")
+                    : ""}
+                  {availabilityQuery.data.readOnly &&
+                  availabilityQuery.data.knowledgeOnly
+                    ? " · "
+                    : ""}
+                  {availabilityQuery.data.knowledgeOnly
+                    ? t("ai.toolPolicy.knowledgeOnly")
+                    : ""}
+                </Text>
+              )}
               {(composerContextItems.length > 0 || useSpaceSearch) && (
                 <Group gap={6} wrap="nowrap" className={classes.contextChipRow}>
                   {visibleComposerContextItems.map((item) => (

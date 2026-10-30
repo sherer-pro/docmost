@@ -5,6 +5,7 @@ export enum DatabaseExportFormat {
   Markdown = "markdown",
   HTML = "html",
   PDF = "pdf",
+  CSV = "csv",
 }
 
 export interface DatabaseSelectOption {
@@ -70,12 +71,19 @@ export type DatabaseCalculation =
   | "earliest"
   | "latest";
 export interface DatabaseViewState {
-  version: 2;
+  version: 2 | 3;
   filter?: DatabaseFilterGroup;
   sorts: DatabaseSort[];
   groupBy?: string | null;
   visibleColumns: Record<string, boolean>;
   calculations: Record<string, DatabaseCalculation>;
+  columnOrder?: string[];
+  columnWidths?: Record<string, number>;
+  kanban?: {
+    columnOrder: string[];
+    hiddenColumns: string[];
+    cardProperties: string[];
+  };
 }
 export interface DatabaseSummary {
   count: number;
@@ -179,6 +187,8 @@ export interface UpdateDatabaseViewPayload {
 }
 
 export interface DatabaseExportViewSnapshot {
+  viewId?: string;
+  groupKey?: string;
   viewState?: DatabaseViewState;
   filters?: string;
   sortPropertyId?: string;

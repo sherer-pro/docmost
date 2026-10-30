@@ -37,3 +37,4 @@ export * from "./lib/pdf";
 export * from "./lib/indent";
 export * from "./lib/page-break";
 export * from "./lib/tag";
+export * from "./lib/database-embed";

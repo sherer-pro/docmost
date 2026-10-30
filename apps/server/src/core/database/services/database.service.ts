@@ -6,6 +6,8 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { sql } from 'kysely';
+import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
 import { DatabaseCellRepo } from '@docmost/db/repos/database/database-cell.repo';
@@ -39,6 +41,7 @@ import {
   UpdateDatabaseDto,
   UpdateDatabasePropertyDto,
   UpdateDatabaseViewDto,
+  MoveDatabaseViewRowDto,
 } from '../dto/database.dto';
 import {
   normalizeDatabaseValue,
@@ -61,6 +64,7 @@ import { DatabaseExportService } from './database-export.service';
 import type { DatabaseExportTableState } from './database-export.types';
 import { DatabaseViewQueryService } from './database-view-query.service';
 import { DatabaseSearchProjectionService } from './database-search-projection.service';
+import { databaseSchemaFingerprint } from '../../../common/helpers/database-schema.util';
 
 interface IDatabaseCellValueWithFallback {
   value: unknown;
@@ -1293,6 +1297,8 @@ export class DatabaseService {
         user,
         workspaceId,
         currentView.viewState,
+        currentView.groupKey,
+        currentView.viewId,
       );
       rows = (await this.viewQuery.list(input, {})).items;
     } else
@@ -1358,14 +1364,28 @@ export class DatabaseService {
     const visiblePropertyIds = currentView?.visiblePropertyIds
       ? new Set(currentView.visiblePropertyIds)
       : null;
+    const viewState = currentView?.viewState
+      ? normalizeDatabaseViewState(currentView.viewState)
+      : null;
+    const orderedProperties = normalizedProperties
+      .filter((p) => !viewState || viewState.visibleColumns[p.id] !== false)
+      .sort((a, b) => {
+        const order =
+          currentView?.visiblePropertyIds ?? viewState?.columnOrder ?? [];
+        const rank = (id: string) =>
+          order.includes(id)
+            ? order.indexOf(id)
+            : order.length + normalizedProperties.findIndex((p) => p.id === id);
+        return rank(a.id) - rank(b.id);
+      });
 
     return {
       database,
       properties: visiblePropertyIds
-        ? normalizedProperties.filter((property) =>
+        ? orderedProperties.filter((property) =>
             visiblePropertyIds.has(property.id),
           )
-        : normalizedProperties,
+        : orderedProperties,
       rows: preparedRows,
       allRowPageIds: new Set(
         normalizedRows.map((row) => row.pageId).filter(Boolean),
@@ -2088,6 +2108,7 @@ export class DatabaseService {
     workspaceId: string,
     rawState: string | unknown,
     groupKey?: string,
+    viewId?: string,
   ) {
     let parsed: unknown;
     try {
@@ -2101,6 +2122,11 @@ export class DatabaseService {
     ]);
     const normalized = this.normalizeProperties(properties);
     const state = this.viewQuery.validateState(parsed, normalized);
+    if (viewId) {
+      const view = await this.databaseViewRepo.findById(viewId);
+      if (!view || view.databaseId !== database.id)
+        throw new NotFoundException('Database view not found');
+    }
     return {
       databaseId: database.id,
       workspaceId,
@@ -2110,6 +2136,7 @@ export class DatabaseService {
       properties: normalized,
       state,
       groupKey,
+      viewId,
     };
   }
 
@@ -2141,13 +2168,14 @@ export class DatabaseService {
     await this.assertCanReadDatabasePages(user, database.spaceId);
     await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
-    if (query?.viewState) {
+    if (query?.viewState || query?.neighborOf) {
       const input = await this.getViewQueryInput(
         database,
         user,
         workspaceId,
-        query.viewState,
+        query.viewState ?? {},
         query.groupKey,
+        query.viewId,
       );
       const result = await this.viewQuery.list(input, query);
       const users = new Set(
@@ -2469,6 +2497,11 @@ export class DatabaseService {
     dto: BatchUpdateDatabaseCellsDto,
     user: User,
     workspaceId: string,
+    options?: {
+      trx: KyselyTransaction;
+      requireExistingRow: boolean;
+      schemaFingerprint: string;
+    },
   ) {
     const database = await this.getOrFailDatabase(databaseId, workspaceId);
     await this.assertCanManageDatabasePages(user, database.spaceId);
@@ -2485,238 +2518,270 @@ export class DatabaseService {
       user,
     );
 
-    const mutation = await executeTx(this.db, async (trx) => {
-      await this.databaseRepo.lockForMutation(databaseId, trx);
-      const [existingRow, existingCells, properties] = await Promise.all([
-        this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId, trx),
-        this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId, trx),
-        this.databasePropertyRepo.findByDatabaseId(databaseId, trx),
-      ]);
+    const mutation = await executeTx(
+      this.db,
+      async (trx) => {
+        await this.databaseRepo.lockForMutation(databaseId, trx);
+        const [existingRow, existingCells, properties] = await Promise.all([
+          this.databaseRowRepo.findByDatabaseAndPage(databaseId, pageId, trx),
+          this.databaseCellRepo.findByDatabaseAndPage(databaseId, pageId, trx),
+          this.databasePropertyRepo.findByDatabaseId(databaseId, trx),
+        ]);
 
-      const normalizedProperties = this.normalizeProperties(properties);
-      const propertyById = new Map(
-        normalizedProperties.map((property) => [property.id, property]),
-      );
-      for (const cell of dto.cells) {
-        if (!propertyById.has(cell.propertyId)) {
-          throw new BadRequestException(
-            'Database cell property does not belong to this database',
-          );
-        }
-      }
-
-      const currentUserIds = new Map(
-        existingCells.map((cell) => [
-          cell.propertyId,
-          this.extractUserIdFromCellValue(cell.value),
-        ]),
-      );
-      const newUserIds: string[] = [];
-      for (const cell of dto.cells) {
-        if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
-        const nextUserId =
-          cell.operation === 'delete'
-            ? null
-            : this.extractUserIdFromCellValue(cell.value);
-        if (nextUserId && nextUserId !== currentUserIds.get(cell.propertyId)) {
-          newUserIds.push(nextUserId);
-        }
-        currentUserIds.set(cell.propertyId, nextUserId);
-      }
-      if (newUserIds.length > 0) {
-        const assignableIds =
-          await this.pageAccessService.getAssignableSpaceUserIds(
-            newUserIds,
-            database.spaceId,
-            workspaceId,
-          );
-        if (newUserIds.some((id) => !assignableIds.has(id))) {
-          throw new BadRequestException(
-            'Database user must be an active space member',
-          );
-        }
-      }
-
-      const historyUserNameCache = new Map<string, string>();
-      const historyPageReferenceCache = new Map<
-        string,
-        IDatabasePageReferenceCellValue
-      >();
-      const row =
-        existingRow ??
-        (await this.databaseRowRepo.insertRow(
-          {
-            databaseId,
-            pageId,
-            workspaceId,
-            createdById: user.id,
-            updatedById: user.id,
-          },
-          trx,
-        ));
-      const previousCellsByPropertyId = new Map(
-        existingCells.map((existingCell) => [
-          existingCell.propertyId,
-          existingCell,
-        ]),
-      );
-      const cells = [];
-      const cellChanges: Array<{
-        propertyId: string;
-        propertyName: string;
-        propertyType: DatabasePropertyType | null;
-        operation: 'upsert' | 'delete';
-        oldValue: unknown;
-        newValue: unknown;
-      }> = [];
-
-      for (const cell of dto.cells) {
-        const property = propertyById.get(cell.propertyId);
-        const previousCell = previousCellsByPropertyId.get(cell.propertyId);
+        const normalizedProperties = this.normalizeProperties(properties);
         if (
-          cell.expectedRevision !== undefined &&
-          cell.expectedRevision !== (previousCell?.revision ?? 0)
-        )
-          throw new ConflictException('Database cell was changed');
-        const previousUserId =
-          property?.type === 'user'
-            ? this.extractUserIdFromCellValue(previousCell?.value)
-            : null;
-        const propertyType = property
-          ? this.normalizePropertyType(property.type)
-          : null;
-        const oldHistoryValue = await this.resolveHistoryCellValue({
-          propertyType,
-          propertySettings: property?.settings,
-          value: previousCell?.value,
-          workspaceId,
-          userNameCache: historyUserNameCache,
-          pageReferenceCache: historyPageReferenceCache,
-        });
+          options?.requireExistingRow &&
+          (!existingRow || existingRow.archivedAt)
+        ) {
+          throw new NotFoundException('Database row not found');
+        }
+        if (
+          options?.schemaFingerprint &&
+          databaseSchemaFingerprint(normalizedProperties) !==
+            options.schemaFingerprint
+        ) {
+          throw new ConflictException('Database schema was changed');
+        }
+        const propertyById = new Map(
+          normalizedProperties.map((property) => [property.id, property]),
+        );
+        for (const cell of dto.cells) {
+          if (!propertyById.has(cell.propertyId)) {
+            throw new BadRequestException(
+              'Database cell property does not belong to this database',
+            );
+          }
+        }
 
-        if (cell.operation === 'delete') {
-          const deleted = await this.databaseCellRepo.upsertCell(
+        const currentUserIds = new Map(
+          existingCells.map((cell) => [
+            cell.propertyId,
+            this.extractUserIdFromCellValue(cell.value),
+          ]),
+        );
+        const newUserIds: string[] = [];
+        for (const cell of dto.cells) {
+          if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
+          const nextUserId =
+            cell.operation === 'delete'
+              ? null
+              : this.extractUserIdFromCellValue(cell.value);
+          if (
+            nextUserId &&
+            nextUserId !== currentUserIds.get(cell.propertyId)
+          ) {
+            newUserIds.push(nextUserId);
+          }
+          currentUserIds.set(cell.propertyId, nextUserId);
+        }
+        if (newUserIds.length > 0) {
+          const assignableIds =
+            await this.pageAccessService.getAssignableSpaceUserIds(
+              newUserIds,
+              database.spaceId,
+              workspaceId,
+            );
+          if (newUserIds.some((id) => !assignableIds.has(id))) {
+            throw new BadRequestException(
+              'Database user must be an active space member',
+            );
+          }
+        }
+
+        const historyUserNameCache = new Map<string, string>();
+        const historyPageReferenceCache = new Map<
+          string,
+          IDatabasePageReferenceCellValue
+        >();
+        const row =
+          existingRow ??
+          (await this.databaseRowRepo.insertRow(
+            {
+              databaseId,
+              pageId,
+              workspaceId,
+              createdById: user.id,
+              updatedById: user.id,
+            },
+            trx,
+          ));
+        const previousCellsByPropertyId = new Map(
+          existingCells.map((existingCell) => [
+            existingCell.propertyId,
+            existingCell,
+          ]),
+        );
+        const cells = [];
+        const cellChanges: Array<{
+          propertyId: string;
+          propertyName: string;
+          propertyType: DatabasePropertyType | null;
+          operation: 'upsert' | 'delete';
+          oldValue: unknown;
+          newValue: unknown;
+        }> = [];
+
+        for (const cell of dto.cells) {
+          const property = propertyById.get(cell.propertyId);
+          const previousCell = previousCellsByPropertyId.get(cell.propertyId);
+          if (options?.requireExistingRow && previousCell?.attachmentId) {
+            throw new BadRequestException('AI cannot modify attachment cells');
+          }
+          if (
+            cell.expectedRevision !== undefined &&
+            cell.expectedRevision !== (previousCell?.revision ?? 0)
+          )
+            throw new ConflictException('Database cell was changed');
+          const previousUserId =
+            property?.type === 'user'
+              ? this.extractUserIdFromCellValue(previousCell?.value)
+              : null;
+          const propertyType = property
+            ? this.normalizePropertyType(property.type)
+            : null;
+          const oldHistoryValue = await this.resolveHistoryCellValue({
+            propertyType,
+            propertySettings: property?.settings,
+            value: previousCell?.value,
+            workspaceId,
+            userNameCache: historyUserNameCache,
+            pageReferenceCache: historyPageReferenceCache,
+          });
+
+          if (cell.operation === 'delete') {
+            const deleted = await this.databaseCellRepo.upsertCell(
+              {
+                databaseId,
+                pageId,
+                propertyId: cell.propertyId,
+                workspaceId,
+                value: null,
+                attachmentId: null,
+                createdById: user.id,
+                updatedById: user.id,
+              },
+              trx,
+            );
+            const softDeleted = await this.databaseCellRepo.updateCell(
+              deleted.id,
+              {
+                deletedAt: new Date(),
+                value: null,
+                attachmentId: null,
+                updatedById: user.id,
+              },
+              trx,
+            );
+            cells.push(softDeleted);
+            cellChanges.push({
+              propertyId: cell.propertyId,
+              propertyName: property?.name ?? cell.propertyId,
+              propertyType,
+              operation: 'delete',
+              oldValue: oldHistoryValue ?? null,
+              newValue: null,
+            });
+            continue;
+          }
+
+          let normalizedValue: unknown;
+          try {
+            normalizedValue = normalizeDatabaseValue(
+              propertyType,
+              cell.value,
+              property?.settings as never,
+            );
+          } catch (error) {
+            throw new BadRequestException(
+              error instanceof Error ? error.message : 'Invalid database input',
+            );
+          }
+          if (propertyType === 'page_reference' && normalizedValue) {
+            await this.assertCanAccessTargetPage(
+              normalizedValue as string,
+              workspaceId,
+              database.spaceId,
+              user,
+              'read',
+            );
+          }
+          const upserted = await this.databaseCellRepo.upsertCell(
             {
               databaseId,
               pageId,
               propertyId: cell.propertyId,
               workspaceId,
-              value: null,
-              attachmentId: null,
+              value: normalizedValue as never,
+              attachmentId: cell.attachmentId ?? null,
               createdById: user.id,
               updatedById: user.id,
             },
             trx,
           );
-          const softDeleted = await this.databaseCellRepo.updateCell(
-            deleted.id,
-            {
-              deletedAt: new Date(),
-              value: null,
-              attachmentId: null,
-              updatedById: user.id,
-            },
-            trx,
-          );
-          cells.push(softDeleted);
+
+          if (property?.type === 'user') {
+            const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
+            if (
+              nextUserId &&
+              nextUserId !== previousUserId &&
+              nextUserId !== user.id
+            ) {
+              await this.notifyDatabaseUserAssignment(
+                {
+                  eventId: uuid7(),
+                  actorId: user.id,
+                  pageId,
+                  spaceId: database.spaceId,
+                  workspaceId,
+                  recipientId: nextUserId,
+                },
+                trx,
+              );
+            }
+          }
+
+          previousCellsByPropertyId.set(cell.propertyId, upserted);
+          cells.push(upserted);
+          const newHistoryValue = await this.resolveHistoryCellValue({
+            propertyType,
+            propertySettings: property?.settings,
+            value: upserted.value,
+            workspaceId,
+            userNameCache: historyUserNameCache,
+            pageReferenceCache: historyPageReferenceCache,
+          });
           cellChanges.push({
             propertyId: cell.propertyId,
             propertyName: property?.name ?? cell.propertyId,
             propertyType,
-            operation: 'delete',
+            operation: 'upsert',
             oldValue: oldHistoryValue ?? null,
-            newValue: null,
+            newValue: newHistoryValue ?? null,
           });
-          continue;
         }
 
-        let normalizedValue: unknown;
-        try {
-          normalizedValue = normalizeDatabaseValue(
-            propertyType,
-            cell.value,
-            property?.settings as never,
-          );
-        } catch (error) {
-          throw new BadRequestException(
-            error instanceof Error ? error.message : 'Invalid database input',
-          );
-        }
-        if (propertyType === 'page_reference' && normalizedValue) {
-          await this.assertCanAccessTargetPage(
-            normalizedValue as string,
-            workspaceId,
-            database.spaceId,
-            user,
-            'read',
-          );
-        }
-        const upserted = await this.databaseCellRepo.upsertCell(
-          {
-            databaseId,
+        if (cellChanges.length > 0) {
+          await this.databaseSearchProjection?.refreshRow(
             pageId,
-            propertyId: cell.propertyId,
             workspaceId,
-            value: normalizedValue as never,
-            attachmentId: cell.attachmentId ?? null,
-            createdById: user.id,
-            updatedById: user.id,
-          },
-          trx,
-        );
-
-        if (property?.type === 'user') {
-          const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
-          if (
-            nextUserId &&
-            nextUserId !== previousUserId &&
-            nextUserId !== user.id
-          ) {
-            await this.notifyDatabaseUserAssignment(
-              {
-                eventId: uuid7(),
-                actorId: user.id,
-                pageId,
-                spaceId: database.spaceId,
-                workspaceId,
-                recipientId: nextUserId,
-              },
-              trx,
-            );
-          }
+            trx,
+          );
         }
+        if (options?.trx && cellChanges.length) {
+          await this.pageHistoryRecorder.recordPageEvents({
+            pageIds: [pageId],
+            actorId: user.id,
+            changeType: 'database.row.cells.updated',
+            changeData: { databaseId, changes: cellChanges },
+            trx,
+          });
+        }
+        return { row, cells, cellChanges };
+      },
+      options?.trx,
+    );
 
-        previousCellsByPropertyId.set(cell.propertyId, upserted);
-        cells.push(upserted);
-        const newHistoryValue = await this.resolveHistoryCellValue({
-          propertyType,
-          propertySettings: property?.settings,
-          value: upserted.value,
-          workspaceId,
-          userNameCache: historyUserNameCache,
-          pageReferenceCache: historyPageReferenceCache,
-        });
-        cellChanges.push({
-          propertyId: cell.propertyId,
-          propertyName: property?.name ?? cell.propertyId,
-          propertyType,
-          operation: 'upsert',
-          oldValue: oldHistoryValue ?? null,
-          newValue: newHistoryValue ?? null,
-        });
-      }
-
-      if (cellChanges.length > 0) {
-        await this.databaseSearchProjection?.refreshRow(
-          pageId,
-          workspaceId,
-          trx,
-        );
-      }
-      return { row, cells, cellChanges };
-    });
-
-    if (mutation.cellChanges.length > 0) {
+    if (mutation.cellChanges.length > 0 && !options?.trx) {
       await this.recordDatabaseRowHistoryEvent({
         database,
         rowPageId: pageId,
@@ -2884,7 +2949,7 @@ export class DatabaseService {
     );
   }
 
-  private async enqueuePageSearchRefresh(pageId: string): Promise<void> {
+  async enqueuePageSearchRefresh(pageId: string): Promise<void> {
     try {
       await this.searchQueue?.add(QueueJob.PAGE_UPDATED, {
         pageIds: [pageId],
@@ -2943,6 +3008,7 @@ export class DatabaseService {
       dto.config,
       this.normalizeProperties(properties),
     );
+    this.validateViewType(dto.type, config, properties);
     return this.databaseViewRepo.insertView({
       databaseId,
       workspaceId,
@@ -2996,7 +3062,20 @@ export class DatabaseService {
         dto.config,
         this.normalizeProperties(properties),
       );
+      if ((view.config as any)?.version === 3 && normalizedConfig.version !== 3)
+        throw new ConflictException('This view requires a newer client');
+      this.validateViewType(
+        dto.type ?? view.type,
+        normalizedConfig,
+        properties,
+      );
     }
+    if (dto.type && dto.config === undefined)
+      this.validateViewType(
+        dto.type,
+        normalizeDatabaseViewState(view.config),
+        await this.databasePropertyRepo.findByDatabaseId(databaseId),
+      );
     const { expectedRevision, config, ...payload } = dto;
     return this.databaseViewRepo.updateView(
       viewId,
@@ -3009,6 +3088,103 @@ export class DatabaseService {
       undefined,
       expectedRevision,
     );
+  }
+
+  private validateViewType(
+    type: string,
+    config: import('@docmost/api-contract').DatabaseViewState,
+    properties: any[],
+  ) {
+    if (!['table', 'kanban'].includes(type))
+      throw new BadRequestException('Unsupported database view');
+    if (
+      type === 'kanban' &&
+      properties.find((p) => p.id === config.groupBy)?.type !== 'select'
+    )
+      throw new BadRequestException('Kanban requires a single select property');
+    if (type === 'kanban') {
+      config.version = 3;
+      config.kanban ??= {
+        columnOrder: [],
+        hiddenColumns: [],
+        cardProperties: [],
+      };
+    }
+    if (type === 'table' && config.kanban)
+      throw new BadRequestException('Table view cannot contain a board layout');
+  }
+
+  async moveViewRow(
+    databaseId: string,
+    viewId: string,
+    dto: MoveDatabaseViewRowDto,
+    user: User,
+    workspaceId: string,
+  ) {
+    const database = await this.getOrFailDatabase(databaseId, workspaceId);
+    await this.assertCanManageDatabasePages(user, database.spaceId);
+    await this.assertCanAccessDatabasePage(
+      database,
+      workspaceId,
+      user,
+      'write',
+    );
+    const snapshot = await this.pageAccessService.getSidebarAccessSnapshot(
+      user,
+      database.spaceId,
+    );
+    if (
+      !snapshot.writablePageIds?.has(dto.pageId) ||
+      (dto.beforePageId && !snapshot.readablePageIds.has(dto.beforePageId))
+    )
+      throw new ForbiddenException('Database row is inaccessible');
+    if (dto.pageId === dto.beforePageId)
+      throw new BadRequestException('Invalid row position');
+    return executeTx(this.db, async (trx) => {
+      await this.databaseRepo.lockForMutation(databaseId, trx);
+      const view = await trx
+        .selectFrom('databaseViews')
+        .selectAll()
+        .where('id', '=', viewId)
+        .where('databaseId', '=', databaseId)
+        .where('deletedAt', 'is', null)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!view) throw new NotFoundException('Database view not found');
+      if (
+        view.revision !== dto.expectedViewRevision ||
+        normalizeDatabaseViewState(view.config).sorts.length
+      )
+        throw new ConflictException('View changed or has an active sort');
+      const positions = await sql<{
+        pageId: string;
+        position: string;
+      }>`select r.page_id, coalesce(v.position, p.position) as position from database_rows r join pages p on p.id = r.page_id left join database_view_row_positions v on v.page_id = r.page_id and v.view_id = ${viewId}::uuid where r.database_id = ${databaseId}::uuid and r.archived_at is null and p.deleted_at is null and r.page_id = any(${[...snapshot.readablePageIds]}::uuid[]) order by coalesce(v.position, p.position) collate "C", r.page_id`.execute(
+        trx,
+      );
+      const current = positions.rows.find((r) => r.pageId === dto.pageId);
+      if (!current) throw new NotFoundException('Database row not found');
+      if (current.position !== dto.expectedPosition)
+        throw new ConflictException('Row order changed');
+      const remaining = positions.rows.filter((r) => r.pageId !== dto.pageId);
+      const index = dto.beforePageId
+        ? remaining.findIndex((r) => r.pageId === dto.beforePageId)
+        : remaining.length;
+      if (index < 0) throw new NotFoundException('Target row not found');
+      let position: string;
+      try {
+        position = generateJitteredKeyBetween(
+          remaining[index - 1]?.position ?? null,
+          remaining[index]?.position ?? null,
+        );
+      } catch {
+        throw new ConflictException('Row order requires a refresh');
+      }
+      await sql`insert into database_view_row_positions(view_id, page_id, position) values(${viewId}::uuid, ${dto.pageId}::uuid, ${position}) on conflict(view_id, page_id) do update set position = excluded.position`.execute(
+        trx,
+      );
+      return { pageId: dto.pageId, position };
+    });
   }
 
   /**

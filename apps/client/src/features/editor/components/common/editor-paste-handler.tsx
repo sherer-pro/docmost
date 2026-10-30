@@ -5,6 +5,11 @@ import { createMentionAction } from "@/features/editor/components/link/internal-
 import { createLinkPreviewAction } from "@/features/editor/components/link-preview/link-preview-action";
 import { INTERNAL_LINK_REGEX } from "@/lib/constants.ts";
 import { Editor } from "@tiptap/core";
+import { parseDatabaseEmbedUrl } from "../database-embed/database-embed-url";
+import { modals } from "@mantine/modals";
+import i18n from "@/i18n";
+import { getPageById } from "@/features/page/services/page-service";
+import { extractPageSlugId } from "@/lib";
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -27,6 +32,55 @@ export const handlePaste = (
   options?: HandlePasteOptions,
 ) => {
   const clipboardData = event.clipboardData.getData("text/plain");
+  const databaseLink =
+    !options?.plainTextRequested && editor.state.selection.empty
+      ? parseDatabaseEmbedUrl(clipboardData.trim())
+      : null;
+  if (databaseLink) {
+    event.preventDefault();
+    const insertLink = () => {
+      if (!editor.isDestroyed)
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "text",
+            text: clipboardData.trim(),
+            marks: [{ type: "link", attrs: { href: clipboardData.trim() } }],
+          })
+          .run();
+    };
+    modals.openConfirmModal({
+      title: i18n.t("dbBoard.insertView"),
+      labels: { confirm: i18n.t("dbBoard.embed"), cancel: i18n.t("Link") },
+      onConfirm: async () => {
+        try {
+          const page = await getPageById({
+            pageId: extractPageSlugId(databaseLink.pageSlug),
+          });
+          if (!page.databaseId || editor.isDestroyed) {
+            insertLink();
+            return;
+          }
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: "databaseEmbed",
+              attrs: {
+                databaseId: page.databaseId,
+                viewId: databaseLink.viewId ?? null,
+              },
+            })
+            .run();
+        } catch {
+          insertLink();
+        }
+      },
+      onCancel: insertLink,
+    });
+    return true;
+  }
 
   if (INTERNAL_LINK_REGEX.test(clipboardData)) {
     // we have to do this validation here to allow the default link extension to takeover if needs be
@@ -73,7 +127,7 @@ export const handlePaste = (
     return true;
   }
 
-    // Convert plain URL into a preview card only for regular paste actions.
+  // Convert plain URL into a preview card only for regular paste actions.
   // For plain-text paste (Ctrl/Cmd+Shift+V or context menu "Paste as text"),
   // keep default behavior and skip preview insertion.
   const trimmedClipboardData = clipboardData.trim();
@@ -82,17 +136,15 @@ export const handlePaste = (
     (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey === true;
   const hasSelection = !editor.state.selection.empty;
 
-  if (
-    !isPlainTextPaste &&
-    !hasSelection &&
-    isHttpUrl(trimmedClipboardData)
-  ) {
+  if (!isPlainTextPaste && !hasSelection && isHttpUrl(trimmedClipboardData)) {
     event.preventDefault();
-    void createLinkPreviewAction(editor, trimmedClipboardData).then((inserted) => {
-      if (!inserted) {
-        editor.chain().focus().insertContent(trimmedClipboardData).run();
-      }
-    });
+    void createLinkPreviewAction(editor, trimmedClipboardData).then(
+      (inserted) => {
+        if (!inserted) {
+          editor.chain().focus().insertContent(trimmedClipboardData).run();
+        }
+      },
+    );
 
     return true;
   }

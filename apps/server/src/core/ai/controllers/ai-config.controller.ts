@@ -20,6 +20,7 @@ import {
   UpdateAiSpaceConfigDto,
 } from '../dto/ai.dto';
 import { AiConfigService } from '../services/ai-config.service';
+import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 
 @UseGuards(JwtAuthGuard)
 @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
@@ -81,20 +82,27 @@ export class AiConfigController {
 @AuthPolicyScope('space', { source: 'params', key: 'spaceId' })
 @Controller('spaces/:spaceId/ai/status')
 export class AiStatusController {
-  constructor(private readonly aiConfigService: AiConfigService) {}
+  constructor(
+    private readonly aiConfigService: AiConfigService,
+    private readonly toolPolicy: AiBuiltinToolPolicyService,
+  ) {}
 
   @Get()
-  get(
+  async get(
     @Param('spaceId', ParseUUIDPipe) spaceId: string,
     @Query() query: AiStatusQueryDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.aiConfigService.getStatus(
+    const status = await this.aiConfigService.getStatus(
       spaceId,
       query.pageId,
       user,
       workspace,
     );
+    return {
+      ...status,
+      ...(await this.toolPolicy.getEffectiveModes(workspace.id, spaceId)),
+    };
   }
 }

@@ -1,4 +1,5 @@
 export * from './lib/trailing-node';
+export * from './lib/database-embed';
 export * from './lib/comment/comment';
 export * from './lib/utils';
 export * from './lib/math';

@@ -78,11 +78,7 @@ const SAFE_MARK_TYPES = new Set([
 
 const AI_APPROVAL_PREVIEW_TEXT_LIMIT = 4000;
 
-const ID_NODE_TYPES = new Set([
-  'paragraph',
-  'heading',
-  'transclusionSource',
-]);
+const ID_NODE_TYPES = new Set(['paragraph', 'heading', 'transclusionSource']);
 const MAX_NODE_JSON_BYTES = 32 * 1024;
 const MAX_OPERATION_TEXT_LENGTH = 16 * 1024;
 
@@ -222,6 +218,30 @@ export function extractAiApprovalPreview(
     return null;
   }
   const value = preview as Record<string, unknown>;
+  if (value.kind === 'databaseCells') {
+    if (
+      typeof value.databaseId !== 'string' ||
+      typeof value.pageId !== 'string' ||
+      typeof value.pageTitle !== 'string' ||
+      value.truncated !== false ||
+      !Array.isArray(value.rows) ||
+      value.rows.length > 20 ||
+      !value.rows.every(
+        (row: any) =>
+          typeof row?.pageId === 'string' &&
+          typeof row.title === 'string' &&
+          Array.isArray(row.cells) &&
+          row.cells.every(
+            (cell: any) =>
+              typeof cell?.propertyId === 'string' &&
+              typeof cell.propertyName === 'string' &&
+              Number.isInteger(cell.expectedRevision),
+          ),
+      )
+    )
+      return null;
+    return preview as AiApprovalPreview;
+  }
   if (
     !['editPageText', 'patchNode', 'insertNode', 'deleteNode'].includes(
       String(value.kind),

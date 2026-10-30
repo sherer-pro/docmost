@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { evaluateDatabaseTrace } from "./ai-database-quality.mjs";
 
 const ratio = (numerator, denominator) =>
   denominator ? numerator / denominator : null;
@@ -13,7 +14,10 @@ export function evaluate(
   runs,
   { split = "holdout", profile = "evidence-v1" } = {},
 ) {
-  const cases = corpus.questions.filter((item) => item.split === split);
+  const cases = [
+    ...corpus.questions,
+    ...(corpus.databaseQuestions ?? []),
+  ].filter((item) => item.split === split);
   if (!cases.length) throw new Error(`Empty or unknown split: ${split}`);
   const byId = new Map(runs.map((run) => [run.id, run]));
   if (byId.size !== runs.length) throw new Error("Duplicate run IDs");
@@ -33,6 +37,8 @@ export function evaluate(
     latencies = [],
     inputTokens = [],
     outputTokens = [];
+  let databaseCorrect = 0,
+    databaseTotal = 0;
   for (const item of cases) {
     const run = byId.get(item.id);
     if (!run) {
@@ -40,6 +46,16 @@ export function evaluate(
       continue;
     }
     completed++;
+    if (item.databaseExpectation) {
+      databaseTotal++;
+      if (evaluateDatabaseTrace(item.databaseExpectation, run.toolCalls))
+        databaseCorrect++;
+      else
+        failures.push({
+          id: item.id,
+          reason: "database_tool_result_or_write_mismatch",
+        });
+    }
     if (
       (item.forbiddenClaims ?? []).some((text) =>
         String(run.answer ?? "").includes(text),
@@ -115,6 +131,7 @@ export function evaluate(
   }
   const metrics = {
     evidenceRecallAt40: ratio(found, required),
+    databaseAccuracy: ratio(databaseCorrect, databaseTotal),
     factualSupport: ratio(supported, claims),
     citationValidity: ratio(validCitations, citationCount),
     falseAbstention: ratio(refused, answerable),
@@ -140,6 +157,7 @@ export function evaluate(
     measured,
     accepted:
       measured &&
+      databaseCorrect === databaseTotal &&
       metrics.evidenceRecallAt40 >= 0.9 &&
       metrics.factualSupport >= 0.95 &&
       metrics.falseAbstention <= 0.1 &&

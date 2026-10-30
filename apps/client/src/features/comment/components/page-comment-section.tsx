@@ -34,9 +34,13 @@ import { useLazyCommentTrigger } from "../hooks/use-lazy-comment-trigger";
 
 interface PageCommentSectionProps {
   pageId: string;
+  readOnly?: boolean;
 }
 
-function LoadedPageCommentSection({ pageId }: PageCommentSectionProps) {
+function LoadedPageCommentSection({
+  pageId,
+  readOnly,
+}: PageCommentSectionProps) {
   const { t } = useTranslation();
   const emit = useQueryEmit();
   const { pageByRoute } = useDatabasePageContext();
@@ -61,15 +65,12 @@ function LoadedPageCommentSection({ pageId }: PageCommentSectionProps) {
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
 
-  const canComment: boolean = spaceAbility.can(
-    SpaceCaslAction.Create,
-    SpaceCaslSubject.Page,
-  );
+  const canComment: boolean =
+    !readOnly &&
+    spaceAbility.can(SpaceCaslAction.Create, SpaceCaslSubject.Page);
 
-  const canResolveComments: boolean = spaceAbility.can(
-    SpaceCaslAction.Edit,
-    SpaceCaslSubject.Page,
-  );
+  const canResolveComments: boolean =
+    !readOnly && spaceAbility.can(SpaceCaslAction.Edit, SpaceCaslSubject.Page);
 
   const { activeComments, resolvedComments } = useMemo(() => {
     if (!comments?.items) {
@@ -279,7 +280,7 @@ function LoadedPageCommentSection({ pageId }: PageCommentSectionProps) {
   );
 }
 
-function PageCommentSection({ pageId }: PageCommentSectionProps) {
+function PageCommentSection({ pageId, readOnly }: PageCommentSectionProps) {
   const { t } = useTranslation();
   const activeCommentId = useAtomValue(activeCommentIdAtom);
   const { targetRef, shouldLoad } = useLazyCommentTrigger(activeCommentId);
@@ -291,7 +292,7 @@ function PageCommentSection({ pageId }: PageCommentSectionProps) {
   return (
     <div ref={targetRef}>
       {shouldLoad ? (
-        <LoadedPageCommentSection pageId={pageId} />
+        <LoadedPageCommentSection pageId={pageId} readOnly={readOnly} />
       ) : (
         <div className={classes.container}>
           <Text size="md" fw={600} my="md">

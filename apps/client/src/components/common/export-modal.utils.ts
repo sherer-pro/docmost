@@ -1,19 +1,20 @@
-import { DatabaseExportFormat } from '@/features/database/types/database.types';
-import { ExportFormat } from '@/features/page/types/page.types.ts';
+import { DatabaseExportFormat } from "@/features/database/types/database.types";
+import { ExportFormat } from "@/features/page/types/page.types.ts";
 
-export type ExportTargetType = 'space' | 'page' | 'database';
+export type ExportTargetType = "space" | "page" | "database";
 
 export function getExportFormatValues(type: ExportTargetType): string[] {
-  if (type === 'database') {
+  if (type === "database") {
     return [
       DatabaseExportFormat.Docmost,
       DatabaseExportFormat.Markdown,
       DatabaseExportFormat.HTML,
       DatabaseExportFormat.PDF,
+      DatabaseExportFormat.CSV,
     ];
   }
 
-  if (type === 'page') {
+  if (type === "page") {
     return [
       ExportFormat.Docmost,
       ExportFormat.Markdown,
@@ -29,7 +30,11 @@ export function shouldShowIncludeChildren(
   type: ExportTargetType,
   format: string,
 ): boolean {
-  return type === 'page' || (type === 'database' && format !== ExportFormat.Docmost);
+  return (
+    type === "page" ||
+    (type === "database" &&
+      ![ExportFormat.Docmost, DatabaseExportFormat.CSV].includes(format as any))
+  );
 }
 
 export function shouldShowAttachments(
@@ -38,16 +43,14 @@ export function shouldShowAttachments(
 ): boolean {
   return (
     format !== ExportFormat.Docmost &&
-    (type === 'page' || type === 'space' || type === 'database')
+    format !== DatabaseExportFormat.CSV &&
+    (type === "page" || type === "space" || type === "database")
   );
 }
 
 export function isSpaceExportFormat(
   format: string,
-): format is
-  | ExportFormat.Docmost
-  | ExportFormat.HTML
-  | ExportFormat.Markdown {
+): format is ExportFormat.Docmost | ExportFormat.HTML | ExportFormat.Markdown {
   return (
     format === ExportFormat.Docmost ||
     format === ExportFormat.HTML ||

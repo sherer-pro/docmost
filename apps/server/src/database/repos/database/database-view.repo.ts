@@ -68,8 +68,15 @@ export class DatabaseViewRepo {
       .where('deletedAt', 'is', null);
     if (expectedRevision !== undefined)
       query = query.where('revision', '=', expectedRevision);
+    if (payload.config !== undefined && (payload.config as any)?.version !== 3)
+      query = query.where(
+        sql<boolean>`coalesce(config->>'version', '2') != '3'`,
+      );
     const view = await query.returningAll().executeTakeFirst();
-    if (!view && expectedRevision !== undefined)
+    if (
+      !view &&
+      (expectedRevision !== undefined || payload.config !== undefined)
+    )
       throw new ConflictException('Database view was changed');
     return view;
   }

@@ -43,6 +43,16 @@ connection with `canary: failed` means query-time evidence resolution needs
 investigation even when synchronization is healthy. Canaries do not write data
 or create recurring jobs.
 
+The corpus also includes 120 structured database cases (72 tuning / 48 holdout),
+in addition to the original 200 RAG questions. Provision the synthetic
+`databaseFixtures` with their supplied property/row IDs; the database root page
+uses the fixture database ID. Apply each case's selection and filters. Record
+actual server `toolCalls` with `name`, `arguments`, and `result` alongside the
+ordinary reviewed answer, evidence and timing. Database totals and proposed
+cell/revision lists are scored against the oracle; an extra write fails a read
+case. The combined holdout contains 128 cases. Fixtures and successful evaluator
+tests do not count as measured model quality.
+
 Baseline status: **unmeasured**. Fixture validation and unit tests do not establish
 production relevance, Russian-language answer quality or reranker benefit.
 

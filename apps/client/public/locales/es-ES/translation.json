@@ -1641,11 +1641,12 @@
             "step2": "Test Chat y Agent",
             "step3": "Enable el modelo espacial y los perfiles previstos.",
             "step4": "En un teléfono, compruebe Chat y Agent, el interruptor de búsqueda del espacio, el pie y el campo de mensaje con el teclado abierto",
-            "step5": "Cambie entre un documento y los ajustes del espacio y use Atrás/Adelante; el asistente debe usar el título del documento actual."
+            "step5": "Cambie entre un documento y los ajustes del espacio y use Atrás/Adelante; el asistente debe usar el título del documento actual.",
+            "step6": "Seleccione una vista y, si lo necesita, filas. Use Agent para consultar registros o calcular totales. Revise cada cambio antes de aprobarlo. Cada propuesta admite 20 filas, 100 celdas y 32 KiB como máximo; un conflicto de revisión rechaza la fila afectada."
           },
           "success": "Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir",
           "rollback": "Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida",
-          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales. La proyección de conocimiento compartida añade a la búsqueda de AI y al contexto de herramientas los campos de documento y personalizados habilitados, las propiedades y celdas de base de datos con nombre y los términos activos del diccionario (`dictionary_term`). El contrato seleccionado `AI_ASSISTANT_PROFILE_ICONS` ofrece {{profileIconCount}} opciones de icono localizadas que se muestran de forma coherente en el editor de perfiles y el panel de chat. La selección de archivos del chat sigue activa tras cerrar el menú Añadir: el archivo elegido se carga o se muestra un error de validación. Los hashes de aprobación de Agent incluyen los atributos predeterminados del editor y la normalización de Yjs antes de aplicar el cambio. Se rechaza el campo text en nodos no textuales antes de la aprobación; el texto del párrafo debe estar en nodos de texto hijos."
+          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales. La proyección de conocimiento compartida añade a la búsqueda de AI y al contexto de herramientas los campos de documento y personalizados habilitados, las propiedades y celdas de base de datos con nombre y los términos activos del diccionario (`dictionary_term`). El contrato seleccionado `AI_ASSISTANT_PROFILE_ICONS` ofrece {{profileIconCount}} opciones de icono localizadas que se muestran de forma coherente en el editor de perfiles y el panel de chat. La selección de archivos del chat sigue activa tras cerrar el menú Añadir: el archivo elegido se carga o se muestra un error de validación. Los hashes de aprobación de Agent incluyen los atributos predeterminados del editor y la normalización de Yjs antes de aplicar el cambio. Se rechaza el campo text en nodos no textuales antes de la aprobación; el texto del párrafo debe estar en nodos de texto hijos.\n\nSeleccione una vista y, si lo necesita, filas. Use Agent para consultar registros o calcular totales. Revise cada cambio antes de aprobarlo. Cada propuesta admite 20 filas, 100 celdas y 32 KiB como máximo; un conflicto de revisión rechaza la fila afectada. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exigir pruebas de páginas, archivos o resultados de herramientas accesibles. Los espacios y perfiles no pueden reducir las restricciones del espacio de trabajo.\n\nUn administrador debe habilitar las capacidades de base de datos. Los resultados y vistas previas se ocultan al revocar el acceso. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "La búsqueda del espacio se ejecuta mientras se genera una respuesta.",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "Proponer cambios de celdas"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "Reemplazar texto en la página actual",
         "patchNode": "Reemplazar un bloque en la página actual",
         "insertNode": "Insertar un bloque en la página actual",
-        "deleteNode": "Eliminar un bloque de la página actual"
+        "deleteNode": "Eliminar un bloque de la página actual",
+        "queryDatabaseView": "Consultar vista de la base",
+        "summarizeDatabaseView": "Calcular totales de la base",
+        "proposeDatabaseCells": "Proponer cambios de celdas"
       },
       "category": {
         "search": "Búsqueda",
@@ -2645,6 +2650,25 @@
         "history": "Historial",
         "attachments": "Adjuntos",
         "sharing": "Uso compartido público"
+      },
+      "readOnly": "Solo respuestas",
+      "readOnlyDescription": "El asistente puede leer contenido, pero no proponer cambios.",
+      "knowledgeOnly": "Respuestas con fuentes permitidas",
+      "knowledgeOnlyDescription": "Exigir pruebas de páginas, archivos o resultados de herramientas accesibles. Los espacios y perfiles no pueden reducir las restricciones del espacio de trabajo.",
+      "preset": "Modo de operación",
+      "answersOnly": "Solo respuestas",
+      "confirmChanges": "Cambios con confirmación"
+    },
+    "database": {
+      "row": "Registro",
+      "property": "Propiedad",
+      "scope": "Vista actual de la base · filas seleccionadas: {{count}}",
+      "receipt": "Cambios de la base",
+      "appliedRows": "Filas aplicadas: {{count}}",
+      "failure": {
+        "conflict": "La revisión o el esquema cambió. Cree una nueva propuesta.",
+        "forbidden": "Se revocó el acceso de escritura.",
+        "invalid_value": "El valor ya no es válido."
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "Guardado",
     "saving": "Guardando...",
     "saved": "Guardado",
-    "error": "No se pudo actualizar los datos"
+    "error": "No se pudo actualizar los datos",
+    "dirty": "Borrador personal"
   },
-  "Move block": "Mover bloque"
+  "Move block": "Mover bloque",
+  "dbBoard": {
+    "board": "Kanban",
+    "layout": "Diseño",
+    "cardFields": "Campos de tarjeta",
+    "hiddenColumns": "Columnas ocultas",
+    "sorted": "Las tarjetas siguen la ordenación. El orden manual está desactivado.",
+    "selectRequired": "Seleccione un campo de selección única para el tablero.",
+    "columnActions": "Acciones de columna",
+    "moveTo": "Mover a columna",
+    "moveFailed": "No se pudo mover. Actualice los datos antes de reintentar.",
+    "csv": "CSV de la vista actual",
+    "record": "Registro",
+    "openPage": "Abrir página completa",
+    "contentPreview": "Vista previa. Abra la página completa para editar el contenido.",
+    "saveShared": "Guardar para todos",
+    "columnWidth": "Ancho de columna",
+    "embed": "Vista de base de datos",
+    "embedDescription": "Vincular una base de datos o vista existente",
+    "sourceLink": "Enlace interno a la base de datos",
+    "sourceUnavailable": "Vista no disponible",
+    "openSource": "Abrir base de datos de origen",
+    "insertView": "¿Insertar esta vista?",
+    "emptyColumn": "Sin valor"
+  },
+  "Time": "Hora",
+  "Insert current time": "Insertar la hora actual",
+  "documentUpdates": {
+    "compareWith": "Comparar con"
+  }
 }

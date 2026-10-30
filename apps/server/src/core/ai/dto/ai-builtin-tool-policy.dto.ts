@@ -7,10 +7,18 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsOptional,
   ValidateIf,
 } from 'class-validator';
 
 export class UpdateAiBuiltinToolWorkspacePolicyDto {
+  @IsOptional()
+  @IsBoolean()
+  readOnly?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  knowledgeOnly?: boolean;
   @IsBoolean()
   enabled: boolean;
 
@@ -21,6 +29,13 @@ export class UpdateAiBuiltinToolWorkspacePolicyDto {
 }
 
 export class UpdateAiBuiltinToolSpacePolicyDto {
+  @IsOptional()
+  @IsBoolean()
+  readOnly?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  knowledgeOnly?: boolean;
   @ValidateIf((_object, value) => value !== null)
   @IsArray()
   @ArrayUnique()

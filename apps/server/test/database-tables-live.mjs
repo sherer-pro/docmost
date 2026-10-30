@@ -24,7 +24,17 @@ const children = [];
 const containers = [];
 let connection;
 let networkCreated = false;
-const report = { runId, isolated: true, tests: [], cleanup: {} };
+const report = {
+  runId,
+  isolated: true,
+  scope: process.argv.includes('--api-only')
+    ? 'api'
+    : process.argv.includes('--startup-only')
+      ? 'startup'
+      : 'full',
+  tests: [],
+  cleanup: {},
+};
 const exactSecrets = new Set();
 const scrub = (text) => {
   for (const secret of exactSecrets)
@@ -80,11 +90,24 @@ const wait = async (label, check, timeout = 120_000) => {
 
 await mkdir(cwd, { recursive: true });
 try {
+  const subnet = process.argv
+    .find((arg) => arg.startsWith('--subnet='))
+    ?.slice('--subnet='.length);
+  if (
+    subnet &&
+    !/^10\.(?:\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(?:\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.0\/28$/.test(
+      subnet,
+    )
+  )
+    throw new Error(
+      'The isolated test subnet must be a private 10.x.x.0/28 range',
+    );
   await docker([
     'network',
     'create',
     '--label',
     `docmost.database-test=${runId}`,
+    ...(subnet ? ['--subnet', subnet] : []),
     prefix,
   ]);
   networkCreated = true;
@@ -144,6 +167,8 @@ try {
     Number((await docker(['port', name, containerPort])).split(':').at(-1));
   const apiPort = await port();
   const collabPort = await port();
+  const modelPort = await port();
+  const providerURL = `http://127.0.0.1:${modelPort}/v1`;
   const baseURL = `http://127.0.0.1:${apiPort}`;
   const collabURL = `http://127.0.0.1:${collabPort}`;
   const env = Object.fromEntries(
@@ -175,6 +200,8 @@ try {
     STORAGE_DRIVER: 'local',
     RAG_SYNC_ENABLED: 'false',
     AI_EXTERNAL_MCP_ENABLED: 'false',
+    AI_BUILTIN_TOOL_EXTENSIONS_ENABLED: 'true',
+    AI_PROVIDER_ALLOWED_ORIGINS: `http://127.0.0.1:${modelPort}`,
     PAGE_TEMPLATES_ENABLED: 'true',
     CLOUD: 'false',
     LOG_HTTP: 'false',
@@ -191,6 +218,19 @@ try {
   };
   console.log(
     'Starting isolated API and collaboration with real PostgreSQL and Redis.',
+  );
+  start(
+    'ai-model',
+    path.join(repo, 'apps/client/e2e/ai-agent/deterministic-agent-model.mjs'),
+    {
+      ...env,
+      DOCMOST_AI_AGENT_MODEL_PORT: String(modelPort),
+      DOCMOST_AI_AGENT_MODEL_HOST: '127.0.0.1',
+    },
+  );
+  await wait(
+    'deterministic AI provider',
+    async () => (await fetch(`http://127.0.0.1:${modelPort}/health`)).ok,
   );
   start(
     'api',
@@ -254,6 +294,7 @@ try {
       './database-tables-live-acceptance.mjs'
     );
     await runLiveAcceptance({
+      providerURL,
       baseURL,
       collabURL,
       sql: connection,

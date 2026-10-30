@@ -9,10 +9,10 @@ export function normalizeDatabaseViewState(input: unknown): DatabaseViewState {
     input && typeof input === "object" && !Array.isArray(input)
       ? (input as Record<string, any>)
       : {};
-  if (source.version !== undefined && source.version !== 2)
+  if (source.version !== undefined && ![2, 3].includes(source.version))
     throw new Error("Unsupported view version");
   const state: DatabaseViewState = {
-    version: 2,
+    version: source.version === 3 ? 3 : 2,
     filter:
       source.filter ??
       (Array.isArray(source.filters)
@@ -102,6 +102,43 @@ export function normalizeDatabaseViewState(input: unknown): DatabaseViewState {
     )
   )
     throw new Error("Invalid calculations");
+  const ids = (values: unknown, max = 100) => {
+    if (
+      !Array.isArray(values) ||
+      values.length > max ||
+      values.some((id) => typeof id !== "string" || id.length > 100) ||
+      new Set(values).size !== values.length
+    )
+      throw new Error("Invalid view layout");
+    return values as string[];
+  };
+  if (source.columnOrder !== undefined)
+    state.columnOrder = ids(source.columnOrder);
+  if (source.columnWidths !== undefined) {
+    if (
+      !source.columnWidths ||
+      typeof source.columnWidths !== "object" ||
+      Array.isArray(source.columnWidths) ||
+      Object.keys(source.columnWidths).length > 100 ||
+      Object.values(source.columnWidths).some(
+        (v) =>
+          typeof v !== "number" || !Number.isFinite(v) || v < 80 || v > 1200,
+      )
+    )
+      throw new Error("Invalid column widths");
+    state.columnWidths = source.columnWidths;
+  }
+  if (source.kanban !== undefined) {
+    if (!source.kanban || typeof source.kanban !== "object")
+      throw new Error("Invalid board layout");
+    state.kanban = {
+      columnOrder: ids(source.kanban.columnOrder ?? []),
+      hiddenColumns: ids(source.kanban.hiddenColumns ?? []),
+      cardProperties: ids(source.kanban.cardProperties ?? []),
+    };
+  }
+  if (state.columnOrder || state.columnWidths || state.kanban)
+    state.version = 3;
   return state;
 }
 
@@ -111,6 +148,9 @@ export function getDatabaseViewPropertyIds(state: DatabaseViewState): string[] {
     ...Object.keys(state.visibleColumns),
     ...Object.keys(state.calculations),
     ...(state.groupBy ? [state.groupBy] : []),
+    ...(state.columnOrder ?? []),
+    ...Object.keys(state.columnWidths ?? {}),
+    ...(state.kanban?.cardProperties ?? []),
   ]);
   const collect = (group: DatabaseFilterGroup) =>
     group.conditions.forEach((condition) =>

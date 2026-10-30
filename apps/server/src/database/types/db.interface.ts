@@ -39,6 +39,7 @@ import type {
   DatabaseRows,
   DatabaseCells,
   DatabaseViews,
+  DatabaseViewRowPositions,
   DictionaryTermAliases,
   DictionaryTerms,
   Favorites,
@@ -124,6 +125,7 @@ export interface DbInterface {
   databaseRows: DatabaseRows;
   databaseCells: DatabaseCells;
   databaseViews: DatabaseViews;
+  databaseViewRowPositions: DatabaseViewRowPositions;
   dictionaryTerms: DictionaryTerms;
   dictionaryTermAliases: DictionaryTermAliases;
   favorites: Favorites;

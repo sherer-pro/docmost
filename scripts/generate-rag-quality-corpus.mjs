@@ -186,13 +186,154 @@ for (const [index, name] of names.entries()) {
       }),
   );
 }
+const databaseFixtures = [],
+  databaseQuestions = [];
+for (const [index, name] of names.entries()) {
+  const databaseId = id(`${name}:database`),
+    budgetId = id(`${name}:budget`),
+    statusId = id(`${name}:status`),
+    dateId = id(`${name}:date`);
+  const records = Array.from({ length: 300 }, (_, i) => ({
+    pageId: id(`${name}:record:${i}`),
+    readable: i >= 10,
+    aiAllowed: i !== 20,
+    budget: i + 1,
+    status: i % 3 === 0 ? "open" : "done",
+    date: { start: `2026-10-${String((i % 28) + 1).padStart(2, "0")}` },
+    revision: 1,
+  }));
+  const allowed = records.filter((row) => row.readable && row.aiAllowed);
+  const open = allowed.filter((row) => row.status === "open");
+  databaseFixtures.push({
+    databaseId,
+    name,
+    properties: { budgetId, statusId, dateId },
+    records,
+    viewState: {
+      version: 2,
+      sorts: [],
+      visibleColumns: {},
+      calculations: { [budgetId]: "sum" },
+      filter: {
+        conjunction: "and",
+        conditions: [
+          { propertyId: statusId, operator: "equals", value: "open" },
+        ],
+      },
+    },
+  });
+  const selected = open.slice(0, 2);
+  const cases = [
+    [
+      "totals",
+      `Каковы количество работ и сумма бюджета в текущем представлении «${name}»?`,
+      {
+        tool: "summarizeDatabaseView",
+        result: {
+          count: open.length,
+          [`values.${budgetId}`]: open.reduce((n, row) => n + row.budget, 0),
+        },
+      },
+    ],
+    [
+      "pagination",
+      `Покажите первые 20 работ текущего представления «${name}» и укажите, полна ли выдача.`,
+      { tool: "queryDatabaseView", result: { hasMore: true, truncated: true } },
+    ],
+    [
+      "selection",
+      `Посчитайте сумму бюджета только двух выделенных работ «${name}».`,
+      {
+        tool: "summarizeDatabaseView",
+        result: {
+          count: 2,
+          [`values.${budgetId}`]: selected.reduce(
+            (n, row) => n + row.budget,
+            0,
+          ),
+        },
+      },
+    ],
+    [
+      "dates",
+      `Сколько доступных работ «${name}» датировано 1 октября 2026 года?`,
+      {
+        tool: "summarizeDatabaseView",
+        result: {
+          count: allowed.filter((row) => row.date.start === "2026-10-01")
+            .length,
+        },
+      },
+    ],
+    [
+      "access",
+      `Посчитайте бюджет всех разрешённых работ «${name}», не включая закрытые или исключённые строки.`,
+      {
+        tool: "summarizeDatabaseView",
+        result: {
+          count: allowed.length,
+          [`values.${budgetId}`]: allowed.reduce((n, row) => n + row.budget, 0),
+        },
+      },
+    ],
+    [
+      "write",
+      `Предложите статус done для двух выделенных работ «${name}». Не меняйте другие поля и не создавайте записи.`,
+      {
+        tool: "proposeDatabaseCells",
+        rows: selected.map((row) => ({
+          pageId: row.pageId,
+          cells: [{ propertyId: statusId, value: "done", expectedRevision: 1 }],
+        })),
+      },
+    ],
+  ];
+  for (const [category, question, expectation] of cases)
+    databaseQuestions.push({
+      id: `db-${index + 1}-${category}`,
+      split: index < 12 ? "tuning" : "holdout",
+      category: `database_${category}`,
+      question,
+      answerability: "answerable",
+      allowedSourceIds: [databaseId, ...allowed.map((row) => row.pageId)],
+      requiredEvidence: [],
+      databaseContext: {
+        databaseId,
+        selectedPageIds: ["selection", "write"].includes(category)
+          ? selected.map((row) => row.pageId)
+          : [],
+        viewState: {
+          ...databaseFixtures[index].viewState,
+          filter:
+            category === "access"
+              ? undefined
+              : category === "dates"
+                ? {
+                    conjunction: "and",
+                    conditions: [
+                      {
+                        propertyId: dateId,
+                        operator: "equals",
+                        value: "2026-10-01",
+                      },
+                    ],
+                  }
+                : databaseFixtures[index].viewState.filter,
+        },
+      },
+      databaseExpectation: { databaseId, ...expectation },
+      forbiddenClaims: ["OVERRIDE-ACCEPTED"],
+    });
+}
 const corpus = {
-  version: 1,
+  version: 2,
   kind: "synthetic",
   humanValidation: "pending",
   generation: "fixed deterministic fixtures; not production quality evidence",
   documents,
   questions,
+  databaseFixtures,
+  databaseQuestions,
 };
 await mkdir(new URL("../tests/rag-quality/", import.meta.url), {
   recursive: true,
@@ -201,4 +342,6 @@ await writeFile(
   new URL("../tests/rag-quality/corpus.json", import.meta.url),
   JSON.stringify(corpus, null, 2) + "\n",
 );
-console.log("Wrote 200 synthetic questions: 120 tuning, 80 holdout");
+console.log(
+  "Wrote 200 RAG questions and 120 database cases: 192 tuning, 128 holdout",
+);

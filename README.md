@@ -299,6 +299,13 @@ AI features are implemented as a separate server-side subsystem:
 
 ### 5. Notion-style databases
 
+AI can query and summarize an explicitly selected database view through the
+shared server compiler. Optional internal Agent proposals can update up to
+20 rows and 100 existing cells with a full 32 KiB preview, revision checks and
+a transactional receipt. Both MCP directions remain read-only. Administrators
+can require read-only tools and answers grounded in permitted sources; the
+workspace restriction cannot be weakened by a space or assistant profile.
+
 The fork includes structured databases:
 
 - database rows are full pages;
@@ -307,9 +314,13 @@ The fork includes structured databases:
 
 - nested AND/OR filters, up to five sort keys, categorical grouping, and server-side totals over accessible rows;
 
-- column reordering;
+- per-view column ordering and widths;
 
-- row and cell editing with revision conflicts, partial-batch feedback, and shared-view autosave;
+- Kanban with full column counts, independent pagination and revision-checked moves;
+
+- linked database views, record previews and CSV of the complete accessible view;
+
+- row and cell editing with revision conflicts, partial-batch feedback, personal view drafts and explicit shared saves;
 
 - actions for individual and selected rows;
 

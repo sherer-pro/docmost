@@ -7,7 +7,6 @@ import CommentEditor from "@/features/comment/components/comment-editor";
 import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms";
 import CommentActions from "@/features/comment/components/comment-actions";
 import CommentMenu from "@/features/comment/components/comment-menu";
-import { useHover } from "@mantine/hooks";
 import {
   useDeleteCommentMutation,
   useUpdateCommentMutation,
@@ -21,7 +20,9 @@ import { scrollCommentMarkIntoView } from "@/features/comment/utils/comment-dom"
 import { COMMENT_BODY_COLLAPSE_LINES } from "@/features/comment/utils/comment-collapse";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
+import { activeCommentIdAtom } from "../atoms/comment-atom";
 import { getCommentActionPermissions } from "@/features/comment/utils/comment-permissions";
+import { notifications } from "@mantine/notifications";
 
 interface CommentListItemProps {
   comment: IComment;
@@ -39,12 +40,23 @@ function CommentListItem({
   userSpaceRole,
 }: CommentListItemProps) {
   const { t } = useTranslation();
-  const { hovered, ref } = useHover();
+  const ref = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isBodyExpanded, setIsBodyExpanded] = useState(false);
   const [isBodyCollapsible, setIsBodyCollapsible] = useState(false);
   const editor = useAtomValue(pageEditorAtom);
+  const activeCommentId = useAtomValue(activeCommentIdAtom);
+  useEffect(() => {
+    if (activeCommentId !== comment.id) return;
+    setIsBodyExpanded(true);
+    const timer = window.setTimeout(
+      () =>
+        ref.current?.scrollIntoView?.({ behavior: "smooth", block: "center" }),
+      250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [activeCommentId, comment.id, ref]);
   const [content, setContent] = useState<string>(comment.content);
   const editContentRef = useRef<any>(null);
   const bodyContentRef = useRef<HTMLDivElement>(null);
@@ -197,15 +209,14 @@ function CommentListItem({
     canResolve,
     isReply: Boolean(comment.parentCommentId),
   });
-  const shouldShowMenu =
-    canEditComment || canDeleteComment || canResolveComment;
+  const shouldShowMenu = true;
   const commentBodyCollapseStyle = {
     "--comment-body-collapse-lines": COMMENT_BODY_COLLAPSE_LINES,
   } as React.CSSProperties;
   const commentBodyId = `comment-${comment.id}-body`;
 
   return (
-    <Box ref={ref} pb="xs">
+    <Box ref={ref} pb="xs" data-comment-target={comment.id}>
       <Group>
         <CustomAvatar
           size="sm"
@@ -219,9 +230,29 @@ function CommentListItem({
               {comment.creator.name}
             </Text>
 
-            <div style={{ visibility: hovered ? "visible" : "hidden" }}>
+            <div>
               {shouldShowMenu && (
                 <CommentMenu
+                  onCopyLink={async () => {
+                    const url = new URL(window.location.href);
+                    if (url.searchParams.get("record") === pageId) {
+                      url.pathname = url.pathname.replace(
+                        /\/db\/[^/]+$/,
+                        `/p/${pageId}`,
+                      );
+                      url.searchParams.delete("record");
+                    }
+                    url.searchParams.set("commentId", comment.id);
+                    url.hash = "";
+                    try {
+                      if (!navigator.clipboard)
+                        throw new Error("Clipboard unavailable");
+                      await navigator.clipboard.writeText(url.toString());
+                      notifications.show({ message: t("Copied") });
+                    } catch {
+                      notifications.show({ message: t("Error"), color: "red" });
+                    }
+                  }}
                   onEditComment={handleEditToggle}
                   onDeleteComment={handleDeleteComment}
                   onResolveComment={handleResolveComment}

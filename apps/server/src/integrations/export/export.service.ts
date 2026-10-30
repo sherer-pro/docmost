@@ -94,6 +94,7 @@ import { collectReferencesFromPmJson } from '../../core/page/transclusion/utils/
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { TransclusionService } from '../../core/page/transclusion/transclusion.service';
+import { materializeDatabaseEmbeds } from './database-embed-export';
 
 const PAGE_STATUS_LABELS: Record<string, string> = {
   TODO: 'To do',
@@ -896,10 +897,15 @@ export class ExportService {
     }
 
     return {
-      content: materializeTransclusionsForPresentation(
-        materializedTemplateContent,
-        resolutions,
-        this.resolveTransclusionPresentationStrings(locale),
+      content: await materializeDatabaseEmbeds(
+        materializeTransclusionsForPresentation(
+          materializedTemplateContent,
+          resolutions,
+          this.resolveTransclusionPresentationStrings(locale),
+        ),
+        this.db,
+        this.pageAccessService,
+        authorizedUser,
       ),
       attachmentPageIds,
     };
@@ -2672,6 +2678,15 @@ export class ExportService {
     }));
     const transclusionSnapshots: DocmostArchiveTransclusionSnapshot[] = [];
     for (const page of archivePages) {
+      page.content = await materializeDatabaseEmbeds(
+        page.content,
+        this.db,
+        this.pageAccessService,
+        params.authorizedUser,
+        new Set(databaseIds),
+      );
+    }
+    for (const page of archivePages) {
       const references = collectReferencesFromPmJson(page.content).filter(
         (reference) => !pageIdSet.has(reference.sourcePageId),
       );
@@ -2728,6 +2743,16 @@ export class ExportService {
         icon: database.icon,
       }),
     );
+    for (const database of archiveDatabases) {
+      if (database.descriptionContent)
+        database.descriptionContent = await materializeDatabaseEmbeds(
+          database.descriptionContent,
+          this.db,
+          this.pageAccessService,
+          params.authorizedUser,
+          new Set(databaseIds),
+        );
+    }
     const archiveProperties: DocmostArchiveDatabaseProperty[] =
       propertyRows.map((property) => ({
         id: property.id,
@@ -2762,12 +2787,27 @@ export class ExportService {
         attachmentId: cell.attachmentId,
         value: cell.value,
       }));
+    const rowPositions = viewRows.length
+      ? await this.db
+          .selectFrom('databaseViewRowPositions')
+          .selectAll()
+          .where(
+            'viewId',
+            'in',
+            viewRows.map((v) => v.id),
+          )
+          .execute()
+      : [];
+    const exportedRowPages = new Set(archiveRows.map((row) => row.pageId));
     const archiveViews: DocmostArchiveDatabaseView[] = viewRows.map((view) => ({
       id: view.id,
       databaseId: view.databaseId,
       name: view.name,
       type: view.type,
       config: view.config,
+      rowPositions: rowPositions
+        .filter((p) => p.viewId === view.id && exportedRowPages.has(p.pageId))
+        .map(({ pageId, position }) => ({ pageId, position })),
     }));
 
     const labelRows =

@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 28 -->
+<!-- ai-admin-guide-contract-version: 29 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -240,6 +240,71 @@ source-dependency checks continue to hide a derived answer when a required page
 becomes unavailable.
 
 ### Agent mode
+
+#### Database views and approved cell changes
+
+`SendAiMessageRequest.databaseContext` freezes the current database ID, optional
+view ID, validated version 2 or 3 view state, and explicit selected row page IDs for
+one immutable attempt. It is included in the payload-bound idempotency
+fingerprint and copied unchanged on retry/regenerate. A missing selection means
+the filtered view, not merely the rows loaded by the browser.
+
+The optional built-in capabilities `database.view.query`, `database.summary.read`,
+and `database.cells.propose` remain deployment/workspace/space/profile gated and
+are absent from legacy allowlists. `queryDatabaseView` and
+`summarizeDatabaseView` reuse the database SQL view compiler. Effective row ACL
+and AI content exclusions are intersected before filtering, pagination and
+aggregation. Totals describe the complete permitted selection; paginated rows
+and document context snapshots must never be treated as complete aggregates.
+These two reads may be explicitly enabled for inbound MCP keys. Read results
+and their source dependencies share one REPEATABLE READ snapshot. Row reference
+metadata is filtered against current access and AI exclusions. All aggregate
+row dependencies are retained; the run API and approval endpoints revalidate
+them before returning tool results or previews. Losing access produces
+`source_access_changed` instead of exposing an older result.
+
+Enable `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED` at deployment level and explicitly
+grant the three capabilities in workspace/space policy before using this flow.
+Existing deployments and allowlists do not acquire the capabilities implicitly.
+
+`proposeDatabaseCells` is internal-Agent-only. It requires the current database
+page and an explicit frozen database context. It proposes updates to existing
+typed cells only, with at most 20 rows, 100 cells and 32 KiB for the complete
+preview and operation. Missing cells use expected revision 0. Duplicate rows or
+properties, stale revisions, inaccessible references, attachment cells and
+out-of-view rows are rejected. The preview contains every old/new value; it is
+never shortened to conceal changes. No row/property/page creation or deletion,
+attachment mutation, or page-title/content update is exposed by this tool.
+
+The `database_cell_revisions` approval mode is separate from Yjs page hashes.
+Only the initiator can approve within the existing one-hour deadline. Approval
+rechecks live capability/profile policy, database/page ACL and AI exclusions.
+The schema fingerprint and cell revisions are checked under the existing
+database mutation lock. Each row is atomic; savepoints isolate conflicts and
+the final `updatedRows`/`failedRows` receipt commits in `ai_run_steps.result` in
+the same PostgreSQL transaction as all successful cell writes, history and
+assignment outbox work. A pre-commit crash rolls back both data and receipt;
+after commit the run no longer awaits that approval. Recovery also excludes
+steps whose receipt already says `applied: true`, including when the same run
+later awaits a different approval, so successful writes cannot be replayed. Failed rows require a new preview. Search refresh happens
+after commit. Pending approval keeps the existing provider admission behavior.
+Both inbound and outbound MCP remain read-only.
+
+Workspace and space tool policies additionally support `readOnly` and
+`knowledgeOnly`, defaulting to false for compatibility. Effective restrictions
+are the logical OR of both scopes; profiles can only narrow tool allowlists.
+`readOnly` removes all write tools, including database proposals.
+`knowledgeOnly` forces the existing knowledge-grounded generation path even
+when a conversation disables space search; insufficient evidence produces an
+explicit limitation rather than an unsupported complete answer. This is a
+generation policy, not a mathematical guarantee about model behavior. The
+status response exposes both effective flags. Policy updates increment the
+existing versions and invalidate pending agent capability snapshots.
+
+Migration `20261030T180000-ai-database-context` adds nullable run context and
+the two backward-compatible policy flags. Roll it back only after draining
+active runs; its `down` drops frozen database contexts and policy flags, but
+does not undo approved cell values or erase their row revisions.
 
 Agent mode is a per-conversation opt-in and is disabled for a space by default.
 A space administrator must first run the tool-calling capability test against
@@ -1956,6 +2021,6 @@ access-restricted message.
 
 ## Database table property contract
 
-Database row sources support `number`, `date`, `multi_select`, `url`, `email`, and `phone` in addition to existing properties. Numbers remain JSON numbers; dates carry a start, optional end, and a time zone when time is included; multi-select values contain option identifiers. Text projections resolve option labels and render dates explicitly. View filters and grouping do not restrict RAG: page ACL and the AI content policy remain authoritative. The read-only AI/MCP tool boundary is unchanged.
+Database row sources support `number`, `date`, `multi_select`, `url`, `email`, and `phone` in addition to existing properties. Numbers remain JSON numbers; dates carry a start, optional end, and a time zone when time is included; multi-select values contain option identifiers. Text projections resolve option labels and render dates explicitly. View filters and grouping do not restrict RAG: page ACL and the AI content policy remain authoritative. MCP remains read-only. Internal Agent can propose the limited, explicitly approved cell operations described above.
 
 Migration `20261013T120000-database-revisions.ts` adds integer revisions to cells and views with default 1 and a read-only SQL value adapter. It does not rewrite cell values. Its `down` removes the adapter and conflict-detection metadata; older application versions do not understand newly introduced property types, so reverting the schema alone is not a safe application downgrade. See [Database tables](DATABASE_TABLES.md) for UI/API query and recovery contracts.

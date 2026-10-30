@@ -32,6 +32,10 @@ export const LazyMathInlineView = createLazyNodeView(
   () => import("./math/math-inline"),
   true,
 );
+export const LazyDatabaseEmbedView = createLazyNodeView(
+  "LazyDatabaseEmbedView",
+  () => import("./database-embed/database-embed-view"),
+);
 export const LazyMathBlockView = createLazyNodeView(
   "LazyMathBlockView",
   () => import("./math/math-block"),

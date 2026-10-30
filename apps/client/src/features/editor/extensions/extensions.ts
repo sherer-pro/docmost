@@ -15,6 +15,7 @@ import { CollaborationCaret } from "@tiptap/extension-collaboration-caret";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Comment,
+  DatabaseEmbed,
   Details,
   DetailsContent,
   DetailsSummary,
@@ -67,6 +68,7 @@ import TransclusionView from "@/features/editor/components/transclusion/transclu
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import {
   LazyAttachmentView,
+  LazyDatabaseEmbedView,
   LazyAudioView,
   LazyCodeBlockView,
   LazyDrawioView,
@@ -118,6 +120,9 @@ lowlight.register("haskell", haskell);
 lowlight.register("scala", scala);
 
 export const mainExtensions = [
+  DatabaseEmbed.configure({
+    view: ReactNodeViewRenderer(LazyDatabaseEmbedView),
+  }),
   StarterKit.configure({
     heading: false,
     undoRedo: false,

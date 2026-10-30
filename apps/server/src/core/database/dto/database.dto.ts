@@ -207,6 +207,16 @@ export class ListDatabasesQueryDto {
 
 export class ListDatabaseRowsQueryDto {
   @IsOptional()
+  @IsUUID()
+  neighborOf?: string;
+
+  @IsOptional()
+  @IsIn(['previous', 'next'])
+  neighborDirection?: 'previous' | 'next';
+  @IsOptional()
+  @IsUUID()
+  viewId?: string;
+  @IsOptional()
   @IsString()
   @MaxLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
   viewState?: string;
@@ -435,6 +445,7 @@ export class CreateDatabaseViewDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
+  @IsIn(['table', 'kanban'])
   type: string;
 
   @IsOptional()
@@ -461,6 +472,7 @@ export class UpdateDatabaseViewDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
+  @IsIn(['table', 'kanban'])
   type?: string;
 
   @IsOptional()
@@ -474,9 +486,33 @@ export class DatabaseRowPageIdDto {
   pageId: string;
 }
 
+export class MoveDatabaseViewRowDto {
+  @IsUUID()
+  pageId: string;
+
+  @IsOptional()
+  @IsUUID()
+  beforePageId?: string;
+
+  @IsInt()
+  @Min(1)
+  expectedViewRevision: number;
+
+  @IsString()
+  @MaxLength(1024)
+  expectedPosition: string;
+}
+
 export class DatabaseExportViewSnapshotDto
   implements DatabaseExportViewSnapshot
 {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  groupKey?: string;
+  @IsOptional()
+  @IsUUID()
+  viewId?: string;
   @IsOptional()
   @MaxJsonStringifiedLength(MAX_DATABASE_VIEW_CONFIG_BYTES)
   @MaxJsonDepth(MAX_DATABASE_VIEW_CONFIG_DEPTH)
@@ -507,7 +543,7 @@ export class DatabaseExportViewSnapshotDto
  */
 export class ExportDatabaseDto {
   @IsString()
-  @IsIn(['docmost', 'markdown', 'html', 'pdf'])
+  @IsIn(['docmost', 'markdown', 'html', 'pdf', 'csv'])
   format: DatabaseExportFormat;
 
   @IsOptional()

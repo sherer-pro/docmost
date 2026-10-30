@@ -1117,7 +1117,31 @@ export class ImportService {
         );
       }
     }
+    const rowDatabases = new Set(
+      data.databaseRows.map((row) => row.databaseId + ':' + row.pageId),
+    );
+    let positionCount = 0;
     for (const view of data.databaseViews) {
+      if (
+        view.rowPositions !== undefined &&
+        (!Array.isArray(view.rowPositions) ||
+          view.rowPositions.length > 100000 ||
+          new Set(view.rowPositions.map((p) => p?.pageId)).size !==
+            view.rowPositions.length ||
+          view.rowPositions.some(
+            (p) =>
+              !p ||
+              !rowDatabases.has(view.databaseId + ':' + p.pageId) ||
+              typeof p.position !== 'string' ||
+              !/^[A-Za-z0-9]{1,1024}$/.test(p.position),
+          ))
+      )
+        throw new BadRequestException('Invalid database view row order');
+      positionCount += view.rowPositions?.length ?? 0;
+      if (positionCount > 1000000)
+        throw new BadRequestException(
+          'Database row order exceeds archive budget',
+        );
       if (!databaseIds.has(view.databaseId)) {
         throw new BadRequestException(
           `Database view "${view.name}" references an unknown database`,

@@ -41,6 +41,11 @@ import { AiMcpPolicyService } from '../mcp/ai-mcp-policy.service';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
+import { normalizeAiDatabaseContext } from './ai-database.service';
+import {
+  AiSourceAccessService,
+  AiSourceAccessChangedError,
+} from './ai-source-access.service';
 
 @Injectable()
 export class AiRunService {
@@ -56,6 +61,7 @@ export class AiRunService {
     private readonly mcpPolicy: AiMcpPolicyService,
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
     private readonly profiles: AiAssistantProfileService,
+    private readonly sourceAccess: AiSourceAccessService,
   ) {}
 
   async send(
@@ -133,6 +139,13 @@ export class AiRunService {
     );
     const providerFingerprint =
       this.profiles.providerSnapshotFingerprint(providerSnapshot);
+    const modes = await this.builtinToolPolicy.getEffectiveModes(
+      workspace.id,
+      conversation.spaceId,
+    );
+    const useSpaceSearch =
+      modes.knowledgeOnly ||
+      (dto.useSpaceSearch ?? conversation.useSpaceSearch);
     const fingerprint = this.fingerprint({
       content: dto.content,
       documentSnapshot: conversation.includeCurrentDocument
@@ -146,10 +159,13 @@ export class AiRunService {
       contextFingerprint: conversation.contextFingerprint,
       chatFileIds,
       attachmentIds,
-      useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
+      useSpaceSearch,
       executionMode: conversation.agentMode ? 'agent' : 'chat',
       assistantProfileFingerprint: resolvedProfile.fingerprint,
       providerFingerprint,
+      ...(dto.databaseContext
+        ? { databaseContext: normalizeAiDatabaseContext(dto.databaseContext) }
+        : {}),
     });
     const existing = await this.findIdempotentRun(
       conversation.id,
@@ -175,6 +191,9 @@ export class AiRunService {
       dto,
       user,
     );
+    const databaseContext = dto.databaseContext
+      ? normalizeAiDatabaseContext(dto.databaseContext)
+      : null;
 
     const userMessageId = uuidv7();
     const assistantMessageId = uuidv7();
@@ -370,6 +389,7 @@ export class AiRunService {
             workspaceId: workspace.id,
             spaceId: conversation.spaceId,
             pageId: conversation.pageId,
+            databaseContext: databaseContext as never,
             userMessageId,
             assistantMessageId,
             status: 'queued',
@@ -377,7 +397,7 @@ export class AiRunService {
             clientRequestId: dto.clientRequestId,
             requestFingerprint: fingerprint,
             contextRevision: lockedConversation.contextRevision,
-            useSpaceSearch: dto.useSpaceSearch ?? conversation.useSpaceSearch,
+            useSpaceSearch,
             chatFileIds,
             attachmentIds,
             documentSnapshot: lockedConversation.includeCurrentDocument
@@ -450,6 +470,7 @@ export class AiRunService {
 
   async get(runId: string, user: User, workspace: Workspace): Promise<AiRun> {
     const run = await this.getOwnedRun(runId, user, workspace);
+    await this.assertRunSourcesAccessible(run, user);
     const steps = await this.db
       .selectFrom('aiRunSteps')
       .selectAll()
@@ -460,6 +481,35 @@ export class AiRunService {
       ...this.toRun(run),
       steps: steps.map((step) => this.toStep(step)),
     };
+  }
+
+  async assertRunSourcesAccessible(
+    run: AiRunEntity,
+    user: User,
+  ): Promise<void> {
+    const dependencies = await this.db
+      .selectFrom('aiRunSourceDependencies')
+      .select('pageId')
+      .where('runId', '=', run.id)
+      .execute();
+    try {
+      await this.sourceAccess.assertAccessible(
+        dependencies
+          .filter((d) => d.pageId)
+          .map((d) => ({
+            sourceType: 'page',
+            sourceId: d.pageId!,
+            pageId: d.pageId,
+          })),
+        { user, workspaceId: run.workspaceId, spaceId: run.spaceId },
+      );
+    } catch (error) {
+      if (!(error instanceof AiSourceAccessChangedError)) throw error;
+      throw new ForbiddenException({
+        code: 'source_access_changed',
+        message: 'AI run sources are no longer accessible',
+      });
+    }
   }
 
   async cancel(
@@ -896,6 +946,7 @@ export class AiRunService {
             chatFileIds: locked.chatFileIds,
             attachmentIds: locked.attachmentIds,
             documentSnapshot: locked.documentSnapshot,
+            databaseContext: locked.databaseContext,
             snapshotHash: locked.snapshotHash,
             selectionText: locked.selectionText,
             selectionFrom: locked.selectionFrom,

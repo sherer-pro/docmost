@@ -20,6 +20,11 @@ async function validatePayload<T extends object>(
 }
 
 describe('database DTO limits', () => {
+  it('accepts the complete-view CSV export format', async () => {
+    await expect(
+      validatePayload(ExportDatabaseDto, { format: 'csv' }),
+    ).resolves.toHaveLength(0);
+  });
   it('accepts only non-negative integer property positions', async () => {
     await expect(
       validatePayload(UpdateDatabasePropertyDto, { position: 2 }),

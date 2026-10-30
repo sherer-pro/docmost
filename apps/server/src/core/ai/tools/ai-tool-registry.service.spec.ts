@@ -41,7 +41,7 @@ describe('built-in AI tool names', () => {
     expect(tools.map((tool) => tool.capability).sort()).toEqual(
       [...AI_BUILTIN_TOOL_CAPABILITIES].sort(),
     );
-    expect(tools).toHaveLength(26);
+    expect(tools).toHaveLength(29);
     for (const tool of tools) {
       expect(tool).toEqual(
         expect.objectContaining({
@@ -83,7 +83,7 @@ describe('built-in AI tool names', () => {
   it('exposes only read-only tools to the inbound MCP surface', () => {
     const mcpTools = buildRegistry().list('mcp');
 
-    expect(mcpTools).toHaveLength(22);
+    expect(mcpTools).toHaveLength(24);
     expect(mcpTools.every((tool) => tool.writeClass === 'read_only')).toBe(
       true,
     );

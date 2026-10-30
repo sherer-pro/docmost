@@ -51,7 +51,8 @@ type TableName =
   | 'databaseProperties'
   | 'databaseRows'
   | 'databaseCells'
-  | 'databaseViews';
+  | 'databaseViews'
+  | 'databaseViewRowPositions';
 
 function linkedInstanceDb(result?: unknown) {
   const query: any = {};
@@ -78,13 +79,11 @@ function createService(params?: {
   };
 }) {
   const pageAccessService = params?.pageAccessService ?? {
-    getEffectiveAccessForPages: jest.fn(async (pages: Array<{ id: string }>) =>
-      new Map(
-        pages.map((page) => [
-          page.id,
-          { capabilities: { canRead: true } },
-        ]),
-      ),
+    getEffectiveAccessForPages: jest.fn(
+      async (pages: Array<{ id: string }>) =>
+        new Map(
+          pages.map((page) => [page.id, { capabilities: { canRead: true } }]),
+        ),
     ),
   };
   const service = new PageService(
@@ -582,6 +581,10 @@ describe('PageService duplicatePage properties', () => {
           deletedAt: null,
         },
       ],
+      databaseViewRowPositions: [
+        { viewId: 'view-active', pageId: 'page-row-active', position: 'a0' },
+        { viewId: 'view-active', pageId: 'page-row-archived', position: 'a1' },
+      ],
       databaseViews: [
         {
           id: 'view-active',
@@ -685,6 +688,13 @@ describe('PageService duplicatePage properties', () => {
       cellByPropertyId.get(propertyByName.get('External')!.id)?.value,
     ).toBe('external-page');
     expect(inserted.databaseViews).toHaveLength(1);
+    expect(inserted.databaseViewRowPositions).toEqual([
+      {
+        viewId: inserted.databaseViews![0].id,
+        pageId: 'page-row-copy',
+        position: 'a0',
+      },
+    ]);
     expect(inserted.databaseViews![0].config).toEqual({
       sortPropertyId: propertyByName.get('Priority')!.id,
       visible: { [propertyByName.get('Parent')!.id]: true },
@@ -906,10 +916,7 @@ describe('PageService duplicatePage properties', () => {
       }),
       fakeTrx,
     );
-    expect(beforeCommit).toHaveBeenCalledWith(
-      fakeTrx,
-      'page-copy-idempotent',
-    );
+    expect(beforeCommit).toHaveBeenCalledWith(fakeTrx, 'page-copy-idempotent');
     expect(queueOutboxService.kick).toHaveBeenCalledTimes(1);
   });
 
@@ -984,11 +991,10 @@ describe('PageService duplicatePage properties', () => {
     mockIsAttachmentNode.mockImplementation((type) => type === 'image');
 
     await expect(
-      service.duplicatePage(
-        pages[0] as any,
-        undefined,
-        { id: 'user-1', workspaceId: 'workspace-1' } as any,
-      ),
+      service.duplicatePage(pages[0] as any, undefined, {
+        id: 'user-1',
+        workspaceId: 'workspace-1',
+      } as any),
     ).rejects.toMatchObject({
       status: 409,
       response: expect.objectContaining({
@@ -1043,11 +1049,10 @@ describe('PageService duplicatePage properties', () => {
       mockGetAttachmentIds.mockReturnValue(['attachment-external']);
 
       await expect(
-        service.duplicatePage(
-          rootPage as any,
-          undefined,
-          { id: 'user-1', workspaceId: 'workspace-1' } as any,
-        ),
+        service.duplicatePage(rootPage as any, undefined, {
+          id: 'user-1',
+          workspaceId: 'workspace-1',
+        } as any),
       ).rejects.toMatchObject({
         status: 409,
         response: expect.objectContaining({

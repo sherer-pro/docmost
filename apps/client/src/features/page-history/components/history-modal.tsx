@@ -9,20 +9,27 @@ import { useMediaQuery } from "@mantine/hooks";
 interface Props {
   pageId: string;
   pageTitle?: string;
+  opened?: boolean;
+  onClose?: () => void;
+  readOnly?: boolean;
 }
 
-export default function HistoryModal({ pageId, pageTitle }: Props) {
+export default function HistoryModal({
+  pageId,
+  pageTitle,
+  opened,
+  onClose,
+  readOnly = false,
+}: Props) {
   const { t } = useTranslation();
-  const [isModalOpen, setModalOpen] = useAtom(historyAtoms);
+  const [globalOpen, setModalOpen] = useAtom(historyAtoms);
+  const isModalOpen = opened ?? globalOpen;
+  const close = onClose ?? (() => setModalOpen(false));
   const isMobile = useMediaQuery("(max-width: 800px)");
 
   if (isMobile) {
     return (
-      <Modal.Root
-        opened={isModalOpen}
-        onClose={() => setModalOpen(false)}
-        fullScreen
-      >
+      <Modal.Root opened={isModalOpen} onClose={close} fullScreen>
         <Modal.Overlay />
         <Modal.Content style={{ overflow: "hidden" }}>
           <Modal.Header>
@@ -37,7 +44,11 @@ export default function HistoryModal({ pageId, pageTitle }: Props) {
             p={0}
             style={{ height: "calc(100vh - 60px)", overflow: "hidden" }}
           >
-            <HistoryModalMobile pageId={pageId} pageTitle={pageTitle} />
+            <HistoryModalMobile
+              pageId={pageId}
+              pageTitle={pageTitle}
+              readOnly={readOnly}
+            />
           </Modal.Body>
         </Modal.Content>
       </Modal.Root>
@@ -45,11 +56,7 @@ export default function HistoryModal({ pageId, pageTitle }: Props) {
   }
 
   return (
-    <Modal.Root
-      size={1400}
-      opened={isModalOpen}
-      onClose={() => setModalOpen(false)}
-    >
+    <Modal.Root size={1400} opened={isModalOpen} onClose={close}>
       <Modal.Overlay />
       <Modal.Content style={{ overflow: "hidden" }}>
         <Modal.Header>
@@ -61,7 +68,7 @@ export default function HistoryModal({ pageId, pageTitle }: Props) {
           <Modal.CloseButton aria-label={t("Close")} />
         </Modal.Header>
         <Modal.Body>
-          <HistoryModalBody pageId={pageId} />
+          <HistoryModalBody pageId={pageId} readOnly={readOnly} />
         </Modal.Body>
       </Modal.Content>
     </Modal.Root>

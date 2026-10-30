@@ -1641,11 +1641,12 @@
             "step2": "Test Chat und Agent",
             "step3": "Enable das Weltraummodell und die vorgesehenen Profile",
             "step4": "Prüfen Sie auf einem Telefon bei geöffneter Tastatur Chat und Agent, den Schalter für die Bereichssuche, die Fußleiste und das Nachrichtenfeld",
-            "step5": "Wechseln Sie zwischen einem Dokument und den Raumeinstellungen und verwenden Sie Zurück/Vorwärts; der Assistent muss den aktuellen Dokumenttitel verwenden."
+            "step5": "Wechseln Sie zwischen einem Dokument und den Raumeinstellungen und verwenden Sie Zurück/Vorwärts; der Assistent muss den aktuellen Dokumenttitel verwenden.",
+            "step6": "Wählen Sie eine Datenbankansicht und bei Bedarf Zeilen aus. Verwenden Sie Agent für Abfragen und Gesamtwerte. Prüfen Sie jede Zelländerung vor der Freigabe. Ein Vorschlag umfasst höchstens 20 Zeilen, 100 Zellen und 32 KiB; geänderte Zellrevisionen führen zur Ablehnung der betroffenen Zeile."
           },
           "success": "Eine Testantwort wird abgeschlossen; Agent listet nur zulässige Tools auf und fragt vor dem Schreiben",
           "rollback": "Deaktivieren Sie Agent oder das Weltraummodell und stellen Sie dann die letzten als funktionierend bekannten Einstellungen wieder her",
-          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern. Die gemeinsame Wissensprojektion ergänzt AI-Suche und Werkzeugkontext um aktivierte Dokument- und benutzerdefinierte Felder, benannte Datenbankeigenschaften und -zellen sowie aktive Wörterbuchbegriffe (`dictionary_term`). Der kuratierte Vertrag `AI_ASSISTANT_PROFILE_ICONS` bietet {{profileIconCount}} lokalisierte Symboloptionen, die im Profil-Editor und Chatbereich einheitlich dargestellt werden. Die Dateiauswahl für den Chat bleibt nach dem Schließen des Hinzufügen-Menüs aktiv: Die ausgewählte Datei wird hochgeladen oder ein Validierungsfehler wird angezeigt. Agent-Freigabe-Hashes berücksichtigen Editor-Standardattribute und die Yjs-Normalisierung vor dem Schreiben. Ein text-Feld in einem Nicht-Textknoten wird vor der Freigabe abgelehnt; Absatztext muss in untergeordneten Textknoten stehen."
+          "technical": "Der integrierte Assistent führt private, an Seiten gebundene Chats über den für den jeweiligen Bereich konfigurierten Anbieter aus. Die Bereichseinstellungen zeigen die Nutzung von Anfragen und Token für heute und die letzten 7 Tage. Der Agent-Modus kann genehmigte Docmost-Werkzeuge aufrufen und wendet Seitenänderungen erst an, nachdem der initiierende Benutzer sie bestätigt hat. Unmittelbar vor der Anwendung einer Änderung prüft der Server erneut den Schreibzugriff auf die aktuelle Seite sowie die Werkzeugrichtlinien auf Deployment-, Workspace-, Space-, Profil- und Gruppenebene. Der Profil-Editor des Bereichs zeigt lokalisierte Werkzeugnamen und erhält die wirksame Richtlinie für Modellüberschreibungen über die bereichsbezogene Profilliste; nur Arbeitsbereichsadministratoren dürfen die Hauptschalter ändern. Die gemeinsame Wissensprojektion ergänzt AI-Suche und Werkzeugkontext um aktivierte Dokument- und benutzerdefinierte Felder, benannte Datenbankeigenschaften und -zellen sowie aktive Wörterbuchbegriffe (`dictionary_term`). Der kuratierte Vertrag `AI_ASSISTANT_PROFILE_ICONS` bietet {{profileIconCount}} lokalisierte Symboloptionen, die im Profil-Editor und Chatbereich einheitlich dargestellt werden. Die Dateiauswahl für den Chat bleibt nach dem Schließen des Hinzufügen-Menüs aktiv: Die ausgewählte Datei wird hochgeladen oder ein Validierungsfehler wird angezeigt. Agent-Freigabe-Hashes berücksichtigen Editor-Standardattribute und die Yjs-Normalisierung vor dem Schreiben. Ein text-Feld in einem Nicht-Textknoten wird vor der Freigabe abgelehnt; Absatztext muss in untergeordneten Textknoten stehen.\n\nWählen Sie eine Datenbankansicht und bei Bedarf Zeilen aus. Verwenden Sie Agent für Abfragen und Gesamtwerte. Prüfen Sie jede Zelländerung vor der Freigabe. Ein Vorschlag umfasst höchstens 20 Zeilen, 100 Zellen und 32 KiB; geänderte Zellrevisionen führen zur Ablehnung der betroffenen Zeile. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Belege aus zugänglichen Seiten, Dateien oder Werkzeugergebnissen verlangen. Bereiche und Profile dürfen Arbeitsbereichsbeschränkungen nicht lockern.\n\nEin Administrator muss Datenbankfunktionen ausdrücklich aktivieren. Ergebnisse und Vorschauen werden bei entzogenem Quellenzugriff ausgeblendet. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "Die Bereichssuche wird während der Generierung einer Antwort ausgeführt.",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "Zelländerungen vorschlagen"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "Text auf der aktuellen Seite ersetzen",
         "patchNode": "Block auf der aktuellen Seite ersetzen",
         "insertNode": "Block in die aktuelle Seite einfügen",
-        "deleteNode": "Block von der aktuellen Seite löschen"
+        "deleteNode": "Block von der aktuellen Seite löschen",
+        "queryDatabaseView": "Datenbankansicht abfragen",
+        "summarizeDatabaseView": "Datenbankgesamtwerte berechnen",
+        "proposeDatabaseCells": "Zelländerungen vorschlagen"
       },
       "category": {
         "search": "Suche",
@@ -2645,6 +2650,25 @@
         "history": "Verlauf",
         "attachments": "Anhänge",
         "sharing": "Öffentliche Freigabe"
+      },
+      "readOnly": "Nur Antworten",
+      "readOnlyDescription": "Der Assistent darf Inhalte lesen, aber keine Änderungen vorschlagen.",
+      "knowledgeOnly": "Antworten aus erlaubten Quellen",
+      "knowledgeOnlyDescription": "Belege aus zugänglichen Seiten, Dateien oder Werkzeugergebnissen verlangen. Bereiche und Profile dürfen Arbeitsbereichsbeschränkungen nicht lockern.",
+      "preset": "Betriebsmodus",
+      "answersOnly": "Nur Antworten",
+      "confirmChanges": "Bestätigte Änderungen vorschlagen"
+    },
+    "database": {
+      "row": "Datensatz",
+      "property": "Eigenschaft",
+      "scope": "Aktuelle Datenbankansicht · ausgewählte Zeilen: {{count}}",
+      "receipt": "Datenbankänderungen",
+      "appliedRows": "Angewendete Zeilen: {{count}}",
+      "failure": {
+        "conflict": "Zellrevision oder Schema geändert. Erstellen Sie einen neuen Vorschlag.",
+        "forbidden": "Schreibzugriff wurde entzogen.",
+        "invalid_value": "Der Wert ist nicht mehr gültig."
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "Gespeichert",
     "saving": "Wird gespeichert...",
     "saved": "Gespeichert",
-    "error": "Aktualisierung der Daten fehlgeschlagen"
+    "error": "Aktualisierung der Daten fehlgeschlagen",
+    "dirty": "Persönlicher Entwurf"
   },
-  "Move block": "Block verschieben"
+  "Move block": "Block verschieben",
+  "dbBoard": {
+    "board": "Kanban",
+    "layout": "Darstellung",
+    "cardFields": "Kartenfelder",
+    "hiddenColumns": "Ausgeblendete Spalten",
+    "sorted": "Karten folgen der Sortierung. Manuelle Reihenfolge ist deaktiviert.",
+    "selectRequired": "Wählen Sie ein Einzelauswahlfeld für die Pinnwand.",
+    "columnActions": "Spaltenaktionen",
+    "moveTo": "In Spalte verschieben",
+    "moveFailed": "Verschieben fehlgeschlagen. Aktualisieren Sie die Daten vor einem erneuten Versuch.",
+    "csv": "CSV der aktuellen Ansicht",
+    "record": "Datensatz",
+    "openPage": "Ganze Seite öffnen",
+    "contentPreview": "Seitenvorschau. Öffnen Sie die ganze Seite zum Bearbeiten.",
+    "saveShared": "Für alle speichern",
+    "columnWidth": "Spaltenbreite",
+    "embed": "Datenbankansicht",
+    "embedDescription": "Vorhandene Datenbank oder Ansicht verknüpfen",
+    "sourceLink": "Interner Datenbanklink",
+    "sourceUnavailable": "Datenbankansicht nicht verfügbar",
+    "openSource": "Quelldatenbank öffnen",
+    "insertView": "Diese Datenbankansicht einfügen?",
+    "emptyColumn": "Ohne Wert"
+  },
+  "Time": "Uhrzeit",
+  "Insert current time": "Aktuelle Uhrzeit einfügen",
+  "documentUpdates": {
+    "compareWith": "Vergleichen mit"
+  }
 }

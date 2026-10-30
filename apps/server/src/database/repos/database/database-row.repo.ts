@@ -36,8 +36,9 @@ export class DatabaseRowRepo {
     workspaceId: string,
     spaceId: string,
     readablePageIds: string[],
+    trx?: KyselyTransaction,
   ) {
-    return this.buildRowsQuery(databaseId, workspaceId, spaceId).where(
+    return this.buildRowsQuery(databaseId, workspaceId, spaceId, trx).where(
       sql<boolean>`${sql.ref('databaseRows.pageId')} = any(${readablePageIds}::uuid[])`,
     );
   }

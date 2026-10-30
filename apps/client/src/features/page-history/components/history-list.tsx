@@ -28,9 +28,10 @@ const PREFETCH_DELAY_MS = 150;
 
 interface Props {
   pageId: string;
+  readOnly?: boolean;
 }
 
-function HistoryList({ pageId }: Props) {
+function HistoryList({ pageId, readOnly }: Props) {
   const { t } = useTranslation();
   const [activeHistoryId, setActiveHistoryId] = useAtom(activeHistoryIdAtom);
   const setActiveHistoryPrevId = useSetAtom(activeHistoryPrevIdAtom);
@@ -142,7 +143,7 @@ function HistoryList({ pageId }: Props) {
             onHover={handleHover}
             onHoverEnd={clearPrefetchTimeout}
             isActive={historyItem.id === activeHistoryId}
-            canDelete={canDelete}
+            canDelete={!readOnly && canDelete}
             onDelete={confirmDelete}
           />
         ))}
@@ -154,7 +155,7 @@ function HistoryList({ pageId }: Props) {
         )}
       </ScrollArea>
 
-      {canRestore && (
+      {!readOnly && canRestore && (
         <>
           <Divider />
           <Group p="xs" wrap="nowrap">

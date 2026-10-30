@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { RawBuilder, sql } from 'kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
+import { dbOrTx } from '@docmost/db/utils';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
-import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
+import {
+  executeWithCursorPagination,
+  defaultEncodeCursor,
+} from '@docmost/db/pagination/cursor-pagination';
 import {
   getDatabaseViewPropertyIds,
   normalizeDatabaseViewState,
@@ -25,9 +29,12 @@ export interface DatabaseViewQueryInput {
   workspaceId: string;
   spaceId: string;
   readablePageIds: string[];
+  referenceReadablePageIds?: string[];
   properties: Property[];
   state: DatabaseViewState;
   groupKey?: string;
+  viewId?: string;
+  trx?: KyselyTransaction;
 }
 
 @Injectable()
@@ -89,7 +96,7 @@ export class DatabaseViewQueryService {
     if (property?.type === 'user')
       return sql`coalesce((select lower(u.name) from users u where u.id::text = (${text}) and u.workspace_id = ${input.workspaceId}), lower(${text})) collate "C"`;
     if (property?.type === 'page_reference')
-      return sql`coalesce((select lower(p.title) from pages p where p.id::text = (${text}) and p.id = any(${input.readablePageIds}::uuid[]) and p.workspace_id = ${input.workspaceId} and p.deleted_at is null), lower(${text})) collate "C"`;
+      return sql`coalesce((select lower(p.title) from pages p where p.id::text = (${text}) and p.id = any(${input.referenceReadablePageIds ?? input.readablePageIds}::uuid[]) and p.workspace_id = ${input.workspaceId} and p.deleted_at is null), lower(${text})) collate "C"`;
     if (property?.type === 'select') {
       const options = property.settings?.options ?? [];
       let label: RawBuilder<any> = text;
@@ -236,6 +243,7 @@ export class DatabaseViewQueryService {
       input.workspaceId,
       input.spaceId,
       input.readablePageIds,
+      input.trx,
     );
     for (const id of getDatabaseViewPropertyIds(input.state)) {
       const property = input.properties.find((property) => property.id === id);
@@ -274,10 +282,24 @@ export class DatabaseViewQueryService {
 
   async list(
     input: DatabaseViewQueryInput,
-    options: { limit?: number; cursor?: string },
+    options: {
+      limit?: number;
+      cursor?: string;
+      neighborOf?: string;
+      neighborDirection?: 'previous' | 'next';
+    },
   ) {
     let query: any = this.query(input);
     const fields: any[] = [];
+    if (input.viewId && input.state.sorts.length === 0) {
+      const position = sql`coalesce((select p.position from database_view_row_positions p where p.view_id = ${input.viewId}::uuid and p.page_id = ${sql.ref('databaseRows.pageId')}), ${sql.ref('pages.position')}, '') collate "C"`;
+      query = query.select(position.as('viewPosition'));
+      fields.push({
+        expression: position,
+        direction: 'asc',
+        key: 'viewPosition',
+      });
+    }
     for (const [index, sort] of input.state.sorts.entries()) {
       const value = this.value(sort.propertyId, input);
       const isNumber =
@@ -312,6 +334,29 @@ export class DatabaseViewQueryService {
         key: 'pageId',
       },
     );
+    query = query.select(
+      sql`coalesce(${sql.ref('pages.position')}, '')`.as('pagePosition'),
+    );
+    let beforeCursor: string | undefined;
+    if (options.neighborOf) {
+      if (options.cursor)
+        throw new BadRequestException(
+          'An anchored row query cannot also use a cursor',
+        );
+      const anchor = await query
+        .where('databaseRows.pageId', '=', options.neighborOf)
+        .executeTakeFirst();
+      if (!anchor) return { items: [], nextCursor: null, hasMore: false };
+      const cursor = defaultEncodeCursor(
+        fields.map((field) => [field.key, anchor[field.key]]) as any,
+      );
+      options = {
+        ...options,
+        limit: 1,
+        cursor: options.neighborDirection === 'previous' ? undefined : cursor,
+      };
+      if (options.neighborDirection === 'previous') beforeCursor = cursor;
+    }
     if (!options.limit)
       return {
         items: await fields
@@ -326,6 +371,7 @@ export class DatabaseViewQueryService {
     const page = await (executeWithCursorPagination as any)(query, {
       perPage: options.limit,
       cursor: options.cursor,
+      beforeCursor,
       fields,
       parseCursor: (cursor) =>
         Object.fromEntries(
@@ -337,6 +383,14 @@ export class DatabaseViewQueryService {
       nextCursor: page.meta.nextCursor,
       hasMore: page.meta.hasNextPage,
     };
+  }
+
+  async matchingPageIds(input: DatabaseViewQueryInput): Promise<string[]> {
+    const rows = await this.query(input)
+      .clearSelect()
+      .select('databaseRows.pageId')
+      .execute();
+    return rows.map((row: { pageId: string }) => row.pageId);
   }
 
   private aggregate(
@@ -367,7 +421,7 @@ export class DatabaseViewQueryService {
 
   async summary(input: DatabaseViewQueryInput): Promise<DatabaseSummary> {
     const calculations = Object.entries(input.state.calculations);
-    const base = this.query(input, false).clearSelect();
+    const base = this.query(input).clearSelect();
     const select = [
       sql`count(*)::int`.as('count'),
       ...calculations.map(([id, operation], index) =>
@@ -401,7 +455,7 @@ export class DatabaseViewQueryService {
         property.type === 'user'
           ? new Map(
               (
-                await this.db
+                await dbOrTx(this.db, input.trx)
                   .selectFrom('users')
                   .select(['id', 'name'])
                   .where('workspaceId', '=', input.workspaceId)

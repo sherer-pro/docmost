@@ -368,6 +368,8 @@ export interface AiSpaceConfigUpdate {
 }
 
 export interface AiAvailability {
+  readOnly?: boolean;
+  knowledgeOnly?: boolean;
   enabled: boolean;
   configured: boolean;
   canUse: boolean;
@@ -572,6 +574,7 @@ interface AiApprovalPreviewBase {
 }
 
 export type AiApprovalPreview =
+  | import("./ai-database").AiDatabaseApprovalPreview
   | (AiApprovalPreviewBase & {
       kind: "editPageText";
       anchorNodeId: string;
@@ -770,6 +773,7 @@ export interface AiRunActionRequest {
 }
 
 export interface SendAiMessageRequest {
+  databaseContext?: import("./ai-database").AiDatabaseContext;
   content: string;
   clientRequestId: string;
   contextRevision: number;

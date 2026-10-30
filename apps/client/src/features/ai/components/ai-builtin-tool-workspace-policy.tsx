@@ -7,6 +7,7 @@ import {
   Stack,
   Switch,
   Text,
+  SegmentedControl,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import type { AiBuiltinToolCapability } from "@docmost/api-contract";
@@ -23,11 +24,15 @@ export function AiBuiltinToolWorkspacePolicy() {
   const query = useAiBuiltinToolWorkspacePolicyQuery();
   const mutation = useUpdateAiBuiltinToolWorkspacePolicyMutation();
   const [enabled, setEnabled] = useState(true);
+  const [readOnly, setReadOnly] = useState(false);
+  const [knowledgeOnly, setKnowledgeOnly] = useState(false);
   const [allowed, setAllowed] = useState<AiBuiltinToolCapability[]>([]);
 
   useEffect(() => {
     if (!query.data) return;
     setEnabled(query.data.enabled);
+    setReadOnly(Boolean(query.data.readOnly));
+    setKnowledgeOnly(Boolean(query.data.knowledgeOnly));
     setAllowed(query.data.allowedCapabilities);
   }, [query.data]);
 
@@ -44,7 +49,12 @@ export function AiBuiltinToolWorkspacePolicy() {
   );
 
   const save = async () => {
-    await mutation.mutateAsync({ enabled, allowedCapabilities: allowed });
+    await mutation.mutateAsync({
+      enabled,
+      readOnly,
+      knowledgeOnly,
+      allowedCapabilities: allowed,
+    });
     notifications.show({
       color: "green",
       message: t("ai.toolPolicy.saved"),
@@ -66,12 +76,36 @@ export function AiBuiltinToolWorkspacePolicy() {
           checked={enabled}
           onChange={(event) => setEnabled(event.currentTarget.checked)}
         />
+        <Text size="sm" fw={500}>
+          {t("ai.toolPolicy.preset")}
+        </Text>
+        <SegmentedControl
+          fullWidth
+          styles={{ label: { whiteSpace: "normal" } }}
+          aria-label={t("ai.toolPolicy.preset")}
+          value={readOnly ? "answers" : "approval"}
+          onChange={(value) => setReadOnly(value === "answers")}
+          data={[
+            { value: "answers", label: t("ai.toolPolicy.answersOnly") },
+            { value: "approval", label: t("ai.toolPolicy.confirmChanges") },
+          ]}
+          disabled={mutation.isPending}
+        />
         <AiToolCapabilityList
+          disabled={readOnly || !enabled || mutation.isPending}
           catalog={query.data.catalog}
           allowed={allowed}
           available={query.data.maximumCapabilities}
           onChange={setAllowed}
-          disabled={!enabled || mutation.isPending}
+        />
+        <Text size="xs" c="dimmed">
+          {t("ai.toolPolicy.readOnlyDescription")}
+        </Text>
+        <Switch
+          label={t("ai.toolPolicy.knowledgeOnly")}
+          description={t("ai.toolPolicy.knowledgeOnlyDescription")}
+          checked={knowledgeOnly}
+          onChange={(event) => setKnowledgeOnly(event.currentTarget.checked)}
         />
         <Text size="xs" c="dimmed">
           {t("ai.toolPolicy.effectiveSummary", {

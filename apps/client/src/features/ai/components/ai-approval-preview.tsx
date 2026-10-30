@@ -1,4 +1,12 @@
-import { Badge, Box, Group, Stack, Text } from "@mantine/core";
+import {
+  Badge,
+  Box,
+  Group,
+  Stack,
+  Text,
+  Table,
+  ScrollArea,
+} from "@mantine/core";
 import type { AiRunStep } from "@/features/ai/types/ai.types.ts";
 import { useTranslation } from "react-i18next";
 import classes from "./ai-panel.module.css";
@@ -53,6 +61,52 @@ export function AiApprovalPreview({ step }: { step: AiRunStep }) {
             {preview.anchorText}
           </Text>
         </Box>
+      )}
+      {preview.kind === "databaseCells" && (
+        <ScrollArea type="auto">
+          <Table withTableBorder withColumnBorders>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("ai.database.row")}</Table.Th>
+                <Table.Th>{t("ai.database.property")}</Table.Th>
+                <Table.Th>{t("ai.agent.before")}</Table.Th>
+                <Table.Th>{t("ai.agent.after")}</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {preview.rows.flatMap((row) =>
+                row.cells.map((cell) => (
+                  <Table.Tr key={`${row.pageId}:${cell.propertyId}`}>
+                    <Table.Td>{row.title || row.pageId}</Table.Td>
+                    <Table.Td>{cell.propertyName}</Table.Td>
+                    <Table.Td
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {cell.beforeDisplay ??
+                        (typeof cell.before === "string"
+                          ? cell.before
+                          : JSON.stringify(cell.before))}
+                    </Table.Td>
+                    <Table.Td
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {cell.afterDisplay ??
+                        (typeof cell.value === "string"
+                          ? cell.value
+                          : JSON.stringify(cell.value))}
+                    </Table.Td>
+                  </Table.Tr>
+                )),
+              )}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       )}
 
       {preview.beforeText && (

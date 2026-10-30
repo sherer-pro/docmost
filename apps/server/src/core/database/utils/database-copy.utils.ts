@@ -13,10 +13,17 @@ export function remapDatabaseViewConfig(
   const remapped: Record<string, unknown> = {};
   for (const [key, rawChildValue] of Object.entries(value)) {
     const childValue =
-      (key === 'propertyId' || key === 'sortPropertyId' || key === 'groupBy') &&
-      typeof rawChildValue === 'string'
-        ? (propertyIdMap.get(rawChildValue) ?? rawChildValue)
-        : remapDatabaseViewConfig(rawChildValue, propertyIdMap);
+      ['columnOrder', 'cardProperties'].includes(key) &&
+      Array.isArray(rawChildValue)
+        ? rawChildValue.map((id) =>
+            typeof id === 'string' ? (propertyIdMap.get(id) ?? id) : id,
+          )
+        : (key === 'propertyId' ||
+              key === 'sortPropertyId' ||
+              key === 'groupBy') &&
+            typeof rawChildValue === 'string'
+          ? (propertyIdMap.get(rawChildValue) ?? rawChildValue)
+          : remapDatabaseViewConfig(rawChildValue, propertyIdMap);
 
     remapped[propertyIdMap.get(key) ?? key] = childValue;
   }

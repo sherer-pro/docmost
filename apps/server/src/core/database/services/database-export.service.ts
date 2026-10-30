@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Readable } from 'stream';
+import { buildDatabaseCsv } from './database-csv';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import type { User } from '@docmost/db/types/entity.types';
 import type { DatabaseExportViewSnapshot } from '@docmost/api-contract';
@@ -76,6 +78,19 @@ export class DatabaseExportService {
     const safeName = (request.databaseName?.trim() || 'database')
       .replace(/\s+/g, '-')
       .toLowerCase();
+    if (request.format === DatabaseExportFormat.CSV) {
+      return {
+        contentType: 'text/csv; charset=utf-8',
+        fileName: `${safeName.replace(/[^\p{L}\p{N}._-]/gu, '_')}.csv`,
+        fileStream: Readable.from([
+          buildDatabaseCsv(
+            request.tableState.properties,
+            request.tableState.rows,
+            request.cellDisplay,
+          ),
+        ]),
+      };
+    }
     const allowedPageIds =
       request.currentView && request.includeChildren
         ? await this.buildCurrentViewAllowedPageIds(

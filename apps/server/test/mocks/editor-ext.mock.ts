@@ -19,6 +19,7 @@ export const Attachment = {} as any;
 export const Drawio = {} as any;
 export const Excalidraw = {} as any;
 export const Embed = {} as any;
+export const DatabaseEmbed = {} as any;
 export const Mention = {} as any;
 export const Subpages = {} as any;
 export const Highlight = {} as any;

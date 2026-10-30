@@ -14,6 +14,7 @@ const { generateKeyBetween } = require('fractional-indexing-jittered');
 const JSZip = require('jszip');
 
 export async function runLiveAcceptance({
+  providerURL,
   baseURL,
   collabURL,
   sql,
@@ -517,6 +518,65 @@ export async function runLiveAcceptance({
       }
       assert(delivered, 'Assignment notification was not delivered');
     });
+    const { runAiDatabaseAcceptance } = await import(
+      './ai-database-live-acceptance.mjs'
+    );
+    fixture.aiApproval = await runAiDatabaseAcceptance({
+      api,
+      fetchApi,
+      actors,
+      space,
+      database,
+      properties,
+      ids,
+      state,
+      providerURL,
+      test,
+      sql,
+      exactSecrets,
+      report,
+    });
+    await test('CSV exports the complete filtered accessible view in its visible column order', async () => {
+      const amount = properties[1].id;
+      const status = properties[8].id;
+      const viewState = {
+        ...state,
+        sorts: [{ propertyId: amount, direction: 'desc' }],
+        filter: {
+          conjunction: 'and',
+          conditions: [{ propertyId: amount, operator: 'gte', value: 500 }],
+        },
+      };
+      const denied = await fetchApi(
+        actors.reader,
+        `/databases/${database.id}/export`,
+        'POST',
+        { format: 'csv' },
+      );
+      assert.equal(denied.status(), 403);
+      const response = await fetchApi(
+        actors.editor,
+        `/databases/${database.id}/export`,
+        'POST',
+        {
+          format: 'csv',
+          currentView: { viewState, visiblePropertyIds: [amount, status] },
+        },
+      );
+      assert.equal(response.status(), 200);
+      assert.match(response.headers()['content-type'], /text\/csv/);
+      const lines = (await response.body())
+        .toString('utf8')
+        .replace(/^\uFEFF/, '')
+        .trimEnd()
+        .split('\r\n');
+      assert.equal(lines.length, 501);
+      assert.equal(lines[0], '"Title","Amount","Status"');
+      const number = new Intl.NumberFormat(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      assert.equal(lines[1], `"Row 0999","${number.format(999)}","Alpha"`);
+      assert.equal(lines.at(-1), `"Row 0500","${number.format(500)}","Alpha"`);
+      assert(!lines.some((line) => line.includes('Row 0049')));
+    });
     await test('real export and queued import preserve 1000 rows, 20 fields and view settings', async () => {
       const readableExport = await fetchApi(
         actors.editor,
@@ -661,7 +721,9 @@ export async function runLiveAcceptance({
           'test',
           '--config',
           path.join(repo, 'apps/client/e2e/database/playwright.live.config.ts'),
-          ...process.argv.slice(2),
+          ...process.argv
+            .slice(2)
+            .filter((arg) => !arg.startsWith('--subnet=')),
         ],
         {
           cwd: path.join(repo, 'apps/client'),

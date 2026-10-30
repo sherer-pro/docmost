@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { evaluate } from "./rag-quality-benchmark.mjs";
+import { evaluateDatabaseTrace } from "./ai-database-quality.mjs";
 
 test("incomplete evaluation cannot claim measured quality", () => {
   const corpus = {
@@ -107,6 +108,11 @@ test("corpus has 120 tuning and 80 disjoint holdout questions with evidence anno
     ),
   );
   assert.equal(corpus.questions.length, 200);
+  assert.equal(corpus.databaseQuestions.length, 120);
+  assert.equal(
+    corpus.databaseQuestions.filter((q) => q.split === "holdout").length,
+    48,
+  );
   assert.equal(
     new Set(corpus.questions.map((question) => question.id)).size,
     200,
@@ -123,4 +129,54 @@ test("corpus has 120 tuning and 80 disjoint holdout questions with evidence anno
   for (const question of corpus.questions)
     for (const evidence of question.requiredEvidence)
       assert.ok(sources.has(evidence.sourceId));
+});
+
+test("database scoring rejects a correct total with an extra write or a changed proposal target", () => {
+  const expected = {
+    databaseId: "database",
+    tool: "summarizeDatabaseView",
+    result: { count: 291 },
+  };
+  const read = {
+    name: expected.tool,
+    arguments: { databaseId: "database" },
+    result: { count: 291 },
+  };
+  assert.equal(evaluateDatabaseTrace(expected, [read]), true);
+  assert.equal(
+    evaluateDatabaseTrace(expected, [read, { name: "proposeDatabaseCells" }]),
+    false,
+  );
+  assert.equal(
+    evaluateDatabaseTrace(expected, [{ ...read, result: { count: 20 } }]),
+    false,
+  );
+  const rows = [
+    {
+      pageId: "row",
+      cells: [{ propertyId: "status", value: "done", expectedRevision: 1 }],
+    },
+  ];
+  const write = {
+    name: "proposeDatabaseCells",
+    arguments: { databaseId: "database", rows },
+  };
+  assert.equal(
+    evaluateDatabaseTrace({ databaseId: "database", tool: write.name, rows }, [
+      write,
+    ]),
+    true,
+  );
+  assert.equal(
+    evaluateDatabaseTrace({ databaseId: "database", tool: write.name, rows }, [
+      {
+        ...write,
+        arguments: {
+          ...write.arguments,
+          rows: [...rows, { ...rows[0], pageId: "other" }],
+        },
+      },
+    ]),
+    false,
+  );
 });

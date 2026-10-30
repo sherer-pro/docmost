@@ -45,6 +45,7 @@ describe('AiRunStepService approval lifecycle', () => {
 
   function createService() {
     const runs = {
+      assertRunSourcesAccessible: jest.fn(async () => undefined),
       getOwnedRun: jest.fn(async () => run),
       withProviderAdmission: jest.fn(async () => ({
         ...pendingStep,

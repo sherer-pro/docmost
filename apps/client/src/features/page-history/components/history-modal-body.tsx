@@ -16,6 +16,7 @@ import {
   highlightChangesAtom,
 } from "@/features/page-history/atoms/history-atoms";
 import HistoryView from "@/features/page-history/components/history-view";
+import { HistoryComparisonSelect } from "./history-comparison-select";
 import { useRef } from "react";
 import { IconChevronUp, IconChevronDown } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -26,9 +27,10 @@ import {
 
 interface Props {
   pageId: string;
+  readOnly?: boolean;
 }
 
-export default function HistoryModalBody({ pageId }: Props) {
+export default function HistoryModalBody({ pageId, readOnly }: Props) {
   const { t } = useTranslation();
   const scrollViewportRef = useRef<HTMLDivElement>(null);
 
@@ -45,13 +47,14 @@ export default function HistoryModalBody({ pageId }: Props) {
     <div className={classes.sidebarFlex}>
       <nav className={classes.sidebar}>
         <div className={classes.sidebarMain}>
-          <HistoryList pageId={pageId} />
+          <HistoryList pageId={pageId} readOnly={readOnly} />
         </div>
       </nav>
 
       <div className={classes.historyPreview} data-page-full-width="true">
+        <HistoryComparisonSelect pageId={pageId} />
         <ScrollArea
-          h={650}
+          h={580}
           w="100%"
           scrollbarSize={5}
           viewportRef={scrollViewportRef}

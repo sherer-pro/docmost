@@ -9,17 +9,18 @@ export function AiDocumentContextSync({
   spaceSlug,
   title,
   canWrite,
+  databaseId,
 }: AiDocumentContext) {
   const setContext = useSetAtom(aiDocumentContextAtom);
 
   useEffect(() => {
-    const context = { pageId, spaceId, spaceSlug, title, canWrite };
+    const context = { pageId, spaceId, spaceSlug, title, canWrite, databaseId };
     setContext(context);
 
     return () => {
       setContext((current) => (current?.pageId === pageId ? null : current));
     };
-  }, [canWrite, pageId, setContext, spaceId, spaceSlug, title]);
+  }, [canWrite, pageId, setContext, spaceId, spaceSlug, title, databaseId]);
 
   return null;
 }

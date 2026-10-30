@@ -22,6 +22,7 @@ export const aiDocumentContextAtom = atom(
 );
 
 export const aiStreamingRunsAtom = atom<Record<string, AiStreamingRun>>({});
+export const aiDatabaseReceiptRunsAtom = atom<Record<string, string>>({});
 
 export const aiLastEditorContextAtom = atom<
   Record<string, AiEditorContext | undefined>

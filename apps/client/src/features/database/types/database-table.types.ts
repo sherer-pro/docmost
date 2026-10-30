@@ -46,6 +46,8 @@ export interface IDatabaseCellValue {
  * handled on the client.
  */
 export interface IDatabaseRowWithCells {
+  viewPosition?: string;
+  pagePosition?: string;
   canWrite?: boolean;
   id: string;
   pageId: string;
@@ -76,6 +78,9 @@ export type IDatabaseRowsSortField = "position" | "title";
 export type IDatabaseRowsSortDirection = "asc" | "desc";
 
 export interface IDatabaseRowsQueryParams {
+  neighborOf?: string;
+  neighborDirection?: "previous" | "next";
+  viewId?: string;
   viewState?: string;
   groupKey?: string;
   limit?: number;

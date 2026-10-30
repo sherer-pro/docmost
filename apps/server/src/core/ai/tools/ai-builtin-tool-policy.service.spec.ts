@@ -25,11 +25,15 @@ function registry() {
 
 function database(rows: {
   workspace?: {
+    readOnly?: boolean;
+    knowledgeOnly?: boolean;
     enabled: boolean;
     allowedCapabilities: string[];
     policyVersion: number;
   };
   space?: {
+    readOnly?: boolean;
+    knowledgeOnly?: boolean;
     allowedCapabilities: string[] | null;
     policyVersion: number;
   };
@@ -67,6 +71,50 @@ function service(
 }
 
 describe('AiBuiltinToolPolicyService', () => {
+  it('keeps workspace safety restrictions authoritative when a space tries to weaken them', async () => {
+    const policy = service(
+      {
+        workspace: {
+          enabled: true,
+          readOnly: true,
+          knowledgeOnly: true,
+          allowedCapabilities: [
+            ...AI_LEGACY_AGENT_CAPABILITIES,
+            'database.cells.propose',
+          ],
+          policyVersion: 1,
+        },
+        space: {
+          allowedCapabilities: null,
+          readOnly: false,
+          knowledgeOnly: false,
+          policyVersion: 1,
+        },
+      },
+      true,
+    );
+    expect(await policy.getEffectiveModes('workspace', 'space')).toEqual({
+      readOnly: true,
+      knowledgeOnly: true,
+    });
+    const snapshot = await policy.buildRunSnapshot(
+      database({
+        workspace: {
+          enabled: true,
+          readOnly: true,
+          allowedCapabilities: [
+            ...AI_LEGACY_AGENT_CAPABILITIES,
+            'database.cells.propose',
+          ],
+          policyVersion: 1,
+        },
+      }),
+      { workspaceId: 'workspace', spaceId: 'space', executionMode: 'agent' },
+    );
+    expect(snapshot.toolNames).not.toContain('proposeDatabaseCells');
+    expect(snapshot.toolNames).not.toContain('editPageText');
+    expect(snapshot.toolNames).toContain('getPage');
+  });
   it('keeps a migrated MCP key on the exact seven legacy reads', async () => {
     const policy = service({}, true);
     const tools = await policy.listForMcp({
@@ -143,11 +191,7 @@ describe('AiBuiltinToolPolicyService', () => {
     );
 
     await expect(
-      inherited.getEffectiveCapabilities(
-        'workspace-1',
-        'space-1',
-        'agent',
-      ),
+      inherited.getEffectiveCapabilities('workspace-1', 'space-1', 'agent'),
     ).resolves.toEqual(AI_LEGACY_AGENT_CAPABILITIES);
     await expect(
       denied.getEffectiveCapabilities('workspace-1', 'space-1', 'agent'),

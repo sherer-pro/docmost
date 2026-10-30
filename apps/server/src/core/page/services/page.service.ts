@@ -171,10 +171,7 @@ export class PageService {
     return row?.databaseId ?? null;
   }
 
-  async resolveReferencedUsers(
-    page: Page,
-    requestedUserIds: string[],
-  ) {
+  async resolveReferencedUsers(page: Page, requestedUserIds: string[]) {
     const referencedIds = new Set<string>();
     const assigneeId = getPageAssigneeId(page.settings);
     if (assigneeId) referencedIds.add(assigneeId);
@@ -190,9 +187,7 @@ export class PageService {
         row.databaseId,
         page.workspaceId,
       );
-      canReadRowCells = Boolean(
-        database && database.spaceId === page.spaceId,
-      );
+      canReadRowCells = Boolean(database && database.spaceId === page.spaceId);
     }
     if (row && canReadRowCells) {
       const [properties, cells] = await Promise.all([
@@ -200,7 +195,9 @@ export class PageService {
         this.databaseCellRepo.findByDatabaseAndPage(row.databaseId, page.id),
       ]);
       const userPropertyIds = new Set(
-        properties.filter((property) => property.type === 'user').map((property) => property.id),
+        properties
+          .filter((property) => property.type === 'user')
+          .map((property) => property.id),
       );
       for (const cell of cells) {
         if (!userPropertyIds.has(cell.propertyId)) continue;
@@ -222,11 +219,15 @@ export class PageService {
       }
     }
 
-    const ids = [...new Set(requestedUserIds)].filter((id) => referencedIds.has(id));
+    const ids = [...new Set(requestedUserIds)].filter((id) =>
+      referencedIds.has(id),
+    );
     const users = await this.userRepo.findByIds(ids, page.workspaceId);
     const usersById = new Map(
       users
-        .filter((user) => !user.deletedAt && user.workspaceId === page.workspaceId)
+        .filter(
+          (user) => !user.deletedAt && user.workspaceId === page.workspaceId,
+        )
         .map((user) => [user.id, user]),
     );
     return ids
@@ -247,7 +248,9 @@ export class PageService {
   ): Promise<void> {
     const previousAssigneeId = getPageAssigneeId(currentSettings);
     const nextAssigneeId = getPageAssigneeId(nextSettings);
-    const previousStakeholderIds = new Set(getPageStakeholderIds(currentSettings));
+    const previousStakeholderIds = new Set(
+      getPageStakeholderIds(currentSettings),
+    );
     const addedIds = [
       ...(nextAssigneeId && nextAssigneeId !== previousAssigneeId
         ? [nextAssigneeId]
@@ -258,11 +261,12 @@ export class PageService {
     ];
     if (addedIds.length === 0) return;
 
-    const assignableIds = await this.pageAccessService.getAssignableSpaceUserIds(
-      addedIds,
-      spaceId,
-      workspaceId,
-    );
+    const assignableIds =
+      await this.pageAccessService.getAssignableSpaceUserIds(
+        addedIds,
+        spaceId,
+        workspaceId,
+      );
     if (addedIds.some((id) => !assignableIds.has(id))) {
       throw new BadRequestException(
         'Assignee and stakeholders must be active space members',
@@ -425,12 +429,13 @@ export class PageService {
         .orderBy('createdAt', 'asc')
         .execute();
 
+      const viewIdMap = new Map(views.map((view) => [view.id, uuid7()]));
       if (views.length > 0) {
         await params.trx
           .insertInto('databaseViews')
           .values(
             views.map((view) => ({
-              id: uuid7(),
+              id: viewIdMap.get(view.id)!,
               databaseId: newDatabaseId,
               workspaceId: view.workspaceId,
               name: view.name,
@@ -443,6 +448,26 @@ export class PageService {
             })),
           )
           .execute();
+        const positions = await params.trx
+          .selectFrom('databaseViewRowPositions')
+          .selectAll()
+          .where('viewId', 'in', [...viewIdMap.keys()])
+          .execute();
+        const copiedPositions = positions.filter((position) =>
+          copiedRowPageIds.has(position.pageId),
+        );
+        for (let offset = 0; offset < copiedPositions.length; offset += 1000) {
+          await params.trx
+            .insertInto('databaseViewRowPositions')
+            .values(
+              copiedPositions.slice(offset, offset + 1000).map((position) => ({
+                viewId: viewIdMap.get(position.viewId)!,
+                pageId: params.pageMap.get(position.pageId)!.newPageId,
+                position: position.position,
+              })),
+            )
+            .execute();
+        }
       }
     }
   }
@@ -1780,10 +1805,7 @@ export class PageService {
         const referencingPageIds =
           referencingPageIdsByAttachmentId.get(attachmentId) ?? new Set();
         referencingPageIds.add(page.id);
-        referencingPageIdsByAttachmentId.set(
-          attachmentId,
-          referencingPageIds,
-        );
+        referencingPageIdsByAttachmentId.set(attachmentId, referencingPageIds);
       }
     }
 
@@ -1909,7 +1931,6 @@ export class PageService {
               node.attrs.sourcePageId = mappedPage.newPageId;
             }
           }
-
         });
 
         const prosemirrorJson = prosemirrorDoc.toJSON();
@@ -1959,32 +1980,32 @@ export class PageService {
     await executeTx(this.db, async (trx) => {
       await trx.insertInto('pages').values(insertablePages).execute();
       await this.duplicateLinkedDatabases({
-          pageMap,
-          copiedPageByOriginalId,
-          spaceId,
-          authUser,
-          trx,
+        pageMap,
+        copiedPageByOriginalId,
+        spaceId,
+        authUser,
+        trx,
       });
       if (isDuplicateInSameSpace) {
         await this.duplicateRowsInExistingDatabases({
-            pageMap,
-            authUser,
-            trx,
+          pageMap,
+          authUser,
+          trx,
         });
       }
       const transclusionPages = insertablePages.map((page) => ({
-          id: page.id as string,
-          workspaceId: page.workspaceId,
-          content: page.content,
+        id: page.id as string,
+        workspaceId: page.workspaceId,
+        content: page.content,
       }));
       if (this.transclusionService) {
         await this.transclusionService.insertTransclusionsForPages(
-            transclusionPages,
-            trx,
+          transclusionPages,
+          trx,
         );
         await this.transclusionService.insertReferencesForPages(
-            transclusionPages,
-            trx,
+          transclusionPages,
+          trx,
         );
       }
       if (attachmentMappings.length > 0) {
@@ -1992,14 +2013,14 @@ export class PageService {
           throw new Error('Queue outbox service is unavailable');
         }
         await this.queueOutboxService.enqueueDuplicatePageAttachments(
-            {
-              workspaceId: rootPage.workspaceId,
-              rootPageId: rootPage.id,
-              newPageId,
-              spaceId,
-              attachmentMappings,
-            },
-            trx,
+          {
+            workspaceId: rootPage.workspaceId,
+            rootPageId: rootPage.id,
+            newPageId,
+            spaceId,
+            attachmentMappings,
+          },
+          trx,
         );
       }
       await options?.beforeCommit?.(trx, newPageId);

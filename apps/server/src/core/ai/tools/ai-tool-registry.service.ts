@@ -25,6 +25,8 @@ import {
   AiBuiltinToolCapability,
   AiBuiltinToolCategory,
   AiBuiltinToolTargetScope,
+  AiDatabaseContext,
+  AiDatabaseCellOperation,
 } from '@docmost/api-contract';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { SearchService } from '../../search/search.service';
@@ -62,6 +64,7 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
+import { AiDatabaseService } from '../services/ai-database.service';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
 // rejected, or expired write proposal starts a new segment. The run-level
@@ -124,17 +127,19 @@ export type AiToolExecutionContext = {
   workspaceId: string;
   spaceId: string;
   currentPageId?: string;
+  databaseContext?: AiDatabaseContext;
   source: AiToolExposure;
 };
 
 export type AiToolWriteProposal = {
   pageId: string;
-  baseContentHash: string;
-  expectedAfterHash: string;
-  operation: AiPageOperation;
+  baseContentHash: string | null;
+  expectedAfterHash: string | null;
+  operation: AiPageOperation | AiDatabaseCellOperation;
 };
 
 export type AiToolExecutionResult = {
+  dependencyPageIds?: string[];
   content: unknown;
   writeProposal?: AiToolWriteProposal;
   citations?: Array<Omit<AiCitationCandidate, 'marker'>>;
@@ -234,6 +239,7 @@ export class AiToolRegistryService {
     private readonly knowledgeProjection: KnowledgeProjectionService = new KnowledgeProjectionService(
       db,
     ),
+    @Optional() private readonly databases?: AiDatabaseService,
   ) {
     this.tools = this.createTools();
     // The mcp__ prefix is reserved for outbound external MCP tools. Reusing it
@@ -269,8 +275,11 @@ export class AiToolRegistryService {
           'current_space',
           'readable_page',
           'current_page',
+          'current_database',
         ].includes(tool.targetScope) ||
-        !['none', 'current_page_hash'].includes(tool.approvalMode) ||
+        !['none', 'current_page_hash', 'database_cell_revisions'].includes(
+          tool.approvalMode,
+        ) ||
         !['read_only', 'write'].includes(tool.writeClass) ||
         tool.exposures.length === 0 ||
         exposures.size !== tool.exposures.length ||
@@ -297,8 +306,12 @@ export class AiToolRegistryService {
       if (
         (tool.writeClass === 'read_only' && tool.approvalMode !== 'none') ||
         (tool.writeClass === 'write' &&
-          tool.approvalMode !== 'current_page_hash') ||
-        (tool.writeClass === 'write' && tool.targetScope !== 'current_page') ||
+          !(
+            (tool.approvalMode === 'current_page_hash' &&
+              tool.targetScope === 'current_page') ||
+            (tool.approvalMode === 'database_cell_revisions' &&
+              tool.targetScope === 'current_database')
+          )) ||
         (tool.writeClass === 'write' &&
           (tool.exposures.length !== 1 || tool.exposures[0] !== 'agent')) ||
         (tool.exposures.includes('mcp') && tool.writeClass !== 'read_only')
@@ -354,6 +367,7 @@ export class AiToolRegistryService {
 
   private createTools(): InternalAiToolDefinition[] {
     return [
+      ...this.createDatabaseTools(),
       {
         name: 'search',
         description:
@@ -1034,6 +1048,112 @@ export class AiToolRegistryService {
           ),
       },
     ];
+  }
+
+  private createDatabaseTools(): InternalAiToolDefinition[] {
+    const databaseId = { type: 'string', format: 'uuid' };
+    const tools: InternalAiToolDefinition[] = [false, true].map((summary) => ({
+      name: summary ? 'summarizeDatabaseView' : 'queryDatabaseView',
+      description: summary
+        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Use this tool for totals, never sum a context snapshot or one page of rows.'
+        : 'Query typed database cells using the frozen current view or an explicit validated viewState. Results are paginated; hasMore means the selection is incomplete.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['databaseId'],
+        properties: {
+          databaseId,
+          viewState: { type: 'object' },
+          ...(summary
+            ? {}
+            : {
+                limit: { type: 'integer', minimum: 1, maximum: 50 },
+                cursor: { type: 'string', maxLength: 4096 },
+              }),
+        },
+      },
+      writeClass: 'read_only',
+      exposures: ['agent', 'mcp'],
+      capability: summary ? 'database.summary.read' : 'database.view.query',
+      category: 'database',
+      targetScope: 'readable_page',
+      ...READ_TOOL_POLICY,
+      execute: async (args, context) => {
+        if (!this.databases)
+          throw new ServiceUnavailableException('Database tools unavailable');
+        const { dependencyPageIds, ...content } = await this.databases.read(
+          args,
+          context,
+          summary,
+        );
+        const database = await this.getReadableDatabase(
+          String(args.databaseId),
+          context,
+        );
+        return {
+          content,
+          dependencyPageIds,
+          citations: await this.pageRootCitations(
+            [{ pageId: database.pageId, type: 'page' }],
+            context,
+          ),
+        };
+      },
+    }));
+    tools.push({
+      name: 'proposeDatabaseCells',
+      description:
+        'Propose typed changes to existing cells of the explicitly selected current database. Read queryDatabaseView first for cell revisions. Never creates rows or properties. The initiating user must approve the complete preview.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['databaseId', 'rows'],
+        properties: {
+          databaseId,
+          rows: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 20,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['pageId', 'cells'],
+              properties: {
+                pageId: databaseId,
+                cells: {
+                  type: 'array',
+                  minItems: 1,
+                  maxItems: 100,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['propertyId', 'value', 'expectedRevision'],
+                    properties: {
+                      propertyId: databaseId,
+                      value: {},
+                      expectedRevision: { type: 'integer', minimum: 0 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      writeClass: 'write',
+      exposures: ['agent'],
+      capability: 'database.cells.propose',
+      category: 'database',
+      targetScope: 'current_database',
+      ...WRITE_TOOL_POLICY,
+      approvalMode: 'database_cell_revisions',
+      execute: async (args, context) => {
+        if (!this.databases || context.source !== 'agent')
+          throw new ForbiddenException();
+        return this.databases.propose(args, context);
+      },
+    });
+    return tools;
   }
 
   private async searchSpace(

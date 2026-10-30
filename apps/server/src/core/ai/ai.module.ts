@@ -35,6 +35,8 @@ import { AiAuxRunService } from './services/ai-aux-run.service';
 import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 import { AiToolRegistryService } from './tools/ai-tool-registry.service';
+import { AiDatabaseService } from './services/ai-database.service';
+import { DatabaseFeatureModule } from '../database/database.module';
 import { AiBuiltinToolPolicyService } from './tools/ai-builtin-tool-policy.service';
 import { AI_BUILTIN_TOOL_POLICY_RESOLVER } from './tools/ai-builtin-tool-policy.token';
 import {
@@ -82,6 +84,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
     RagModule,
     DictionaryModule,
     StorageModule,
+    DatabaseFeatureModule,
   ],
   controllers: [
     AiConfigController,
@@ -121,6 +124,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
     AiAuxRunExecutionService,
     AiAuxRunEventService,
     AiToolRegistryService,
+    AiDatabaseService,
     AiBuiltinToolPolicyService,
     {
       provide: AI_BUILTIN_TOOL_POLICY_RESOLVER,

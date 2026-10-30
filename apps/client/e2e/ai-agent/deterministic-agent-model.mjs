@@ -51,7 +51,10 @@ function scenarioFrom(messages) {
     .filter((message) => message?.role === "user")
     .map((message) => textContent(message.content))
     .join("\n");
-  return userText.match(/AGENT_AUDIT:([a-z0-9_-]+)/i)?.[1]?.toLowerCase() ?? "default";
+  return (
+    userText.match(/AGENT_AUDIT:([a-z0-9_-]+)/i)?.[1]?.toLowerCase() ??
+    "default"
+  );
 }
 
 function currentPageId(messages) {
@@ -75,7 +78,10 @@ function previousToolNames(messages) {
 function latestToolResult(messages) {
   const message = [...messages]
     .reverse()
-    .find((candidate) => candidate?.role === "tool" && typeof candidate.content === "string");
+    .find(
+      (candidate) =>
+        candidate?.role === "tool" && typeof candidate.content === "string",
+    );
   if (!message) return null;
   try {
     return JSON.parse(message.content);
@@ -122,7 +128,9 @@ function readOutline(result) {
         id: item.id,
         text: item.text,
         contentHash:
-          typeof value?.contentHash === "string" ? value.contentHash : undefined,
+          typeof value?.contentHash === "string"
+            ? value.contentHash
+            : undefined,
       }
     : null;
 }
@@ -138,6 +146,69 @@ function agentChoice(body, scenario) {
       content: "",
       toolCalls: [toolCall("capabilityProbe", { value: "ok" })],
       finishReason: "tool_calls",
+    };
+  }
+
+  if (scenario.startsWith("database-")) {
+    const text = messages
+      .filter((m) => m.role === "user")
+      .map((m) => textContent(m.content))
+      .join("\n");
+    const match = /DATABASE_AUDIT_CONTEXT:(\{[^\n]+\})/.exec(text);
+    if (!match) throw new Error("Database acceptance context missing");
+    const context = JSON.parse(match[1]);
+    const call = (name, args) => ({
+      content: "",
+      toolCalls: [toolCall(name, args, previous.length)],
+      finishReason: "tool_calls",
+    });
+    if (scenario === "database-summary") {
+      if (!previous.includes("summarizeDatabaseView"))
+        return call("summarizeDatabaseView", {
+          databaseId: context.databaseId,
+        });
+      const result =
+        latestToolResult(messages)?.result ?? latestToolResult(messages);
+      return {
+        content: `Count: ${result.count}; sum: ${result.values?.[context.propertyId]} [C1]`,
+        toolCalls: [],
+        finishReason: "stop",
+      };
+    }
+    if (!previous.includes("queryDatabaseView"))
+      return call("queryDatabaseView", {
+        databaseId: context.databaseId,
+        limit: 20,
+      });
+    if (
+      !previous.includes("proposeDatabaseCells") &&
+      available.has("proposeDatabaseCells")
+    ) {
+      const result =
+        latestToolResult(messages)?.result ?? latestToolResult(messages);
+      const rows = result.items
+        .filter((row) => context.pageIds.includes(row.pageId))
+        .map((row) => ({
+          pageId: row.pageId,
+          cells: [
+            {
+              propertyId: context.propertyId,
+              value: context.value,
+              expectedRevision:
+                row.cells.find((c) => c.propertyId === context.propertyId)
+                  ?.revision ?? 0,
+            },
+          ],
+        }));
+      return call("proposeDatabaseCells", {
+        databaseId: context.databaseId,
+        rows,
+      });
+    }
+    return {
+      content: "Database operation finished.",
+      toolCalls: [],
+      finishReason: "stop",
     };
   }
 
@@ -186,7 +257,8 @@ function agentChoice(body, scenario) {
     const outline = readOutline(latestToolResult(messages));
     if (!outline || !available.has("editPageText")) {
       return {
-        content: "The deterministic agent could not create a safe text proposal.",
+        content:
+          "The deterministic agent could not create a safe text proposal.",
         toolCalls: [],
         finishReason: "stop",
       };
@@ -209,7 +281,8 @@ function agentChoice(body, scenario) {
   }
 
   return {
-    content: "The deterministic agent observed the decided proposal and finished.",
+    content:
+      "The deterministic agent observed the decided proposal and finished.",
     toolCalls: [],
     finishReason: "stop",
   };
@@ -227,7 +300,9 @@ function completion(choice) {
         message: {
           role: "assistant",
           content: choice.content,
-          ...(choice.toolCalls.length > 0 ? { tool_calls: choice.toolCalls } : {}),
+          ...(choice.toolCalls.length > 0
+            ? { tool_calls: choice.toolCalls }
+            : {}),
         },
         finish_reason: choice.finishReason,
       },
@@ -291,24 +366,28 @@ async function handleCompletion(request, response) {
     toolNames,
     toolChoice: body.tool_choice ?? null,
   });
-  if (requests.length > MAX_REQUEST_LOG) requests.splice(0, requests.length - MAX_REQUEST_LOG);
+  if (requests.length > MAX_REQUEST_LOG)
+    requests.splice(0, requests.length - MAX_REQUEST_LOG);
 
   const delayMs = Number(configured.delayMs ?? 0);
   if (Number.isFinite(delayMs) && delayMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, Math.min(delayMs, 120_000)));
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(delayMs, 120_000)),
+    );
   }
   if (configured.disconnect === true) {
     request.socket.destroy();
     return;
   }
 
-  const choice = toolNames.length > 0
-    ? agentChoice(body, scenario)
-    : {
-        content: "Deterministic chat response without agent tools.",
-        toolCalls: [],
-        finishReason: "stop",
-      };
+  const choice =
+    toolNames.length > 0
+      ? agentChoice(body, scenario)
+      : {
+          content: "Deterministic chat response without agent tools.",
+          toolCalls: [],
+          finishReason: "stop",
+        };
   if (body.stream === true) streamCompletion(response, choice);
   else sendJson(response, 200, completion(choice));
 }
@@ -340,9 +419,15 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, { scenarios: Object.fromEntries(scenarios) });
       return;
     }
-    if (["POST", "PUT"].includes(request.method ?? "") && url.pathname === "/__scenario") {
+    if (
+      ["POST", "PUT"].includes(request.method ?? "") &&
+      url.pathname === "/__scenario"
+    ) {
       const { value } = await readJson(request);
-      if (typeof value?.name !== "string" || !/^[a-z0-9_-]+$/i.test(value.name)) {
+      if (
+        typeof value?.name !== "string" ||
+        !/^[a-z0-9_-]+$/i.test(value.name)
+      ) {
         sendJson(response, 400, { error: "name is required" });
         return;
       }
@@ -365,9 +450,13 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`deterministic agent model listening on ${port}\n`);
-});
+server.listen(
+  port,
+  process.env.DOCMOST_AI_AGENT_MODEL_HOST ?? "0.0.0.0",
+  () => {
+    process.stdout.write(`deterministic agent model listening on ${port}\n`);
+  },
+);
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => server.close(() => process.exit(0)));

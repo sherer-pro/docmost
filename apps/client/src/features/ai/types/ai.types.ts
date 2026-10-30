@@ -95,6 +95,7 @@ export interface AiEditorContext {
 }
 
 export interface AiDocumentContext {
+  databaseId?: string;
   pageId: string;
   spaceId: string;
   spaceSlug?: string;
@@ -128,6 +129,7 @@ export interface AiActivityItem {
 }
 
 export interface SendAiMessageInput {
+  databaseContext?: import("@docmost/api-contract").AiDatabaseContext;
   conversationId: string;
   content: string;
   pageId: string;

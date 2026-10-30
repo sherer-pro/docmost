@@ -18,6 +18,7 @@ import {
   historyAtoms,
 } from "@/features/page-history/atoms/history-atoms";
 import HistoryView from "@/features/page-history/components/history-view";
+import { HistoryComparisonSelect } from "./history-comparison-select";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { IconCheck, IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -34,9 +35,14 @@ import classes from "./css/history-mobile.module.css";
 interface Props {
   pageId: string;
   pageTitle?: string;
+  readOnly?: boolean;
 }
 
-export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
+export default function HistoryModalMobile({
+  pageId,
+  pageTitle,
+  readOnly,
+}: Props) {
   const { t } = useTranslation();
 
   const [activeHistoryId, setActiveHistoryId] = useAtom(activeHistoryIdAtom);
@@ -122,6 +128,7 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
   return (
     <Box className={classes.container}>
       <Box className={classes.selectorWrapper}>
+        <HistoryComparisonSelect pageId={pageId} />
         <Select
           data={selectData}
           value={activeHistoryId}
@@ -158,7 +165,7 @@ export default function HistoryModalMobile({ pageId, pageTitle }: Props) {
         </Box>
       </ScrollArea>
 
-      {(canRestore || canDelete) && (
+      {!readOnly && (canRestore || canDelete) && (
         <Group className={classes.actionButtons} justify="flex-end" gap="sm">
           {canRestore && (
             <>

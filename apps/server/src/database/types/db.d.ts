@@ -356,6 +356,8 @@ export interface AiRunContextSources {
 }
 
 export interface AiBuiltinToolSpacePolicies {
+  readOnly: Generated<boolean>;
+  knowledgeOnly: Generated<boolean>;
   allowedCapabilities: Json | null;
   createdAt: Generated<Timestamp>;
   policyVersion: Generated<number>;
@@ -366,6 +368,8 @@ export interface AiBuiltinToolSpacePolicies {
 }
 
 export interface AiBuiltinToolWorkspacePolicies {
+  readOnly: Generated<boolean>;
+  knowledgeOnly: Generated<boolean>;
   allowedCapabilities: Json;
   createdAt: Generated<Timestamp>;
   enabled: Generated<boolean>;
@@ -376,6 +380,7 @@ export interface AiBuiltinToolWorkspacePolicies {
 }
 
 export interface AiRuns {
+  databaseContext: Json | null;
   evidenceSnapshot: Json | null;
   retrievalDiagnostics: Json | null;
   assistantMessageId: string;
@@ -786,6 +791,12 @@ export interface Databases {
   spaceId: string;
   updatedAt: Generated<Timestamp>;
   workspaceId: string;
+}
+
+export interface DatabaseViewRowPositions {
+  viewId: string;
+  pageId: string;
+  position: string;
 }
 
 export interface DatabaseViews {
@@ -1436,6 +1447,7 @@ export interface DB {
   databaseRows: DatabaseRows;
   databases: Databases;
   databaseViews: DatabaseViews;
+  databaseViewRowPositions: DatabaseViewRowPositions;
   dictionaryTermAliases: DictionaryTermAliases;
   dictionaryTerms: DictionaryTerms;
   favorites: Favorites;

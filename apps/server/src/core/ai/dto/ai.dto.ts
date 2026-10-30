@@ -490,6 +490,9 @@ export class AiDocumentHeadingDto {
 }
 
 export class SendAiMessageDto {
+  @IsOptional()
+  @IsObject()
+  databaseContext?: import('@docmost/api-contract').AiDatabaseContext;
   @IsString()
   @Length(1, 32000)
   content: string;

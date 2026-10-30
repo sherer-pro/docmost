@@ -7,6 +7,7 @@ import {
 import { runWithIdempotencyLease } from "@/lib/api-client";
 import { buildAiUploadIdempotencyPayload } from "@/features/ai/utils/ai-upload-idempotency";
 import { useSetAtom } from "jotai";
+import { aiDatabaseReceiptRunsAtom } from "../atoms/ai-atoms";
 import {
   cancelAiRun,
   approveAiRunStep,
@@ -539,9 +540,15 @@ export function useAiRunQuery(runId?: string, enabled = true) {
 export function useApproveAiRunStepMutation() {
   const queryClient = useQueryClient();
   const setRuns = useSetAtom(aiStreamingRunsAtom);
+  const setReceiptRuns = useSetAtom(aiDatabaseReceiptRunsAtom);
   return useMutation({
     mutationFn: approveAiRunStep,
     onSuccess: ({ run }) => {
+      setReceiptRuns((current) => ({
+        ...current,
+        [run.conversationId]: run.id,
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["database"] });
       setRuns(
         (current) => reduceAiRunState(current, { type: "rest", run }).runs,
       );

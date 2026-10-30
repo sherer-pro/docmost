@@ -11,6 +11,43 @@ test.beforeEach(async ({ request }) => {
   await request.post("/api/fixture/reset");
 });
 
+test("Kanban uses complete column counts, independent pagination and revision-checked moves", async ({
+  page,
+}, info) => {
+  await page.goto(fixtureUrl);
+  await page.getByRole("textbox", { name: "Layout", exact: true }).click();
+  await page.getByRole("option", { name: "Kanban", exact: true }).click();
+  const board = page.getByRole("region", { name: "Kanban", exact: true });
+  const alpha = board.getByRole("group", { name: "Alpha", exact: true });
+  const beta = board.getByRole("group", { name: "Beta", exact: true });
+  await expect(alpha.getByText("1000", { exact: true })).toBeVisible();
+  await expect(alpha.getByRole("button", { name: /^Row / })).toHaveCount(30);
+  await alpha.getByRole("button", { name: "Load more", exact: true }).click();
+  await expect(alpha.getByRole("button", { name: /^Row / })).toHaveCount(60);
+  await alpha
+    .getByRole("textbox", { name: "Move to column", exact: true })
+    .first()
+    .click();
+  await page.getByRole("option", { name: "Beta", exact: true }).click();
+  await expect(
+    beta.getByRole("button", { name: "Row 0", exact: true }),
+  ).toBeVisible();
+  await expect(alpha.getByText("999", { exact: true })).toBeVisible();
+  const saved = (await state(page)).requests.find(
+    (request) =>
+      request.method === "PATCH" &&
+      request.path.includes(`/rows/${rowId(0)}/cells`),
+  );
+  expect(saved.body.cells).toEqual([
+    {
+      propertyId: "50000000-0000-4000-8000-000000000009",
+      value: "b",
+      expectedRevision: 1,
+    },
+  ]);
+  await page.screenshot({ path: info.outputPath("kanban.png") });
+});
+
 for (const theme of ["light", "dark"])
   for (const width of [320, 390, 768, 1440]) {
     test(`responsive database ${theme} ${width}`, async ({
@@ -134,7 +171,7 @@ test("TSV preserves blank rows and retries only failed operations", async ({
   ]);
 });
 
-test("autosave preserves the second client draft on conflict", async ({
+test("explicit shared save preserves the second client draft on conflict", async ({
   context,
   page,
 }) => {
@@ -158,12 +195,19 @@ test("autosave preserves the second client draft on conflict", async ({
   await page
     .getByRole("textbox", { name: "Name", exact: true })
     .fill("First client");
+  await expect(page.getByText("Personal draft", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Save for everyone", exact: true })
+    .click();
   await expect
     .poll(async () => (await state(page)).views[0].name)
     .toBe("First client");
   await other
     .getByRole("textbox", { name: "Name", exact: true })
     .fill("Second client");
+  await other
+    .getByRole("button", { name: "Save for everyone", exact: true })
+    .click();
   await expect(
     other.getByText(
       "This view changed in another session. Your draft is preserved.",

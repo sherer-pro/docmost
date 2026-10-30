@@ -91,6 +91,7 @@
 | POST | `/databases/:databaseId/views` | `apps/server/src/core/database/database.controller.ts` |
 | DELETE | `/databases/:databaseId/views/:viewId` | `apps/server/src/core/database/database.controller.ts` |
 | PATCH | `/databases/:databaseId/views/:viewId` | `apps/server/src/core/database/database.controller.ts` |
+| POST | `/databases/:databaseId/views/:viewId/rows/actions/move` | `apps/server/src/core/database/database.controller.ts` |
 | GET | `/databases/rows/:pageId/context` | `apps/server/src/core/database/database.controller.ts` |
 | GET | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary-terms` | `apps/server/src/core/dictionary/dictionary.controller.ts` |

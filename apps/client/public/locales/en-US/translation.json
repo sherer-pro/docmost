@@ -1641,11 +1641,12 @@
             "step2": "Test Chat and Agent",
             "step3": "Enable the space model and intended profiles",
             "step4": "On a phone, verify Chat and Agent, the space search switch, the footer, and the message field while the keyboard is open",
-            "step5": "Switch between a document and space settings and use Back/Forward; the assistant must use the current document title."
+            "step5": "Switch between a document and space settings and use Back/Forward; the assistant must use the current document title.",
+            "step6": "Select a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row."
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
-          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes."
+          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes.\n\nSelect a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.\n\nAn administrator must explicitly enable the database capabilities. Tool results and previews are withheld if source access is revoked. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3."
         },
         "retrieval": {
           "description": "Space search runs while an answer is generated.",
@@ -2061,7 +2062,8 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "proposeDatabaseCells": "Propose cell changes"
       },
       "previewUnavailable": "A structured preview is unavailable. Do not approve unless you understand the operation.",
       "previewLabel": "Proposed page change",
@@ -2632,7 +2634,10 @@
         "editPageText": "Replace text on the current page",
         "patchNode": "Replace a block on the current page",
         "insertNode": "Insert a block on the current page",
-        "deleteNode": "Delete a block from the current page"
+        "deleteNode": "Delete a block from the current page",
+        "queryDatabaseView": "Query database view",
+        "summarizeDatabaseView": "Calculate database totals",
+        "proposeDatabaseCells": "Propose cell changes"
       },
       "category": {
         "search": "Search",
@@ -2645,6 +2650,25 @@
         "history": "History",
         "attachments": "Attachments",
         "sharing": "Public sharing"
+      },
+      "readOnly": "Answers only",
+      "readOnlyDescription": "The assistant may read content but cannot propose changes.",
+      "knowledgeOnly": "Answers from allowed sources",
+      "knowledgeOnlyDescription": "Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.",
+      "preset": "Operating mode",
+      "answersOnly": "Answers only",
+      "confirmChanges": "Suggest confirmed changes"
+    },
+    "database": {
+      "row": "Record",
+      "property": "Property",
+      "scope": "Current database view · selected rows: {{count}}",
+      "receipt": "Database changes",
+      "appliedRows": "Applied rows: {{count}}",
+      "failure": {
+        "conflict": "Cell revision or schema changed. Create a new proposal.",
+        "forbidden": "Write access was revoked.",
+        "invalid_value": "The value is no longer valid."
       }
     }
   },
@@ -3092,7 +3116,37 @@
     "idle": "Saved",
     "saving": "Saving...",
     "saved": "Saved",
-    "error": "Failed to update data"
+    "error": "Failed to update data",
+    "dirty": "Personal draft"
   },
-  "Move block": "Move block"
+  "Move block": "Move block",
+  "dbBoard": {
+    "board": "Kanban",
+    "layout": "Layout",
+    "cardFields": "Card fields",
+    "hiddenColumns": "Hidden columns",
+    "sorted": "Cards follow the active sort. Manual ordering is disabled.",
+    "selectRequired": "Choose a single select property for this board.",
+    "columnActions": "Column actions",
+    "moveTo": "Move to column",
+    "moveFailed": "The move failed. Refresh the data before retrying.",
+    "csv": "CSV (current view)",
+    "record": "Record",
+    "openPage": "Open full page",
+    "contentPreview": "Page preview. Open the full page to edit its content.",
+    "saveShared": "Save for everyone",
+    "columnWidth": "Column width",
+    "embed": "Database view",
+    "embedDescription": "Link an existing database or view",
+    "sourceLink": "Internal database link",
+    "sourceUnavailable": "Database view unavailable",
+    "openSource": "Open source database",
+    "insertView": "Insert this database view?",
+    "emptyColumn": "No value"
+  },
+  "Time": "Time",
+  "Insert current time": "Insert current time",
+  "documentUpdates": {
+    "compareWith": "Compare with"
+  }
 }

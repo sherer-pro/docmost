@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -30,6 +31,11 @@ import type { JsonObject, JsonValue } from '../../../database/types/db';
 import { approvedStepRecoveryAction } from './ai-run-step-recovery';
 import { AiBuiltinToolPolicyService } from '../tools/ai-builtin-tool-policy.service';
 import { AiAssistantProfileService } from './ai-assistant-profile.service';
+import {
+  AiDatabaseService,
+  normalizeAiDatabaseContext,
+} from './ai-database.service';
+import type { AiDatabaseCellOperation } from '@docmost/api-contract';
 
 const APPROVED_STEP_RECOVERY_DELAY_MS = 30_000;
 
@@ -48,6 +54,7 @@ export class AiRunStepService {
     private readonly collaboration: CollaborationDocumentPort,
     private readonly builtinToolPolicy: AiBuiltinToolPolicyService,
     private readonly profiles: AiAssistantProfileService,
+    @Optional() private readonly databases?: AiDatabaseService,
   ) {}
 
   async approve(
@@ -57,6 +64,7 @@ export class AiRunStepService {
     workspace: Workspace,
   ) {
     const run = await this.runs.getOwnedRun(runId, user, workspace);
+    await this.runs.assertRunSourcesAccessible(run, user);
     const step = await this.getPendingStep(run.id, stepId);
     if (!step.expiresAt || step.expiresAt <= new Date()) {
       await this.expireApprovalAndThrow(run, step, user);
@@ -105,6 +113,7 @@ export class AiRunStepService {
     workspace: Workspace,
   ) {
     const run = await this.runs.getOwnedRun(runId, user, workspace);
+    await this.runs.assertRunSourcesAccessible(run, user);
     const step = await this.getPendingStep(run.id, stepId);
     const resumed = await this.decideAndResume({
       run,
@@ -194,6 +203,7 @@ export class AiRunStepService {
       .innerJoin('aiRuns as run', 'run.id', 'step.runId')
       .select(['step.id as id', 'step.runId as runId'])
       .where('step.status', '=', 'approved')
+      .where(sql<boolean>`coalesce(step.result->>'applied', 'false') != 'true'`)
       .where('run.status', '=', 'awaiting_approval')
       .where(
         'step.updatedAt',
@@ -303,6 +313,7 @@ export class AiRunStepService {
         .where('id', '=', stepId)
         .where('runId', '=', runId)
         .where('status', '=', 'approved')
+        .where(sql<boolean>`coalesce(result->>'applied', 'false') != 'true'`)
         .executeTakeFirst();
       const run = await trx
         .selectFrom('aiRuns')
@@ -336,76 +347,112 @@ export class AiRunStepService {
         if (!user || !workspace || step.decidedById !== run.userId) {
           throw new Error('agent_write_not_allowed');
         }
+        await this.runs.assertRunSourcesAccessible(run, user);
         const definition = await this.assertApprovedStepPolicyCurrent(
           run,
           step.toolName,
         );
-        if (
-          definition.writeClass !== 'write' ||
-          definition.approvalMode !== 'current_page_hash'
-        ) {
-          throw new Error('agent_write_not_allowed');
+        if (step.toolName === 'proposeDatabaseCells') {
+          if (
+            !this.databases ||
+            definition.writeClass !== 'write' ||
+            definition.approvalMode !== 'database_cell_revisions' ||
+            definition.targetScope !== 'current_database' ||
+            step.targetPageId !== run.pageId ||
+            (step.arguments as any)?.pageId !== run.pageId ||
+            !run.databaseContext
+          ) {
+            throw new Error('agent_write_not_allowed');
+          }
+          const databaseResult = await this.databases.apply(
+            {
+              ...(step.arguments as any),
+              kind: 'databaseCells',
+            } as AiDatabaseCellOperation,
+            {
+              user,
+              workspaceId: run.workspaceId,
+              spaceId: run.spaceId,
+              currentPageId: run.pageId,
+              databaseContext: normalizeAiDatabaseContext(run.databaseContext),
+            },
+            trx,
+          );
+          result = databaseResult as unknown as JsonValue;
+          applied = databaseResult.applied;
+          if (!applied) {
+            errorCode = 'agent_write_stale';
+            errorMessage =
+              'No database rows could be updated; review the row failures';
+          }
+        } else {
+          if (
+            definition.writeClass !== 'write' ||
+            definition.approvalMode !== 'current_page_hash'
+          ) {
+            throw new Error('agent_write_not_allowed');
+          }
+          if (
+            step.targetPageId !== run.pageId ||
+            step.targetPageId !==
+              this.requireString(
+                step.arguments as Record<string, unknown>,
+                'pageId',
+              )
+          ) {
+            throw new Error('agent_write_not_allowed');
+          }
+          const page = await this.pages.findById(run.pageId, true);
+          if (
+            !page ||
+            page.deletedAt ||
+            page.workspaceId !== workspace.id ||
+            page.spaceId !== run.spaceId
+          ) {
+            throw new Error('page_unavailable');
+          }
+          await this.pageAccess.assertCanWritePage(page, user);
+          const operation = this.toOperation(
+            step.toolName,
+            step.arguments as Record<string, unknown>,
+          );
+          assertSafeAiPageOperation(operation);
+          const expectedAfterHash = this.expectedAfterHash(step.result);
+          const currentContentHash =
+            await this.collaboration.getPageContentHash(`page.${run.pageId}`, {
+              user,
+            });
+          const recoveryAction = approvedStepRecoveryAction(
+            step.baseContentHash,
+            expectedAfterHash,
+            currentContentHash,
+          );
+          if (recoveryAction === 'stale') {
+            throw new Error('agent_write_stale');
+          }
+          const appliedResult =
+            recoveryAction === 'complete'
+              ? {
+                  beforeHash: step.baseContentHash,
+                  afterHash: expectedAfterHash,
+                  recovered: true,
+                }
+              : ((await this.collaboration.applyAiPageOperation(
+                  `page.${run.pageId}`,
+                  {
+                    operation,
+                    baseContentHash: step.baseContentHash!,
+                    expectedAfterHash: expectedAfterHash!,
+                    user,
+                  },
+                )) as Record<string, unknown>);
+          applied = true;
+          result = {
+            ok: true,
+            applied: true,
+            ...appliedResult,
+          };
         }
-        if (
-          step.targetPageId !== run.pageId ||
-          step.targetPageId !==
-            this.requireString(
-              step.arguments as Record<string, unknown>,
-              'pageId',
-            )
-        ) {
-          throw new Error('agent_write_not_allowed');
-        }
-        const page = await this.pages.findById(run.pageId, true);
-        if (
-          !page ||
-          page.deletedAt ||
-          page.workspaceId !== workspace.id ||
-          page.spaceId !== run.spaceId
-        ) {
-          throw new Error('page_unavailable');
-        }
-        await this.pageAccess.assertCanWritePage(page, user);
-        const operation = this.toOperation(
-          step.toolName,
-          step.arguments as Record<string, unknown>,
-        );
-        assertSafeAiPageOperation(operation);
-        const expectedAfterHash = this.expectedAfterHash(step.result);
-        const currentContentHash = await this.collaboration.getPageContentHash(
-          `page.${run.pageId}`,
-          { user },
-        );
-        const recoveryAction = approvedStepRecoveryAction(
-          step.baseContentHash,
-          expectedAfterHash,
-          currentContentHash,
-        );
-        if (recoveryAction === 'stale') {
-          throw new Error('agent_write_stale');
-        }
-        const appliedResult =
-          recoveryAction === 'complete'
-            ? {
-                beforeHash: step.baseContentHash,
-                afterHash: expectedAfterHash,
-                recovered: true,
-              }
-            : ((await this.collaboration.applyAiPageOperation(
-                `page.${run.pageId}`,
-                {
-                  operation,
-                  baseContentHash: step.baseContentHash!,
-                  expectedAfterHash: expectedAfterHash!,
-                  user,
-                },
-              )) as Record<string, unknown>);
-        applied = true;
-        result = {
-          ok: true,
-          applied: true,
-          ...appliedResult,
-        };
       } catch (error) {
         const responseCode = (error as any)?.response?.code;
         const profilePolicyError = [
@@ -476,7 +523,15 @@ export class AiRunStepService {
     });
     if (!outcome) return undefined;
 
-    if (outcome.applied) {
+    if (outcome.applied && outcome.step.toolName === 'proposeDatabaseCells') {
+      const ids = (outcome.step.result as any)?.updatedRows ?? [];
+      try {
+        await this.databases?.refreshSearch(ids);
+      } catch {
+        this.logger.error('Failed to enqueue database search refresh');
+      }
+    }
+    if (outcome.applied && outcome.step.toolName !== 'proposeDatabaseCells') {
       try {
         await this.history.enqueuePageEvent({
           pageId: outcome.run.pageId,

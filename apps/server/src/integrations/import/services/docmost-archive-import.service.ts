@@ -696,6 +696,7 @@ export class DocmostArchiveImportService {
           pageIdMap: params.pageIdMap,
           slugIdMap: params.slugIdMap,
           databaseIdMap: params.databaseIdMap,
+          importTaskId: params.fileTask.id,
           attachmentIdMap: params.attachmentIdMap,
           externalSnapshotAttachmentIdMap:
             params.snapshotAttachmentMapsByConsumer.get(page.id),
@@ -815,6 +816,7 @@ export class DocmostArchiveImportService {
               pageIdMap,
               slugIdMap,
               databaseIdMap,
+              importTaskId: fileTask.id,
               attachmentIdMap,
               userIdMap,
               transclusionSnapshots: new Map(),
@@ -924,7 +926,7 @@ export class DocmostArchiveImportService {
         .insertInto('databaseViews')
         .values(
           data.databaseViews.map((view) => ({
-            id: uuid7(),
+            id: deterministicImportId(fileTask.id, 'database-view', view.id),
             databaseId: databaseIdMap.get(view.databaseId)!,
             name: view.name,
             type: view.type,
@@ -934,6 +936,24 @@ export class DocmostArchiveImportService {
           })),
         )
         .execute();
+      const positions = data.databaseViews.flatMap((view) =>
+        (view.rowPositions ?? [])
+          .filter((p) => pageIdMap.has(p.pageId))
+          .map((p) => ({
+            viewId: deterministicImportId(
+              fileTask.id,
+              'database-view',
+              view.id,
+            ),
+            pageId: pageIdMap.get(p.pageId)!,
+            position: p.position,
+          })),
+      );
+      for (let offset = 0; offset < positions.length; offset += 1000)
+        await trx
+          .insertInto('databaseViewRowPositions')
+          .values(positions.slice(offset, offset + 1000))
+          .execute();
     }
   }
 
@@ -1218,6 +1238,7 @@ export class DocmostArchiveImportService {
       pageIdMap: Map<string, string>;
       slugIdMap: Map<string, string>;
       databaseIdMap: Map<string, string>;
+      importTaskId?: string;
       attachmentIdMap: Map<string, string>;
       externalSnapshotAttachmentIdMap?: Map<string, string>;
       sourceArchivePageId?: string;
@@ -1307,6 +1328,12 @@ export class DocmostArchiveImportService {
       const mapped = context.databaseIdMap.get(attrs.databaseId);
       if (mapped) attrs.databaseId = mapped;
     }
+    if (node.type === 'databaseEmbed' && attrs?.viewId && context.importTaskId)
+      attrs.viewId = deterministicImportId(
+        context.importTaskId,
+        'database-view',
+        attrs.viewId,
+      );
     if (attrs?.attachmentId) {
       const mapped = context.attachmentIdMap.get(attrs.attachmentId);
       if (mapped) {

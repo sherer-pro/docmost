@@ -16,6 +16,10 @@ import { ExportModule } from '../../integrations/export/export.module';
     DatabaseSearchProjectionService,
     DatabaseViewQueryService,
   ],
-  exports: [DatabaseService, DatabaseSearchProjectionService],
+  exports: [
+    DatabaseService,
+    DatabaseSearchProjectionService,
+    DatabaseViewQueryService,
+  ],
 })
 export class DatabaseFeatureModule {}

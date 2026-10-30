@@ -138,7 +138,10 @@ export interface IDatabaseView {
 }
 
 export interface IDatabaseViewConfig {
-  version?: 2;
+  version?: 2 | 3;
+  columnOrder?: string[];
+  columnWidths?: Record<string, number>;
+  kanban?: import("@docmost/api-contract").DatabaseViewState["kanban"];
   filter?: import("@docmost/api-contract").DatabaseFilterGroup;
   sorts?: import("@docmost/api-contract").DatabaseSort[];
   groupBy?: string | null;
