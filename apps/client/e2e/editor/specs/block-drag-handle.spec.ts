@@ -75,6 +75,34 @@ async function json(editor: Locator) {
   return editor.evaluate((element) => (element as any).editor.getJSON());
 }
 
+async function waitForLiveEditor(editor: Locator) {
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  await expect
+    .poll(() =>
+      editor.evaluate((element) =>
+        Boolean((element as any).editor?.isInitialized),
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      editor.evaluate((element) => {
+        let missing = 0;
+        (element as any).editor.state.doc.descendants((node: any) => {
+          if (
+            ["paragraph", "heading", "transclusionSource"].includes(
+              node.type.name,
+            ) &&
+            node.attrs.id === null
+          )
+            missing++;
+        });
+        return missing;
+      }),
+    )
+    .toBe(0);
+}
+
 async function move(
   page: Page,
   source: Locator,
@@ -170,7 +198,7 @@ test("moves nested blocks and list items, preserves history and persisted conten
   try {
     await page.goto(pageUrl(state, record));
     const editor = mainEditor(page);
-    await expect(editor).toHaveAttribute("contenteditable", "true");
+    await waitForLiveEditor(editor);
     await expect(editor).toContainText("Keep task item");
     await editor.evaluate((element) => {
       const live = (element as any).editor;
@@ -309,6 +337,7 @@ test("moves nested blocks and list items, preserves history and persisted conten
       })
       .toEqual(after);
     await page.reload();
+    await waitForLiveEditor(mainEditor(page));
     await expect.poll(() => json(mainEditor(page))).toEqual(after);
   } finally {
     await apiPost(api, "/api/users/update", {
