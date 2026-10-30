@@ -53,7 +53,9 @@ export function isUnifiedSearchEnabled(
 ) {
   const searchType = getUnifiedSearchType(params.contentType);
   const hasTextQuery = params.query.trim().length > 0;
-  const hasLabelFilter = searchType === "page" && Boolean(params.labelId);
+  const hasLabelFilter =
+    searchType === "page" &&
+    Boolean(params.labelId || params.labelIds?.length || params.creatorId);
   const hasTagFilter = searchType === "page" && Boolean(params.tag);
   const hasTagsFilter = searchType === "page" && Boolean(params.tags?.length);
 
@@ -69,7 +71,15 @@ export function getUnifiedSearchBackendParams(
   const { contentType, ...backendParams } = params;
 
   if (searchType !== "page") {
-    const { labelId, tag, tags, ...attachmentParams } = backendParams;
+    const {
+      labelId,
+      labelIds,
+      creatorId,
+      titleOnly,
+      tag,
+      tags,
+      ...attachmentParams
+    } = backendParams;
     return attachmentParams;
   }
 
@@ -117,6 +127,9 @@ export function useAllSearch(
   const {
     contentType: _contentType,
     labelId: _labelId,
+    labelIds: _labelIds,
+    creatorId: _creatorId,
+    titleOnly: _titleOnly,
     tag: _tag,
     tags: _tags,
     ...base

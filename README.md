@@ -408,7 +408,8 @@ Search works across pages, databases, rows, attachments, and enabled dictionary 
 
 - dictionary terms, aliases, forms, and definitions and selected database property names and cell values are indexed;
 
-- search filters cover spaces, content types, page labels, and multi-select inline TBD/TODO/DONE/Core/Future/Pilot tags;
+- search filters cover spaces, content types, authors, any of several page labels, title-only queries, and multi-select inline TBD/TODO/DONE/Core/Future/Pilot tags;
+- document result links open the page search at the matching text, with previous/next navigation;
 - tag-aware document results group up to three anchored matching fragments and identify pages, databases, and database rows explicitly;
 
 - result breadcrumbs show where a page or database row sits in the content tree;
@@ -453,7 +454,7 @@ The editor includes the following additional capabilities:
 
 - improved Draw.io, Excalidraw, and Mermaid diagrams;
 
-- a subpage navigation block;
+- a subpage navigation block with manual, alphabetical, or recently updated order;
 
 - rich link previews;
 

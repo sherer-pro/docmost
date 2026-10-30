@@ -1363,6 +1363,7 @@ export class PageService {
     pagination: PaginationOptions,
     pageId?: string,
     includeNodeTypes?: SidebarNodeType[],
+    sort: 'manual' | 'title' | 'updated' = 'manual',
   ): Promise<
     CursorPaginationResult<
       Partial<Page> & {
@@ -1409,6 +1410,7 @@ export class PageService {
         'pages.spaceId as spaceId',
         'pages.creatorId as creatorId',
         'pages.deletedAt as deletedAt',
+        'pages.updatedAt as updatedAt',
       ])
       .select((eb) => [
         sql<any>`pages.settings`.as('settings'),
@@ -1518,6 +1520,7 @@ export class PageService {
             'databases.spaceId as spaceId',
             'databases.creatorId as creatorId',
             'databases.deletedAt as deletedAt',
+            'databasePage.updatedAt as updatedAt',
             /**
              * It is important to use ref instead of raw SQL for camelCase aliases.
              *
@@ -1563,6 +1566,34 @@ export class PageService {
       );
     }
 
+    if (sort !== 'manual') {
+      const sorted = this.db.selectFrom(query.as('sidebar')).selectAll();
+      const expression: import('kysely').RawBuilder<string | Date> =
+        sort === 'title'
+          ? sql<string>`lower(coalesce(${sql.ref('sidebar.title')}, ''))`
+          : sql<Date>`${sql.ref('sidebar.updatedAt')}`;
+      return executeWithCursorPagination(
+        sorted.select(expression.as('sortKey')),
+        {
+          perPage: 250,
+          cursor: pagination.cursor,
+          beforeCursor: pagination.beforeCursor,
+          fields: [
+            {
+              expression,
+              direction: sort === 'title' ? 'asc' : 'desc',
+              key: 'sortKey',
+            },
+            { expression: 'id', direction: 'asc' },
+          ] as const,
+          parseCursor: (cursor: any) => ({
+            sortKey:
+              sort === 'updated' ? new Date(cursor.sortKey) : cursor.sortKey,
+            id: cursor.id,
+          }),
+        },
+      ) as any;
+    }
     return executeWithCursorPagination(query, {
       perPage: 250,
       cursor: pagination.cursor,

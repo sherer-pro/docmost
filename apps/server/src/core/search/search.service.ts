@@ -363,31 +363,45 @@ export class SearchService {
       excludedPageIds?: ReadonlySet<string>;
     },
   ): Promise<{ items: SearchResponseDto[] }> {
-    const { labelId } = searchParams;
+    const labelIds = [
+      ...new Set([
+        ...(searchParams.labelIds ?? []),
+        ...(searchParams.labelId ? [searchParams.labelId] : []),
+      ]),
+    ];
     const tags = this.getSelectedTags(searchParams);
     const query = searchParams.query?.trim() ?? '';
     const searchQuery = query ? buildSearchTsQuery(query) : undefined;
     const hasTextQuery = searchQuery !== undefined;
 
-    if (!hasTextQuery && !labelId && tags.length === 0) {
+    if (
+      !hasTextQuery &&
+      !labelIds.length &&
+      !searchParams.creatorId &&
+      tags.length === 0
+    ) {
       return { items: [] };
     }
 
-    const searchVector = opts.userId
-      ? sql<string>`COALESCE(tsv, ''::tsvector) || COALESCE(database_search_tsv, ''::tsvector)`
-      : sql<string>`tsv`;
+    const searchVector = searchParams.titleOnly
+      ? sql<string>`to_tsvector('english', f_unaccent(coalesce(title, '')))`
+      : opts.userId
+        ? sql<string>`COALESCE(tsv, ''::tsvector) || COALESCE(database_search_tsv, ''::tsvector)`
+        : sql<string>`tsv`;
     const textQuery = sql<string>`to_tsquery('english', f_unaccent(${searchQuery}))`;
     const rankExpression = hasTextQuery
       ? sql<number>`ts_rank(${searchVector}, ${textQuery})`
       : sql<number>`0`;
     const highlightExpression = hasTextQuery
-      ? opts.userId
-        ? sql<string>`CASE
+      ? searchParams.titleOnly
+        ? sql<string>`ts_headline('english', title, ${textQuery}, ${TS_HEADLINE_OPTIONS})`
+        : opts.userId
+          ? sql<string>`CASE
             WHEN tsv @@ ${textQuery}
               THEN ts_headline('english', text_content, ${textQuery}, ${TS_HEADLINE_OPTIONS})
             ELSE ts_headline('english', database_search_text, ${textQuery}, ${TS_HEADLINE_OPTIONS})
           END`
-        : sql<string>`ts_headline('english', text_content, ${textQuery}, ${TS_HEADLINE_OPTIONS})`
+          : sql<string>`ts_headline('english', text_content, ${textQuery}, ${TS_HEADLINE_OPTIONS})`
       : sql<string>`${''}`;
 
     let queryResults = this.db
@@ -435,7 +449,7 @@ export class SearchService {
       );
     }
 
-    if (labelId) {
+    if (labelIds.length) {
       queryResults = queryResults
         .select((eb) =>
           jsonArrayFrom(
@@ -453,7 +467,7 @@ export class SearchService {
                 'labels.type',
               ])
               .whereRef('matchingPageLabels.pageId', '=', 'pages.id')
-              .where('labels.id', '=', labelId)
+              .where('labels.id', 'in', labelIds)
               .where('labels.workspaceId', '=', opts.workspaceId)
               .whereRef('labels.spaceId', '=', 'pages.spaceId')
               .where('labels.type', '=', LabelType.PAGE),
@@ -470,7 +484,7 @@ export class SearchService {
               )
               .select('labelFilter.id')
               .whereRef('labelFilter.pageId', '=', 'pages.id')
-              .where('labelFilter.labelId', '=', labelId)
+              .where('labelFilter.labelId', 'in', labelIds)
               .where('labelFilterLabels.workspaceId', '=', opts.workspaceId)
               .whereRef('labelFilterLabels.spaceId', '=', 'pages.spaceId')
               .where('labelFilterLabels.type', '=', LabelType.PAGE),
@@ -649,7 +663,7 @@ export class SearchService {
           visiblePageIdsBySpaceId,
         );
 
-      if (this.databaseSearchProjection && query) {
+      if (this.databaseSearchProjection && query && !searchParams.titleOnly) {
         const databaseRows = searchResultsWithBreadcrumbs.filter(
           (result) => result.contentKind === 'databaseRow',
         );

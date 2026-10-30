@@ -4,6 +4,39 @@ import { validateSync } from 'class-validator';
 import { SearchDTO } from './search.dto';
 
 describe('SearchDTO', () => {
+  it('accepts author-only and multiple-label queries and validates title scope', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(
+      validateSync(plainToInstance(SearchDTO, { creatorId: id, query: '' })),
+    ).toHaveLength(0);
+    expect(
+      validateSync(plainToInstance(SearchDTO, { labelIds: [id], query: '' })),
+    ).toHaveLength(0);
+    expect(
+      validateSync(
+        plainToInstance(SearchDTO, { labelIds: [id, id], query: '' }),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      validateSync(
+        plainToInstance(SearchDTO, { labelIds: ['not-a-uuid'], query: '' }),
+      ).length,
+    ).toBeGreaterThan(0);
+    const title = plainToInstance(SearchDTO, {
+      query: 'roadmap',
+      titleOnly: 'true',
+    });
+    expect(title.titleOnly).toBe(true);
+    expect(validateSync(title)).toHaveLength(0);
+    expect(
+      validateSync(
+        plainToInstance(SearchDTO, {
+          query: 'roadmap',
+          titleOnly: 'sometimes',
+        }),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
   it('trims a text query before validation', () => {
     const dto = plainToInstance(SearchDTO, { query: '  policy  ' });
 

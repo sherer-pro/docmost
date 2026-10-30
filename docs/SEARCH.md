@@ -28,6 +28,18 @@ cell is limited to 20 KB and one row projection to 1 MB.
 
 ## Drivers and fallback
 
+Document search accepts `creatorId`, up to twenty distinct `labelIds` (any
+selected label matches), and `titleOnly`. The legacy `labelId` is combined with
+the label list. Author and label filters also work without a text query. They
+retain the existing workspace, space and page access checks. Public-share
+search ignores private author and label filters. Title-only queries use titles
+for both matching and highlighting; Typesense queries only its title field.
+
+Document result links preserve tag anchors and can carry a bounded `find`
+query. The page's existing search dialog highlights matches and provides
+previous/next navigation in read and edit mode. Opening a match does not change
+the page's editing preference or its saved content.
+
 `SEARCH_DRIVER=database` searches PostgreSQL directly. Cell edits update the
 row projection in the same transaction, so committed changes are immediately
 searchable. Property/select-option changes, user display-name changes, copies,

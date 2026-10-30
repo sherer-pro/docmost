@@ -7,6 +7,7 @@ export type SharedPageTreeNode = {
   name: string;
   icon?: string;
   position: string;
+  updatedAt?: string | Date;
   spaceId: string;
   parentPageId: string;
   hasChildren: boolean;
@@ -28,6 +29,7 @@ export function buildSharedPageTree(
       name: page.title,
       icon: page.icon,
       position: page.position,
+      updatedAt: page.updatedAt,
       // Initially assume a page has no children.
       hasChildren: false,
       spaceId: page.spaceId,

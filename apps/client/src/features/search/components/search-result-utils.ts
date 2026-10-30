@@ -38,3 +38,10 @@ export function isDuplicateTextHighlight(
     );
   });
 }
+export function withSearchQuery(href: string, query?: string) {
+  const term = query?.trim().slice(0, 512);
+  if (!term) return href;
+  const url = new URL(href, "https://docmost.invalid");
+  url.searchParams.set("find", term);
+  return `${url.pathname}${url.search}${url.hash}`;
+}

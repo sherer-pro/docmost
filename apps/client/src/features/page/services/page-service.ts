@@ -65,6 +65,8 @@ function serializeSidebarPagesParams(params: SidebarPagesParams): string {
     searchParams.append("cursor", params.cursor);
   }
 
+  if (params.sort) searchParams.append('sort', params.sort);
+
   for (const nodeType of params.includeNodeTypes ?? []) {
     searchParams.append("includeNodeTypes", nodeType);
   }

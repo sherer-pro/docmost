@@ -3147,6 +3147,15 @@
   "Time": "시간",
   "Insert current time": "현재 시간 삽입",
   "documentUpdates": {
-    "compareWith": "비교 대상"
+    "compareWith": "비교 대상",
+    "subpageSort": "하위 페이지 정렬",
+    "manualOrder": "수동 순서",
+    "alphabetical": "이름순",
+    "recentlyUpdated": "최근 수정순"
+  },
+  "searchEnhancements": {
+    "author": "작성자",
+    "titleOnly": "제목만 검색",
+    "labelsAny": "선택한 레이블 중 하나"
   }
 }

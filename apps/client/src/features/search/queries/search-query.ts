@@ -32,6 +32,7 @@ export function usePageSearchQuery(
     enabled:
       hasNonWhitespaceSearchQuery(params.query) ||
       !!params.labelId ||
+      Boolean(params.labelIds?.length || params.creatorId) ||
       !!params.tag ||
       Boolean(params.tags?.length),
   });

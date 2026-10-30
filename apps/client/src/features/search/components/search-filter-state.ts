@@ -11,6 +11,9 @@ export interface SearchFilterPayload {
   spaceId?: string | null;
   contentType?: string | null;
   labelId?: string | null;
+  labelIds?: string[];
+  creatorId?: string | null;
+  titleOnly?: boolean;
   tags?: BuiltInTagValue[];
 }
 
@@ -59,6 +62,7 @@ interface SearchFilterPayloadInput {
   spaceId: string | null;
   contentType: string | null;
   label: SelectedSearchLabel | null;
+  labels?: SelectedSearchLabel[];
   tags: BuiltInTagValue[];
 }
 
@@ -66,6 +70,7 @@ export function getSearchFilterPayload({
   spaceId,
   contentType,
   label,
+  labels,
   tags,
 }: SearchFilterPayloadInput): SearchFilterPayload {
   const supportsPageFilters = contentType === "page";
@@ -74,6 +79,9 @@ export function getSearchFilterPayload({
     spaceId,
     contentType,
     labelId: supportsPageFilters ? (label?.id ?? null) : null,
+    ...(labels
+      ? { labelIds: supportsPageFilters ? labels.map((label) => label.id) : [] }
+      : {}),
     tags: supportsPageFilters ? tags : [],
   };
 }

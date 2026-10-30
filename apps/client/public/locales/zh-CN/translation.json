@@ -3147,6 +3147,15 @@
   "Time": "时间",
   "Insert current time": "插入当前时间",
   "documentUpdates": {
-    "compareWith": "比较版本"
+    "compareWith": "比较版本",
+    "subpageSort": "子页面排序",
+    "manualOrder": "手动排序",
+    "alphabetical": "按名称排序",
+    "recentlyUpdated": "最近更新"
+  },
+  "searchEnhancements": {
+    "author": "作者",
+    "titleOnly": "仅搜索标题",
+    "labelsAny": "匹配任一所选标签"
   }
 }

@@ -74,6 +74,13 @@ describe("page-service sidebar reads", () => {
     );
   });
 
+  it('sends the saved subpage sort instead of silently using manual order', async () => {
+    const params = {pageId: 'parent', sort: 'updated' as const};
+    getMock.mockResolvedValue({data: {items: [], meta: {}}});
+    await getSidebarPages(params);
+    expect(getMock.mock.calls[0][1].paramsSerializer.serialize(params)).toBe('pageId=parent&sort=updated');
+  });
+
   it("paginates all sidebar pages through the canonical GET route", async () => {
     getMock
       .mockResolvedValueOnce({

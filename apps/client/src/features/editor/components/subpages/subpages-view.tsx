@@ -7,6 +7,8 @@ import {
   Skeleton,
   Text,
   ThemeIcon,
+  Select,
+  Button,
 } from "@mantine/core";
 import {
   IconAlertCircle,
@@ -15,7 +17,7 @@ import {
   IconSitemap,
 } from "@tabler/icons-react";
 import { useGetSidebarPagesQuery } from "@/features/page/queries/page-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import classes from "./subpages.module.css";
 import {
@@ -26,31 +28,58 @@ import { useTranslation } from "react-i18next";
 import { sortPositionKeys } from "@/features/page/tree/utils/utils";
 import { useSharedPageSubpages } from "@/features/share/hooks/use-shared-page-subpages";
 import { useEditorPageId } from "@/features/editor/hooks/use-editor-page-id";
+import { useEditorEditable } from "../transclusion/use-editor-editable";
 
 export default function SubpagesView(props: NodeViewProps) {
-  const { editor } = props;
+  const { editor, node, updateAttributes } = props;
   const { spaceSlug, shareId } = useParams();
   const { t } = useTranslation();
 
   const currentPageId = useEditorPageId(editor);
+  const editable = useEditorEditable(editor);
+  const sort = ["title", "updated"].includes(node.attrs.sort)
+    ? node.attrs.sort
+    : "manual";
 
   // Get subpages from shared tree if we're in a shared context
   const sharedSubpages = useSharedPageSubpages(currentPageId);
 
-  const { data, isLoading, error } = useGetSidebarPagesQuery({
-    pageId: currentPageId,
-  });
+  const {
+    data,
+    isLoading,
+    error,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useGetSidebarPagesQuery(
+    shareId
+      ? null
+      : {
+          pageId: currentPageId,
+          sort,
+        },
+  );
 
   const subpages = useMemo(() => {
     // If we're in a shared context, use the shared subpages
     if (shareId && sharedSubpages) {
-      return sharedSubpages.map((node) => ({
+      const result = sharedSubpages.map((node) => ({
         id: node.value,
         slugId: node.slugId,
         title: node.name,
         icon: node.icon,
         position: node.position,
+        updatedAt: node.updatedAt,
       }));
+      if (sort === "title")
+        result.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""));
+      if (sort === "updated")
+        result.sort(
+          (a, b) =>
+            new Date(b.updatedAt ?? 0).getTime() -
+            new Date(a.updatedAt ?? 0).getTime(),
+        );
+      return result;
     }
 
     // Otherwise use the API data
@@ -60,11 +89,29 @@ export default function SubpagesView(props: NodeViewProps) {
       // In the Subpages block we display only regular pages.
       .filter((node) => node.nodeType === "page");
 
-    return sortPositionKeys(allPages);
-  }, [data, shareId, sharedSubpages]);
+    return sort === "manual" ? sortPositionKeys(allPages) : allPages;
+  }, [data, shareId, sharedSubpages, sort]);
 
-  const isSubpagesLoading = isLoading && !shareId;
-  const hasSubpagesError = Boolean(error && !shareId);
+  useEffect(() => {
+    if (
+      !shareId &&
+      !error &&
+      hasNextPage &&
+      !isFetchingNextPage &&
+      subpages.length === 0
+    )
+      void fetchNextPage();
+  }, [
+    shareId,
+    error,
+    hasNextPage,
+    isFetchingNextPage,
+    subpages.length,
+    fetchNextPage,
+  ]);
+  const isSubpagesLoading =
+    !shareId && !error && (isLoading || (hasNextPage && subpages.length === 0));
+  const hasSubpagesError = Boolean(error && !shareId && subpages.length === 0);
 
   return (
     <NodeViewWrapper data-drag-handle className={classes.nodeView}>
@@ -86,6 +133,23 @@ export default function SubpagesView(props: NodeViewProps) {
         }
       >
         <div className={classes.header}>
+          {editable && (
+            <Select
+              aria-label={t("documentUpdates.subpageSort")}
+              w={210}
+              size="xs"
+              value={sort}
+              data={[
+                { value: "manual", label: t("documentUpdates.manualOrder") },
+                { value: "title", label: t("documentUpdates.alphabetical") },
+                {
+                  value: "updated",
+                  label: t("documentUpdates.recentlyUpdated"),
+                },
+              ]}
+              onChange={(sort) => updateAttributes({ sort: sort ?? "manual" })}
+            />
+          )}
           <Group gap="xs" wrap="nowrap">
             <ThemeIcon
               className={classes.headerIcon}
@@ -124,7 +188,10 @@ export default function SubpagesView(props: NodeViewProps) {
             ))}
           </div>
         ) : hasSubpagesError ? (
-          <div className={`${classes.state} ${classes.errorState}`} role="status">
+          <div
+            className={`${classes.state} ${classes.errorState}`}
+            role="status"
+          >
             <IconAlertCircle size={20} aria-hidden />
             <Text size="sm">{t("Failed to load subpages")}</Text>
           </div>
@@ -167,6 +234,16 @@ export default function SubpagesView(props: NodeViewProps) {
               </li>
             ))}
           </ul>
+        )}
+        {hasNextPage && !shareId && (
+          <Button
+            size="compact-sm"
+            variant="subtle"
+            loading={isFetchingNextPage}
+            onClick={() => void fetchNextPage()}
+          >
+            {t("Load more")}
+          </Button>
         )}
       </Paper>
     </NodeViewWrapper>

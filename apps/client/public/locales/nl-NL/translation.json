@@ -3147,6 +3147,15 @@
   "Time": "Tijd",
   "Insert current time": "Huidige tijd invoegen",
   "documentUpdates": {
-    "compareWith": "Vergelijken met"
+    "compareWith": "Vergelijken met",
+    "subpageSort": "Volgorde subpagina’s",
+    "manualOrder": "Handmatige volgorde",
+    "alphabetical": "A–Z",
+    "recentlyUpdated": "Recent bijgewerkt"
+  },
+  "searchEnhancements": {
+    "author": "Auteur",
+    "titleOnly": "Alleen titels doorzoeken",
+    "labelsAny": "Een van de geselecteerde labels"
   }
 }

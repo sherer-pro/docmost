@@ -3147,6 +3147,15 @@
   "Time": "Uhrzeit",
   "Insert current time": "Aktuelle Uhrzeit einfügen",
   "documentUpdates": {
-    "compareWith": "Vergleichen mit"
+    "compareWith": "Vergleichen mit",
+    "subpageSort": "Unterseiten sortieren",
+    "manualOrder": "Manuelle Reihenfolge",
+    "alphabetical": "A–Z",
+    "recentlyUpdated": "Zuletzt aktualisiert"
+  },
+  "searchEnhancements": {
+    "author": "Autor",
+    "titleOnly": "Nur Titel durchsuchen",
+    "labelsAny": "Beliebiges ausgewähltes Label"
   }
 }

@@ -45,6 +45,10 @@ import {
 } from "./search-filter-state";
 import { getSearchContentTypeOptions } from "./search-content-type-options";
 import classes from "./search-spotlight-filters.module.css";
+import {
+  AdvancedSearchControls,
+  type AdvancedSearchOptions,
+} from "./advanced-search-controls";
 
 interface SearchSpotlightFiltersProps {
   onFiltersChange?: (filters: SearchFilterPayload) => void;
@@ -72,8 +76,13 @@ export function SearchSpotlightFilters({
   const [spaceSearchQuery, setSpaceSearchQuery] = useState("");
   const [debouncedSpaceQuery] = useDebouncedValue(spaceSearchQuery, 300);
   const [contentType, setContentType] = useState<string | null>("all");
-  const [selectedLabel, setSelectedLabel] =
-    useState<SelectedSearchLabel | null>(null);
+  const [selectedLabels, setSelectedLabels] = useState<SelectedSearchLabel[]>(
+    [],
+  );
+  const selectedLabel = selectedLabels[0] ?? null;
+  const setSelectedLabel = (label: SelectedSearchLabel | null) =>
+    setSelectedLabels(label ? [label] : []);
+  const [advanced, setAdvanced] = useState<AdvancedSearchOptions>({});
   const [selectedTags, setSelectedTags] = useState<BuiltInTagValue[]>([]);
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
   const [debouncedLabelQuery] = useDebouncedValue(labelSearchQuery, 300);
@@ -116,19 +125,18 @@ export function SearchSpotlightFilters({
   }, [spacesData?.items, selectedSpaceId]);
 
   const availableLabels = useMemo<IPageSearchLabel[]>(() => {
-    if (
-      !selectedLabel ||
-      labels.some((label) => label.id === selectedLabel.id)
-    ) {
-      return labels;
-    }
-
     if (!selectedSpaceId) return labels;
     return [
-      { ...selectedLabel, type: "page", spaceId: selectedSpaceId },
+      ...selectedLabels
+        .filter((selected) => !labels.some((label) => label.id === selected.id))
+        .map((label) => ({
+          ...label,
+          type: "page" as const,
+          spaceId: selectedSpaceId,
+        })),
       ...labels,
     ];
-  }, [labels, selectedLabel, selectedSpaceId]);
+  }, [labels, selectedLabels, selectedSpaceId]);
 
   const facetCounts = useMemo(
     () => new Map(tagFacets.map((facet) => [facet.value, facet.documentCount])),
@@ -148,15 +156,18 @@ export function SearchSpotlightFilters({
     nextContentType: string | null,
     nextLabel: SelectedSearchLabel | null,
     nextTags: BuiltInTagValue[],
+    nextLabels: SelectedSearchLabel[] = nextLabel ? selectedLabels : [],
   ) => {
-    onFiltersChange?.(
-      getSearchFilterPayload({
+    onFiltersChange?.({
+      ...getSearchFilterPayload({
         spaceId: nextSpaceId,
         contentType: nextContentType,
         label: nextLabel,
         tags: nextTags,
+        labels: nextLabels,
       }),
-    );
+      ...(nextContentType === "page" ? advanced : {}),
+    });
   };
 
   const notifyTagReset = () => {
@@ -169,7 +180,7 @@ export function SearchSpotlightFilters({
 
   useEffect(() => {
     emitFilters(selectedSpaceId, contentType, selectedLabel, selectedTags);
-  }, []);
+  }, [advanced]);
 
   useEffect(() => {
     if (!intent) return;
@@ -275,8 +286,19 @@ export function SearchSpotlightFilters({
     const nextContentType =
       label && contentType !== "page" ? "page" : contentType;
     if (nextContentType !== contentType) setContentType(nextContentType);
-    setSelectedLabel(label);
-    emitFilters(selectedSpaceId, nextContentType, label, selectedTags);
+    const next = !label
+      ? []
+      : selectedLabels.some((item) => item.id === label.id)
+        ? selectedLabels.filter((item) => item.id !== label.id)
+        : [...selectedLabels, label].slice(0, 20);
+    setSelectedLabels(next);
+    emitFilters(
+      selectedSpaceId,
+      nextContentType,
+      next[0] ?? null,
+      selectedTags,
+      next,
+    );
   };
 
   const handleTagsSelect = (tags: BuiltInTagValue[]) => {
@@ -406,9 +428,11 @@ export function SearchSpotlightFilters({
             fw={500}
             disabled={isLabelFilterDisabled}
           >
-            {selectedLabel
-              ? `${t("Label")}: ${selectedLabel.name}`
-              : t("Label")}
+            {selectedLabels.length > 1
+              ? `${t("Labels")}: ${selectedLabels.length}`
+              : selectedLabel
+                ? `${t("Label")}: ${selectedLabel.name}`
+                : t("Label")}
           </Button>
         </Menu.Target>
         <Menu.Dropdown>
@@ -424,6 +448,9 @@ export function SearchSpotlightFilters({
             styles={{ input: { marginBottom: 8 } }}
           />
           <ScrollArea.Autosize mah={280}>
+            <Text size="xs" c="dimmed" px="sm" py="xs">
+              {t("searchEnhancements.labelsAny")}
+            </Text>
             {selectedLabel && (
               <>
                 <Menu.Item onClick={() => handleLabelSelect(null)}>
@@ -442,6 +469,7 @@ export function SearchSpotlightFilters({
               availableLabels.map((label) => (
                 <Menu.Item
                   key={label.id}
+                  closeMenuOnClick={false}
                   onClick={() =>
                     handleLabelSelect({ id: label.id, name: label.name })
                   }
@@ -450,7 +478,9 @@ export function SearchSpotlightFilters({
                     <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
                       {label.name}
                     </Text>
-                    {selectedLabel?.id === label.id && <IconCheck size={20} />}
+                    {selectedLabels.some(
+                      (selected) => selected.id === label.id,
+                    ) && <IconCheck size={20} />}
                   </Group>
                 </Menu.Item>
               ))
@@ -565,6 +595,13 @@ export function SearchSpotlightFilters({
           ))}
         </Menu.Dropdown>
       </Menu>
+      {!arePageFiltersDisabled && (
+        <AdvancedSearchControls
+          spaceId={selectedSpaceId ?? undefined}
+          value={advanced}
+          onChange={setAdvanced}
+        />
+      )}
     </div>
   );
 }

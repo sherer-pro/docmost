@@ -5,7 +5,9 @@ export interface SubpagesOptions {
   view: any;
 }
 
-export interface SubpagesAttributes {}
+export interface SubpagesAttributes {
+  sort?: 'manual' | 'title' | 'updated';
+}
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -28,6 +30,23 @@ export const Subpages = Node.create<SubpagesOptions>({
   group: 'block',
   atom: true,
   draggable: true,
+
+  addAttributes() {
+    return {
+      sort: {
+        default: 'manual',
+        parseHTML: (element: HTMLElement) =>
+          ['title', 'updated'].includes(element.dataset.sort)
+            ? element.dataset.sort
+            : 'manual',
+        renderHTML: (attrs) => ({
+          'data-sort': ['title', 'updated'].includes(attrs.sort)
+            ? attrs.sort
+            : 'manual',
+        }),
+      },
+    };
+  },
 
   parseHTML() {
     return [

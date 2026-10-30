@@ -24,13 +24,17 @@ import type {
 import { searchSpotlight } from "@/features/search/constants";
 import { getPageIcon } from "@/lib";
 import classes from "./search-result-item.module.css";
-import { isDuplicateTextHighlight } from "./search-result-utils";
+import {
+  isDuplicateTextHighlight,
+  withSearchQuery,
+} from "./search-result-utils";
 import tagColorClasses from "@/components/ui/tag-colors.module.css";
 
 interface SearchResultItemProps {
   result: IPageSearch | IAttachmentSearch;
   isAttachmentResult: boolean;
   showSpace?: boolean;
+  query?: string;
 }
 
 const CONTENT_KIND_LABELS: Record<IPageSearch["contentKind"], string> = {
@@ -151,6 +155,7 @@ export function SearchResultItem({
   result,
   isAttachmentResult,
   showSpace,
+  query,
 }: SearchResultItemProps) {
   const { t } = useTranslation();
 
@@ -221,7 +226,7 @@ export function SearchResultItem({
   }
 
   const pageResult = result as IPageSearch;
-  const pageUrl = buildResultUrl(pageResult);
+  const pageUrl = withSearchQuery(buildResultUrl(pageResult), query);
   const breadcrumbsText = pageResult.breadcrumbs?.length
     ? pageResult.breadcrumbs.map((crumb) => crumb.title).join(" / ")
     : null;

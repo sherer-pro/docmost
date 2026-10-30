@@ -81,6 +81,9 @@ export interface IPageSearchParams {
   spaceId?: string;
   shareId?: string;
   labelId?: string;
+  labelIds?: string[];
+  creatorId?: string;
+  titleOnly?: boolean;
   tag?: TagValue;
   tags?: BuiltInTagValue[];
   limit?: number;

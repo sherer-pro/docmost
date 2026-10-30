@@ -3147,6 +3147,15 @@
   "Time": "Время",
   "Insert current time": "Вставить текущее время",
   "documentUpdates": {
-    "compareWith": "Сравнить с"
+    "compareWith": "Сравнить с",
+    "subpageSort": "Порядок подстраниц",
+    "manualOrder": "Вручную",
+    "alphabetical": "А–Я",
+    "recentlyUpdated": "Последние изменения"
+  },
+  "searchEnhancements": {
+    "author": "Автор",
+    "titleOnly": "Искать только в названиях",
+    "labelsAny": "Любая из выбранных меток"
   }
 }

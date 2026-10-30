@@ -4,7 +4,15 @@ import React, { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { Provider } from "jotai";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import SearchAndReplaceDialog from "./search-and-replace-dialog";
 
 beforeAll(() => vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true));
@@ -74,6 +82,22 @@ function mount(children: React.ReactNode) {
 }
 
 describe("search dialog editor lifecycle", () => {
+  it("initializes a literal search from a result link for a read-only editor", () => {
+    const editor = editorFixture();
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    act(() =>
+      root.render(
+        <MemoryRouter initialEntries={["/s/team/p/page?find=linked%20term"]}>
+          <Provider>
+            <SearchAndReplaceDialog editor={editor as any} editable={false} />
+          </Provider>
+        </MemoryRouter>,
+      ),
+    );
+    expect(editor.commands.setSearchTerm).toHaveBeenCalledWith("linked term");
+  });
   it("ignores an editor destroyed before passive effects during navigation", () => {
     const editor = editorFixture();
     function Navigation() {

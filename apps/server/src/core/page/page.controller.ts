@@ -698,10 +698,7 @@ export class PageController {
           targetSpaceId,
         );
         if (
-          targetAbility.cannot(
-            SpaceCaslAction.Create,
-            SpaceCaslSubject.Page,
-          )
+          targetAbility.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)
         ) {
           throw new ForbiddenException();
         }
@@ -1183,6 +1180,7 @@ export class PageController {
       dto,
       dto.pageId,
       dto.includeNodeTypes,
+      dto.sort,
     );
 
     const visibleItems = sidebarPages.items.filter((node) =>

@@ -79,7 +79,9 @@ export class SearchController {
 
     if (
       this.environmentService.getSearchDriver() === 'typesense' &&
+      Boolean(searchDto.query?.trim()) &&
       !searchDto.labelId &&
+      !searchDto.labelIds?.length &&
       !searchDto.tag &&
       !searchDto.tags?.length
     ) {
@@ -149,6 +151,8 @@ export class SearchController {
   ) {
     delete searchDto.shareId;
     delete searchDto.labelId;
+    delete searchDto.labelIds;
+    delete searchDto.creatorId;
     delete searchDto.tag;
     delete searchDto.tags;
 

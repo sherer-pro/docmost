@@ -21,6 +21,10 @@ export class SidebarPageDto {
 
 export class SidebarPagesQueryDto extends PaginationOptions {
   @IsOptional()
+  @IsIn(['manual', 'title', 'updated'])
+  sort?: 'manual' | 'title' | 'updated';
+
+  @IsOptional()
   @IsUUID()
   spaceId: string;
 

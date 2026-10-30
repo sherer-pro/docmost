@@ -30,7 +30,10 @@ interface PageFindDialogDialogProps {
   editable?: boolean;
 }
 
-function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialogProps) {
+function SearchAndReplaceDialog({
+  editor,
+  editable = true,
+}: PageFindDialogDialogProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -168,11 +171,11 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
       searchText.trim() === ""
         ? ""
         : editor?.storage?.searchAndReplace?.results.length > 0
-        ? editor?.storage?.searchAndReplace?.resultIndex +
-          1 +
-          "/" +
-          editor?.storage?.searchAndReplace?.results.length
-        : t("Not found"),
+          ? editor?.storage?.searchAndReplace?.resultIndex +
+            1 +
+            "/" +
+            editor?.storage?.searchAndReplace?.results.length
+          : t("Not found"),
     [
       searchText,
       editor?.storage?.searchAndReplace?.resultIndex,
@@ -183,13 +186,46 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
   const location = useLocation();
   useEffect(() => {
     closeDialog();
-  }, [location]);
+    const term = new URLSearchParams(location.search)
+      .get("find")
+      ?.trim()
+      .slice(0, 512);
+    if (!term || !canSearch()) return;
+    setSearchText(term);
+    setPageFindState({ isOpen: true });
+    let revealed = false;
+    const reveal = () => {
+      if (revealed || !canSearch()) return;
+      const match = editor.view?.dom?.querySelector(
+        ".search-result-current",
+      ) as HTMLElement | null;
+      if (!match) return;
+      revealed = true;
+      for (
+        let parent = match.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        if (parent.tagName === "DETAILS")
+          (parent as HTMLDetailsElement).open = true;
+      }
+      match.dispatchEvent(
+        new CustomEvent("docmost:reveal-search-match", { bubbles: true }),
+      );
+      match.scrollIntoView?.({ block: "center", behavior: "instant" });
+    };
+    editor.on?.("transaction", reveal);
+    const timer = setTimeout(reveal, 0);
+    return () => {
+      clearTimeout(timer);
+      editor.off?.("transaction", reveal);
+    };
+  }, [editor, location.key, location.pathname, location.search]);
 
   return (
     <Dialog
       className={classes.findDialog}
       opened={pageFindState.isOpen}
-
       size="lg"
       radius="md"
       w={"auto"}
@@ -226,7 +262,12 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
 
           <ActionIcon.Group>
             <Tooltip label={t("Previous match (Shift+Enter)")}>
-              <ActionIcon variant="subtle" color="gray" onClick={previous}>
+              <ActionIcon
+                aria-label={t("Previous match (Shift+Enter)")}
+                variant="subtle"
+                color="gray"
+                onClick={previous}
+              >
                 <IconArrowNarrowUp
                   style={{ width: "70%", height: "70%" }}
                   stroke={1.5}
@@ -234,7 +275,12 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t("Next match (Enter)")}>
-              <ActionIcon variant="subtle" color="gray" onClick={next}>
+              <ActionIcon
+                aria-label={t("Next match (Enter)")}
+                variant="subtle"
+                color="gray"
+                onClick={next}
+              >
                 <IconArrowNarrowDown
                   style={{ width: "70%", height: "70%" }}
                   stroke={1.5}
@@ -245,6 +291,7 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
               <ActionIcon
                 variant="subtle"
                 color={caseSensitive.color}
+                aria-label={t("Match case (Alt+C)")}
                 onClick={() => caseSensitiveToggle()}
               >
                 <IconLetterCase
@@ -258,6 +305,7 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
                 <ActionIcon
                   variant="subtle"
                   color={replaceButton.color}
+                  aria-label={t("Replace")}
                   onClick={() => replaceButtonToggle()}
                 >
                   <IconReplace
@@ -268,7 +316,12 @@ function SearchAndReplaceDialog({ editor, editable = true }: PageFindDialogDialo
               </Tooltip>
             )}
             <Tooltip label={t("Close (Escape)")}>
-              <ActionIcon variant="subtle" color="gray" onClick={closeDialog}>
+              <ActionIcon
+                aria-label={t("Close (Escape)")}
+                variant="subtle"
+                color="gray"
+                onClick={closeDialog}
+              >
                 <IconX style={{ width: "70%", height: "70%" }} stroke={1.5} />
               </ActionIcon>
             </Tooltip>

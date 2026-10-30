@@ -521,6 +521,113 @@ export async function runLiveAcceptance({
     const { runAiDatabaseAcceptance } = await import(
       './ai-database-live-acceptance.mjs'
     );
+    await test('advanced search applies title, creator and OR-label filters before returning readable pages', async () => {
+      const term = `searchprobe${randomBytes(5).toString('hex')}`;
+      const make = (
+        actor,
+        title,
+        text,
+        parentPageId = parent.id,
+        withSubpages = false,
+      ) =>
+        api(actor, '/pages', 'POST', {
+          spaceId: space.id,
+          parentPageId,
+          title,
+          format: 'json',
+          content: {
+            type: 'doc',
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text }] },
+              ...(withSubpages
+                ? [{ type: 'subpages', attrs: { sort: 'title' } }]
+                : []),
+            ],
+          },
+        });
+      const first = await make(
+        actors.editor,
+        `${term} first`,
+        'Find this linked phrase twice. Find this linked phrase again.',
+        parent.id,
+        true,
+      );
+      const body = await make(admin, 'Body result', term);
+      const second = await make(
+        admin,
+        `${term} second`,
+        'Second accessible title',
+      );
+      await make(admin, 'Zulu child', 'Child page', first.id);
+      await make(admin, 'Alpha child', 'Child page', first.id);
+      await make(admin, `${term} hidden`, term, hiddenParent.id);
+      const one = await api(actors.editor, '/pages/labels/add', 'POST', {
+        pageId: first.id,
+        names: [`${term}-a`],
+      });
+      const two = await api(admin, '/pages/labels/add', 'POST', {
+        pageId: second.id,
+        names: [`${term}-b`],
+      });
+      await api(admin, '/pages/labels/add', 'POST', {
+        pageId: body.id,
+        names: [`${term}-b`],
+      });
+      const search = async (options) =>
+        (
+          await api(actors.reader, '/search', 'POST', {
+            query: term,
+            spaceId: space.id,
+            ...options,
+          })
+        ).items;
+      const idsOf = (items) => items.map((item) => item.id).sort();
+      assert.deepEqual(
+        idsOf(await search({})),
+        [first.id, body.id, second.id].sort(),
+      );
+      assert.deepEqual(
+        idsOf(await search({ titleOnly: true })),
+        [first.id, second.id].sort(),
+      );
+      const labelIds = [one[0].id, two[0].id];
+      assert.deepEqual(
+        idsOf(await search({ query: '', labelIds })),
+        [first.id, body.id, second.id].sort(),
+      );
+      assert.deepEqual(
+        idsOf(
+          await search({
+            labelIds,
+            creatorId: actors.editor.id,
+            titleOnly: true,
+          }),
+        ),
+        [first.id],
+      );
+      assert(
+        (await search({ query: '', creatorId: actors.editor.id })).every(
+          (item) => item.creatorId === actors.editor.id,
+        ),
+      );
+      fixture.searchPage = {
+        ...first,
+        query: 'Find this linked phrase',
+        route: `/s/${space.slug}/p/${first.slugId}`,
+      };
+      const alphabetical = await api(
+        actors.reader,
+        `/pages/sidebar-pages?${new URLSearchParams({ pageId: parent.id, sort: 'title' })}`,
+      );
+      const children = alphabetical.items.map((item) => item.id);
+      assert(children.indexOf(first.id) < children.indexOf(second.id));
+      await sql`update pages set updated_at=${new Date(Date.now() + 60000)} where id=${first.id}`;
+      const recent = await api(
+        actors.reader,
+        `/pages/sidebar-pages?${new URLSearchParams({ pageId: parent.id, sort: 'updated' })}`,
+      );
+      assert.equal(recent.items[0].id, first.id);
+    });
     fixture.aiApproval = await runAiDatabaseAcceptance({
       api,
       fetchApi,
@@ -572,7 +679,10 @@ export async function runLiveAcceptance({
         .split('\r\n');
       assert.equal(lines.length, 501);
       assert.equal(lines[0], '"Title","Amount","Status"');
-      const number = new Intl.NumberFormat(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const number = new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
       assert.equal(lines[1], `"Row 0999","${number.format(999)}","Alpha"`);
       assert.equal(lines.at(-1), `"Row 0500","${number.format(500)}","Alpha"`);
       assert(!lines.some((line) => line.includes('Row 0049')));

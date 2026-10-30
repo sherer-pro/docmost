@@ -36,7 +36,13 @@ export const BUILT_IN_SEARCH_TAGS = builtInTagValues;
 export type BuiltInSearchTag = BuiltInTagValue;
 
 function hasDocumentFilter(dto: SearchDTO): boolean {
-  return Boolean(dto.labelId || dto.tag || dto.tags?.length);
+  return Boolean(
+    dto.labelId ||
+      dto.labelIds?.length ||
+      dto.creatorId ||
+      dto.tag ||
+      dto.tags?.length,
+  );
 }
 
 export class SearchDTO {
@@ -66,6 +72,18 @@ export class SearchDTO {
   @IsOptional()
   @IsUUID()
   labelId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  labelIds?: string[];
+
+  @IsOptional()
+  @Transform(({ value }) => parseOptionalBoolean(value))
+  @IsBoolean()
+  titleOnly?: boolean;
 
   @IsOptional()
   @Transform(({ value }) =>

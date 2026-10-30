@@ -132,6 +132,7 @@ export interface ISidebarNode {
 }
 
 export interface SidebarPagesParams {
+  sort?: "manual" | "title" | "updated";
   spaceId?: string;
   pageId?: string;
   cursor?: string;

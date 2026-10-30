@@ -3147,6 +3147,15 @@
   "Time": "時刻",
   "Insert current time": "現在の時刻を挿入",
   "documentUpdates": {
-    "compareWith": "比較対象"
+    "compareWith": "比較対象",
+    "subpageSort": "サブページの並び順",
+    "manualOrder": "手動の順序",
+    "alphabetical": "名前順",
+    "recentlyUpdated": "更新順"
+  },
+  "searchEnhancements": {
+    "author": "作成者",
+    "titleOnly": "タイトルのみ検索",
+    "labelsAny": "選択したラベルのいずれか"
   }
 }

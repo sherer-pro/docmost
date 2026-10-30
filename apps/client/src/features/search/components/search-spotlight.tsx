@@ -57,6 +57,11 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     if (filters.labelId && contentType === "page") {
       params.labelId = filters.labelId;
     }
+    if (contentType === "page") {
+      if (filters.labelIds?.length) params.labelIds = filters.labelIds;
+      if (filters.creatorId) params.creatorId = filters.creatorId;
+      if (filters.titleOnly) params.titleOnly = true;
+    }
     if (filters.tags?.length && contentType === "page") {
       params.tags = filters.tags;
     }
@@ -68,7 +73,9 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
   const searchResults =
     (singleSearch.data?.pages.flat() as UnifiedSearchResult[] | undefined) ??
     [];
-  const hasLabelSearch = Boolean(filters.labelId) && contentType === "page";
+  const hasLabelSearch =
+    Boolean(filters.labelId || filters.labelIds?.length || filters.creatorId) &&
+    contentType === "page";
   const hasTagSearch = Boolean(filters.tags?.length) && contentType === "page";
   const hasSearchInput =
     query.trim().length > 0 || hasLabelSearch || hasTagSearch;
@@ -95,6 +102,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       <SearchResultItem
         key={result.id}
         result={result as IPageSearch | IAttachmentSearch}
+        query={debouncedSearchQuery}
         isAttachmentResult={resultType === "attachment"}
         showSpace={!filters.spaceId}
       />

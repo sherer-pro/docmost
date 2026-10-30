@@ -3147,6 +3147,15 @@
   "Time": "Time",
   "Insert current time": "Insert current time",
   "documentUpdates": {
-    "compareWith": "Compare with"
+    "compareWith": "Compare with",
+    "subpageSort": "Subpage order",
+    "manualOrder": "Manual order",
+    "alphabetical": "A–Z",
+    "recentlyUpdated": "Recently updated"
+  },
+  "searchEnhancements": {
+    "author": "Author",
+    "titleOnly": "Search titles only",
+    "labelsAny": "Match any selected label"
   }
 }

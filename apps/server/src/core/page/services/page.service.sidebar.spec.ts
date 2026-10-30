@@ -65,6 +65,33 @@ describe('PageService getSidebarPages database node mapping', () => {
     jest.clearAllMocks();
   });
 
+  it.each(['title', 'updated'] as const)(
+    'paginates the complete child query by %s with an ID tie-breaker',
+    async (sort) => {
+      await service.getSidebarPages(
+        'space-1',
+        { limit: 20, query: '', adminView: false },
+        'parent-1',
+        ['page'],
+        sort,
+      );
+      const [query, options] = (executeWithCursorPagination as jest.Mock).mock
+        .calls[0];
+      const compiled = query.compile();
+      expect(compiled.sql).toContain('"sidebar"');
+      expect(options.fields[0].direction).toBe(
+        sort === 'title' ? 'asc' : 'desc',
+      );
+      expect(options.fields[1]).toEqual({ expression: 'id', direction: 'asc' });
+      expect(
+        options.parseCursor({
+          sortKey: '2026-10-30T00:00:00.000Z',
+          id: 'page-1',
+        }).id,
+      ).toBe('page-1');
+    },
+  );
+
   afterAll(async () => {
     await db.destroy();
   });

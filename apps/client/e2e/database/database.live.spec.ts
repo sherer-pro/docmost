@@ -103,6 +103,59 @@ test("live AI cell preview, explicit approval and durable row receipt", async ({
     .toBe(false);
 });
 
+test("live result links highlight matches and navigate without enabling page writes", async ({
+  page,
+}) => {
+  await page.goto(
+    `${fixture.searchPage.route}?find=${encodeURIComponent(fixture.searchPage.query)}`,
+  );
+  await expect(page.getByPlaceholder("Find", { exact: true })).toHaveValue(
+    fixture.searchPage.query,
+  );
+  await expect(page.locator(".tiptap .search-result")).toHaveCount(2);
+  await expect(page.locator(".tiptap .search-result-current")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Next match (Enter)", exact: true })
+    .click();
+  await expect(page.getByText("2/2", { exact: true })).toBeVisible();
+});
+
+test("live subpage order is saved without changing the page tree order", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await page.goto(fixture.searchPage.route);
+  const block = page.getByRole("navigation", { name: "Subpages", exact: true });
+  await expect(block.getByRole("link")).toHaveText([
+    "Alpha child",
+    "Zulu child",
+  ]);
+  await page.getByRole("radio", { name: "Edit", exact: true }).check();
+  await block.getByRole("textbox", { name: "Subpage order" }).click();
+  await page.getByRole("option", { name: "Manual order", exact: true }).click();
+  await expect(block.getByRole("link")).toHaveText([
+    "Zulu child",
+    "Alpha child",
+  ]);
+  await expect
+    .poll(async () => {
+      const pageData = await api(
+        page.request,
+        `/pages/info?pageId=${fixture.searchPage.id}`,
+      );
+      return pageData.content.content.find(
+        (node: any) => node.type === "subpages",
+      )?.attrs.sort;
+    }, {timeout: 55000})
+    .toBe("manual");
+  await page.reload();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Subpages", exact: true })
+      .getByRole("link"),
+  ).toHaveText(["Zulu child", "Alpha child"]);
+});
+
 test("live record drawer preserves table context and supports direct links", async ({
   page,
 }) => {

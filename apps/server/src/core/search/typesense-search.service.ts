@@ -91,10 +91,16 @@ export class TypesenseSearchService {
       const response = await this.runTypesenseRequest(() =>
         this.typesenseIndexService.searchPages({
           q: query,
-          query_by: opts.userId
-            ? 'title,content,databaseContent'
-            : 'title,content',
-          query_by_weights: opts.userId ? '8,3,2' : '8,3',
+          query_by: searchParams.titleOnly
+            ? 'title'
+            : opts.userId
+              ? 'title,content,databaseContent'
+              : 'title,content',
+          query_by_weights: searchParams.titleOnly
+            ? '8'
+            : opts.userId
+              ? '8,3,2'
+              : '8,3',
           filter_by: this.buildFilter({
             workspaceId: opts.workspaceId,
             spaceId: publicShare?.spaceId ?? searchParams.spaceId,
@@ -144,11 +150,16 @@ export class TypesenseSearchService {
           // PostgreSQL driver which omits it for share searches.
           ...(publicShare ? {} : { space }),
           rank: Number(hit.text_match ?? 0),
-          highlight: this.buildAuthoritativeHighlight(query, [
-            textContent,
-            ...(authUser ? [databaseSearchText] : []),
-            row.title,
-          ]),
+          highlight: this.buildAuthoritativeHighlight(
+            query,
+            searchParams.titleOnly
+              ? [row.title]
+              : [
+                  textContent,
+                  ...(authUser ? [databaseSearchText] : []),
+                  row.title,
+                ],
+          ),
           tagMatchCount: 0,
           tagSnippets: [],
         } as SearchResponseDto);
@@ -175,7 +186,7 @@ export class TypesenseSearchService {
       results,
       visiblePageIdsBySpaceId,
     );
-    if (authUser && this.databaseSearchProjection) {
+    if (authUser && this.databaseSearchProjection && !searchParams.titleOnly) {
       const databaseRows = items.filter(
         (item) => item.contentKind === 'databaseRow',
       );

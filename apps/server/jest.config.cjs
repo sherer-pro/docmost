@@ -1,5 +1,11 @@
+const requestedWorkers = process.env.JEST_MAX_WORKERS;
+if (requestedWorkers !== undefined && (!/^[1-9]\d?$/.test(requestedWorkers) || Number(requestedWorkers) > 16)) {
+  throw new Error('JEST_MAX_WORKERS must be an integer from 1 to 16');
+}
+
 /** @type {import('jest').Config} */
 module.exports = {
+  ...(requestedWorkers === undefined ? {} : {maxWorkers: Number(requestedWorkers)}),
   moduleFileExtensions: ['js', 'json', 'ts', 'tsx'],
   rootDir: '.',
   roots: ['<rootDir>/src'],
