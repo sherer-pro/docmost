@@ -4,6 +4,8 @@
 
 | Method | Path | Source |
 | --- | --- | --- |
+| GET | `/` | `apps/server/src/core/attachment/page-attachments.controller.ts` |
+| POST | `/:attachmentId/actions/remove` | `apps/server/src/core/attachment/page-attachments.controller.ts` |
 | GET | `/ai/conversations` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | POST | `/ai/conversations` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:conversationId/files` | `apps/server/src/core/ai/controllers/ai-file.controller.ts` |

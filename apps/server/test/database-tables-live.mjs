@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { cp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
 
@@ -90,6 +90,22 @@ const wait = async (label, check, timeout = 120_000) => {
 
 await mkdir(cwd, { recursive: true });
 try {
+  // Keep an immutable application snapshot while other checks rebuild the repo.
+  const runtimeRoot = path.resolve(cwd, '..', '..');
+  await cp(path.join(repo, 'apps/server/dist'), path.join(cwd, 'dist'), {
+    recursive: true,
+  });
+  await cp(
+    path.join(repo, 'apps/client/dist'),
+    path.join(runtimeRoot, 'apps/client/dist'),
+    { recursive: true },
+  );
+  await symlink(
+    path.join(repo, 'apps/server/node_modules'),
+    path.join(cwd, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  report.immutableApplicationSnapshot = true;
   const subnet = process.argv
     .find((arg) => arg.startsWith('--subnet='))
     ?.slice('--subnet='.length);
@@ -232,21 +248,14 @@ try {
     'deterministic AI provider',
     async () => (await fetch(`http://127.0.0.1:${modelPort}/health`)).ok,
   );
-  start(
-    'api',
-    path.join(repo, 'apps/server/dist/apps/server/src/main.js'),
-    env,
-  );
+  start('api', path.join(cwd, 'dist/apps/server/src/main.js'), env);
   await wait(
     'API and migrations',
     async () => (await fetch(`${baseURL}/api/health`)).ok,
   );
   start(
     'collaboration',
-    path.join(
-      repo,
-      'apps/server/dist/apps/server/src/collaboration/server/collab-main.js',
-    ),
+    path.join(cwd, 'dist/apps/server/src/collaboration/server/collab-main.js'),
     env,
   );
   await wait(

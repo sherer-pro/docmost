@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
 
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -627,6 +628,18 @@ export async function runLiveAcceptance({
         `/pages/sidebar-pages?${new URLSearchParams({ pageId: parent.id, sort: 'updated' })}`,
       );
       assert.equal(recent.items[0].id, first.id);
+    });
+    await runPageAttachmentsAcceptance({
+      api,
+      fetchApi,
+      actors,
+      space,
+      workspaceId,
+      hiddenParent,
+      sql,
+      fixture,
+      test,
+      output,
     });
     fixture.aiApproval = await runAiDatabaseAcceptance({
       api,

@@ -446,6 +446,8 @@ The editor includes the following additional capabilities:
 
 - full-size image previews;
 
+- a searchable page attachment gallery with sequential image, audio, video and PDF previews, download and navigation to usage; space administrators with page write access may queue removal of files unused by documents, history, templates or database cells;
+
 - width settings for individual blocks;
 
 - improved table rendering;

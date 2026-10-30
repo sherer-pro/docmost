@@ -3157,5 +3157,13 @@
     "author": "Autor",
     "titleOnly": "Buscar solo en títulos",
     "labelsAny": "Cualquiera de las etiquetas seleccionadas"
+  },
+  "attachmentGallery": {
+    "noPreview": "Este formato no tiene vista previa.",
+    "loadFailed": "No se pudieron cargar los adjuntos.",
+    "deleteConfirm": "¿Eliminar «{{name}}»? Los archivos usados en documentos o en el historial no se pueden eliminar.",
+    "goToUsage": "Ir al uso",
+    "unused": "No se usa en esta página",
+    "inUse": "El archivo sigue en uso en documentos, bases de datos o en el historial. Se rechazó la eliminación."
   }
 }

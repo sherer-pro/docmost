@@ -3157,5 +3157,13 @@
     "author": "Autore",
     "titleOnly": "Cerca solo nei titoli",
     "labelsAny": "Una qualsiasi delle etichette selezionate"
+  },
+  "attachmentGallery": {
+    "noPreview": "Nessuna anteprima per questo formato.",
+    "loadFailed": "Impossibile caricare gli allegati.",
+    "deleteConfirm": "Eliminare «{{name}}»? I file usati nei documenti o nella cronologia non possono essere eliminati.",
+    "goToUsage": "Vai al punto di utilizzo",
+    "unused": "Non usato in questa pagina",
+    "inUse": "Il file è ancora usato in documenti, database o cronologia. Eliminazione rifiutata."
   }
 }

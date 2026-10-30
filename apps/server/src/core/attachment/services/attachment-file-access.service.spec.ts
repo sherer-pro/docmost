@@ -172,23 +172,26 @@ describe('AttachmentFileAccessService', () => {
     expect(res.headerValues['Cache-Control']).toBe('private, no-store');
   });
 
-  it('serves spoofed inline extensions as downloads with safe content type', async () => {
-    const { service } = createService({
-      fileExt: '.mp4',
-      fileName: 'clip.mp4',
-      mimeType: 'text/html',
-    });
-    const req = { headers: {}, cookies: {} } as any;
-    const res = createReply();
+  it.each(['.mp4', '.mp3', '.webm', '.ogg', '.wav', '.m4a', '.webp', '.avif'])(
+    'serves spoofed inline extension %s as a download with safe content type',
+    async (extension) => {
+      const { service } = createService({
+        fileExt: extension,
+        fileName: `clip${extension}`,
+        mimeType: 'text/html',
+      });
+      const req = { headers: {}, cookies: {} } as any;
+      const res = createReply();
 
-    await service.getPublicFile(req, res, workspace, fileId, 'query-token');
+      await service.getPublicFile(req, res, workspace, fileId, 'query-token');
 
-    expect(res.header).toHaveBeenCalledWith(
-      'Content-Disposition',
-      'attachment; filename="clip.mp4"',
-    );
-    expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
-  });
+      expect(res.header).toHaveBeenCalledWith(
+        'Content-Disposition',
+        `attachment; filename="clip${extension}"`,
+      );
+      expect(res.headerValues['Content-Type']).toBe('application/octet-stream');
+    },
+  );
 
   it.each(['diagram.excalidraw.svg', 'diagram.drawio.svg'])(
     'serves editor diagram SVG %s with an image content type for previews',

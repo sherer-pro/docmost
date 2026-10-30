@@ -207,6 +207,26 @@ export class QueueOutboxService {
     );
   }
 
+  async enqueueAttachmentCleanup(
+    attachmentId: string,
+    workspaceId: string,
+    trx: KyselyTransaction,
+  ): Promise<boolean> {
+    const attachments = await trx
+      .selectFrom('attachments')
+      .select(['id', 'filePath'])
+      .where('id', '=', attachmentId)
+      .where('workspaceId', '=', workspaceId)
+      .execute();
+    return this.stageAttachmentCleanup(
+      attachments,
+      'attachment',
+      attachmentId,
+      workspaceId,
+      trx,
+    );
+  }
+
   async enqueuePageAttachmentCleanup(
     pageIds: string[],
     rootPageId: string,

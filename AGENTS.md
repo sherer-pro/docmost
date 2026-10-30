@@ -65,6 +65,7 @@
 - `apps/client/src` — main frontend code.
 - `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
 - `apps/client/src/features/session` — account active sessions UI.
+- `apps/client/src/features/attachments/components` — authenticated page attachment gallery and sequential media preview; unused-file removal uses the transactional cleanup outbox and retains files referenced by history.
 - `apps/client/src/features/presence` — authenticated Socket.IO presence heartbeat/reporting hooks.
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
@@ -163,6 +164,7 @@
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
 - Editor browser acceptance matrix: `pnpm test:editor:e2e`; a full run verifies downloaded Markdown/HTML/PDF/Docmost artifacts and deletes its audit space only after both Playwright and artifact verification pass. Focused runs skip the necessarily incomplete artifact check. Any failed full run retains its audit space for inspection.
 - Image preview zoom browser acceptance: `node apps/client/e2e/image-preview/run.mjs` (isolated Vite on port 5197; image/SVG/Mermaid buttons, Alt+wheel, pinch, pan, reset, keyboard, and mobile sizing; no application login required).
+- That runner also checks sequential gallery previews and generated audio/video playback in both themes. Gallery ACL, history retention and asynchronous removal contracts are documented in `docs/PAGE_ATTACHMENTS.md` and exercised by the database live runner.
 - AI assistant browser acceptance matrix: `pnpm test:ai:e2e`
 - AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
 - Outbound external-MCP live audit: `pnpm test:ai-external-mcp:e2e`; this mutation-heavy Docker audit is intentionally separate from `verify:release`. It accepts runtime auth cookies or `DOCMOST_ADMIN_EMAIL`/`DOCMOST_ADMIN_PASSWORD`, temporarily recreates the application container and mutates MCP settings, then restores settings/environment and removes its synthetic containers and records. See `apps/client/e2e/ai-external-mcp/README.md`.

@@ -6,6 +6,7 @@ import { createInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { ImagePreviewModal } from "../../src/features/editor/components/common/image-preview-modal";
 import { MermaidDiagram } from "../../src/features/editor/components/common/mermaid-diagram";
+import { MediaLightbox } from "../../src/features/attachments/components/media-lightbox";
 
 const params = new URLSearchParams(location.search);
 const [en, ru] = await Promise.all([
@@ -22,10 +23,43 @@ const svg =
 
 export function Preview() {
   const [kind, setKind] = useState<string | null>(null);
+  const [mediaIndex, setMediaIndex] = useState(-1);
   return (
     <>
       <button onClick={() => setKind("image")}>Open image</button>
       <button onClick={() => setKind("svg")}>Open SVG</button>
+      <button onClick={() => setMediaIndex(0)}>Open gallery</button>
+      <MediaLightbox
+        files={[
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            fileName: "gallery.png",
+            mimeType: "image/png",
+            fileExt: ".png",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            fileName: "gallery.wav",
+            mimeType: "audio/wav",
+            fileExt: ".wav",
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            fileName: "gallery.webm",
+            mimeType: "video/webm",
+            fileExt: ".webm",
+          },
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            fileName: "gallery.pdf",
+            mimeType: "application/pdf",
+            fileExt: ".pdf",
+          },
+        ]}
+        index={mediaIndex}
+        onChange={setMediaIndex}
+        onClose={() => setMediaIndex(-1)}
+      />
       <MermaidDiagram
         source={"flowchart LR\n A[Start] --> B[Detailed diagram] --> C[End]"}
         accessibleName="Mermaid diagram"

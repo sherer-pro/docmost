@@ -3157,5 +3157,13 @@
     "author": "Autor",
     "titleOnly": "Nur Titel durchsuchen",
     "labelsAny": "Beliebiges ausgewähltes Label"
+  },
+  "attachmentGallery": {
+    "noPreview": "Für dieses Format ist keine Vorschau verfügbar.",
+    "loadFailed": "Anhänge konnten nicht geladen werden.",
+    "deleteConfirm": "„{{name}}“ löschen? Dateien mit Verweisen in Dokumenten oder im Verlauf können nicht gelöscht werden.",
+    "goToUsage": "Zur Verwendung",
+    "unused": "Auf dieser Seite nicht verwendet",
+    "inUse": "Die Datei wird noch in Dokumenten, Datenbanken oder im Verlauf verwendet. Löschen wurde abgelehnt."
   }
 }

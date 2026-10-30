@@ -12,6 +12,8 @@ import { AttachmentContentService } from './services/attachment-content.service'
 import { ShareModule } from '../share/share.module';
 import { AttachmentCleanupService } from './services/attachment-cleanup.service';
 import { ATTACHMENT_CLEANUP_HANDLER } from '../../integrations/queue/outbox/queue-outbox.types';
+import { PageAttachmentsController } from './page-attachments.controller';
+import { PageAttachmentsService } from './services/page-attachments.service';
 
 @Module({
   imports: [
@@ -21,9 +23,14 @@ import { ATTACHMENT_CLEANUP_HANDLER } from '../../integrations/queue/outbox/queu
     TokenModule,
     ShareModule,
   ],
-  controllers: [AttachmentController, LegacyFilesController],
+  controllers: [
+    AttachmentController,
+    LegacyFilesController,
+    PageAttachmentsController,
+  ],
   providers: [
     AttachmentService,
+    PageAttachmentsService,
     AttachmentContentService,
     AttachmentProcessor,
     AttachmentFileAccessService,

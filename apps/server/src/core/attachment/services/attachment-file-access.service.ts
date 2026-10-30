@@ -31,6 +31,14 @@ const trustedInlineMimeTypesByExtension: Record<string, string[]> = {
   '.pdf': ['application/pdf'],
   '.mp4': ['video/mp4'],
   '.mov': ['video/quicktime'],
+  '.gif': ['image/gif'],
+  '.webp': ['image/webp'],
+  '.avif': ['image/avif'],
+  '.mp3': ['audio/mpeg'],
+  '.wav': ['audio/wav', 'audio/x-wav'],
+  '.ogg': ['audio/ogg', 'video/ogg', 'application/ogg'],
+  '.m4a': ['audio/mp4', 'audio/x-m4a'],
+  '.webm': ['video/webm', 'audio/webm'],
 };
 
 const dangerousDownloadMimeTypes = new Set([

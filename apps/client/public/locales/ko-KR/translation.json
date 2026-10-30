@@ -3157,5 +3157,13 @@
     "author": "작성자",
     "titleOnly": "제목만 검색",
     "labelsAny": "선택한 레이블 중 하나"
+  },
+  "attachmentGallery": {
+    "noPreview": "이 형식은 미리 볼 수 없습니다.",
+    "loadFailed": "첨부 파일을 불러오지 못했습니다.",
+    "deleteConfirm": "“{{name}}”을 삭제할까요? 문서나 기록에서 사용하는 파일은 삭제할 수 없습니다.",
+    "goToUsage": "사용 위치로 이동",
+    "unused": "이 페이지에서 사용하지 않음",
+    "inUse": "문서, 데이터베이스 또는 기록에서 사용 중이므로 삭제할 수 없습니다."
   }
 }

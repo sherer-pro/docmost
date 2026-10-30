@@ -3157,5 +3157,13 @@
     "author": "Author",
     "titleOnly": "Search titles only",
     "labelsAny": "Match any selected label"
+  },
+  "attachmentGallery": {
+    "noPreview": "This format has no preview.",
+    "loadFailed": "Attachments could not be loaded.",
+    "deleteConfirm": "Delete “{{name}}”? Files referenced by documents or history cannot be deleted.",
+    "goToUsage": "Go to usage",
+    "unused": "Not used on this page",
+    "inUse": "The file is still referenced by documents, databases or history. Deletion was refused."
   }
 }

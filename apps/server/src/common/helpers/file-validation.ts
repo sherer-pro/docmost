@@ -16,6 +16,14 @@ const SIGNATURE_RULES: Record<string, string[]> = {
   '.pdf': ['pdf'],
   '.mp4': ['mp4'],
   '.mov': ['mov'],
+  '.gif': ['gif'],
+  '.webp': ['webp'],
+  '.avif': ['avif'],
+  '.mp3': ['mp3'],
+  '.wav': ['wav'],
+  '.ogg': ['ogg'],
+  '.m4a': ['m4a'],
+  '.webm': ['webm'],
 };
 
 /**
@@ -152,9 +160,13 @@ export function detectFileTypeFromBuffer(
     }
   }
 
-  if (fileBuffer.length >= 8) {
+  if (fileBuffer.length >= 12) {
     if (fileBuffer.toString('ascii', 4, 8) === 'ftyp') {
       const majorBrand = fileBuffer.toString('ascii', 8, 12);
+      if (['avif', 'avis'].includes(majorBrand))
+        return { ext: 'avif', mime: 'image/avif' };
+      if (['M4A ', 'M4B '].includes(majorBrand))
+        return { ext: 'm4a', mime: 'audio/mp4' };
       if (majorBrand === 'qt  ') {
         return { ext: 'mov', mime: 'video/quicktime' };
       }
@@ -162,6 +174,15 @@ export function detectFileTypeFromBuffer(
       return { ext: 'mp4', mime: 'video/mp4' };
     }
 
+    if (fileBuffer.toString('ascii', 0, 4) === 'RIFF') {
+      if (fileBuffer.toString('ascii', 8, 12) === 'WEBP')
+        return { ext: 'webp', mime: 'image/webp' };
+      if (fileBuffer.toString('ascii', 8, 12) === 'WAVE')
+        return { ext: 'wav', mime: 'audio/wav' };
+    }
+  }
+
+  if (fileBuffer.length >= 8) {
     // PNG signature
     if (
       fileBuffer[0] === 0x89 &&
@@ -178,6 +199,22 @@ export function detectFileTypeFromBuffer(
   }
 
   if (fileBuffer.length >= 3) {
+    if (['GIF87a', 'GIF89a'].includes(fileBuffer.toString('ascii', 0, 6)))
+      return { ext: 'gif', mime: 'image/gif' };
+    if (fileBuffer.toString('ascii', 0, 4) === 'OggS')
+      return { ext: 'ogg', mime: 'audio/ogg' };
+    if (
+      fileBuffer.toString('ascii', 0, 3) === 'ID3' ||
+      (fileBuffer[0] === 0xff &&
+        (fileBuffer[1] & 0xe0) === 0xe0 &&
+        (fileBuffer[1] & 0x06) !== 0)
+    )
+      return { ext: 'mp3', mime: 'audio/mpeg' };
+    if (
+      fileBuffer.subarray(0, 4).equals(Buffer.from('1a45dfa3', 'hex')) &&
+      fileBuffer.includes(Buffer.from('webm'))
+    )
+      return { ext: 'webm', mime: 'video/webm' };
     // JPEG starts with FF D8 FF
     if (
       fileBuffer[0] === 0xff &&

@@ -138,15 +138,18 @@ test("live subpage order is saved without changing the page tree order", async (
     "Alpha child",
   ]);
   await expect
-    .poll(async () => {
-      const pageData = await api(
-        page.request,
-        `/pages/info?pageId=${fixture.searchPage.id}`,
-      );
-      return pageData.content.content.find(
-        (node: any) => node.type === "subpages",
-      )?.attrs.sort;
-    }, {timeout: 55000})
+    .poll(
+      async () => {
+        const pageData = await api(
+          page.request,
+          `/pages/info?pageId=${fixture.searchPage.id}`,
+        );
+        return pageData.content.content.find(
+          (node: any) => node.type === "subpages",
+        )?.attrs.sort;
+      },
+      { timeout: 55000 },
+    )
     .toBe("manual");
   await page.reload();
   await expect(
@@ -155,6 +158,83 @@ test("live subpage order is saved without changing the page tree order", async (
       .getByRole("link"),
   ).toHaveText(["Zulu child", "Alpha child"]);
 });
+
+for (const theme of ["light", "dark"])
+  for (const width of [1440, 390])
+    test(`live attachment gallery keeps its context ${theme} ${width}`, async ({
+      page,
+    }, info) => {
+      await page.addInitScript(
+        (value) => localStorage.setItem("mantine-color-scheme-value", value),
+        theme,
+      );
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(fixture.gallery.route);
+      if (width < 600) {
+        await page
+          .getByRole("button", { name: "Open menu", exact: true })
+          .click();
+        await page
+          .getByRole("menuitem", { name: "Page details", exact: true })
+          .click();
+      } else {
+        await page
+          .getByRole("button", { name: "Page details", exact: true })
+          .click();
+      }
+      const details = page.getByRole("dialog", {
+        name: "Page details",
+        exact: true,
+      });
+      await details
+        .getByRole("tab", { name: "Attachments", exact: true })
+        .click();
+      await expect(
+        details.getByRole("button", { name: "01-gallery.png", exact: true }),
+      ).toBeVisible();
+      await expect(
+        details.getByText("private-filename-must-not-leak.txt", {
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await details
+        .getByRole("button", { name: "01-gallery.png", exact: true })
+        .click();
+      const preview = page.getByRole("dialog", {
+        name: "01-gallery.png",
+        exact: true,
+      });
+      await expect(
+        preview.getByRole("img", { name: "01-gallery.png", exact: true }),
+      ).toBeVisible();
+      await preview
+        .getByRole("button", { name: "Zoom in", exact: true })
+        .click();
+      await expect(preview.locator("output")).toHaveText("125%");
+      await preview.getByRole("button", { name: "Next", exact: true }).click();
+      await expect(
+        page.getByRole("dialog", { name: "02-historical.txt", exact: true }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(
+        page.getByRole("dialog", { name: "02-historical.txt", exact: true }),
+      ).toHaveCount(0);
+      await expect(details).toBeVisible();
+      await details
+        .getByRole("textbox", { name: "Search", exact: true })
+        .fill("gallery");
+      await expect(
+        details.getByRole("button", { name: "02-historical.txt", exact: true }),
+      ).toHaveCount(0);
+      await page.screenshot({
+        path: info.outputPath("attachment-gallery.png"),
+      });
+      await details
+        .getByRole("button", { name: "Go to usage", exact: true })
+        .click();
+      await expect(details).toHaveCount(0);
+      await expect(page.locator(".tiptap img").first()).toBeInViewport();
+    });
 
 test("live record drawer preserves table context and supports direct links", async ({
   page,

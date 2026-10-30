@@ -19,6 +19,9 @@ interface ImagePreviewModalProps {
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
+  toolbar?: ReactNode;
+  zoomable?: boolean;
+  previewKey?: string;
 }
 
 export function ImagePreviewModal({
@@ -26,6 +29,9 @@ export function ImagePreviewModal({
   onClose,
   title,
   children,
+  toolbar,
+  zoomable = true,
+  previewKey,
 }: ImagePreviewModalProps) {
   const { t } = useTranslation();
 
@@ -45,7 +51,16 @@ export function ImagePreviewModal({
         body: classes.body,
       }}
     >
-      {opened && <ZoomablePreview>{children}</ZoomablePreview>}
+      {opened && (
+        <>
+          {toolbar}
+          {zoomable ? (
+            <ZoomablePreview key={previewKey}>{children}</ZoomablePreview>
+          ) : (
+            <div key={previewKey}>{children}</div>
+          )}
+        </>
+      )}
     </Modal>
   );
 }

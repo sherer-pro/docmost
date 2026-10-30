@@ -3157,5 +3157,13 @@
     "author": "Autor",
     "titleOnly": "Pesquisar apenas nos títulos",
     "labelsAny": "Qualquer um dos rótulos selecionados"
+  },
+  "attachmentGallery": {
+    "noPreview": "Este formato não tem prévia.",
+    "loadFailed": "Não foi possível carregar os anexos.",
+    "deleteConfirm": "Excluir “{{name}}”? Arquivos usados em documentos ou no histórico não podem ser excluídos.",
+    "goToUsage": "Ir para o uso",
+    "unused": "Não usado nesta página",
+    "inUse": "O arquivo ainda é usado em documentos, bases ou no histórico. A exclusão foi recusada."
   }
 }

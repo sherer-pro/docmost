@@ -59,7 +59,7 @@ and reconciliation count mismatches.
 
 Run Typesense as a separate container on the same private Compose network, not
 inside the Docmost application container. Keep port `8108` private unless an
-operator explicitly needs host access. Put a long random key in a root-owned
+operator explicitly needs host access. Put a long random key in a secret
 file below a root-owned mode `0700` directory, make it readable by the
 non-root container process without making that directory traversable to host
 users, point `TYPESENSE_SECRET_FILE` at its absolute host path, and set:
@@ -78,6 +78,15 @@ filesystem, drops all capabilities, rotates logs, and caps Typesense at 512 MiB,
 one CPU, and 256 processes. The explicit eight-thread pool keeps that PID cap
 portable to hosts with a high visible CPU count. Do not force an arbitrary
 numeric UID until the official image has been tested against the real data volume.
+
+The application image runs as UID `1000`, while the pinned Typesense image
+starts as UID `0` with all capabilities dropped. A secret owned by `1000:0`
+with mode `0600` is unreadable by Typesense: UID 0 cannot bypass file permissions
+without `CAP_DAC_OVERRIDE`. For this pair of images, use owner `1000:0`, mode
+`0640`, and retain a root-owned mode `0700` parent directory. Verify read access
+from both containers before opening ingress. Compose file-backed secrets retain
+the host file's ownership and permissions; a secret's `mode` setting does not
+repair a bind-mounted source file (see the [Compose secrets specification](https://docs.docker.com/reference/compose-file/services/#secrets)). Never print the key when checking access.
 
 The canonical overlay contains:
 

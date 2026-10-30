@@ -42,6 +42,7 @@ import { IPage } from "@/features/page/types/page.types";
 import { formattedDate } from "@/lib/time";
 import { useSearchLabelsQuery } from "@/features/search/queries/search-query";
 import { getPageIcon } from "@/lib/utils";
+import { PageAttachmentsGallery } from "@/features/attachments/components/page-attachments-gallery";
 
 interface PageDetailsModalProps {
   pageId: string;
@@ -126,6 +127,7 @@ export default function PageDetailsModal({
   readOnly,
 }: PageDetailsModalProps) {
   const { t } = useTranslation();
+  const [attachmentOverlayOpen, setAttachmentOverlayOpen] = useState(false);
   const { data: labels, isLoading: labelsLoading } = usePageLabelsQuery(
     pageId,
     open,
@@ -158,6 +160,8 @@ export default function PageDetailsModal({
       radius="md"
       overlayProps={{ backgroundOpacity: 0.45, blur: 2 }}
       closeButtonProps={{ "aria-label": t("Close") }}
+      closeOnEscape={!attachmentOverlayOpen}
+      closeOnClickOutside={!attachmentOverlayOpen}
     >
       <Stack gap="md">
         <Paper withBorder radius="md" p="md">
@@ -251,6 +255,7 @@ export default function PageDetailsModal({
         >
           <Tabs.List grow>
             <Tabs.Tab value="overview">{t("Overview")}</Tabs.Tab>
+            <Tabs.Tab value="attachments">{t("Attachments")}</Tabs.Tab>
             <Tabs.Tab value="incoming">
               {t("Incoming")} ({counts?.incoming ?? 0})
             </Tabs.Tab>
@@ -373,6 +378,33 @@ export default function PageDetailsModal({
           </Tabs.Panel>
           <Tabs.Panel value="outgoing" pt="md">
             <BacklinkList pageId={pageId} direction="outgoing" open={open} />
+          </Tabs.Panel>
+          <Tabs.Panel value="attachments" pt="md">
+            <PageAttachmentsGallery
+              pageId={pageId}
+              opened={open}
+              onOverlayOpenChange={setAttachmentOverlayOpen}
+              onGoToUsage={(file) => {
+                onClose();
+                setTimeout(() => {
+                  const blockId = file.usages.find(Boolean);
+                  const element =
+                    (blockId
+                      ? (document.getElementById(blockId) ??
+                        document.querySelector(
+                          `[data-id="${CSS.escape(blockId)}"]`,
+                        ))
+                      : null) ??
+                    document.querySelector(
+                      `[src*="/${file.id}/"],a[href*="/${file.id}/"]`,
+                    );
+                  element?.scrollIntoView({
+                    block: "center",
+                    behavior: "smooth",
+                  });
+                }, 200);
+              }}
+            />
           </Tabs.Panel>
         </Tabs>
       </Stack>

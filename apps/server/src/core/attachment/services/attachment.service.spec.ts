@@ -65,10 +65,7 @@ describe('AttachmentService spoof validation', () => {
   });
 
   it('uploadFile rejects pdf extension with png signature', async () => {
-    const pngBuffer = Buffer.from(
-      '89504e470d0a1a0a0000000d49484452',
-      'hex',
-    );
+    const pngBuffer = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
     const filePromise = Promise.resolve({
       filename: 'document.pdf',
@@ -303,6 +300,31 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
     expect(attachmentRepo.deleteAttachmentByFilePath).toHaveBeenCalledWith(
       expect.stringMatching(/^workspace-id\/files\/[^/]+\/diagram\.drawio$/),
     );
+  });
+
+  it('cleans the newly uploaded path when concurrent removal wins the metadata update', async () => {
+    attachmentRepo.findById.mockResolvedValue({
+      id: 'attachment-id',
+      workspaceId: 'workspace-id',
+      pageId: 'page-id',
+      fileExt: '.drawio',
+      filePath: 'workspace-id/files/attachment-id/old.drawio',
+    });
+    attachmentRepo.updateAttachment.mockResolvedValueOnce(undefined);
+    await expect(
+      service.uploadFile({
+        filePromise: Promise.resolve({} as any),
+        attachmentId: 'attachment-id',
+        pageId: 'page-id',
+        userId: 'user-id',
+        spaceId: 'space-id',
+        workspaceId: 'workspace-id',
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(storageService.delete).toHaveBeenCalledWith(
+      'workspace-id/files/attachment-id/diagram.drawio',
+    );
+    expect(searchQueue.add).not.toHaveBeenCalled();
   });
 
   it('keeps a persisted upload when indexing queueing fails', async () => {

@@ -3157,5 +3157,13 @@
     "author": "Auteur",
     "titleOnly": "Rechercher uniquement dans les titres",
     "labelsAny": "Une des étiquettes sélectionnées"
+  },
+  "attachmentGallery": {
+    "noPreview": "Aucun aperçu pour ce format.",
+    "loadFailed": "Impossible de charger les pièces jointes.",
+    "deleteConfirm": "Supprimer « {{name}} » ? Les fichiers utilisés dans les documents ou l’historique ne peuvent pas être supprimés.",
+    "goToUsage": "Voir l’utilisation",
+    "unused": "Non utilisé sur cette page",
+    "inUse": "Le fichier est encore utilisé dans des documents, des bases ou l’historique. Suppression refusée."
   }
 }

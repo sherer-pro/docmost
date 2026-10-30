@@ -3157,5 +3157,13 @@
     "author": "Auteur",
     "titleOnly": "Alleen titels doorzoeken",
     "labelsAny": "Een van de geselecteerde labels"
+  },
+  "attachmentGallery": {
+    "noPreview": "Geen voorbeeld voor dit formaat.",
+    "loadFailed": "Bijlagen konden niet worden geladen.",
+    "deleteConfirm": "“{{name}}” verwijderen? Bestanden die in documenten of geschiedenis worden gebruikt, kunnen niet worden verwijderd.",
+    "goToUsage": "Ga naar gebruik",
+    "unused": "Niet gebruikt op deze pagina",
+    "inUse": "Het bestand wordt nog gebruikt in documenten, databases of geschiedenis. Verwijderen geweigerd."
   }
 }

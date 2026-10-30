@@ -18,4 +18,12 @@ export const inlineFileExtensions = [
   '.pdf',
   '.mp4',
   '.mov',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.m4a',
+  '.webm',
 ];

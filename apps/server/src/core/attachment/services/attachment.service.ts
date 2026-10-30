@@ -152,6 +152,8 @@ export class AttachmentService {
           },
           attachmentId,
         );
+        if (!attachment)
+          throw new NotFoundException('Attachment was removed during upload');
       } else {
         attachment = await this.saveAttachment({
           attachmentId,
@@ -424,9 +426,7 @@ export class AttachmentService {
 
     let staged = false;
     await executeTx(this.db, async (trx) => {
-      let query = trx
-        .selectFrom('attachments')
-        .select(['id', 'workspaceId']);
+      let query = trx.selectFrom('attachments').select(['id', 'workspaceId']);
       if (scopeType === 'page') {
         query = query.where('pageId', '=', scopeId);
       } else if (scopeType === 'space') {

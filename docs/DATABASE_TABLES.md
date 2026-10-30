@@ -99,6 +99,10 @@ The live runner also accepts `--subnet=10.x.x.0/28` for an unused private
 Docker subnet when the daemon's default address pools are exhausted. Check
 existing network ranges before choosing it. The argument is consumed by the
 runner and is not forwarded to Playwright.
+It copies the built API, collaboration and frontend into its own runtime before
+starting them. Later repository builds cannot replace assets served by an active
+acceptance run. Dependencies are linked from the installed workspace; no package
+installation or environment file is copied into the snapshot.
 - Required broad verification: `corepack pnpm verify:full`, route inventory, AI/fork documentation, and English comment checks.
 
 The synthetic browser fixture is test-only and is not reachable from the production application entry point. Its API stores synthetic records in memory. The live runner instead exercises the actual local application, its PostgreSQL transactions, and Redis workers.

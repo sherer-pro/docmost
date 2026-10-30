@@ -3157,5 +3157,13 @@
     "author": "作者",
     "titleOnly": "仅搜索标题",
     "labelsAny": "匹配任一所选标签"
+  },
+  "attachmentGallery": {
+    "noPreview": "此格式无法预览。",
+    "loadFailed": "无法加载附件。",
+    "deleteConfirm": "删除“{{name}}”？文档或历史记录中使用的文件无法删除。",
+    "goToUsage": "转到使用位置",
+    "unused": "本页面未使用",
+    "inUse": "此文件仍在文档、数据库或历史记录中使用，已拒绝删除。"
   }
 }
