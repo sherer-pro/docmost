@@ -74,8 +74,7 @@ export const Footnote = Node.create<{ view: any }>({
       },
       text: {
         default: '',
-        parseHTML: (element) =>
-          footnoteText(element.getAttribute('data-footnote-text')),
+        parseHTML: () => '',
         renderHTML: (attrs) => ({
           'data-footnote-text': footnoteText(attrs.text),
         }),

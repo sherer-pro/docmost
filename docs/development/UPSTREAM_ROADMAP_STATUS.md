@@ -22,16 +22,20 @@ complete; final release acceptance and CI remain pending.
   Markdown/HTML/PDF/Docmost export and archive import; block-level automatic/explicit
   text direction; workspace initial editing preference copied only to new users.
   See [document blocks](../EDITOR_BLOCKS.md).
+- Document tabs with collaborative rename/order/duplication, hidden-content search,
+  stable citation anchors, complete exports and archive import; read-only page
+  presentation with keyboard controls, long-slide scrolling, pointer and native
+  full screen. Presentation forces database embeds to read-only.
 
-The first three implementation commits are `33a86bf2`, `26d7cf6b` and `1c8bb87c`;
-the document blocks package follows them on local `main`. These packages have not been pushed or
+The first four implementation commits are `33a86bf2`, `26d7cf6b`, `1c8bb87c` and
+`f4b250be`; the tabs/presentation package follows them on local `main`. These packages have not been pushed or
 deployed as part of this task.
 
 ## Remaining required work
 
 - Finish the database record editing experience and compact view controls,
   including a collapsible long description.
-- Empty-page template selection, tabs and page presentation.
+- Empty-page template selection.
 - Database system fields, multiple participants, file properties and a bounded
   formula language with consistent query/export/AI semantics.
 - Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
@@ -79,6 +83,26 @@ Local, ignored receipts are under `artifacts/`:
   server and 9 client preference tests passed.
 - `footnote-preference-direction-build.log`: complete monorepo build passed.
 - `footnote-package-lint.log`: lint passed with the existing frontend warnings.
+- `document-blocks-final-live.log`: six footnote/tab/presentation cases passed
+  across Chromium, Firefox and WebKit, with PostgreSQL, HTTP, downloaded artifacts,
+  archive import and nested-tab rejection checks.
+- `tabs-search-subscription-fixed.log` and `editor-blocks/results.json`: both themes
+  and desktop/mobile sizes passed, including native full screen and search that
+  already exists when a tab renderer mounts.
+- `search-editor-replacement-reproduction.log` and
+  `search-editor-replacement-fixed.log`: a reproduced loss of the URL search term
+  during editor replacement now has a regression test.
+- `document-workflows-maintenance.log`: the reviewed maintenance baseline passed.
+
+## Model benchmark connection
+
+The configured production model is `gemma4:31b`. Its current HTTPS endpoint fails
+the normal pinned TLS request with `ERR_TLS_CERT_ALTNAME_INVALID`; no certificate
+checks or production settings were changed. The operator selected local LM Studio
+at `http://127.0.0.1:56254` for benchmark work. Its loaded model is
+`google/gemma-4-12b-qat`, with a loaded context of 90624 tokens. Model-list and
+runtime connectivity checks are separate from the still-pending corpus run and
+human evidence review required by `tests/rag-quality/README.md`.
 
 These receipts establish only the checks actually completed for this checkpoint;
 they do not substitute for the remaining roadmap features or final release gate.

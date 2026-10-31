@@ -70,6 +70,7 @@
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.
 - `apps/client/src/features/editor/components/tag` — inline TBD/TODO tag node view.
+- `apps/client/src/features/editor/components/{footnote,tabs,presentation}` — shared document block readers, editing controls and read-only presentation. `docs/EDITOR_BLOCKS.md` defines persistence, search, evidence, direction and export behavior. The presentation's `DocumentReadOnlyContext` also prevents embedded database editing.
 - `apps/client/src/features/editor/components/fixed-toolbar` — persistent editor toolbar shown when the user preference is enabled.
 - `apps/client/src/features/page/components/reading-time` — live page reading-time calculation, localized labels, and theme-aware indicator styling.
 - `apps/client/src/features/space/components/custom-links` — admin-managed space sidebar custom links: curated Tabler icon registry, URL safety helper, and the settings UI.

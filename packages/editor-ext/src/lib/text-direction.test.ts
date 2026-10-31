@@ -17,10 +17,10 @@ describe('block direction', () => {
         '<p dir="rtl">العربية עברית English</p>',
       );
       editor.commands.setTextSelection(1);
-      expect(editor.commands.setTextDirection('ltr')).toBe(true);
+      expect(editor.commands.setBlockTextDirection('ltr')).toBe(true);
       expect(editor.getHTML()).toContain('<p dir="ltr">Русский English</p>');
-      expect(editor.commands.setTextDirection('unsafe' as any)).toBe(false);
-      expect(editor.commands.setTextDirection('auto')).toBe(true);
+      expect(editor.commands.setBlockTextDirection('unsafe' as any)).toBe(false);
+      expect(editor.commands.setBlockTextDirection('auto')).toBe(true);
       expect(editor.getHTML()).toContain('<p dir="auto">Русский English</p>');
     } finally {
       editor.destroy();

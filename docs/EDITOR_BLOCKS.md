@@ -60,3 +60,39 @@ their existing direction. Table headings use logical start alignment.
 The isolated document-block browser fixture runs with
 `node apps/client/e2e/editor-blocks/run.mjs` and exercises mixed Russian, English,
 Arabic and Hebrew paragraphs, lists and tables in both themes and sizes.
+
+## Tabs
+
+`tabs` contains one or more `tabItem` blocks with stable IDs and a plain-text
+title. Each item holds ordinary document blocks. Creation and paste cannot nest
+tabs, including through lists or other containers; API content validation uses
+the same structural rule. No user code or remote content is evaluated.
+
+The active item is local display state. A bounded memory cache keyed by user,
+page and tabs ID preserves the choice when the static editor becomes live. It
+does not write shared state or persist document contents. Renaming checks the
+current title against the editing baseline. Add, duplicate, move and confirmed
+delete use ordinary editor transactions and support undo and collaboration.
+Keyboard navigation uses unmodified arrows/Home/End; document shortcuts such as
+Ctrl+End retain their normal behavior.
+
+All item bodies remain mounted for search. A matching hidden range or a section
+link reveals its item. The item title is a canonical level-3 section with the
+item's stable ID, so AI citations and heading links can reach inactive content.
+Text, AI/RAG evidence and HTML/Markdown/PDF exports include every item, regardless
+of the current selection. HTML/PDF expand all items; Docmost archives retain the
+block structure. The reader extensions remain registered when creation is disabled.
+
+## Presentation
+
+The page action menu captures the current owned editor JSON, falling back to the
+loaded page content. Headings, horizontal rules and page breaks split the copy
+into slides. Only the current slide is rendered, with ordinary read-only block
+readers. Comment marks are removed from the copy, preserving the source data.
+Long slides scroll instead of shrinking or clipping text.
+
+Arrow keys, PageUp/PageDown, Home/End and Space navigate. Tabs and media retain
+their own keyboard controls. The viewer offers a pointer and browser full-screen
+mode where supported. It uses no page-editor atoms and never attaches a write
+collaboration provider. Embedded database controls are forced read-only even
+when the user can edit the source database; source ACL checks remain independent.

@@ -1643,11 +1643,12 @@
             "step4": "Controleer op een telefoon met het toetsenbord open Chat en Agent, de schakelaar voor zoeken in de ruimte, de voettekst en het berichtveld",
             "step5": "Wissel tussen een document en de ruimte-instellingen en gebruik Terug/Vooruit; de assistent moet de titel van het huidige document gebruiken.",
             "step6": "Selecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af.",
-            "step7": "Controleer voetnoten volgens dezelfde bron- en toegangsregels als de hoofdtekst."
+            "step7": "Controleer voetnoten volgens dezelfde bron- en toegangsregels als de hoofdtekst.",
+            "step8": "Neem inhoud uit inactieve documenttabbladen mee bij het controleren van een antwoord."
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
-          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan.\n\nSelecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.\n\nEen beheerder moet databasefuncties expliciet inschakelen. Resultaten en voorbeelden worden verborgen als brontoegang wordt ingetrokken. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nVoetnoottekst (footnote) telt als documentinhoud. Externe verwijzingen worden niet automatisch opgehaald of gecontroleerd en toegangsrechten blijven behouden."
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan.\n\nSelecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.\n\nEen beheerder moet databasefuncties expliciet inschakelen. Resultaten en voorbeelden worden verborgen als brontoegang wordt ingetrokken. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nVoetnoottekst (footnote) telt als documentinhoud. Externe verwijzingen worden niet automatisch opgehaald of gecontroleerd en toegangsrechten blijven behouden.\n\nInhoud en titels van alle tabs/tabItem horen bij het documentbewijs. Het actieve tabblad is lokale weergavestatus; selecteren beperkt AI/RAG-bewijs niet en geeft geen toegang tot bronnen."
         },
         "retrieval": {
           "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",
@@ -3168,7 +3169,27 @@
     "inUse": "Het bestand wordt nog gebruikt in documenten, databases of geschiedenis. Verwijderen geweigerd."
   },
   "docBlocks": {
-    "direction": {"auto":"Automatische richting","ltr":"Van links naar rechts","rtl":"Van rechts naar links"},
+    "presentation": "Pagina presenteren",
+    "slideNumber": "Dia {{number}} van {{total}}",
+    "previousSlide": "Vorige dia",
+    "nextSlide": "Volgende dia",
+    "pointer": "Aanwijzer",
+    "fullscreen": "Volledig scherm",
+    "tabs": "Tabbladen",
+    "tabsDescription": "Documentinhoud in tabbladen groeperen",
+    "tabNumber": "Tabblad {{number}}",
+    "addTab": "Tabblad toevoegen",
+    "tabActions": "Tabbladacties",
+    "moveTabLeft": "Naar links verplaatsen",
+    "moveTabRight": "Naar rechts verplaatsen",
+    "deleteTab": "Tabblad verwijderen",
+    "deleteTabDescription": "Het tabblad en de inhoud worden verwijderd.",
+    "tabChanged": "Dit tabblad is gewijzigd. Open het hernoemen opnieuw.",
+    "direction": {
+      "auto": "Automatische richting",
+      "ltr": "Van links naar rechts",
+      "rtl": "Van rechts naar links"
+    },
     "directionDescription": "Stel de richting van het huidige tekstblok in",
     "initialEditMode": "Eerste bewerkingsmodus voor nieuwe gebruikers",
     "initialEditModeDescription": "Wordt gekopieerd bij het aanmaken van een account. Bestaande voorkeuren en paginakeuzes blijven behouden.",

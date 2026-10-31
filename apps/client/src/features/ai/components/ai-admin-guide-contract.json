@@ -1,5 +1,5 @@
 {
-  "version": 30,
+  "version": 31,
   "anchors": [
     "assistant",
     "retrieval",
@@ -153,6 +153,13 @@
       "key": "scenario.assistant.technical",
       "needles": [
         "footnote"
+      ]
+    },
+    {
+      "id": "all-tabs-document-evidence",
+      "key": "scenario.assistant.technical",
+      "needles": [
+        "tabs/tabItem"
       ]
     }
   ],
@@ -336,6 +343,7 @@
     "troubleshooting.title",
     "scenario.retrieval.steps.step4",
     "scenario.assistant.steps.step6",
-    "scenario.assistant.steps.step7"
+    "scenario.assistant.steps.step7",
+    "scenario.assistant.steps.step8"
   ]
 }

@@ -1643,11 +1643,12 @@
             "step4": "En un teléfono, compruebe Chat y Agent, el interruptor de búsqueda del espacio, el pie y el campo de mensaje con el teclado abierto",
             "step5": "Cambie entre un documento y los ajustes del espacio y use Atrás/Adelante; el asistente debe usar el título del documento actual.",
             "step6": "Seleccione una vista y, si lo necesita, filas. Use Agent para consultar registros o calcular totales. Revise cada cambio antes de aprobarlo. Cada propuesta admite 20 filas, 100 celdas y 32 KiB como máximo; un conflicto de revisión rechaza la fila afectada.",
-            "step7": "Revise las notas con las mismas reglas de fuentes y acceso que el texto principal."
+            "step7": "Revise las notas con las mismas reglas de fuentes y acceso que el texto principal.",
+            "step8": "Incluya el contenido de las pestañas inactivas al comprobar una respuesta."
           },
           "success": "Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir",
           "rollback": "Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida",
-          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales. La proyección de conocimiento compartida añade a la búsqueda de AI y al contexto de herramientas los campos de documento y personalizados habilitados, las propiedades y celdas de base de datos con nombre y los términos activos del diccionario (`dictionary_term`). El contrato seleccionado `AI_ASSISTANT_PROFILE_ICONS` ofrece {{profileIconCount}} opciones de icono localizadas que se muestran de forma coherente en el editor de perfiles y el panel de chat. La selección de archivos del chat sigue activa tras cerrar el menú Añadir: el archivo elegido se carga o se muestra un error de validación. Los hashes de aprobación de Agent incluyen los atributos predeterminados del editor y la normalización de Yjs antes de aplicar el cambio. Se rechaza el campo text en nodos no textuales antes de la aprobación; el texto del párrafo debe estar en nodos de texto hijos.\n\nSeleccione una vista y, si lo necesita, filas. Use Agent para consultar registros o calcular totales. Revise cada cambio antes de aprobarlo. Cada propuesta admite 20 filas, 100 celdas y 32 KiB como máximo; un conflicto de revisión rechaza la fila afectada. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exigir pruebas de páginas, archivos o resultados de herramientas accesibles. Los espacios y perfiles no pueden reducir las restricciones del espacio de trabajo.\n\nUn administrador debe habilitar las capacidades de base de datos. Los resultados y vistas previas se ocultan al revocar el acceso. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nEl texto de las notas (footnote) se incluye como contenido del documento. No se consultan ni verifican referencias externas ni se amplían permisos."
+          "technical": "El asistente integrado ejecuta chats privados vinculados a páginas mediante el proveedor configurado para cada espacio. La configuración del espacio muestra el uso de solicitudes y tokens de hoy y de los últimos 7 días. El modo Agent puede invocar herramientas de Docmost aprobadas y solo aplica cambios en las páginas después de que los confirme el usuario que los inició. Justo antes de aplicar un cambio, el servidor vuelve a comprobar el acceso de escritura a la página actual y las políticas de herramientas de los niveles deployment, workspace, space, profile y group. El editor de perfiles del espacio muestra nombres de herramientas localizados y recibe la política efectiva de sustitución del modelo mediante la lista de perfiles del espacio; solo los administradores del espacio de trabajo pueden cambiar los interruptores principales. La proyección de conocimiento compartida añade a la búsqueda de AI y al contexto de herramientas los campos de documento y personalizados habilitados, las propiedades y celdas de base de datos con nombre y los términos activos del diccionario (`dictionary_term`). El contrato seleccionado `AI_ASSISTANT_PROFILE_ICONS` ofrece {{profileIconCount}} opciones de icono localizadas que se muestran de forma coherente en el editor de perfiles y el panel de chat. La selección de archivos del chat sigue activa tras cerrar el menú Añadir: el archivo elegido se carga o se muestra un error de validación. Los hashes de aprobación de Agent incluyen los atributos predeterminados del editor y la normalización de Yjs antes de aplicar el cambio. Se rechaza el campo text en nodos no textuales antes de la aprobación; el texto del párrafo debe estar en nodos de texto hijos.\n\nSeleccione una vista y, si lo necesita, filas. Use Agent para consultar registros o calcular totales. Revise cada cambio antes de aprobarlo. Cada propuesta admite 20 filas, 100 celdas y 32 KiB como máximo; un conflicto de revisión rechaza la fila afectada. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exigir pruebas de páginas, archivos o resultados de herramientas accesibles. Los espacios y perfiles no pueden reducir las restricciones del espacio de trabajo.\n\nUn administrador debe habilitar las capacidades de base de datos. Los resultados y vistas previas se ocultan al revocar el acceso. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nEl texto de las notas (footnote) se incluye como contenido del documento. No se consultan ni verifican referencias externas ni se amplían permisos.\n\nEl contenido y los títulos de todos los tabs/tabItem son evidencia del documento. La pestaña activa es un estado local de visualización; seleccionarla no limita la evidencia de AI/RAG ni concede acceso a fuentes."
         },
         "retrieval": {
           "description": "La búsqueda del espacio se ejecuta mientras se genera una respuesta.",
@@ -3168,7 +3169,27 @@
     "inUse": "El archivo sigue en uso en documentos, bases de datos o en el historial. Se rechazó la eliminación."
   },
   "docBlocks": {
-    "direction": {"auto":"Dirección automática","ltr":"De izquierda a derecha","rtl":"De derecha a izquierda"},
+    "presentation": "Presentar página",
+    "slideNumber": "Diapositiva {{number}} de {{total}}",
+    "previousSlide": "Diapositiva anterior",
+    "nextSlide": "Diapositiva siguiente",
+    "pointer": "Puntero",
+    "fullscreen": "Pantalla completa",
+    "tabs": "Pestañas",
+    "tabsDescription": "Agrupar el contenido del documento en pestañas",
+    "tabNumber": "Pestaña {{number}}",
+    "addTab": "Añadir pestaña",
+    "tabActions": "Acciones de pestaña",
+    "moveTabLeft": "Mover a la izquierda",
+    "moveTabRight": "Mover a la derecha",
+    "deleteTab": "Eliminar pestaña",
+    "deleteTabDescription": "Se eliminarán la pestaña y su contenido.",
+    "tabChanged": "Esta pestaña cambió. Abra de nuevo el cambio de nombre.",
+    "direction": {
+      "auto": "Dirección automática",
+      "ltr": "De izquierda a derecha",
+      "rtl": "De derecha a izquierda"
+    },
     "directionDescription": "Establecer la dirección del bloque de texto actual",
     "initialEditMode": "Modo inicial del editor para nuevos usuarios",
     "initialEditModeDescription": "Se copia al crear la cuenta. Se conservan las preferencias existentes y las opciones de cada página.",

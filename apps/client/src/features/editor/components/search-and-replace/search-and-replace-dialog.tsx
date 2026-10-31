@@ -197,6 +197,8 @@ function SearchAndReplaceDialog({
       ?.trim()
       .slice(0, 512);
     if (!term || !canSearch()) return;
+    editor.commands.setSearchTerm(term);
+    editor.commands.resetIndex();
     setSearchText(term);
     setPageFindState({ isOpen: true });
     let revealed = false;

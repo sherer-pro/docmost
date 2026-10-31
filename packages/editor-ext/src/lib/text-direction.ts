@@ -1,19 +1,24 @@
 import { Extension } from '@tiptap/core';
 
 export type TextDirectionValue = 'auto' | 'ltr' | 'rtl';
+export const BLOCK_DIRECTION_EXPORT_STYLES = `
+li[dir="auto"]:has(> p:first-child:dir(rtl)),
+li[dir="auto"]:has(> div > p:first-child:dir(rtl)) { direction: rtl; }
+th { text-align: start; }
+`;
 export const textDirectionValue = (value: unknown): TextDirectionValue =>
   value === 'ltr' || value === 'rtl' ? value : 'auto';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
-    textDirection: {
-      setTextDirection: (direction: TextDirectionValue) => ReturnType;
+    blockTextDirection: {
+      setBlockTextDirection: (direction: TextDirectionValue) => ReturnType;
     };
   }
 }
 
 export const TextDirection = Extension.create({
-  name: 'textDirection',
+  name: 'blockTextDirection',
   addOptions() {
     return {
       types: [
@@ -44,7 +49,7 @@ export const TextDirection = Extension.create({
   },
   addCommands() {
     return {
-      setTextDirection:
+      setBlockTextDirection:
         (direction) =>
         ({ tr, dispatch }) => {
           if (!['auto', 'ltr', 'rtl'].includes(direction)) return false;

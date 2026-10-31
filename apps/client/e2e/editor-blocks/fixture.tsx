@@ -12,6 +12,7 @@ import { EditorProvider, useCurrentEditor } from "@tiptap/react";
 import { UndoRedo } from "@tiptap/extensions";
 import { mainExtensions } from "@/features/editor/extensions/extensions";
 import { Footnotes } from "@/features/editor/components/footnote/footnotes";
+import PresentationModal from "@/features/editor/components/presentation/presentation-modal";
 
 const i18n = createInstance();
 await i18n.init({
@@ -27,19 +28,115 @@ await i18n.init({
 function Controls() {
   const { editor } = useCurrentEditor();
   const [term, setTerm] = useState("");
+  const [presenting, setPresenting] = useState(false);
   return (
     <Group>
+      <Button onClick={() => setPresenting(true)}>Present fixture</Button>
+      {presenting && (
+        <PresentationModal
+          title="Presentation fixture"
+          onClose={() => setPresenting(false)}
+          content={{
+            type: "doc",
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 1 },
+                content: [{ type: "text", text: "First slide" }],
+              },
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: "Commented source text",
+                    marks: [
+                      {
+                        type: "comment",
+                        attrs: { commentId: "fixture-thread" },
+                      },
+                    ],
+                  },
+                ],
+              },
+              { type: "horizontalRule" },
+              {
+                type: "heading",
+                attrs: { level: 2 },
+                content: [{ type: "text", text: "Long slide" }],
+              },
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: "Readable long content. ".repeat(1000),
+                  },
+                ],
+              },
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: "Last slide" }],
+              },
+              {
+                type: "tabs",
+                attrs: { id: "presentation-tabs" },
+                content: [
+                  {
+                    type: "tabItem",
+                    attrs: { id: "present-one", title: "One" },
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          { type: "text", text: "First presentation tab" },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    type: "tabItem",
+                    attrs: { id: "present-two", title: "Two" },
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          { type: "text", text: "Second presentation tab" },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }}
+        />
+      )}
       <Button onClick={() => editor?.commands.insertFootnote()}>
         Insert footnote
       </Button>
       <Button onClick={() => editor?.commands.undo()}>Undo</Button>
       <Button onClick={() => editor?.commands.redo()}>Redo</Button>
+      <Button
+        onClick={() => editor?.commands.setSearchTerm("Hidden tab evidence")}
+      >
+        Find hidden tab
+      </Button>
       <TextInput
         label="Find"
         value={term}
         onChange={(event) => {
           setTerm(event.currentTarget.value);
           editor?.commands.setSearchTerm(event.currentTarget.value);
+          const result = editor?.storage.searchAndReplace?.results?.[0];
+          if (result)
+            document.dispatchEvent(
+              new CustomEvent("docmost:reveal-search-match", {
+                detail: { editor, position: result.from },
+                cancelable: true,
+              }),
+            );
         }}
       />
     </Group>
@@ -64,6 +161,36 @@ createRoot(document.getElementById("root")!).render(
                 content={{
                   type: "doc",
                   content: [
+                    {
+                      type: "tabs",
+                      attrs: { id: "fixture-tabs" },
+                      content: [
+                        {
+                          type: "tabItem",
+                          attrs: { id: "tab-one", title: "Overview" },
+                          content: [
+                            {
+                              type: "paragraph",
+                              content: [
+                                { type: "text", text: "First tab body" },
+                              ],
+                            },
+                          ],
+                        },
+                        {
+                          type: "tabItem",
+                          attrs: { id: "tab-two", title: "Details" },
+                          content: [
+                            {
+                              type: "paragraph",
+                              content: [
+                                { type: "text", text: "Hidden tab evidence" },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
                     {
                       type: "paragraph",
                       content: [

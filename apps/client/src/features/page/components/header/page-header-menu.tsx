@@ -11,6 +11,7 @@ import {
   IconWifiOff,
   IconSparkles,
   IconTemplate,
+  IconPresentation,
 } from "@tabler/icons-react";
 import React, { useEffect, useRef, useState } from "react";
 import useToggleAside from "@/hooks/use-toggle-aside.tsx";
@@ -285,6 +286,10 @@ interface PageActionMenuProps {
   canMoveDeleteShare?: boolean;
   mobile?: boolean;
 }
+const PresentationModal = React.lazy(
+  () => import("@/features/editor/components/presentation/presentation-modal"),
+);
+
 function PageActionMenu({
   readOnly,
   canMoveDeleteShare,
@@ -324,6 +329,11 @@ function PageActionMenu({
     { open: openAccessModal, close: closeAccessModal },
   ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
+  const [presentation, setPresentation] = useState<{
+    content: any;
+    title: string;
+    pageId: string;
+  } | null>(null);
   const [user] = useAtom(userAtom);
   const isWorkspaceAdmin = user?.role === "owner" || user?.role === "admin";
   const canOpenAccessModal = canOpenPageAccessModal({
@@ -614,6 +624,24 @@ function PageActionMenu({
             </>
           )}
 
+          {page?.id && !page.databaseId && (
+            <Menu.Item
+              leftSection={<IconPresentation size={16} />}
+              onClick={() =>
+                setPresentation({
+                  content:
+                    (pageEditor?.storage as any)?.pageId === page.id
+                      ? pageEditor.getJSON()
+                      : page.content,
+                  title: page.title || t("Untitled"),
+                  pageId: page.id,
+                })
+              }
+            >
+              {t("docBlocks.presentation")}
+            </Menu.Item>
+          )}
+
           <DocumentCommonActionItems
             onCopyLink={handleCopyLink}
             onCopyAsMarkdown={handleCopyAsMarkdown}
@@ -750,6 +778,14 @@ function PageActionMenu({
         </Menu.Dropdown>
       </Menu>
 
+      {presentation && (
+        <React.Suspense fallback={null}>
+          <PresentationModal
+            {...presentation}
+            onClose={() => setPresentation(null)}
+          />
+        </React.Suspense>
+      )}
       <ExportModal
         type="page"
         id={page.id}

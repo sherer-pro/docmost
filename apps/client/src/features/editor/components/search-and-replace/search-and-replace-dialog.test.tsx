@@ -82,6 +82,28 @@ function mount(children: React.ReactNode) {
 }
 
 describe("search dialog editor lifecycle", () => {
+  it("reapplies the URL term when the editor is replaced while the local input is unchanged", () => {
+    const previous = editorFixture();
+    const next = editorFixture();
+    for (const editor of [previous, next])
+      editor.commands.setSearchTerm.mockImplementation((term) => {
+        editor.storage.searchAndReplace.searchTerm = term;
+      });
+    const render = (editor: typeof previous) => (
+      <MemoryRouter initialEntries={["/p/page?find=note"]}>
+        <Provider>
+          <SearchAndReplaceDialog editor={editor as any} />
+        </Provider>
+      </MemoryRouter>
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => root.render(render(previous)));
+    expect(previous.storage.searchAndReplace.searchTerm).toBe("note");
+    act(() => root.render(render(next)));
+    expect(next.storage.searchAndReplace.searchTerm).toBe("note");
+  });
   it("initializes a literal search from a result link for a read-only editor", () => {
     const editor = editorFixture();
     container = document.createElement("div");

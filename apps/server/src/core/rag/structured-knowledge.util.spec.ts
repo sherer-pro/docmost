@@ -7,6 +7,39 @@ import {
 import { fitEvidence } from './rag-evidence.util';
 
 describe('Canonical structured evidence', () => {
+  it('maps every tab title to its stable source anchor including inactive content', () => {
+    const headings = editorKnowledgeHeadings({
+      type: 'doc',
+      content: [
+        {
+          type: 'tabs',
+          content: [
+            {
+              type: 'tabItem',
+              attrs: { id: 'tab-one', title: 'Overview' },
+              content: [],
+            },
+            {
+              type: 'tabItem',
+              attrs: { id: 'tab-two', title: 'Details' },
+              content: [],
+            },
+          ],
+        },
+      ],
+    });
+    expect(headings.map((heading) => heading.id)).toEqual([
+      'tab-one',
+      'tab-two',
+    ]);
+    const sections = knowledgeSections(
+      '### Overview\n\nVisible\n\n### Details\n\nHidden evidence',
+      headings,
+    );
+    expect(
+      sections.find((section) => section.id === 'tab-two')?.markdown,
+    ).toContain('Hidden evidence');
+  });
   it('keeps heading anchors when a heading contains a footnote', () => {
     const headings = editorKnowledgeHeadings({
       type: 'doc',

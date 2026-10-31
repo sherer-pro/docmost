@@ -12,6 +12,9 @@ import {
   DatabaseEmbed,
   Footnote,
   TextDirection,
+  Tabs,
+  TabItem,
+  assertTabStructure,
   Callout,
   Comment,
   CustomCodeBlock,
@@ -61,6 +64,8 @@ import { prosemirrorToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import { Logger } from '@nestjs/common';
 
 export const tiptapExtensions = [
+  Tabs,
+  TabItem,
   TextDirection,
   DatabaseEmbed,
   Footnote,
@@ -72,7 +77,14 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph', 'transclusionSource', 'footnote'],
+    types: [
+      'heading',
+      'paragraph',
+      'transclusionSource',
+      'footnote',
+      'tabs',
+      'tabItem',
+    ],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -140,6 +152,7 @@ export function jsonToText(tiptapJson: JSONContent) {
 }
 
 export function strictJsonToNode(tiptapJson: JSONContent) {
+  assertTabStructure(tiptapJson);
   const schema = getSchema(tiptapExtensions);
   return Node.fromJSON(schema, tiptapJson);
 }
@@ -154,6 +167,7 @@ export function prosemirrorNodeToYJson(node: Node): JSONContent {
 }
 
 export function jsonToNode(tiptapJson: JSONContent) {
+  assertTabStructure(tiptapJson);
   const schema = getSchema(tiptapExtensions);
   const clonedJson = structuredClone(tiptapJson);
   try {

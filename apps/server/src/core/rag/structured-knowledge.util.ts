@@ -27,14 +27,19 @@ export function editorKnowledgeHeadings(content: unknown): KnowledgeHeading[] {
   const visit = (node: any) => {
     if (!node || result.length >= 500) return;
     if (
-      node.type === 'heading' &&
+      (node.type === 'heading' || node.type === 'tabItem') &&
       typeof node.attrs?.id === 'string' &&
       /^[\w-]{1,100}$/.test(node.attrs.id)
     )
       result.push({
         id: node.attrs.id,
-        title: text(node),
-        level: Number(node.attrs.level),
+        title:
+          node.type === 'tabItem'
+            ? typeof node.attrs.title === 'string'
+              ? node.attrs.title
+              : 'Tab'
+            : text(node),
+        level: node.type === 'tabItem' ? 3 : Number(node.attrs.level),
       });
     if (Array.isArray(node.content)) node.content.forEach(visit);
   };

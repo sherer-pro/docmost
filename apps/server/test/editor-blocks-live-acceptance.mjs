@@ -19,10 +19,36 @@ export async function runEditorBlocksAcceptance({
   output,
   sql,
 }) {
-  await test('Footnotes survive page reads and downloaded Markdown, HTML, PDF and Docmost exports', async () => {
+  await test('Footnotes and all tab content survive page reads and downloaded Markdown, HTML, PDF and Docmost exports', async () => {
     const content = {
       type: 'doc',
       content: [
+        {
+          type: 'tabs',
+          attrs: { id: 'qa-tabs' },
+          content: [
+            {
+              type: 'tabItem',
+              attrs: { id: 'qa-tab-one', title: 'Overview' },
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Visible tab evidence' }],
+                },
+              ],
+            },
+            {
+              type: 'tabItem',
+              attrs: { id: 'qa-tab-two', title: 'Details' },
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Hidden tab evidence' }],
+                },
+              ],
+            },
+          ],
+        },
         {
           type: 'paragraph',
           content: [
@@ -52,6 +78,13 @@ export async function runEditorBlocksAcceptance({
     });
     const read = await api(actors.reader, `/pages/info?pageId=${page.id}`);
     assert(JSON.stringify(read.content).includes('First canonical note'));
+    const nested = structuredClone(content);
+    nested.content[0].content[0].content.push(structuredClone(content.content[0]));
+    const invalid = await fetchApi(actors.admin, '/pages/actions/update', 'POST', {
+      pageId: page.id, format: 'json', operation: 'replace', content: nested,
+    });
+    assert.equal(invalid.status(), 400);
+    assert.deepEqual((await api(actors.reader, `/pages/info?pageId=${page.id}`)).content, read.content);
     let archive;
     for (const format of ['markdown', 'html', 'pdf', 'docmost']) {
       const response = await fetchApi(
@@ -78,6 +111,9 @@ export async function runEditorBlocksAcceptance({
         assert(
           JSON.stringify(document.content).includes('First canonical note'),
         );
+        assert(
+          JSON.stringify(document.content).includes('Hidden tab evidence'),
+        );
         archive = bytes;
       } else {
         const ext = format === 'markdown' ? 'md' : format;
@@ -101,10 +137,14 @@ export async function runEditorBlocksAcceptance({
           );
           assert(result.stdout.includes('First canonical note'));
           assert(result.stdout.includes('Second canonical note'));
+          assert(result.stdout.includes('Visible tab evidence'));
+          assert(result.stdout.includes('Hidden tab evidence'));
         } else {
           const text = await file.async('string');
           assert(text.includes('First canonical note'));
           assert(text.includes('Second canonical note'));
+          assert(text.includes('Visible tab evidence'));
+          assert(text.includes('Hidden tab evidence'));
           if (format === 'markdown') assert(text.includes('[^1]:'));
           else {
             assert(text.includes('data-footnotes'));
@@ -155,6 +195,7 @@ export async function runEditorBlocksAcceptance({
     const [imported] =
       await sql`select content from pages where space_id=${target.id} and title='Footnote acceptance' and deleted_at is null`;
     assert(JSON.stringify(imported.content).includes('Second canonical note'));
+    assert(JSON.stringify(imported.content).includes('Hidden tab evidence'));
     fixture.editorBlocks = {
       pageId: page.id,
       route: `/s/${space.slug}/p/${page.slugId}`,

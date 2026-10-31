@@ -1,0 +1,62 @@
+.root {
+  height: calc(100dvh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+}
+
+.root:fullscreen {
+  height: 100dvh;
+  padding: 12px;
+}
+
+.slide {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(8px, 3vw, 48px);
+  overscroll-behavior: contain;
+}
+
+.slide :global(.ProseMirror) {
+  padding: 0;
+  max-width: 1100px;
+  margin-inline: auto;
+  font-size: clamp(16px, 1.6vw, 24px);
+  line-height: 1.6;
+}
+
+.slide :global(.comment-mark),
+.slide :global([data-comment-id]) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  cursor: inherit !important;
+}
+
+.slide :global([data-comment-marker]),
+.slide :global(.collaboration-carets__caret),
+.slide :global(.collaboration-cursor__caret) {
+  display: none !important;
+}
+
+.controls {
+  flex-shrink: 0;
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding-top: 8px;
+}
+
+.pointer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fa5252;
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px #fa5252;
+  pointer-events: none;
+  z-index: 10000;
+}

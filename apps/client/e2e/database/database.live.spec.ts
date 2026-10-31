@@ -240,18 +240,25 @@ for (const theme of ["light", "dark"])
       await expect(page.locator(".tiptap img").first()).toBeInViewport();
     });
 
+async function resetEditorBlocks(
+  page: Page,
+  content = fixture.editorBlocks.content,
+) {
+  await api(page.request, "/pages/actions/update", "POST", {
+    pageId: fixture.editorBlocks.pageId,
+    format: "json",
+    operation: "replace",
+    content,
+  });
+  await page.goto(fixture.editorBlocks.route);
+}
+
 test("live footnotes create, edit, search, conflict and survive reload", async ({
   page,
   browser,
 }, info) => {
   test.setTimeout(120000);
-  await api(page.request, "/pages/actions/update", "POST", {
-    pageId: fixture.editorBlocks.pageId,
-    format: "json",
-    operation: "replace",
-    content: fixture.editorBlocks.content,
-  });
-  await page.goto(fixture.editorBlocks.route);
+  await resetEditorBlocks(page);
   const footer = page.locator('section[role="doc-endnotes"]');
   await expect(
     footer.getByText("First canonical note", { exact: true }),
@@ -266,8 +273,8 @@ test("live footnotes create, edit, search, conflict and survive reload", async (
     footer.getByRole("button", { name: "Edit", exact: true }).first(),
   ).toBeVisible();
   const body = page.getByRole("textbox", { name: "Editor", exact: true });
-  await body.click();
-  await page.keyboard.press("Control+End");
+  await body.locator(":scope > p").last().click();
+  await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("/Footnote");
   await page
@@ -355,6 +362,113 @@ test("live footnotes create, edit, search, conflict and survive reload", async (
   await expect(
     footer.getByText("Browser-created footnote", { exact: true }),
   ).toBeVisible();
+});
+
+test("live tabs persist edits, reveal hidden matches and present databases read-only", async ({
+  page,
+  browser,
+}, info) => {
+  test.setTimeout(120000);
+  const content = structuredClone(fixture.editorBlocks.content);
+  content.content[0].content[1].content.push({
+    type: "databaseEmbed",
+    attrs: { databaseId: fixture.databaseId },
+  });
+  await resetEditorBlocks(page, content);
+  const tabs = page.locator("[data-docmost-tabs-scope]").first();
+  await expect(
+    tabs.getByText("Visible tab evidence", { exact: true }),
+  ).toBeVisible();
+  await tabs.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(
+    tabs.getByText("Hidden tab evidence", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByTestId("page-state-segmented-control")
+    .locator("label")
+    .filter({ hasText: /^Edit$/ })
+    .click();
+  await expect(
+    tabs.getByRole("button", { name: "Tab actions", exact: true }),
+  ).toBeVisible();
+  await expect(
+    tabs.getByRole("tab", { name: "Details", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await tabs.getByRole("button", { name: "Tab actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const rename = page.getByRole("dialog", { name: "Rename", exact: true });
+  await rename
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("Renamed live tab");
+  await rename.getByRole("button", { name: "Save", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        JSON.stringify(
+          (
+            await api(
+              page.request,
+              `/pages/info?pageId=${fixture.editorBlocks.pageId}`,
+            )
+          ).content,
+        ),
+      { timeout: 55000 },
+    )
+    .toContain("Renamed live tab");
+  await page.goto(
+    `${fixture.editorBlocks.route}?find=${encodeURIComponent("Hidden tab evidence")}`,
+  );
+  await expect(tabs.locator(".search-result-current")).toBeVisible();
+  await expect(
+    tabs.getByRole("tab", { name: "Renamed live tab", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page
+    .getByRole("button", { name: "Close (Escape)", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "Present page", exact: true })
+    .click();
+  const presentation = page.getByRole("dialog", {
+    name: "Present page",
+    exact: true,
+  });
+  await expect(presentation).toBeVisible();
+  await presentation
+    .getByRole("tab", { name: "Renamed live tab", exact: true })
+    .click();
+  await expect(
+    presentation.getByText("Rows: 900", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    presentation.getByRole("button", { name: "Add row", exact: true }),
+  ).toHaveCount(0);
+  await expect(presentation.locator('[contenteditable="true"]')).toHaveCount(0);
+  await expect(
+    presentation.getByRole("button", { name: "Tab actions", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath("tabs-presentation-readonly.png"),
+  });
+  await presentation
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  const context = await browser.newContext({ storageState: sessions.reader });
+  try {
+    const reader = await context.newPage();
+    await reader.goto(fixture.editorBlocks.route);
+    await reader
+      .getByRole("tab", { name: "Renamed live tab", exact: true })
+      .click();
+    await expect(
+      reader.getByText("Hidden tab evidence", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      reader.getByRole("button", { name: "Tab actions", exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
 });
 
 test("live record drawer preserves table context and supports direct links", async ({

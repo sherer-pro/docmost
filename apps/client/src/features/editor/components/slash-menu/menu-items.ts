@@ -90,6 +90,22 @@ function createTagMenuItem(tag: TagDefinition): SlashMenuItemType {
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
+    {
+      title: "docBlocks.tabs",
+      description: "docBlocks.tabsDescription",
+      searchTerms: ["tabs", "tab", "panels"],
+      icon: IconAppWindow,
+      command: ({ editor, range }: CommandProps) =>
+        editor
+          .chain()
+          .focus()
+          .deleteRange(range)
+          .insertTabs([
+            i18n.t("docBlocks.tabNumber", { number: 1 }),
+            i18n.t("docBlocks.tabNumber", { number: 2 }),
+          ])
+          .run(),
+    },
     ...(["auto", "ltr", "rtl"] as const).map((direction) => ({
       title: `docBlocks.direction.${direction}`,
       description: "docBlocks.directionDescription",
@@ -100,7 +116,7 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .chain()
           .focus()
           .deleteRange(range)
-          .setTextDirection(direction)
+          .setBlockTextDirection(direction)
           .run(),
     })),
     {

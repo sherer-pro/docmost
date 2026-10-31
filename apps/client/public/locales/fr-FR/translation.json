@@ -1643,11 +1643,12 @@
             "step4": "Sur un téléphone, vérifiez Chat et Agent, le commutateur de recherche de l’espace, le pied et le champ de message avec le clavier ouvert",
             "step5": "Passez d’un document aux paramètres de l’espace et utilisez Précédent/Suivant ; l’assistant doit utiliser le titre du document actuel.",
             "step6": "Sélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée.",
-            "step7": "Vérifiez les notes selon les mêmes règles de sources et d’accès que le corps du document."
+            "step7": "Vérifiez les notes selon les mêmes règles de sources et d’accès que le corps du document.",
+            "step8": "Tenez compte des onglets inactifs du document pour vérifier une réponse."
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",
-          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`). Le contrat sélectionné `AI_ASSISTANT_PROFILE_ICONS` propose {{profileIconCount}} choix d’icônes localisés, affichés de manière cohérente dans l’éditeur de profil et le panneau de discussion. La sélection de fichiers du chat reste active après la fermeture du menu Ajouter : le fichier choisi est envoyé ou une erreur de validation apparaît. Les empreintes de validation Agent intègrent les attributs par défaut de l’éditeur et la normalisation Yjs avant la modification. Un champ text dans un nœud non textuel est rejeté avant validation ; le texte du paragraphe doit figurer dans des nœuds texte enfants.\n\nSélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exiger des preuves issues des pages, fichiers ou résultats d’outils accessibles. Les espaces et profils ne peuvent pas assouplir les restrictions de l’espace de travail.\n\nUn administrateur doit activer les capacités de base de données. Les résultats et aperçus sont masqués si l’accès aux sources est révoqué. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nLe texte des notes (footnote) fait partie des sources du document. Aucune référence externe n’est chargée ou vérifiée automatiquement et les droits restent inchangés."
+          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`). Le contrat sélectionné `AI_ASSISTANT_PROFILE_ICONS` propose {{profileIconCount}} choix d’icônes localisés, affichés de manière cohérente dans l’éditeur de profil et le panneau de discussion. La sélection de fichiers du chat reste active après la fermeture du menu Ajouter : le fichier choisi est envoyé ou une erreur de validation apparaît. Les empreintes de validation Agent intègrent les attributs par défaut de l’éditeur et la normalisation Yjs avant la modification. Un champ text dans un nœud non textuel est rejeté avant validation ; le texte du paragraphe doit figurer dans des nœuds texte enfants.\n\nSélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exiger des preuves issues des pages, fichiers ou résultats d’outils accessibles. Les espaces et profils ne peuvent pas assouplir les restrictions de l’espace de travail.\n\nUn administrateur doit activer les capacités de base de données. Les résultats et aperçus sont masqués si l’accès aux sources est révoqué. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nLe texte des notes (footnote) fait partie des sources du document. Aucune référence externe n’est chargée ou vérifiée automatiquement et les droits restent inchangés.\n\nLe contenu et les titres de tous les tabs/tabItem font partie des preuves du document. L’onglet actif est un état local d’affichage ; sa sélection ne limite pas les preuves AI/RAG et n’accorde aucun accès aux sources."
         },
         "retrieval": {
           "description": "La recherche dans l’espace s’exécute pendant la génération d’une réponse.",
@@ -3168,7 +3169,27 @@
     "inUse": "Le fichier est encore utilisé dans des documents, des bases ou l’historique. Suppression refusée."
   },
   "docBlocks": {
-    "direction": {"auto":"Direction automatique","ltr":"De gauche à droite","rtl":"De droite à gauche"},
+    "presentation": "Présenter la page",
+    "slideNumber": "Diapositive {{number}} sur {{total}}",
+    "previousSlide": "Diapositive précédente",
+    "nextSlide": "Diapositive suivante",
+    "pointer": "Pointeur",
+    "fullscreen": "Plein écran",
+    "tabs": "Onglets",
+    "tabsDescription": "Regrouper le contenu du document en onglets",
+    "tabNumber": "Onglet {{number}}",
+    "addTab": "Ajouter un onglet",
+    "tabActions": "Actions de l’onglet",
+    "moveTabLeft": "Déplacer vers la gauche",
+    "moveTabRight": "Déplacer vers la droite",
+    "deleteTab": "Supprimer l’onglet",
+    "deleteTabDescription": "L’onglet et son contenu seront supprimés.",
+    "tabChanged": "Cet onglet a changé. Rouvrez le renommage.",
+    "direction": {
+      "auto": "Direction automatique",
+      "ltr": "De gauche à droite",
+      "rtl": "De droite à gauche"
+    },
     "directionDescription": "Définir la direction du bloc de texte actuel",
     "initialEditMode": "Mode initial de l’éditeur pour les nouveaux utilisateurs",
     "initialEditModeDescription": "Copié à la création du compte. Les préférences existantes et les choix par page sont conservés.",

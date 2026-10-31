@@ -40,3 +40,4 @@ export * from "./lib/tag";
 export * from "./lib/database-embed";
 export * from "./lib/footnote";
 export * from "./lib/text-direction";
+export * from "./lib/tabs";

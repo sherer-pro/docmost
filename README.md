@@ -450,6 +450,8 @@ The editor includes the following additional capabilities:
 
 - automatic block text direction for mixed languages, with explicit left-to-right/right-to-left slash commands, and a workspace initial editing preference copied only to new accounts;
 
+- document tabs with rename, order and duplication, search and source links into inactive content, and complete AI/export coverage; a read-only page presentation with keyboard navigation, scrolling long slides, pointer and full-screen mode;
+
 - a searchable page attachment gallery with sequential image, audio, video and PDF previews, download and navigation to usage; space administrators with page write access may queue removal of files unused by documents, history, templates or database cells;
 
 - width settings for individual blocks;

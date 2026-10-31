@@ -49,6 +49,7 @@ import {
   detachTemplateContent,
   normalizeBuiltInTagValues,
   prepareFootnotesForExport,
+  BLOCK_DIRECTION_EXPORT_STYLES,
 } from '@docmost/editor-ext/server';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 import {
@@ -676,6 +677,7 @@ export class ExportService {
            [data-docmost-transclusion="true"] { break-inside: avoid; }
            [data-docmost-transclusion-label="true"] { line-height: 1.4; }
            ${TAG_EXPORT_STYLES}
+           ${BLOCK_DIRECTION_EXPORT_STYLES}
          </style>
         </head>
         <body>${pageHtml}</body>
@@ -1214,6 +1216,7 @@ export class ExportService {
         line-height: 1.4;
       }
       ${TAG_EXPORT_STYLES}
+      ${BLOCK_DIRECTION_EXPORT_STYLES}
       .page-break,
       [data-type="pageBreak"] {
         display: block;

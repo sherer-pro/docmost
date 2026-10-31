@@ -19,7 +19,7 @@ import { DatabaseTableView } from "@/features/database/components/database-table
 import { getPageById } from "@/features/page/services/page-service";
 import { extractPageSlugId } from "@/lib";
 import { parseDatabaseEmbedUrl } from "./database-embed-url";
-import { PublicDocumentContext } from "./database-embed-context";
+import { PublicDocumentContext, DocumentReadOnlyContext } from "./database-embed-context";
 import { useEditorEditable } from "../transclusion/use-editor-editable";
 
 export default function DatabaseEmbedView(props: NodeViewProps) {
@@ -39,6 +39,7 @@ export default function DatabaseEmbedView(props: NodeViewProps) {
 }
 
 function Source({ node, editor, updateAttributes }: NodeViewProps) {
+  const forceReadOnly = useContext(DocumentReadOnlyContext);
   const { t } = useTranslation();
   const editable = useEditorEditable(editor);
   const [url, setUrl] = useState("");
@@ -144,7 +145,7 @@ function Source({ node, editor, updateAttributes }: NodeViewProps) {
         databaseId={databaseId}
         spaceId={source.data.spaceId}
         spaceSlug={spaceSlug}
-        isEditable={page.data.access?.capabilities?.canWrite === true}
+        isEditable={!forceReadOnly && page.data.access?.capabilities?.canWrite === true}
         initialViewId={node.attrs.viewId ?? undefined}
         embedded
       />

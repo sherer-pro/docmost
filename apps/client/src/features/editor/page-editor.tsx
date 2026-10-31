@@ -542,6 +542,7 @@ export default function PageEditor({
           role: "textbox",
           "aria-label": runtime.ariaLabel,
           "aria-multiline": "true",
+          "data-editor-view-key": `${currentUser?.user.id}:${pageId}`,
         },
         scrollThreshold: 80,
         scrollMargin: 80,
@@ -754,6 +755,7 @@ export default function PageEditor({
                     role: "textbox",
                     "aria-label": t("Editor"),
                     "aria-multiline": "true",
+                    "data-editor-view-key": `${currentUser?.user.id}:${pageId}`,
                   },
                 }}
                 onCreate={({ editor: staticEditor }) => {

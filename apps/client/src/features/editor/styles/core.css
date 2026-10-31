@@ -59,6 +59,11 @@
     margin-bottom: 0;
   }
 
+  li[dir="auto"]:has(> p:first-child:dir(rtl)),
+  li[dir="auto"]:has(> div > p:first-child:dir(rtl)) {
+    direction: rtl;
+  }
+
   h1,
   h2,
   h3,

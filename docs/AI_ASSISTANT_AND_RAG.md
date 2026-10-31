@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 30 -->
+<!-- ai-admin-guide-contract-version: 31 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -37,6 +37,16 @@ heading's source ID. Footnotes use child text nodes and participate in ordinary
 collaboration, search and undo. The shared reader schema is registered on the
 API, collaboration process and client before the editor's creation command is
 enabled. Disabling a creation entry point must not remove the reader extension.
+
+Document `tabs`/`tabItem` content and titles participate in canonical text,
+Markdown evidence, retrieval, source ACL checks and context limits for every tab.
+The active tab is local renderer state and never narrows the evidence set.
+Tab titles use stable `tabItem` IDs as canonical section anchors; following a
+section link reveals its tab, including headings within inactive tabs.
+Selecting a tab does not grant access to an embedded database or transcluded
+source. Presentation uses a read-only snapshot; it does not change document
+content or AI context. Embedded databases in that viewer cannot expose editing
+controls even when the viewer has source write access.
 
 This file is the canonical source for AI/RAG/MCP architecture, security
 boundaries, limits, and recovery behavior. `AI_INTEGRATION.md` is the operator
