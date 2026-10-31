@@ -36,6 +36,7 @@ export type AiRetrievalOutcome = {
   errorCode?: string;
   sources: AiSafeRetrievalSource[];
   diagnostics?: {
+    preparationMs?: number;
     profile: string;
     mode: string;
     received: number;

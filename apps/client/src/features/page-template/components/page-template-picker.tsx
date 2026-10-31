@@ -40,15 +40,22 @@ import {
   discoverPageTemplates,
   getPageTemplateDestinations,
   isCollaborationUnavailable,
+  applyPageTemplate,
 } from "../services/page-template-api";
 import type {
   PageTemplateDestination,
   PageTemplateDiscoveryItem,
 } from "../types/page-template.types";
 import classes from "./page-template-picker.module.css";
+import { type Editor, useEditorState } from "@tiptap/react";
+import { isEmptyTemplateTarget } from "@docmost/editor-ext";
+import { usePageTemplateCapabilitiesQuery } from "../queries/page-template-query";
+import { useEditorIsolation } from "@/features/editor/editor-isolation-context";
+import { queryClient } from "@/lib/query-client";
 
 type PickerRequest = {
-  mode: "create";
+  mode: "create" | "apply";
+  pageId?: string;
 };
 
 export const PAGE_TEMPLATE_PICKER_EVENT = "docmost:page-template-picker";
@@ -61,33 +68,76 @@ function errorMessage(error: any, fallback: string): string {
 export function PageTemplatePicker({
   pageId,
   spaceId,
+  editor,
+  allowApply = false,
 }: {
   pageId: string;
   spaceId: string;
+  editor?: Editor | null;
+  allowApply?: boolean;
 }) {
+  const { t } = useTranslation();
+  const isolated = useEditorIsolation();
+  const empty = useEditorState({
+    editor: editor ?? null,
+    selector: ({ editor }) =>
+      Boolean(
+        editor &&
+          !editor.isDestroyed &&
+          isEmptyTemplateTarget(editor.getJSON()),
+      ),
+  });
+  const capabilities = usePageTemplateCapabilitiesQuery(
+    allowApply && empty ? spaceId : undefined,
+  ).data;
   const navigate = useNavigate();
   const [request, setRequest] = useState<PickerRequest | null>(null);
 
   useEffect(() => {
     const listener = (event: Event) => {
-      setRequest((event as CustomEvent<PickerRequest>).detail);
+      const detail = (event as CustomEvent<PickerRequest>).detail;
+      if (!detail || (detail.pageId ? detail.pageId !== pageId : isolated))
+        return;
+      setRequest(detail);
     };
     window.addEventListener(PAGE_TEMPLATE_PICKER_EVENT, listener);
     return () =>
       window.removeEventListener(PAGE_TEMPLATE_PICKER_EVENT, listener);
-  }, []);
+  }, [pageId, isolated]);
 
   return (
-    <TemplateUseModal
-      opened={Boolean(request)}
-      spaceId={spaceId}
-      defaultParentPageId={pageId}
-      onClose={() => setRequest(null)}
-      onCreated={(page) => {
-        setRequest(null);
-        navigate(`/p/${page.slugId}`);
-      }}
-    />
+    <>
+      {allowApply &&
+        empty &&
+        capabilities?.enabled &&
+        (capabilities.useRegular || capabilities.useSynced) && (
+          <Button
+            variant="subtle"
+            leftSection={<IconTemplate size={18} />}
+            onClick={() => setRequest({ mode: "apply", pageId })}
+          >
+            {t("docBlocks.applyTemplate")}
+          </Button>
+        )}
+      <TemplateUseModal
+        opened={Boolean(request)}
+        spaceId={spaceId}
+        defaultParentPageId={pageId}
+        targetPageId={request?.mode === "apply" ? pageId : undefined}
+        onClose={() => setRequest(null)}
+        onCreated={(page) => {
+          if (request?.mode === "apply") {
+            void queryClient.invalidateQueries({
+              predicate: (query) => query.queryKey.includes(pageId),
+            });
+            setRequest(null);
+            return;
+          }
+          setRequest(null);
+          navigate(`/p/${page.slugId}`);
+        }}
+      />
+    </>
   );
 }
 
@@ -96,6 +146,7 @@ export function TemplateUseModal({
   spaceId,
   defaultParentPageId,
   initialTemplate,
+  targetPageId,
   onClose,
   onCreated,
 }: {
@@ -103,6 +154,7 @@ export function TemplateUseModal({
   spaceId: string;
   defaultParentPageId?: string;
   initialTemplate?: PageTemplateDiscoveryItem | null;
+  targetPageId?: string;
   onClose: () => void;
   onCreated: (page: any) => void;
 }) {
@@ -308,9 +360,9 @@ export function TemplateUseModal({
   );
 
   useEffect(() => {
-    if (!opened || step !== 1 || !selectedTemplate) return;
+    if (!opened || step !== 1 || !selectedTemplate || targetPageId) return;
     void loadDestinations();
-  }, [loadDestinations, opened, selectedTemplate, step]);
+  }, [loadDestinations, opened, selectedTemplate, step, targetPageId]);
 
   const chooseTemplate = (template: PageTemplateDiscoveryItem) => {
     setSelectedTemplate(template);
@@ -319,10 +371,16 @@ export function TemplateUseModal({
   };
 
   const submit = async () => {
-    if (submitting || !selectedTemplate || !selectedParent) return;
+    if (submitting || !selectedTemplate || (!targetPageId && !selectedParent))
+      return;
     setSubmitting(true);
     setCollaborationUnavailable(false);
     try {
+      if (targetPageId) {
+        await applyPageTemplate(targetPageId, selectedTemplate.id);
+        onCreated({ id: targetPageId });
+        return;
+      }
       const result = await createPageFromTemplate({
         templatePageId: selectedTemplate.id,
         spaceId,
@@ -336,10 +394,10 @@ export function TemplateUseModal({
       } else {
         notifications.show({
           color: "red",
-          message: errorMessage(
-            error,
-            t("Could not create page from template."),
-          ),
+          message:
+            error?.response?.data?.code === "page_template_target_not_empty"
+              ? t("docBlocks.templateTargetChanged")
+              : errorMessage(error, t("Could not create page from template.")),
         });
       }
     } finally {
@@ -351,7 +409,9 @@ export function TemplateUseModal({
     <Modal
       opened={opened}
       onClose={submitting ? () => undefined : onClose}
-      title={t("Create page from template")}
+      title={t(
+        targetPageId ? "docBlocks.applyTemplate" : "Create page from template",
+      )}
       centered
       size="lg"
       fullScreen={Boolean(isMobile)}
@@ -499,88 +559,103 @@ export function TemplateUseModal({
             </Text>
           </Alert>
 
-          <TextInput
-            label={t("Page title")}
-            value={title}
-            onChange={(event) => setTitle(event.currentTarget.value)}
-            placeholder={selectedTemplate?.title || t("Untitled")}
-          />
-          <Divider label={t("Choose page destination")} labelPosition="left" />
-          <TextInput
-            label={t("Search parent pages")}
-            value={destinationQuery}
-            onChange={(event) => setDestinationQuery(event.currentTarget.value)}
-            placeholder={t("Search parent pages")}
-            leftSection={<IconSearch size={16} />}
-          />
-          <ScrollArea
-            h={isMobile ? "clamp(8rem, calc(100dvh - 430px), 16.25rem)" : 260}
-          >
-            {destinationsLoading ? (
-              <Center py="xl" role="status">
-                <Loader size="sm" />
-              </Center>
-            ) : destinationsError ? (
-              <EmptyState
-                compact
-                icon={IconAlertCircle}
-                title={t("Could not load destinations")}
-                action={
-                  <Button
-                    variant="light"
-                    leftSection={<IconRefresh size={16} />}
-                    onClick={() => void loadDestinations()}
-                  >
-                    {t("Retry")}
-                  </Button>
-                }
+          {targetPageId ? (
+            <Text size="sm">{t("docBlocks.templateApplyHint")}</Text>
+          ) : (
+            <>
+              <TextInput
+                label={t("Page title")}
+                value={title}
+                onChange={(event) => setTitle(event.currentTarget.value)}
+                placeholder={selectedTemplate?.title || t("Untitled")}
               />
-            ) : (
-              <Stack gap={4}>
-                {rootAllowed && (
-                  <PickerOption
-                    selected={selectedParent === "root"}
-                    title={t("Space root")}
-                    description={t("Create a top-level page.")}
-                    icon={<IconFolder size={18} />}
-                    onClick={() => {
-                      setSelectedParent("root");
-                    }}
-                  />
-                )}
-                {destinations.map((item) => (
-                  <PickerOption
-                    key={item.id}
-                    selected={selectedParent === item.id}
-                    title={item.title || t("Untitled")}
-                    icon={item.icon || <IconFile size={18} />}
-                    onClick={() => {
-                      setSelectedParent(item.id);
-                    }}
-                  />
-                ))}
-                {!rootAllowed && destinations.length === 0 && (
+              <Divider
+                label={t("Choose page destination")}
+                labelPosition="left"
+              />
+              <TextInput
+                label={t("Search parent pages")}
+                value={destinationQuery}
+                onChange={(event) =>
+                  setDestinationQuery(event.currentTarget.value)
+                }
+                placeholder={t("Search parent pages")}
+                leftSection={<IconSearch size={16} />}
+              />
+              <ScrollArea
+                h={
+                  isMobile ? "clamp(8rem, calc(100dvh - 430px), 16.25rem)" : 260
+                }
+              >
+                {destinationsLoading ? (
+                  <Center py="xl" role="status">
+                    <Loader size="sm" />
+                  </Center>
+                ) : destinationsError ? (
                   <EmptyState
                     compact
-                    icon={IconFolder}
-                    title={t("No available destinations")}
-                    description={t(
-                      "You do not have permission to create a page in the available locations.",
-                    )}
+                    icon={IconAlertCircle}
+                    title={t("Could not load destinations")}
+                    action={
+                      <Button
+                        variant="light"
+                        leftSection={<IconRefresh size={16} />}
+                        onClick={() => void loadDestinations()}
+                      >
+                        {t("Retry")}
+                      </Button>
+                    }
                   />
+                ) : (
+                  <Stack gap={4}>
+                    {rootAllowed && (
+                      <PickerOption
+                        selected={selectedParent === "root"}
+                        title={t("Space root")}
+                        description={t("Create a top-level page.")}
+                        icon={<IconFolder size={18} />}
+                        onClick={() => {
+                          setSelectedParent("root");
+                        }}
+                      />
+                    )}
+                    {destinations.map((item) => (
+                      <PickerOption
+                        key={item.id}
+                        selected={selectedParent === item.id}
+                        title={item.title || t("Untitled")}
+                        icon={item.icon || <IconFile size={18} />}
+                        onClick={() => {
+                          setSelectedParent(item.id);
+                        }}
+                      />
+                    ))}
+                    {!rootAllowed && destinations.length === 0 && (
+                      <EmptyState
+                        compact
+                        icon={IconFolder}
+                        title={t("No available destinations")}
+                        description={t(
+                          "You do not have permission to create a page in the available locations.",
+                        )}
+                      />
+                    )}
+                    {destinationNextCursor && (
+                      <Button
+                        variant="subtle"
+                        loading={destinationsLoadingMore}
+                        onClick={() =>
+                          void loadDestinations(destinationNextCursor)
+                        }
+                      >
+                        {t("Load more")}
+                      </Button>
+                    )}
+                  </Stack>
                 )}
-                {destinationNextCursor && (
-                  <Button
-                    variant="subtle"
-                    loading={destinationsLoadingMore}
-                    onClick={() => void loadDestinations(destinationNextCursor)}
-                  >
-                    {t("Load more")}
-                  </Button>
-                )}
-              </Stack>
-            )}
-          </ScrollArea>
+              </ScrollArea>
+            </>
+          )}
           {collaborationUnavailable && (
             <Alert
               color="red"
@@ -616,10 +691,13 @@ export function TemplateUseModal({
             </Button>
             <Button
               loading={submitting}
-              disabled={!title.trim() || !selectedParent || destinationsError}
+              disabled={
+                !targetPageId &&
+                (!title.trim() || !selectedParent || destinationsError)
+              }
               onClick={() => void submit()}
             >
-              {t("Create page")}
+              {t(targetPageId ? "docBlocks.applyAction" : "Create page")}
             </Button>
           </Group>
         </Stack>

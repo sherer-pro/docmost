@@ -16,7 +16,7 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import { useEditor } from "@tiptap/react";
+import { useEditor, useEditorState } from "@tiptap/react";
 import type { Range } from "@tiptap/core";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { searchAndReplaceStateAtom } from "@/features/editor/components/search-and-replace/atoms/search-and-replace-state-atom.ts";
@@ -25,6 +25,7 @@ import { useTranslation } from "react-i18next";
 import { getHotkeyHandler, useToggle } from "@mantine/hooks";
 import { useLocation } from "react-router-dom";
 import classes from "./search-replace.module.css";
+import { useEditorIsolation } from "../../editor-isolation-context";
 
 interface PageFindDialogDialogProps {
   editor: ReturnType<typeof useEditor>;
@@ -36,10 +37,23 @@ function SearchAndReplaceDialog({
   editable = true,
 }: PageFindDialogDialogProps) {
   const { t } = useTranslation();
+  const isolated = useEditorIsolation();
   const [searchText, setSearchText] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [pageFindState, setPageFindState] = useAtom(searchAndReplaceStateAtom);
   const inputRef = useRef(null);
+  const searchSnapshot = useEditorState({
+    editor,
+    selector: ({ editor }) => {
+      const search = editor?.isDestroyed
+        ? undefined
+        : editor?.storage.searchAndReplace;
+      return {
+        count: search?.results?.length ?? 0,
+        index: search?.resultIndex ?? 0,
+      };
+    },
+  });
   const canSearch = () =>
     Boolean(editor && !editor.isDestroyed && editor.storage.searchAndReplace);
 
@@ -133,6 +147,7 @@ function SearchAndReplaceDialog({
   }, [editor, searchText]);
 
   const handleOpenEvent = (e) => {
+    if (e.detail?.editor ? e.detail.editor !== editor : isolated) return;
     if (!canSearch()) return;
     setPageFindState({ isOpen: true });
     const selectedText = editor.state.doc.textBetween(
@@ -147,6 +162,7 @@ function SearchAndReplaceDialog({
   };
 
   const handleCloseEvent = (e) => {
+    if (e.detail?.editor ? e.detail.editor !== editor : isolated) return;
     closeDialog();
   };
 
@@ -167,6 +183,27 @@ function SearchAndReplaceDialog({
 
   useEffect(() => {
     if (!canSearch()) return;
+    const dom = editor?.view?.dom;
+    if (!dom) return;
+    const keyboard = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        handleOpenEvent(
+          new CustomEvent("openFindDialogFromEditor", { detail: { editor } }),
+        );
+      } else if (event.key === "Escape" && pageFindState.isOpen) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDialog();
+      }
+    };
+    dom.addEventListener("keydown", keyboard);
+    return () => dom.removeEventListener("keydown", keyboard);
+  }, [editor, pageFindState.isOpen, isolated]);
+
+  useEffect(() => {
+    if (!canSearch()) return;
     editor.commands.setCaseSensitive(caseSensitive.isCaseSensitive);
     editor.commands.resetIndex();
     goToSelection();
@@ -176,21 +213,15 @@ function SearchAndReplaceDialog({
     () =>
       searchText.trim() === ""
         ? ""
-        : editor?.storage?.searchAndReplace?.results.length > 0
-          ? editor?.storage?.searchAndReplace?.resultIndex +
-            1 +
-            "/" +
-            editor?.storage?.searchAndReplace?.results.length
+        : searchSnapshot?.count > 0
+          ? searchSnapshot.index + 1 + "/" + searchSnapshot.count
           : t("Not found"),
-    [
-      searchText,
-      editor?.storage?.searchAndReplace?.resultIndex,
-      editor?.storage?.searchAndReplace?.results.length,
-    ],
+    [searchText, searchSnapshot?.index, searchSnapshot?.count],
   );
 
   const location = useLocation();
   useEffect(() => {
+    if (isolated) return;
     closeDialog();
     const term = new URLSearchParams(location.search)
       .get("find")
@@ -239,7 +270,7 @@ function SearchAndReplaceDialog({
       clearTimeout(timer);
       editor.off?.("transaction", reveal);
     };
-  }, [editor, location.key, location.pathname, location.search]);
+  }, [editor, location.key, location.pathname, location.search, isolated]);
 
   return (
     <Dialog
@@ -271,6 +302,7 @@ function SearchAndReplaceDialog({
             value={searchText}
             autoFocus
             onKeyDown={getHotkeyHandler([
+              ["Escape", closeDialog],
               ["Enter", next],
               ["shift+Enter", previous],
               ["alt+C", caseSensitiveToggle],
@@ -359,6 +391,7 @@ function SearchAndReplaceDialog({
               onChange={replaceInputEvent}
               value={replaceText}
               onKeyDown={getHotkeyHandler([
+                ["Escape", closeDialog],
                 ["Enter", replace],
                 ["ctrl+alt+Enter", replaceAll],
               ])}

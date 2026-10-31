@@ -5,8 +5,124 @@ import {
   type APIRequestContext,
 } from "@playwright/test";
 
+async function editViewName(page: Page, name: string) {
+  await page.getByRole("button", { name: /^View settings \(/ }).click();
+  const settings = page.getByRole("dialog", {
+    name: "View settings",
+    exact: true,
+  });
+  await settings.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+}
+async function expectViewName(page: Page, name: string) {
+  await page.getByRole("button", { name: /^View settings \(/ }).click();
+  const settings = page.getByRole("dialog", {
+    name: "View settings",
+    exact: true,
+  });
+  await expect(
+    settings.getByRole("textbox", { name: "Name", exact: true }),
+  ).toHaveValue(name);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+}
+
 const fixture = JSON.parse(process.env.DATABASE_LIVE_FIXTURE!);
 const sessions = JSON.parse(process.env.DATABASE_LIVE_SESSIONS!);
+
+const browserErrors = new WeakMap<Page, string[]>();
+const browserErrorTasks = new WeakMap<Page, Promise<unknown>[]>();
+test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  const tasks: Promise<unknown>[] = [];
+  browserErrors.set(page, errors);
+  browserErrorTasks.set(page, tasks);
+  page.on("pageerror", (error) => errors.push(error.stack || error.message));
+  page.on("console", (message) => {
+    if (message.type() !== "error" || errors.length >= 100) return;
+    errors.push(message.text().slice(0, 4000));
+    tasks.push(
+      Promise.allSettled(
+        message.args().map((handle) =>
+          handle.evaluate((value) => {
+            if (!value || typeof value !== "object") return null;
+            return {
+              message:
+                typeof value.message === "string"
+                  ? value.message.slice(0, 500)
+                  : undefined,
+              stack:
+                typeof value.stack === "string"
+                  ? value.stack.slice(0, 1400)
+                  : undefined,
+              componentStack:
+                typeof value.componentStack === "string"
+                  ? value.componentStack.slice(0, 3000)
+                  : undefined,
+            };
+          }),
+        ),
+      ).then((results) => {
+        for (const result of results)
+          if (result.status === "fulfilled" && result.value)
+            errors.push(JSON.stringify(result.value));
+      }),
+    );
+  });
+});
+test.afterEach(async ({ page, request }, info) => {
+  const errors = browserErrors.get(page) ?? [];
+  if (info.status !== info.expectedStatus) {
+    if (!page.isClosed())
+      await info.attach("navigation", {
+        body: Buffer.from(page.url()),
+        contentType: "text/plain",
+      });
+    if (!page.isClosed())
+      await info.attach("page-readiness", {
+        body: Buffer.from(JSON.stringify(await page.evaluate(() => ({
+          loadingIndicators: document.querySelectorAll('[aria-label="Loading..."]').length,
+          dialogs: Array.from(document.querySelectorAll('[role="dialog"]'), (element) => ({
+            title: element.querySelector("h2")?.textContent,
+            labelledBy: element.getAttribute("aria-labelledby"),
+            labelledText: element.getAttribute("aria-labelledby")?.split(/\s+/).map((id) => document.getElementById(id)?.textContent),
+            display: getComputedStyle(element).display,
+            visibility: getComputedStyle(element).visibility,
+            hidden: element.getAttribute("aria-hidden"),
+            ancestors: (() => {
+              const result = [];
+              let parent = element.parentElement;
+              while (parent && result.length < 5) {
+                result.push({ tag: parent.tagName, hidden: parent.getAttribute("aria-hidden"), inert: parent.hasAttribute("inert"), display: getComputedStyle(parent).display, visibility: getComputedStyle(parent).visibility });
+                parent = parent.parentElement;
+              }
+              return result;
+            })(),
+          })),
+          assets: performance.getEntriesByType("resource")
+            .filter((entry) => /\/assets\/.*\.js$/.test(entry.name))
+            .slice(-25)
+            .map((entry) => ({ path: new URL(entry.name).pathname, start: entry.startTime, duration: entry.duration })),
+        })))),
+        contentType: "application/json",
+      });
+    await Promise.race([
+      Promise.allSettled(browserErrorTasks.get(page) ?? []),
+      new Promise((resolve) => setTimeout(resolve, 1000)),
+    ]);
+    if (errors.length)
+      await info.attach("browser-errors", {
+        body: Buffer.from(errors.join("\n\n")),
+        contentType: "text/plain",
+      });
+  }
+  if (info.title.startsWith("live record editor")) {
+    if (!page.isClosed()) await page.close();
+    await api(request, "/pages/actions/update", "POST", {
+      pageId: fixture.ids[103],
+      title: "Row 0103",
+    });
+  }
+});
 const notesId = fixture.properties[0].id;
 const cell = (page: Page, index: number, property = 0) =>
   page.locator(
@@ -57,7 +173,7 @@ async function selectShared(page: Page) {
   await page.getByRole("textbox", { name: "View", exact: true }).click();
   await page.getByRole("option", { name: "Shared view", exact: true }).click();
   await expect(
-    page.getByRole("textbox", { name: "Name", exact: true }),
+    page.getByRole("textbox", { name: "View", exact: true }),
   ).toHaveValue("Shared view");
 }
 
@@ -471,6 +587,314 @@ test("live tabs persist edits, reveal hidden matches and present databases read-
   }
 });
 
+test("live empty template fills the current page and survives reload", async ({
+  page,
+  browser,
+}, info) => {
+  const target = await api(page.request, "/pages", "POST", {
+    spaceId: fixture.spaceId,
+    parentPageId: fixture.emptyTemplates.parentId,
+    title: `Keep template title ${info.project.name}`,
+  });
+  await page.goto(`/s/${fixture.emptyTemplates.spaceSlug}/p/${target.slugId}`);
+  await page
+    .getByTestId("page-state-segmented-control")
+    .locator("label")
+    .filter({ hasText: /^Edit$/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Use a template", exact: true })
+    .click();
+  const picker = page.getByRole("dialog", {
+    name: "Use a template",
+    exact: true,
+  });
+  await picker
+    .getByRole("button", { name: /Reusable regular template/ })
+    .click();
+  await expect(
+    picker.getByRole("textbox", { name: "Page title", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("empty-template-picker.png") });
+  await picker.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "Editor", exact: true }),
+  ).toContainText(fixture.emptyTemplates.text);
+  await expect(page.getByLabel("Title", { exact: true })).toHaveText(
+    target.title,
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("textbox", { name: "Editor", exact: true }),
+  ).toContainText(fixture.emptyTemplates.text);
+  await expect(
+    page.getByRole("button", { name: "Use a template", exact: true }),
+  ).toHaveCount(0);
+  const empty = await api(page.request, "/pages", "POST", {
+    spaceId: fixture.spaceId,
+    title: "Reader empty template target",
+  });
+  const readerContext = await browser.newContext({
+    storageState: sessions.reader,
+  });
+  try {
+    const reader = await readerContext.newPage();
+    await reader.goto(
+      `/s/${fixture.emptyTemplates.spaceSlug}/p/${empty.slugId}`,
+    );
+    await expect(
+      reader.getByRole("textbox", { name: "Editor", exact: true }),
+    ).toHaveAttribute("contenteditable", "false");
+    await expect(
+      reader.getByRole("button", { name: "Use a template", exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await readerContext.close();
+  }
+});
+
+test("live empty template preserves a collaborator's new content", async ({
+  page,
+  context,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() =>
+    localStorage.setItem("mantine-color-scheme-value", "dark"),
+  );
+  const target = await api(page.request, "/pages", "POST", {
+    spaceId: fixture.spaceId,
+    parentPageId: fixture.emptyTemplates.parentId,
+    title: "Concurrent empty template target",
+  });
+  const route = `/s/${fixture.emptyTemplates.spaceSlug}/p/${target.slugId}`;
+  await page.goto(route);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-mantine-color-scheme",
+    "dark",
+  );
+  await page
+    .getByTestId("page-state-segmented-control")
+    .locator("label")
+    .filter({ hasText: /^Edit$/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Use a template", exact: true })
+    .click();
+  const picker = page.getByRole("dialog", {
+    name: "Use a template",
+    exact: true,
+  });
+  await picker
+    .getByRole("button", { name: /Reusable regular template/ })
+    .click();
+  const other = await context.newPage();
+  try {
+    await other.goto(route);
+    await other
+      .getByTestId("page-state-segmented-control")
+      .locator("label")
+      .filter({ hasText: /^Edit$/ })
+      .click();
+    const editor = other.getByRole("textbox", { name: "Editor", exact: true });
+    await expect(editor).toHaveAttribute("contenteditable", "true");
+    await editor.click();
+    await other.keyboard.type("Concurrent content must survive");
+    await expect(
+      page.getByRole("textbox", { name: "Editor", exact: true }),
+    ).toContainText("Concurrent content must survive");
+    await picker.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(
+      page.getByText(
+        "The page is no longer empty. Your content has been preserved.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.screenshot({
+      path: info.outputPath("empty-template-concurrent-mobile-dark.png"),
+    });
+    const saved = await api(page.request, `/pages/info?pageId=${target.id}`);
+    expect(JSON.stringify(saved.content)).toContain(
+      "Concurrent content must survive",
+    );
+    expect(JSON.stringify(saved.content)).not.toContain(
+      fixture.emptyTemplates.text,
+    );
+  } finally {
+    await other.close();
+  }
+});
+
+test("live database description collapses without replacing its editor and reveals search matches", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    storageState: sessions.reader,
+    viewport: { width: 1100, height: 650 },
+  });
+  try {
+    const page = await context.newPage();
+    await open(page);
+    const body = page.getByRole("textbox", { name: "Editor", exact: true });
+    await expect(
+      page.getByRole("button", { name: "Show full description", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".editor-container [data-editor-page-id]"),
+    ).toHaveCount(1);
+    const original = await body.elementHandle();
+    await page
+      .getByRole("button", { name: "Show full description", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Collapse description", exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await page
+      .getByRole("button", { name: "Collapse description", exact: true })
+      .click();
+    expect(
+      await body.evaluate((element, initial) => element === initial, original),
+    ).toBe(true);
+    await page.goto(
+      `${fixture.route}?find=Database%20description%20paragraph%2014`,
+    );
+    await expect(body.locator(".search-result-current")).toHaveText(
+      "Database description paragraph 14",
+    );
+    await expect(
+      page.getByRole("button", { name: "Collapse description", exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(body.locator(".search-result-current")).toBeInViewport();
+  } finally {
+    await context.close();
+  }
+});
+
+for (const recordMode of ["read", "edit"] as const) {
+  test(`live record editor saves body and title without changing the table editor or route (${recordMode})`, async ({
+    page,
+    browser,
+  }, info) => {
+    test.setTimeout(120000);
+    if (recordMode === "edit") {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.addInitScript(() =>
+        localStorage.setItem("mantine-color-scheme-value", "dark"),
+      );
+    }
+    const savedText = `Record sidebar saved content ${info.project.name} ${recordMode}`;
+    const currentUser = (await api(page.request, "/users/me")).user;
+    await api(page.request, "/users/update", "POST", {
+      pageEditModeByPageId: {
+        ...currentUser.settings?.preferences?.pageEditModeByPageId,
+        [fixture.databasePageId]: recordMode,
+        [fixture.ids[103]]: recordMode,
+      },
+    });
+    await open(page);
+    const rootBody = page
+      .getByRole("textbox", { name: "Editor", exact: true })
+      .first();
+    await expect(rootBody).toHaveAttribute(
+      "contenteditable",
+      String(recordMode === "edit"),
+    );
+    const initialDescription = await rootBody.textContent();
+    const initialMode = await rootBody.getAttribute("contenteditable");
+    const tablePath = new URL(page.url()).pathname;
+    await page.getByRole("link", { name: "Row 0103", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`record=${fixture.ids[103]}`));
+    const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+    await expect(drawer).toBeVisible();
+    await drawer
+      .getByTestId("page-state-segmented-control")
+      .locator("label")
+      .filter({ hasText: /^Edit$/ })
+      .click();
+    const body = drawer.getByRole("textbox", { name: "Editor", exact: true });
+    await expect(body).toHaveAttribute("contenteditable", "true");
+    const originalBodyText = await body.textContent();
+    await body.locator(":scope > p").last().click();
+    await body.press("Control+End");
+    await expect(body).toBeFocused();
+    await body.press("Enter");
+    await body.pressSequentially(savedText);
+    await expect(body).toContainText(originalBodyText!);
+    await body.focus();
+    await page.keyboard.press("Control+f");
+    const find = page.getByRole("textbox", { name: "Find", exact: true });
+    await expect(find).toHaveCount(1);
+    await find.fill(savedText);
+    await expect(body.locator(".search-result-current")).toHaveText(savedText);
+    await find.press("Escape");
+    await expect(drawer).toBeVisible();
+    await expect(rootBody.locator(".search-result")).toHaveCount(0);
+    await drawer
+      .getByLabel("Title", { exact: true })
+      .fill("Row 0103 edited in drawer");
+    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    await expect
+      .poll(
+        async () => {
+          const value = await api(
+            page.request,
+            `/pages/info?pageId=${fixture.ids[103]}`,
+          );
+          return (
+            value.title === "Row 0103 edited in drawer" &&
+            JSON.stringify(value.content).includes(savedText)
+          );
+        },
+        { timeout: 55000 },
+      )
+      .toBe(true);
+    expect(new URL(page.url()).pathname).toBe(tablePath);
+    expect(new URL(page.url()).searchParams.has("record")).toBe(false);
+    await expect(rootBody).toHaveText(initialDescription);
+    await expect(rootBody).toHaveAttribute("contenteditable", initialMode!);
+    await page
+      .getByRole("link", { name: "Row 0103 edited in drawer", exact: true })
+      .click();
+    await expect(
+      drawer.getByRole("textbox", { name: "Editor", exact: true }),
+    ).toContainText(savedText);
+    await page.screenshot({
+      path: info.outputPath(`record-editor-${recordMode}.png`),
+    });
+    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    const context = await browser.newContext({
+      storageState: sessions.reader,
+      viewport:
+        recordMode === "edit"
+          ? { width: 390, height: 844 }
+          : { width: 1440, height: 1000 },
+    });
+    try {
+      const reader = await context.newPage();
+      if (recordMode === "edit")
+        await reader.addInitScript(() =>
+          localStorage.setItem("mantine-color-scheme-value", "dark"),
+        );
+      await reader.goto(`${fixture.route}?record=${fixture.ids[103]}`);
+      const readDrawer = reader.getByRole("dialog", {
+        name: "Record",
+        exact: true,
+      });
+      await expect(
+        readDrawer.getByRole("textbox", { name: "Editor", exact: true }),
+      ).toHaveAttribute("contenteditable", "false");
+      await expect(
+        readDrawer.getByTestId("page-state-segmented-control"),
+      ).toHaveCount(0);
+      await expect(
+        readDrawer.getByText(savedText, { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+}
+
 test("live record drawer preserves table context and supports direct links", async ({
   page,
 }) => {
@@ -847,9 +1271,7 @@ test("live two clients preserve view conflicts and explicitly apply the draft", 
     await open(other);
     await selectShared(page);
     await selectShared(other);
-    await page
-      .getByRole("textbox", { name: "Name", exact: true })
-      .fill("First client");
+    await editViewName(page, "First client");
     await page
       .getByRole("button", { name: "Save for everyone", exact: true })
       .click();
@@ -861,9 +1283,7 @@ test("live two clients preserve view conflicts and explicitly apply the draft", 
           ).find((view: any) => view.id === fixture.viewId).name,
       )
       .toBe("First client");
-    await other
-      .getByRole("textbox", { name: "Name", exact: true })
-      .fill("Second client");
+    await editViewName(other, "Second client");
     await other
       .getByRole("button", { name: "Save for everyone", exact: true })
       .click();
@@ -872,9 +1292,7 @@ test("live two clients preserve view conflicts and explicitly apply the draft", 
         "This view changed in another session. Your draft is preserved.",
       ),
     ).toBeVisible();
-    await expect(
-      other.getByRole("textbox", { name: "Name", exact: true }),
-    ).toHaveValue("Second client");
+    await expectViewName(other, "Second client");
     await other
       .getByRole("button", { name: "Apply my changes", exact: true })
       .click();

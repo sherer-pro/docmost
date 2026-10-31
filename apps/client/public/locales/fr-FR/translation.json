@@ -1644,11 +1644,12 @@
             "step5": "Passez d’un document aux paramètres de l’espace et utilisez Précédent/Suivant ; l’assistant doit utiliser le titre du document actuel.",
             "step6": "Sélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée.",
             "step7": "Vérifiez les notes selon les mêmes règles de sources et d’accès que le corps du document.",
-            "step8": "Tenez compte des onglets inactifs du document pour vérifier une réponse."
+            "step8": "Tenez compte des onglets inactifs du document pour vérifier une réponse.",
+            "step9": "Le test Agent propose une fonction avec tool_choice: required. Un seul appel capabilityProbe valide reste obligatoire ; LM Studio est pris en charge sans élargir les autorisations."
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",
-          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`). Le contrat sélectionné `AI_ASSISTANT_PROFILE_ICONS` propose {{profileIconCount}} choix d’icônes localisés, affichés de manière cohérente dans l’éditeur de profil et le panneau de discussion. La sélection de fichiers du chat reste active après la fermeture du menu Ajouter : le fichier choisi est envoyé ou une erreur de validation apparaît. Les empreintes de validation Agent intègrent les attributs par défaut de l’éditeur et la normalisation Yjs avant la modification. Un champ text dans un nœud non textuel est rejeté avant validation ; le texte du paragraphe doit figurer dans des nœuds texte enfants.\n\nSélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exiger des preuves issues des pages, fichiers ou résultats d’outils accessibles. Les espaces et profils ne peuvent pas assouplir les restrictions de l’espace de travail.\n\nUn administrateur doit activer les capacités de base de données. Les résultats et aperçus sont masqués si l’accès aux sources est révoqué. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nLe texte des notes (footnote) fait partie des sources du document. Aucune référence externe n’est chargée ou vérifiée automatiquement et les droits restent inchangés.\n\nLe contenu et les titres de tous les tabs/tabItem font partie des preuves du document. L’onglet actif est un état local d’affichage ; sa sélection ne limite pas les preuves AI/RAG et n’accorde aucun accès aux sources."
+          "technical": "L’assistant intégré exécute des conversations privées liées aux pages par l’intermédiaire du fournisseur configuré pour chaque espace. Les paramètres de l’espace affichent l’utilisation des requêtes et des jetons pour aujourd’hui et les 7 derniers jours. Le mode Agent peut appeler des outils Docmost approuvés et n’applique les modifications aux pages qu’après leur confirmation par l’utilisateur à l’origine de la demande. Juste avant d’appliquer une modification, le serveur vérifie à nouveau le droit d’écriture sur la page active et les politiques d’outils aux niveaux deployment, workspace, space, profile et group. L’éditeur de profils de l’espace affiche les noms d’outils localisés et reçoit la stratégie effective de remplacement du modèle via la liste des profils de l’espace ; seuls les administrateurs de l’espace de travail peuvent modifier les commutateurs principaux. La projection de connaissances partagée enrichit la recherche AI et le contexte des outils avec les champs de document et personnalisés activés, les propriétés et cellules de base de données nommées et les termes actifs du dictionnaire (`dictionary_term`). Le contrat sélectionné `AI_ASSISTANT_PROFILE_ICONS` propose {{profileIconCount}} choix d’icônes localisés, affichés de manière cohérente dans l’éditeur de profil et le panneau de discussion. La sélection de fichiers du chat reste active après la fermeture du menu Ajouter : le fichier choisi est envoyé ou une erreur de validation apparaît. Les empreintes de validation Agent intègrent les attributs par défaut de l’éditeur et la normalisation Yjs avant la modification. Un champ text dans un nœud non textuel est rejeté avant validation ; le texte du paragraphe doit figurer dans des nœuds texte enfants.\n\nSélectionnez une vue et, si nécessaire, des lignes. Utilisez Agent pour interroger les données ou calculer les totaux. Vérifiez chaque modification avant de l’approuver. Une proposition est limitée à 20 lignes, 100 cellules et 32 KiB ; un conflit de révision rejette la ligne concernée. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exiger des preuves issues des pages, fichiers ou résultats d’outils accessibles. Les espaces et profils ne peuvent pas assouplir les restrictions de l’espace de travail.\n\nUn administrateur doit activer les capacités de base de données. Les résultats et aperçus sont masqués si l’accès aux sources est révoqué. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nLe texte des notes (footnote) fait partie des sources du document. Aucune référence externe n’est chargée ou vérifiée automatiquement et les droits restent inchangés.\n\nLe contenu et les titres de tous les tabs/tabItem font partie des preuves du document. L’onglet actif est un état local d’affichage ; sa sélection ne limite pas les preuves AI/RAG et n’accorde aucun accès aux sources. Le test Agent propose une fonction avec tool_choice: required. Un seul appel capabilityProbe valide reste obligatoire ; LM Studio est pris en charge sans élargir les autorisations. Les requêtes de la base actuelle héritent du viewState figé et des lignes sélectionnées. Une erreur ne signifie pas un total nul. Le diagnostic Agent conserve preparationMs avant la génération, y compris en attente d’approbation ou en cas d’échec du fournisseur. Les textes des documents et les valeurs des cellules issus des outils intégrés sont des données sources non fiables. Leurs instructions ne permettent aucune modification supplémentaire et ne remplacent pas la confirmation utilisateur."
         },
         "retrieval": {
           "description": "La recherche dans l’espace s’exécute pendant la génération d’une réponse.",
@@ -3119,7 +3120,12 @@
     "saving": "Enregistrement...",
     "saved": "Enregistré",
     "error": "Échec de la mise à jour des données",
-    "dirty": "Brouillon personnel"
+    "dirty": "Brouillon personnel",
+    "addProperty": "Ajouter une propriété",
+    "pinToolbar": "Épingler la barre",
+    "unpinToolbar": "Détacher la barre",
+    "showDescription": "Afficher toute la description",
+    "hideDescription": "Réduire la description"
   },
   "Move block": "Déplacer le bloc",
   "dbBoard": {
@@ -3169,6 +3175,7 @@
     "inUse": "Le fichier est encore utilisé dans des documents, des bases ou l’historique. Suppression refusée."
   },
   "docBlocks": {
+    "recordContent": "Contenu de l’enregistrement",
     "presentation": "Présenter la page",
     "slideNumber": "Diapositive {{number}} sur {{total}}",
     "previousSlide": "Diapositive précédente",
@@ -3199,6 +3206,10 @@
     "footnoteReference": "Note {{number}}",
     "backToReference": "Revenir à la référence {{number}}",
     "emptyFootnote": "Note vide",
-    "footnoteChanged": "Cette note a changé. Rouvrez-la avant de l’enregistrer."
+    "footnoteChanged": "Cette note a changé. Rouvrez-la avant de l’enregistrer.",
+    "applyTemplate": "Utiliser un modèle",
+    "templateApplyHint": "Le modèle remplit cette page vide. Son titre et son emplacement sont conservés.",
+    "templateTargetChanged": "La page n’est plus vide. Votre contenu est conservé.",
+    "applyAction": "Appliquer"
   }
 }

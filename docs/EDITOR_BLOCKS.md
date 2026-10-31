@@ -96,3 +96,29 @@ their own keyboard controls. The viewer offers a pointer and browser full-screen
 mode where supported. It uses no page-editor atoms and never attaches a write
 collaboration provider. Embedded database controls are forced read-only even
 when the user can edit the source database; source ACL checks remain independent.
+
+## Templates on an empty page
+
+An editable plain document offers the existing space template catalog while
+its body contains only empty paragraphs. Applying a regular or published synced
+template fills that document and preserves its title and location. Database
+descriptions, row panels and template source pages do not offer this action.
+
+`POST /api/pages/:pageId/actions/apply-template` uses the existing idempotency
+lease and collaboration mutation protocol. The server reads current content,
+checks page and template access and captures a content hash. Persistence
+resolves the current user from the id-only internal actor, rechecks permissions,
+source revision/hash and the empty target, then stores copied attachments,
+provenance, content and the operation receipt in one transaction. A concurrent
+edit rejects application; a repeated completed request returns its receipt.
+Staged file bytes remain outside the transaction and are compensated on failure.
+
+Migration `20261031T120000-empty-page-template-application` adds operation
+metadata and the `template_apply` kind. Its down refuses to erase existing
+application receipts; disabling creation is the operational rollback after use.
+Existing readers already understand all reused template nodes.
+
+The pinned Hocuspocus 3.4.4 patch clears rejected save-queue entries in `finally`.
+Without it, a storage error prevents both live-document recovery and subsequent
+operations on the same document. Native dependency tests and a real PostgreSQL
+attachment-insertion failure verify the recovery path.

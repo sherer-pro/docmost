@@ -244,7 +244,7 @@ export const Comment = Mark.create<ICommentOptions, ICommentStorage>({
       this.storage.activeCommentId = commentId;
       const commentEventClick = new CustomEvent("ACTIVE_COMMENT_EVENT", {
         bubbles: true,
-        detail: { commentId, resolved },
+        detail: { commentId, resolved, pageId: elem.closest('[data-editor-page-id]')?.getAttribute('data-editor-page-id') ?? undefined },
       });
 
       elem.dispatchEvent(commentEventClick);

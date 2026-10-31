@@ -31,11 +31,14 @@
 }
 
 .viewToolbar {
-  position: sticky;
-  top: rem(60px);
   z-index: 6;
   background: var(--mantine-color-body);
   padding-block: rem(8px);
+}
+
+.viewToolbar[data-pinned="true"] {
+  position: sticky;
+  top: calc(var(--app-shell-header-offset, 0rem) + rem(45px));
 }
 
 .propertyHeader {

@@ -1,4 +1,4 @@
-import { Container, Stack } from "@mantine/core";
+import { Container, Loader, Stack } from "@mantine/core";
 import {
   lazy,
   Suspense,
@@ -114,12 +114,15 @@ export default function DatabasePage() {
   const isEditable = !readOnly && userPageEditMode === PageEditMode.Edit;
   const recordScope = databaseId ? databaseContexts[databaseId] : undefined;
   const showRecord = (pageId?: string) =>
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (pageId) next.set("record", pageId);
-      else next.delete("record");
-      return next;
-    });
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (pageId) next.set("record", pageId);
+        else next.delete("record");
+        return next;
+      },
+      { flushSync: true, preventScrollReset: true },
+    );
   const fixedToolbarEnabled = Boolean(
     isEditable && currentUser?.user?.settings?.preferences?.fixedToolbar,
   );
@@ -273,12 +276,12 @@ export default function DatabasePage() {
   return (
     <>
       {recordPageId && recordScope && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<Loader aria-label={t("Loading...")} />}>
           <DatabaseRecordDrawer
             pageId={recordPageId}
             scope={recordScope}
             spaceSlug={spaceSlug}
-            isEditable={isEditable}
+            isEditable={!readOnly}
             onNavigate={showRecord}
             onClose={() => showRecord()}
           />

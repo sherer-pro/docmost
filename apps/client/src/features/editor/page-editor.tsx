@@ -57,8 +57,7 @@ import { useCollabToken } from "@/features/auth/queries/auth-query.tsx";
 import SearchAndReplaceDialog from "@/features/editor/components/search-and-replace/search-and-replace-dialog.tsx";
 import { useDebouncedCallback, useDocumentVisibility } from "@mantine/hooks";
 import { useIdle } from "@/hooks/use-idle.ts";
-import { queryClient } from "@/lib/query-client.ts";
-import { IPage } from "@/features/page/types/page.types.ts";
+import { updatePageContentCache } from "@/features/page/queries/page-query";
 import { useParams } from "react-router-dom";
 import { extractPageSlugId } from "@/lib";
 import { FIVE_MINUTES } from "@/lib/constants.ts";
@@ -112,6 +111,7 @@ interface PageEditorProps {
   headingNumberingEnabled?: boolean;
   spaceHeadingNumberingEnabled?: boolean;
   templateKind?: TemplateKind | null;
+  allowTemplateApplication?: boolean;
 }
 
 export default function PageEditor({
@@ -129,6 +129,7 @@ export default function PageEditor({
   headingNumberingEnabled = false,
   spaceHeadingNumberingEnabled = false,
   templateKind = null,
+  allowTemplateApplication = true,
 }: PageEditorProps) {
   const { t } = useTranslation();
   const collaborationURL = useCollaborationUrl();
@@ -493,18 +494,7 @@ export default function PageEditor({
       return;
     }
 
-    const pageData = queryClient.getQueryData<IPage>([
-      "pages",
-      resolvedCacheSlugId,
-    ]);
-
-    if (pageData) {
-      queryClient.setQueryData(["pages", resolvedCacheSlugId], {
-        ...pageData,
-        content: newContent,
-        updatedAt: new Date(),
-      });
-    }
+    updatePageContentCache(pageId, resolvedCacheSlugId, newContent);
   }, 3000);
   const [editor, setLiveEditor] = useState<Editor | null>(null);
   const liveEditorRuntimeRef = useRef({
@@ -543,6 +533,7 @@ export default function PageEditor({
           "aria-label": runtime.ariaLabel,
           "aria-multiline": "true",
           "data-editor-view-key": `${currentUser?.user.id}:${pageId}`,
+          "data-editor-page-id": pageId,
         },
         scrollThreshold: 80,
         scrollMargin: 80,
@@ -756,9 +747,11 @@ export default function PageEditor({
                     "aria-label": t("Editor"),
                     "aria-multiline": "true",
                     "data-editor-view-key": `${currentUser?.user.id}:${pageId}`,
+                    "data-editor-page-id": pageId,
                   },
                 }}
                 onCreate={({ editor: staticEditor }) => {
+                  (staticEditor.storage as any).pageId = pageId;
                   staticEditor.commands.setHeadingNumberingEnabled(
                     headingNumberingEnabled,
                   );
@@ -852,7 +845,16 @@ export default function PageEditor({
           </div>
         </TransclusionLookupProvider>
       </PageReferenceProvider>
-      <PageTemplatePicker pageId={pageId} spaceId={spaceId} />
+      <div className={editorLayoutClasses.editorContentInset}>
+        <PageTemplatePicker
+          pageId={pageId}
+          spaceId={spaceId}
+          editor={editor}
+          allowApply={
+            allowTemplateApplication && !templateKind && editorIsEditable
+          }
+        />
+      </div>
     </>
   );
 }

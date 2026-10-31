@@ -22,6 +22,7 @@ export type PageTemplateOperationKind =
   | 'snapshot'
   | 'page_duplicate'
   | 'template_sync'
+  | 'template_apply'
   | 'template_detach';
 
 const OPERATION_LEASE_MS = 5 * 60 * 1000;

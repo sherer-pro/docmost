@@ -108,11 +108,22 @@ test("corpus has 120 tuning and 80 disjoint holdout questions with evidence anno
     ),
   );
   assert.equal(corpus.questions.length, 200);
-  assert.equal(corpus.databaseQuestions.length, 120);
+  assert.equal(corpus.databaseQuestions.length, 160);
   assert.equal(
     corpus.databaseQuestions.filter((q) => q.split === "holdout").length,
-    48,
+    64,
   );
+  for (const fixture of corpus.databaseFixtures) {
+    assert.equal(fixture.records.filter((row) => row.budget === null).length, 1);
+    assert.equal(fixture.records.filter((row) => row.date === null).length, 1);
+    assert.ok(fixture.records.some((row) => row.notes?.includes("OVERRIDE-ACCEPTED")));
+    const cases = corpus.databaseQuestions.filter((q) => q.databaseContext.databaseId === fixture.databaseId);
+    for (const name of ["empty_budget", "empty_date"]) {
+      const question = cases.find((q) => q.category === `database_${name}`);
+      assert.equal(question.databaseExpectation.result.count, 1);
+      assert.equal(question.databaseContext.viewState.filter.conditions[0].operator, "is_empty");
+    }
+  }
   assert.equal(
     new Set(corpus.questions.map((question) => question.id)).size,
     200,

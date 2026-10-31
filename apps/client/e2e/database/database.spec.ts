@@ -1,5 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 
+async function editViewName(page: Page, name: string) {
+  await page.getByRole("button", { name: /^View settings \(/ }).click();
+  const settings = page.getByRole("dialog", {
+    name: "View settings",
+    exact: true,
+  });
+  await settings.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+}
+async function expectViewName(page: Page, name: string) {
+  await page.getByRole("button", { name: /^View settings \(/ }).click();
+  const settings = page.getByRole("dialog", {
+    name: "View settings",
+    exact: true,
+  });
+  await expect(
+    settings.getByRole("textbox", { name: "Name", exact: true }),
+  ).toHaveValue(name);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+}
+
 const notesId = "50000000-0000-4000-8000-000000000001";
 const rowId = (index: number) =>
   `60000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
@@ -71,6 +92,33 @@ for (const theme of ["light", "dark"])
       ).toBeVisible();
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
+      const toolbar = page.getByRole("toolbar", {
+        name: "View settings",
+        exact: true,
+      });
+      await expect(toolbar).toHaveAttribute("data-pinned", "true");
+      await toolbar
+        .getByRole("button", { name: "Unpin toolbar", exact: true })
+        .click();
+      await expect(toolbar).toHaveAttribute("data-pinned", "false");
+      await page.reload();
+      await expect(toolbar).toHaveAttribute("data-pinned", "false");
+      await toolbar
+        .getByRole("button", { name: "Pin toolbar", exact: true })
+        .click();
+      await toolbar
+        .getByRole("button", { name: "Add property", exact: true })
+        .click();
+      await expect(
+        page.getByRole("textbox", { name: "New column name", exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("textbox", { name: "New column name", exact: true })
+        .fill("Pending property");
+      await page.keyboard.press("Escape");
+      await expect(
+        page.getByRole("textbox", { name: "New column name", exact: true }),
+      ).toHaveCount(0);
       expect(failures).toEqual([]);
       await page.screenshot({
         path: testInfo.outputPath(`database-${theme}-${width}.png`),
@@ -183,7 +231,7 @@ test("explicit shared save preserves the second client draft on conflict", async
       .getByRole("option", { name: "Shared view", exact: true })
       .click();
     await expect(
-      target.getByRole("textbox", { name: "Name", exact: true }),
+      target.getByRole("textbox", { name: "View", exact: true }),
     ).toHaveValue("Shared view");
   }
   expect(
@@ -192,9 +240,7 @@ test("explicit shared save preserves the second client draft on conflict", async
         request.method === "PATCH" && request.path.includes("/views/"),
     ),
   ).toHaveLength(0);
-  await page
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill("First client");
+  await editViewName(page, "First client");
   await expect(page.getByText("Personal draft", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Save for everyone", exact: true })
@@ -202,9 +248,7 @@ test("explicit shared save preserves the second client draft on conflict", async
   await expect
     .poll(async () => (await state(page)).views[0].name)
     .toBe("First client");
-  await other
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill("Second client");
+  await editViewName(other, "Second client");
   await other
     .getByRole("button", { name: "Save for everyone", exact: true })
     .click();
@@ -213,9 +257,7 @@ test("explicit shared save preserves the second client draft on conflict", async
       "This view changed in another session. Your draft is preserved.",
     ),
   ).toBeVisible();
-  await expect(
-    other.getByRole("textbox", { name: "Name", exact: true }),
-  ).toHaveValue("Second client");
+  await expectViewName(other, "Second client");
   await other
     .getByRole("button", { name: "Apply my changes", exact: true })
     .click();

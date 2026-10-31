@@ -1,6 +1,6 @@
 import { useAtomValue } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   buildTree,
   findBreadcrumbPath,
@@ -51,9 +51,6 @@ function buildNodeUrl(
 export default function Breadcrumb() {
   const { t } = useTranslation();
   const treeData = useAtomValue(treeDataAtom);
-  const [breadcrumbNodes, setBreadcrumbNodes] = useState<
-    SpaceTreeNode[] | null
-  >(null);
   const { pageSlug, databaseSlug, spaceSlug } = useParams();
   const routeSlug = pageSlug ?? databaseSlug;
   const { data: currentPage } = usePageQuery({
@@ -64,10 +61,9 @@ export default function Breadcrumb() {
   );
   const isMobile = useMediaQuery("(max-width: 48em)");
 
-  useEffect(() => {
+  const breadcrumbNodes = useMemo<SpaceTreeNode[] | null>(() => {
     if (!currentPage) {
-      setBreadcrumbNodes(null);
-      return;
+      return null;
     }
 
     if (Array.isArray(serverBreadcrumbs) && serverBreadcrumbs.length > 0) {
@@ -75,19 +71,16 @@ export default function Breadcrumb() {
       const breadcrumbNodeIds = new Set(
         breadcrumbTreeNodes.map((node) => node.id),
       );
-      setBreadcrumbNodes(
-        orderBreadcrumbNodes(
-          mergeTreeNodeMetadata(
+      return orderBreadcrumbNodes(
+        mergeTreeNodeMetadata(
           breadcrumbTreeNodes,
           findTreeNodesByIds(treeData ?? [], breadcrumbNodeIds),
-          ),
         ),
       );
-      return;
     }
 
     const localBreadcrumb = findBreadcrumbPath(treeData ?? [], currentPage.id);
-    setBreadcrumbNodes(localBreadcrumb || null);
+    return localBreadcrumb || null;
   }, [currentPage, serverBreadcrumbs, treeData]);
 
   const HiddenNodesTooltipContent = () =>

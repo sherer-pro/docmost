@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import {
   Anchor,
   Button,
@@ -12,7 +12,24 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { usePageQuery } from "@/features/page/queries/page-query";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel";
-import ReadonlyPageEditor from "@/features/editor/readonly-page-editor";
+import PageEditor from "@/features/editor/page-editor";
+import { TitleEditor } from "@/features/editor/title-editor";
+import { IsolatedEditorScope } from "@/features/editor/isolated-editor-scope";
+import { useAtom, useAtomValue } from "jotai";
+import {
+  pageEditorAtom,
+  titleEditorAtom,
+  pageEditorUnsyncedChangesAtom,
+  yjsConnectionStatusAtom,
+} from "@/features/editor/atoms/editor-atoms";
+import { searchAndReplaceStateAtom } from "@/features/editor/components/search-and-replace/atoms/search-and-replace-state-atom";
+import { historyAtoms } from "@/features/page-history/atoms/history-atoms";
+import { showCommentPopupAtom } from "@/features/comment/atoms/comment-atom";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
+import { PageStateSegmentedControl } from "@/features/user/components/page-state-pref";
+import { useSpaceQuery } from "@/features/space/queries/space-query";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
+import { resolveHeadingNumberingEnabled } from "@/features/page/utils/heading-numbering";
 import { EmptyState } from "@/components/ui/empty-state";
 import HistoryModal from "@/features/page-history/components/history-modal";
 import { IconFileOff } from "@tabler/icons-react";
@@ -32,22 +49,37 @@ const Comments = lazy(
   () => import("@/features/comment/components/page-comment-section"),
 );
 
-export function DatabaseRecordDrawer({
-  pageId,
-  scope,
-  spaceSlug,
-  isEditable,
-  onNavigate,
-  onClose,
-}: {
+type RecordDrawerProps = {
   pageId: string | null;
   scope: RecordScope;
   spaceSlug: string;
   isEditable: boolean;
   onNavigate: (pageId: string) => void;
   onClose: () => void;
-}) {
+};
+
+export function DatabaseRecordDrawer(props: RecordDrawerProps) {
+  return props.pageId ? (
+    <IsolatedEditorScope key={props.pageId}>
+      <ScopedRecordDrawer {...props} />
+    </IsolatedEditorScope>
+  ) : null;
+}
+
+function ScopedRecordDrawer({
+  pageId,
+  scope,
+  spaceSlug,
+  isEditable,
+  onNavigate,
+  onClose,
+}: RecordDrawerProps) {
   const { t } = useTranslation();
+  const content = useRef<HTMLDivElement>(null);
+  const editor = useAtomValue(pageEditorAtom);
+  const [find, setFind] = useAtom(searchAndReplaceStateAtom);
+  const history = useAtomValue(historyAtoms);
+  const commentPopup = useAtomValue(showCommentPopupAtom);
   return (
     <Drawer
       opened={Boolean(pageId)}
@@ -56,17 +88,58 @@ export function DatabaseRecordDrawer({
       size="xl"
       title={t("dbBoard.record")}
       closeButtonProps={{ "aria-label": t("Close") }}
+      closeOnEscape={false}
+      closeOnClickOutside={false}
     >
-      {pageId && (
-        <Record
-          key={pageId}
-          pageId={pageId}
-          scope={scope}
-          spaceSlug={spaceSlug}
-          isEditable={isEditable}
-          onNavigate={onNavigate}
-        />
-      )}
+      <div
+        ref={content}
+        onKeyDown={(event) => {
+          if (!content.current?.contains(event.target as Node)) return;
+          if (
+            !event.defaultPrevented &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "f" &&
+            editor
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.dispatchEvent(
+              new CustomEvent("openFindDialogFromEditor", {
+                detail: { editor },
+              }),
+            );
+          } else if (event.key === "Escape" && !event.defaultPrevented) {
+            if (find.isOpen) {
+              event.preventDefault();
+              event.stopPropagation();
+              setFind({ isOpen: false });
+            } else if (
+              !history &&
+              !commentPopup &&
+              !(event.target as Element).closest(
+                'input,textarea,[contenteditable="true"]',
+              ) &&
+              !Array.from(
+                document.querySelectorAll(
+                  '#slash-command, #emoji-command, [role="menu"]',
+                ),
+              ).some((element) => element.getClientRects().length > 0)
+            )
+              onClose();
+          }
+        }}
+      >
+        {pageId && (
+          <Record
+            key={pageId}
+            pageId={pageId}
+            scope={scope}
+            spaceSlug={spaceSlug}
+            isEditable={isEditable}
+            onNavigate={onNavigate}
+          />
+        )}
+      </div>
     </Drawer>
   );
 }
@@ -86,6 +159,8 @@ function Record({
 }) {
   const { t } = useTranslation();
   const { data: page, isPending, isError, refetch } = usePageQuery({ pageId });
+  const { data: space } = useSpaceQuery(page?.spaceId);
+  const user = useAtomValue(currentUserAtom);
   const context = useDatabaseRowContextQuery(pageId);
   const state = JSON.stringify(scope.viewState);
   const neighbors = useQuery({
@@ -117,7 +192,17 @@ function Record({
       );
     },
   });
-  const [history, setHistory] = useState(false);
+  const [, setHistory] = useAtom(historyAtoms);
+  const editor = useAtomValue(pageEditorAtom);
+  const titleEditor = useAtomValue(titleEditorAtom);
+  const unsynced = useAtomValue(pageEditorUnsyncedChangesAtom);
+  const connection = useAtomValue(yjsConnectionStatusAtom);
+  const aside = useAtomValue(asideStateAtom);
+  const comments = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (aside.isAsideOpen && aside.tab === "comments")
+      comments.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [aside]);
   if (isPending || context.isPending)
     return <Loader aria-label={t("Loading...")} />;
   if (
@@ -133,6 +218,7 @@ function Record({
         action={<Button onClick={() => void refetch()}>{t("Retry")}</Button>}
       />
     );
+  const canWrite = isEditable && page.access?.capabilities?.canWrite === true;
   return (
     <Stack>
       <Group justify="space-between">
@@ -158,36 +244,79 @@ function Record({
         <Button variant="subtle" onClick={() => setHistory(true)}>
           {t("Page history")}
         </Button>
+        <Button
+          variant="subtle"
+          disabled={!editor}
+          onClick={() =>
+            document.dispatchEvent(
+              new CustomEvent("openFindDialogFromEditor", {
+                detail: { editor },
+              }),
+            )
+          }
+        >
+          {t("Find")}
+        </Button>
+        {canWrite && <PageStateSegmentedControl pageId={page.id} size="xs" />}
       </Group>
+      {connection === "disconnected" ? (
+        <Text role="status" c="orange" size="sm">
+          {t("Real-time editor connection lost. Retrying...")}
+        </Text>
+      ) : (
+        unsynced > 0 && (
+          <Text role="status" c="dimmed" size="sm">
+            {t("Saving...")}
+          </Text>
+        )
+      )}
       {neighbors.isError && (
         <Button variant="subtle" onClick={() => void neighbors.refetch()}>
           {t("Retry")}
         </Button>
       )}
-      <DocumentFieldsPanel
-        page={page}
-        readOnly={!isEditable || page.access?.capabilities?.canWrite !== true}
-      />
+      <DocumentFieldsPanel page={page} readOnly={!canWrite} />
       <Text size="xs" c="dimmed">
-        {t("dbBoard.contentPreview")}
+        {t("docBlocks.recordContent")}
       </Text>
-      <ReadonlyPageEditor
+      <TitleEditor
         title={page.title ?? ""}
-        content={page.content}
         pageId={page.id}
+        slugId={page.slugId}
+        spaceSlug={spaceSlug}
+        editable={canWrite}
+        syncUrl={false}
       />
-      <Suspense fallback={<Loader />}>
-        <Comments
-          pageId={page.id}
-          readOnly={!isEditable || page.access?.capabilities?.canWrite !== true}
-        />
-      </Suspense>
+      <PageEditor
+        pageId={page.id}
+        content={page.content}
+        editable={canWrite}
+        cacheSlugId={page.slugId}
+        spaceId={page.spaceId}
+        showBottomSpacer={false}
+        allowTemplateApplication={false}
+        dictionaryEnabled={space?.settings?.dictionary?.enabled === true}
+        tagSettings={space?.settings?.tags}
+        canCreateInlineComments={canWrite}
+        canManageDictionary={canWrite}
+        headingNumberingEnabled={resolveHeadingNumberingEnabled({
+          pageId,
+          preferences: user?.user.settings?.preferences,
+          spaceSettings: space?.settings,
+        })}
+        spaceHeadingNumberingEnabled={
+          space?.settings?.headingNumbering?.enabled === true
+        }
+      />
+      <div ref={comments}>
+        <Suspense fallback={<Loader />}>
+          <Comments pageId={page.id} readOnly={!canWrite} />
+        </Suspense>
+      </div>
       <HistoryModal
         pageId={page.id}
         pageTitle={page.title ?? ""}
-        opened={history}
-        onClose={() => setHistory(false)}
-        readOnly
+        readOnly={!canWrite || !editor || !titleEditor}
       />
     </Stack>
   );

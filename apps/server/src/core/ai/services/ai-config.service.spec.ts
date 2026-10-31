@@ -1,5 +1,61 @@
 import { AiConfigService } from './ai-config.service';
 
+describe('AiConfigService required tool capability probe', () => {
+  function fixture(toolCalls: unknown[]) {
+    const service = Object.create(AiConfigService.prototype) as any;
+    const query = {
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      executeTakeFirstOrThrow: jest.fn().mockResolvedValue({}),
+    };
+    service.db = { updateTable: jest.fn().mockReturnValue(query) };
+    service.spaceAbility = { assertHasFullSpaceAccess: jest.fn() };
+    service.getRawConfig = jest.fn().mockResolvedValue({ id: 'config' });
+    service.mergeProviderConfig = jest.fn().mockResolvedValue({
+      baseUrl: 'http://127.0.0.1:56254/v1',
+      chatModel: 'local-model',
+      maxOutputTokens: 1024,
+    });
+    service.provider = {
+      completeWithTools: jest.fn(async (_config, _messages, tools, choice) => {
+        if (typeof choice !== 'string')
+          throw new Error('Named tool choices are unsupported');
+        expect(choice).toBe('required');
+        expect(tools).toHaveLength(1);
+        return { toolCalls };
+      }),
+    };
+    return service;
+  }
+
+  it('verifies one real function call using the broadly supported string choice', async () => {
+    const service = fixture([
+      { function: { name: 'capabilityProbe', arguments: '{"value":"ok"}' } },
+    ]);
+    await expect(
+      service.testAgent('space', {}, { id: 'user' }, { id: 'workspace' }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(service.db.updateTable).toHaveBeenCalledWith('aiSpaceConfigs');
+  });
+
+  it.each([
+    [],
+    [{ function: { name: 'otherTool', arguments: '{"value":"ok"}' } }],
+    [{ function: { name: 'capabilityProbe', arguments: '{"value":"wrong"}' } }],
+    [{ function: { name: 'capabilityProbe', arguments: 'invalid' } }],
+    [
+      { function: { name: 'capabilityProbe', arguments: '{"value":"ok"}' } },
+      { function: { name: 'capabilityProbe', arguments: '{"value":"ok"}' } },
+    ],
+  ])('does not verify an invalid or ambiguous result %#', async (...calls) => {
+    const service = fixture(calls);
+    await expect(
+      service.testAgent('space', {}, { id: 'user' }, { id: 'workspace' }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(service.db.updateTable).not.toHaveBeenCalled();
+  });
+});
+
 describe('AiConfigService secret handling', () => {
   const appSecret = '0123456789abcdef0123456789abcdef';
   const createService = () =>

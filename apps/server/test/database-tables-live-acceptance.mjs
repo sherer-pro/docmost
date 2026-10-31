@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
 import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
+import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
 
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -48,8 +49,11 @@ export async function runLiveAcceptance({
     return actor.api.fetch(`/api${endpoint}`, {
       method,
       ...(data !== undefined ? { data } : {}),
-      headers: csrf ? { 'x-csrf-token': csrf } : {},
       ...options,
+      headers: {
+        ...(csrf ? { 'x-csrf-token': csrf } : {}),
+        ...options.headers,
+      },
     });
   };
   const api = async (actor, endpoint, method = 'GET', data, options) => {
@@ -138,6 +142,16 @@ export async function runLiveAcceptance({
       parentPageId: parent.id,
       name: 'Database acceptance',
     });
+    const description = {
+      type: 'doc',
+      content: Array.from({ length: 14 }, (_, index) => ({
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: `Database description paragraph ${index + 1}` },
+        ],
+      })),
+    };
+    await sql`update pages set content=${JSON.stringify(description)}::text::jsonb where id=${database.pageId}`;
     const databasePage = await api(
       admin,
       `/pages/info?pageId=${database.pageId}`,
@@ -318,6 +332,8 @@ export async function runLiveAcceptance({
         'PATCH',
         { cells },
       );
+    await runEmptyTemplateAcceptance({ api, fetchApi, actors, space, parent, fixture, test, sql });
+    if (!process.argv.includes('--templates-only')) {
     await test('real ACL before pagination and global summaries', async () => {
       const page = await rows(actors.editor);
       assert.equal(page.items.length, 100);
@@ -668,6 +684,7 @@ export async function runLiveAcceptance({
       output,
       sql,
     });
+
     await test('CSV exports the complete filtered accessible view in its visible column order', async () => {
       const amount = properties[1].id;
       const status = properties[8].id;
@@ -839,6 +856,7 @@ export async function runLiveAcceptance({
         queuedImport: true,
       };
     });
+    }
     await writeFile(
       path.join(output, 'api-results.json'),
       JSON.stringify(report.tests, null, 2),
@@ -858,7 +876,10 @@ export async function runLiveAcceptance({
           path.join(repo, 'apps/client/e2e/database/playwright.live.config.ts'),
           ...process.argv
             .slice(2)
-            .filter((arg) => !arg.startsWith('--subnet=')),
+            .filter(
+              (arg) =>
+                !arg.startsWith('--subnet=') && arg !== '--skip-postgres' && arg !== '--templates-only',
+            ),
         ],
         {
           cwd: path.join(repo, 'apps/client'),

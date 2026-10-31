@@ -1644,11 +1644,12 @@
             "step5": "Wissel tussen een document en de ruimte-instellingen en gebruik Terug/Vooruit; de assistent moet de titel van het huidige document gebruiken.",
             "step6": "Selecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af.",
             "step7": "Controleer voetnoten volgens dezelfde bron- en toegangsregels als de hoofdtekst.",
-            "step8": "Neem inhoud uit inactieve documenttabbladen mee bij het controleren van een antwoord."
+            "step8": "Neem inhoud uit inactieve documenttabbladen mee bij het controleren van een antwoord.",
+            "step9": "De Agent-test biedt één functie met tool_choice: required. Eén geldige capabilityProbe-aanroep blijft verplicht; LM Studio wordt ondersteund zonder ruimere rechten."
           },
           "success": "Een testantwoord is voltooid; Agent vermeldt alleen toegestane tools en vraagt ​​voordat er wordt geschreven",
           "rollback": "Schakel Agent of het ruimtemodel uit en herstel vervolgens de laatst bekende goede instellingen",
-          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan.\n\nSelecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.\n\nEen beheerder moet databasefuncties expliciet inschakelen. Resultaten en voorbeelden worden verborgen als brontoegang wordt ingetrokken. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nVoetnoottekst (footnote) telt als documentinhoud. Externe verwijzingen worden niet automatisch opgehaald of gecontroleerd en toegangsrechten blijven behouden.\n\nInhoud en titels van alle tabs/tabItem horen bij het documentbewijs. Het actieve tabblad is lokale weergavestatus; selecteren beperkt AI/RAG-bewijs niet en geeft geen toegang tot bronnen."
+          "technical": "De ingebouwde assistent voert via de provider die voor elke ruimte is geconfigureerd privéchats uit die aan pagina’s zijn gekoppeld. De ruimte-instellingen tonen het gebruik van verzoeken en tokens voor vandaag en de laatste 7 dagen. De Agent-modus kan goedgekeurde Docmost-tools aanroepen en past paginawijzigingen pas toe nadat de gebruiker die ze heeft geïnitieerd deze heeft bevestigd. Direct voordat een wijziging wordt toegepast, controleert de server opnieuw de schrijftoegang tot de huidige pagina en het toolbeleid op deployment-, workspace-, space-, profile- en group-niveau. De profiel-editor van de ruimte toont gelokaliseerde toolnamen en ontvangt het effectieve beleid voor modeloverschrijvingen via de profiellijst van de ruimte; alleen werkruimtebeheerders kunnen de hoofdschakelaars wijzigen. De gedeelde kennisprojectie voegt ingeschakelde document- en aangepaste velden, benoemde database-eigenschappen en -cellen en actieve woordenboektermen (`dictionary_term`) toe aan AI-zoekopdrachten en toolcontext. Het samengestelde contract `AI_ASSISTANT_PROFILE_ICONS` biedt {{profileIconCount}} gelokaliseerde pictogramkeuzes die in de profiel-editor en het chatpaneel hetzelfde worden weergegeven. De bestandsselectie voor de chat blijft actief nadat het menu Toevoegen sluit: het gekozen bestand wordt geüpload of er verschijnt een validatiefout. Goedkeuringshashes van Agent verwerken de standaardkenmerken van de editor en Yjs-normalisatie voordat de wijziging wordt toegepast. Een text-veld op een niet-tekstknooppunt wordt vóór goedkeuring geweigerd; alineatekst moet in onderliggende tekstknooppunten staan.\n\nSelecteer een databaseweergave en eventueel rijen. Gebruik Agent voor zoekopdrachten en totalen. Controleer elke celwijziging voordat u deze goedkeurt. Een voorstel is beperkt tot 20 rijen, 100 cellen en 32 KiB; een revisieconflict wijst de betreffende rij af. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Bewijs uit toegankelijke pagina’s, bestanden of toolresultaten vereisen. Ruimtes en profielen kunnen werkruimtebeperkingen niet versoepelen.\n\nEen beheerder moet databasefuncties expliciet inschakelen. Resultaten en voorbeelden worden verborgen als brontoegang wordt ingetrokken. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nVoetnoottekst (footnote) telt als documentinhoud. Externe verwijzingen worden niet automatisch opgehaald of gecontroleerd en toegangsrechten blijven behouden.\n\nInhoud en titels van alle tabs/tabItem horen bij het documentbewijs. Het actieve tabblad is lokale weergavestatus; selecteren beperkt AI/RAG-bewijs niet en geeft geen toegang tot bronnen. De Agent-test biedt één functie met tool_choice: required. Eén geldige capabilityProbe-aanroep blijft verplicht; LM Studio wordt ondersteund zonder ruimere rechten. Query’s van de huidige database gebruiken de vastgezette viewState en geselecteerde rijen. Een fout betekent geen totaal van nul. Agent-diagnostiek bewaart preparationMs vóór generatie, ook bij een wachtende goedkeuring of providerfout. Documenttekst en celwaarden uit ingebouwde hulpmiddelen zijn onbetrouwbare brongegevens. Ingesloten opdrachten geven geen toestemming voor andere wijzigingen en vervangen geen gebruikersbevestiging."
         },
         "retrieval": {
           "description": "Zoeken binnen een ruimte wordt uitgevoerd terwijl een antwoord wordt gegenereerd.",
@@ -3119,7 +3120,12 @@
     "saving": "Opslaan...",
     "saved": "Opgeslagen",
     "error": "Bijwerken van gegevens mislukt",
-    "dirty": "Persoonlijk concept"
+    "dirty": "Persoonlijk concept",
+    "addProperty": "Eigenschap toevoegen",
+    "pinToolbar": "Werkbalk vastzetten",
+    "unpinToolbar": "Werkbalk losmaken",
+    "showDescription": "Volledige beschrijving tonen",
+    "hideDescription": "Beschrijving inklappen"
   },
   "Move block": "Blok verplaatsen",
   "dbBoard": {
@@ -3169,6 +3175,7 @@
     "inUse": "Het bestand wordt nog gebruikt in documenten, databases of geschiedenis. Verwijderen geweigerd."
   },
   "docBlocks": {
+    "recordContent": "Recordinhoud",
     "presentation": "Pagina presenteren",
     "slideNumber": "Dia {{number}} van {{total}}",
     "previousSlide": "Vorige dia",
@@ -3199,6 +3206,10 @@
     "footnoteReference": "Voetnoot {{number}}",
     "backToReference": "Terug naar verwijzing {{number}}",
     "emptyFootnote": "Lege voetnoot",
-    "footnoteChanged": "Deze voetnoot is gewijzigd. Open deze opnieuw voordat u opslaat."
+    "footnoteChanged": "Deze voetnoot is gewijzigd. Open deze opnieuw voordat u opslaat.",
+    "applyTemplate": "Sjabloon gebruiken",
+    "templateApplyHint": "Het sjabloon vult deze lege pagina. Titel en locatie blijven behouden.",
+    "templateTargetChanged": "De pagina is niet meer leeg. Uw inhoud is behouden.",
+    "applyAction": "Toepassen"
   }
 }

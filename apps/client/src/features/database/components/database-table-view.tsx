@@ -24,6 +24,7 @@ import {
   Group,
   Menu,
   Paper,
+  Popover,
   ScrollArea,
   Select,
   SelectProps,
@@ -33,7 +34,7 @@ import {
   TextInput,
   NumberInput,
 } from "@mantine/core";
-import { useMediaQuery } from "@mantine/hooks";
+import { useLocalStorage, useMediaQuery } from "@mantine/hooks";
 import {
   IconDotsVertical,
   IconEye,
@@ -54,6 +55,8 @@ import {
   type TablerIcon,
   IconFileDescription,
   IconGripVertical,
+  IconPin,
+  IconPinnedOff,
 } from "@tabler/icons-react";
 import {
   type CSSProperties,
@@ -71,6 +74,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useSetAtom } from "jotai";
 import { useAtomValue } from "jotai/react";
+import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import { useQuery } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { modals } from "@mantine/modals";
@@ -260,6 +264,12 @@ export function DatabaseTableView({
   embedded = false,
 }: DatabaseTableViewProps) {
   const { t } = useTranslation();
+  const toolbarUser = useAtomValue(currentUserAtom);
+  const [toolbarPinned, setToolbarPinned] = useLocalStorage({
+    key: `database-toolbar:${toolbarUser?.user?.id ?? "anonymous"}:${databaseId}`,
+    defaultValue: true,
+  });
+  const [propertyCreatorOpened, setPropertyCreatorOpened] = useState(false);
   const {
     data: properties = [],
     isSuccess: arePropertiesLoaded,
@@ -322,11 +332,14 @@ export function DatabaseTableView({
   const openRecord = (pageId: string) =>
     embedded
       ? navigate(`/s/${spaceSlug}/p/${pageId}`)
-      : setSearchParams((current) => {
-          const next = new URLSearchParams(current);
-          next.set("record", pageId);
-          return next;
-        });
+      : setSearchParams(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.set("record", pageId);
+            return next;
+          },
+          { flushSync: true, preventScrollReset: true },
+        );
   const [viewNameDraft, setViewNameDraft] = useState("");
   const [viewStateDraft, setViewStateDraft] = useState<DatabaseViewState>(() =>
     normalizeDatabaseViewState(null),
@@ -1976,6 +1989,7 @@ export function DatabaseTableView({
     }
 
     if (newPropertyType === "select" || newPropertyType === "multi_select") {
+      setPropertyCreatorOpened(false);
       setSelectPropertyDraft({
         type: newPropertyType,
         name: trimmedName,
@@ -1993,6 +2007,7 @@ export function DatabaseTableView({
       },
       {
         onSuccess: () => {
+          setPropertyCreatorOpened(false);
           emitDatabaseInvalidation({
             invalidateProperties: true,
             invalidateRows: true,
@@ -2436,46 +2451,72 @@ export function DatabaseTableView({
     <Paper withBorder radius="md" p="md">
       <Group
         className={classes.viewToolbar}
+        data-pinned={!embedded && toolbarPinned}
+        role="toolbar"
+        aria-label={t("dbTable.viewSettings")}
         justify="space-between"
         mb="md"
         align="flex-end"
         wrap="wrap"
       >
         {isEditable && (
-          <Group wrap="wrap">
-            <TextInput
-              aria-label={t("New column name")}
-              placeholder={t("New column")}
-              value={newPropertyName}
-              onChange={(event) =>
-                setNewPropertyName(event.currentTarget.value)
-              }
-            />
-            <Select
-              aria-label={t("Property type")}
-              w={180}
-              value={newPropertyType}
-              data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
-                value: propertyType,
-                label: propertyTypeLabels[propertyType],
-              }))}
-              onChange={(value) => {
-                if (!value) {
-                  return;
-                }
-
-                setNewPropertyType(value as DatabasePropertyType);
-              }}
-              allowDeselect={false}
-              renderOption={renderPropertyTypeOption}
-              leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
-            />
-            <Button
-              leftSection={<IconPlus size={14} />}
-              onClick={handleCreateProperty}
+          <Group gap="xs" wrap="wrap">
+            <Popover
+              opened={propertyCreatorOpened}
+              onChange={setPropertyCreatorOpened}
+              position="bottom-start"
+              width={300}
+              withinPortal
             >
-              {t("Property")}
-            </Button>
+              <Popover.Target>
+                <Button
+                  variant="default"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => setPropertyCreatorOpened((opened) => !opened)}
+                  aria-expanded={propertyCreatorOpened}
+                >
+                  {t("dbTable.addProperty")}
+                </Button>
+              </Popover.Target>
+              <Popover.Dropdown>
+                <Stack gap="sm">
+                  <TextInput
+                    aria-label={t("New column name")}
+                    placeholder={t("New column")}
+                    value={newPropertyName}
+                    onChange={(event) =>
+                      setNewPropertyName(event.currentTarget.value)
+                    }
+                  />
+                  <Select
+                    aria-label={t("Property type")}
+                    value={newPropertyType}
+                    data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
+                      value: propertyType,
+                      label: propertyTypeLabels[propertyType],
+                    }))}
+                    onChange={(value) => {
+                      if (!value) {
+                        return;
+                      }
+
+                      setNewPropertyType(value as DatabasePropertyType);
+                    }}
+                    allowDeselect={false}
+                    renderOption={renderPropertyTypeOption}
+                    leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
+                  />
+                  <Button
+                    leftSection={<IconPlus size={14} />}
+                    onClick={handleCreateProperty}
+                    loading={createPropertyMutation.isPending}
+                    disabled={!newPropertyName.trim()}
+                  >
+                    {t("Property")}
+                  </Button>
+                </Stack>
+              </Popover.Dropdown>
+            </Popover>
 
             <Button
               variant="light"
@@ -2511,47 +2552,11 @@ export function DatabaseTableView({
               }}
               clearable
             />
-            {isEditable && (
-              <>
-                <TextInput
-                  aria-label={t("Name")}
-                  placeholder={t("Name")}
-                  w={180}
-                  value={viewNameDraft}
-                  onChange={(event) =>
-                    setViewNameDraft(event.currentTarget.value)
-                  }
-                />
-                {!selectedViewId && (
-                  <Button
-                    variant="default"
-                    onClick={() => void saveCurrentView()}
-                    loading={
-                      createViewMutation.isPending ||
-                      updateViewMutation.isPending
-                    }
-                    disabled={!viewNameDraft.trim()}
-                  >
-                    {t("Create")}
-                  </Button>
-                )}
-                {selectedViewId && (
-                  <AccessibleActionIcon
-                    label={t("Delete")}
-                    color="red"
-                    variant="subtle"
-                    loading={deleteViewMutation.isPending}
-                    onClick={() => void deleteCurrentView()}
-                  >
-                    <IconTrash size={16} />
-                  </AccessibleActionIcon>
-                )}
-              </>
-            )}
           </Group>
 
           <Select
             aria-label={t("dbBoard.layout")}
+            w={125}
             value={viewState.kanban ? "kanban" : "table"}
             allowDeselect={false}
             data={[
@@ -2598,7 +2603,53 @@ export function DatabaseTableView({
               setVisibleColumns(state.visibleColumns);
               setActiveGroupKey(undefined);
             }}
-          />
+          >
+            {isEditable && (
+              <Group align="flex-end">
+                <TextInput
+                  label={t("Name")}
+                  value={viewNameDraft}
+                  onChange={(event) =>
+                    setViewNameDraft(event.currentTarget.value)
+                  }
+                />
+                {!selectedViewId ? (
+                  <Button
+                    variant="default"
+                    onClick={() => void saveCurrentView()}
+                    loading={createViewMutation.isPending}
+                    disabled={!viewNameDraft.trim()}
+                  >
+                    {t("Create")}
+                  </Button>
+                ) : (
+                  <AccessibleActionIcon
+                    label={t("Delete")}
+                    color="red"
+                    loading={deleteViewMutation.isPending}
+                    onClick={() => void deleteCurrentView()}
+                  >
+                    <IconTrash size={16} />
+                  </AccessibleActionIcon>
+                )}
+              </Group>
+            )}
+          </DatabaseViewControls>
+          {!embedded && (
+            <AccessibleActionIcon
+              label={t(
+                toolbarPinned ? "dbTable.unpinToolbar" : "dbTable.pinToolbar",
+              )}
+              aria-pressed={toolbarPinned}
+              onClick={() => setToolbarPinned((pinned) => !pinned)}
+            >
+              {toolbarPinned ? (
+                <IconPinnedOff size={18} />
+              ) : (
+                <IconPin size={18} />
+              )}
+            </AccessibleActionIcon>
+          )}
         </Group>
       </Group>
       <Group mb="sm">

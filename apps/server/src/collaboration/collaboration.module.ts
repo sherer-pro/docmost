@@ -23,12 +23,14 @@ import { SpacePolicyModule } from '../core/space-policy/space-policy.module';
 import { CollabPageUpdatePublisherService } from './services/collab-page-update-publisher.service';
 import { CollaborationHistoryModule } from './services/collaboration-history.module';
 import { QueueOutboxPersistenceModule } from '../database/persistence/queue-outbox-persistence.module';
+import { EmptyPageTemplatePersistenceService } from './services/empty-page-template-persistence.service';
 
 @Module({
   providers: [
     CollaborationGateway,
     AuthenticationExtension,
     PersistenceExtension,
+    EmptyPageTemplatePersistenceService,
     LoggerExtension,
     HistoryProcessor,
     CollaborationHandler,

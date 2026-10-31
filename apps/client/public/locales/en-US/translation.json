@@ -1644,11 +1644,12 @@
             "step5": "Switch between a document and space settings and use Back/Forward; the assistant must use the current document title.",
             "step6": "Select a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row.",
             "step7": "Check footnote evidence with the same source and access rules as the document body.",
-            "step8": "Include content from inactive document tabs when checking an answer."
+            "step8": "Include content from inactive document tabs when checking an answer.",
+            "step9": "The Agent capability test offers one function with tool_choice: required. A single valid capabilityProbe call is still mandatory; this supports LM Studio without relaxing tool permissions."
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
-          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes.\n\nSelect a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.\n\nAn administrator must explicitly enable the database capabilities. Tool results and previews are withheld if source access is revoked. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nFootnote text (footnote) is included as document evidence. It does not fetch or verify external references or widen page access.\n\nAll content and titles in tabs/tabItem belong to the document evidence. The active tab is local display state; selecting it never narrows AI/RAG evidence or grants source access."
+          "technical": "The built-in assistant runs private, page-bound chats through the provider configured for each space. Its space settings show request and token usage for today and the last 7 calendar days. Agent mode can call approved Docmost tools and applies page changes only after the initiating user confirms them. Immediately before applying a change, the server rechecks the current page write access and the deployment, workspace, space, profile, and group tool policies. The space profile editor shows localized tool names and receives the effective model-override policy through the space-scoped profile list; only workspace administrators can change the master switches. The shared knowledge projection enriches AI search and tool context with enabled document and custom fields, named database properties and cells, and active dictionary terms (`dictionary_term`). The curated `AI_ASSISTANT_PROFILE_ICONS` contract provides {{profileIconCount}} localized icon choices, rendered consistently in the profile editor and chat panel. Chat file selection remains active after the Add menu closes, so choosing a file still uploads it or displays a validation error. Agent approval hashes include editor defaults and Yjs normalization before a write is applied. A text field on a non-text node is rejected before approval; paragraph text must be in child text nodes.\n\nSelect a database view and optional rows, then use Agent to query records or calculate totals. Review every cell change before approving. A proposal is limited to 20 rows, 100 cells and 32 KiB; changed cell revisions reject the affected row. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Require evidence from permitted pages, files, or tool results. Workspace restrictions cannot be weakened by a space or profile.\n\nAn administrator must explicitly enable the database capabilities. Tool results and previews are withheld if source access is revoked. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nFootnote text (footnote) is included as document evidence. It does not fetch or verify external references or widen page access.\n\nAll content and titles in tabs/tabItem belong to the document evidence. The active tab is local display state; selecting it never narrows AI/RAG evidence or grants source access. The Agent capability test offers one function with tool_choice: required. A single valid capabilityProbe call is still mandatory; this supports LM Studio without relaxing tool permissions. Current database queries inherit the frozen viewState and selected rows. A tool error is not a zero total. Agent diagnostics retain preparationMs before inference, including pending approvals and provider failures. Built-in tool document text and database cell values are untrusted source data. Embedded commands cannot authorize unrelated changes or replace user approval."
         },
         "retrieval": {
           "description": "Space search runs while an answer is generated.",
@@ -3119,7 +3120,12 @@
     "saving": "Saving...",
     "saved": "Saved",
     "error": "Failed to update data",
-    "dirty": "Personal draft"
+    "dirty": "Personal draft",
+    "addProperty": "Add property",
+    "pinToolbar": "Pin toolbar",
+    "unpinToolbar": "Unpin toolbar",
+    "showDescription": "Show full description",
+    "hideDescription": "Collapse description"
   },
   "Move block": "Move block",
   "dbBoard": {
@@ -3169,6 +3175,7 @@
     "inUse": "The file is still referenced by documents, databases or history. Deletion was refused."
   },
   "docBlocks": {
+    "recordContent": "Record content",
     "presentation": "Present page",
     "slideNumber": "Slide {{number}} of {{total}}",
     "previousSlide": "Previous slide",
@@ -3199,6 +3206,10 @@
     "footnoteReference": "Footnote {{number}}",
     "backToReference": "Back to reference {{number}}",
     "emptyFootnote": "Empty footnote",
-    "footnoteChanged": "This footnote changed. Reopen it before saving."
+    "footnoteChanged": "This footnote changed. Reopen it before saving.",
+    "applyTemplate": "Use a template",
+    "templateApplyHint": "The template fills this empty page. Its title and location are preserved.",
+    "templateTargetChanged": "The page is no longer empty. Your content has been preserved.",
+    "applyAction": "Apply"
   }
 }

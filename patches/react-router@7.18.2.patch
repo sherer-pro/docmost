@@ -1,0 +1,84 @@
+diff --git a/dist/development/chunk-62JRHF6Z.mjs b/dist/development/chunk-62JRHF6Z.mjs
+index 43c3c5eae20fb44356130bd8b37ecc277ffdb62a..d553a51df3b46a59678cebb57cb79675ee288b71 100644
+--- a/dist/development/chunk-62JRHF6Z.mjs
++++ b/dist/development/chunk-62JRHF6Z.mjs
+@@ -10538,6 +10538,7 @@ var Link = React10.forwardRef(
+       prefetch,
+       rest
+     );
++    let mergedRef = React10.useMemo(() => mergeRefs(forwardedRef, prefetchRef), [forwardedRef, prefetchRef]);
+     let internalOnClick = useLinkClickHandler(to, {
+       replace: replace2,
+       mask,
+@@ -10565,7 +10566,7 @@ var Link = React10.forwardRef(
+           ...prefetchHandlers,
+           href: (isSpaLink ? maskedHref : void 0) || parsed.absoluteURL || href,
+           onClick: isSpaLink ? handleClick : onClick,
+-          ref: mergeRefs(forwardedRef, prefetchRef),
++          ref: mergedRef,
+           target,
+           "data-discover": !isAbsolute && discover === "render" ? "true" : void 0
+         }
+diff --git a/dist/development/chunk-7XGYIT3M.js b/dist/development/chunk-7XGYIT3M.js
+index 2d811c7f69ce39addbcdc25c5f25630a5d7ea1b7..5145d3d5868e169cf631e9ccada1a1c1bbf28512 100644
+--- a/dist/development/chunk-7XGYIT3M.js
++++ b/dist/development/chunk-7XGYIT3M.js
+@@ -420,6 +420,7 @@ var Link = React.forwardRef(
+       prefetch,
+       rest
+     );
++    let mergedRef = React.useMemo(() => _chunkHHGH3NKSjs.mergeRefs.call(void 0, forwardedRef, prefetchRef), [forwardedRef, prefetchRef]);
+     let internalOnClick = useLinkClickHandler(to, {
+       replace,
+       mask,
+@@ -447,7 +448,7 @@ var Link = React.forwardRef(
+           ...prefetchHandlers,
+           href: (isSpaLink ? maskedHref : void 0) || parsed.absoluteURL || href,
+           onClick: isSpaLink ? handleClick : onClick,
+-          ref: _chunkHHGH3NKSjs.mergeRefs.call(void 0, forwardedRef, prefetchRef),
++          ref: mergedRef,
+           target,
+           "data-discover": !isAbsolute && discover === "render" ? "true" : void 0
+         }
+diff --git a/dist/production/chunk-FDTIF24W.js b/dist/production/chunk-FDTIF24W.js
+index e6bfbabd4b7c5659eeaf7d9a4b2d00318945f6b7..4ea27c2d02493425bc458ce5fb65995925670753 100644
+--- a/dist/production/chunk-FDTIF24W.js
++++ b/dist/production/chunk-FDTIF24W.js
+@@ -420,6 +420,7 @@ var Link = React.forwardRef(
+       prefetch,
+       rest
+     );
++    let mergedRef = React.useMemo(() => _chunkTP6EHSSFjs.mergeRefs.call(void 0, forwardedRef, prefetchRef), [forwardedRef, prefetchRef]);
+     let internalOnClick = useLinkClickHandler(to, {
+       replace,
+       mask,
+@@ -447,7 +448,7 @@ var Link = React.forwardRef(
+           ...prefetchHandlers,
+           href: (isSpaLink ? maskedHref : void 0) || parsed.absoluteURL || href,
+           onClick: isSpaLink ? handleClick : onClick,
+-          ref: _chunkTP6EHSSFjs.mergeRefs.call(void 0, forwardedRef, prefetchRef),
++          ref: mergedRef,
+           target,
+           "data-discover": !isAbsolute && discover === "render" ? "true" : void 0
+         }
+diff --git a/dist/production/chunk-YBLPXYCV.mjs b/dist/production/chunk-YBLPXYCV.mjs
+index e9c83c3123c4ac53a21256629fd2b965aa8a2fd7..79cf3cd235b4e9cc1ee1270c467d48c7e3d37f10 100644
+--- a/dist/production/chunk-YBLPXYCV.mjs
++++ b/dist/production/chunk-YBLPXYCV.mjs
+@@ -10538,6 +10538,7 @@ var Link = React10.forwardRef(
+       prefetch,
+       rest
+     );
++    let mergedRef = React10.useMemo(() => mergeRefs(forwardedRef, prefetchRef), [forwardedRef, prefetchRef]);
+     let internalOnClick = useLinkClickHandler(to, {
+       replace: replace2,
+       mask,
+@@ -10565,7 +10566,7 @@ var Link = React10.forwardRef(
+           ...prefetchHandlers,
+           href: (isSpaLink ? maskedHref : void 0) || parsed.absoluteURL || href,
+           onClick: isSpaLink ? handleClick : onClick,
+-          ref: mergeRefs(forwardedRef, prefetchRef),
++          ref: mergedRef,
+           target,
+           "data-discover": !isAbsolute && discover === "render" ? "true" : void 0
+         }

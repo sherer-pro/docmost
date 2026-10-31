@@ -1,0 +1,132 @@
+diff --git a/cjs/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.cjs b/cjs/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.cjs
+index f2380aadfe5bb1123ec06aa44421cbacd8d06522..8d2d93bead0601599e0e7c3cba743a8bc89c8eb6 100644
+--- a/cjs/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.cjs
++++ b/cjs/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.cjs
+@@ -35,7 +35,7 @@ const ScrollAreaRoot = React.forwardRef((_props, ref) => {
+   const [cornerHeight, setCornerHeight] = React.useState(0);
+   const [scrollbarXEnabled, setScrollbarXEnabled] = React.useState(false);
+   const [scrollbarYEnabled, setScrollbarYEnabled] = React.useState(false);
+-  const rootRef = hooks.useMergedRef(ref, (node) => setScrollArea(node));
++  const rootRef = hooks.useMergedRef(ref, setScrollArea);
+   return /* @__PURE__ */ jsxRuntime.jsx(
+     ScrollArea_context.ScrollAreaProvider,
+     {
+diff --git a/cjs/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.cjs b/cjs/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.cjs
+index dc852fc03b265eca0f8dde2069196d44c43345f9..5c4e75b9e04458859f37efd60f3338c0ae17daaa 100644
+--- a/cjs/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.cjs
++++ b/cjs/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.cjs
+@@ -24,7 +24,7 @@ const Scrollbar = React.forwardRef((props, forwardedRef) => {
+   } = props;
+   const context = ScrollArea_context.useScrollAreaContext();
+   const [scrollbar, setScrollbar] = React.useState(null);
+-  const composeRefs = hooks.useMergedRef(forwardedRef, (node) => setScrollbar(node));
++  const composeRefs = hooks.useMergedRef(forwardedRef, setScrollbar);
+   const rectRef = React.useRef(null);
+   const prevWebkitUserSelectRef = React.useRef("");
+   const { viewport } = context;
+diff --git a/cjs/components/SegmentedControl/SegmentedControl.cjs b/cjs/components/SegmentedControl/SegmentedControl.cjs
+index fccdc134b75068308e40430921dd47f11e470c11..18abe8b15ee144641a1d446c6a87bfc1cf46a2f9 100644
+--- a/cjs/components/SegmentedControl/SegmentedControl.cjs
++++ b/cjs/components/SegmentedControl/SegmentedControl.cjs
+@@ -90,10 +90,9 @@ const SegmentedControl = factory.factory((_props, ref) => {
+   const [key, setKey] = React.useState(hooks.randomId());
+   const [parent, setParent] = React.useState(null);
+   const [refs, setRefs] = React.useState({});
+-  const setElementRef = (element, val) => {
+-    refs[val] = element;
+-    setRefs(refs);
+-  };
++  const labelRefs = React.useMemo(() => new Map(_data.map((item) => [item.value, (node) => {
++    setRefs((current) => current[item.value] === node ? current : { ...current, [item.value]: node });
++  }])), [JSON.stringify(_data.map((item) => item.value))]);
+   const [_value, handleValueChange] = hooks.useUncontrolled({
+     value,
+     defaultValue,
+@@ -134,7 +133,7 @@ const SegmentedControl = factory.factory((_props, ref) => {
+           "read-only": readOnly
+         },
+         htmlFor: `${uuid}-${item.value}`,
+-        ref: (node) => setElementRef(node, item.value),
++        ref: labelRefs.get(item.value),
+         __vars: {
+           "--sc-label-color": color !== void 0 ? getContrastColor.getContrastColor({ color, theme, autoContrast }) : void 0
+         },
+@@ -143,7 +142,7 @@ const SegmentedControl = factory.factory((_props, ref) => {
+       /* @__PURE__ */ jsxRuntime.jsx("span", { ...getStyles("innerLabel"), children: item.label })
+     )
+   ));
+-  const mergedRef = hooks.useMergedRef(ref, (node) => setParent(node));
++  const mergedRef = hooks.useMergedRef(ref, setParent);
+   hooks.useShallowEffect(() => {
+     setKey(hooks.randomId());
+   }, [data.length]);
+diff --git a/esm/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.mjs b/esm/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.mjs
+index 2bbb067cd1e1c55824595b2038da91976c95357f..06a086aecc06b4c666c3063683724a7cda7464a1 100644
+--- a/esm/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.mjs
++++ b/esm/components/ScrollArea/ScrollAreaRoot/ScrollAreaRoot.mjs
+@@ -33,7 +33,7 @@ const ScrollAreaRoot = forwardRef((_props, ref) => {
+   const [cornerHeight, setCornerHeight] = useState(0);
+   const [scrollbarXEnabled, setScrollbarXEnabled] = useState(false);
+   const [scrollbarYEnabled, setScrollbarYEnabled] = useState(false);
+-  const rootRef = useMergedRef(ref, (node) => setScrollArea(node));
++  const rootRef = useMergedRef(ref, setScrollArea);
+   return /* @__PURE__ */ jsx(
+     ScrollAreaProvider,
+     {
+diff --git a/esm/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.mjs b/esm/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.mjs
+index b1536c695a391ed5296eaf4e4daefc0643bd7e3b..32c34466d5ecba414a508632c05251156d77a78e 100644
+--- a/esm/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.mjs
++++ b/esm/components/ScrollArea/ScrollAreaScrollbar/Scrollbar.mjs
+@@ -22,7 +22,7 @@ const Scrollbar = forwardRef((props, forwardedRef) => {
+   } = props;
+   const context = useScrollAreaContext();
+   const [scrollbar, setScrollbar] = useState(null);
+-  const composeRefs = useMergedRef(forwardedRef, (node) => setScrollbar(node));
++  const composeRefs = useMergedRef(forwardedRef, setScrollbar);
+   const rectRef = useRef(null);
+   const prevWebkitUserSelectRef = useRef("");
+   const { viewport } = context;
+diff --git a/esm/components/SegmentedControl/SegmentedControl.mjs b/esm/components/SegmentedControl/SegmentedControl.mjs
+index 34e7fb1214e075f09a82ead803110fcf3ff3c744..cf91faa1806e452da88e1a7fb6c2c1586b3579c3 100644
+--- a/esm/components/SegmentedControl/SegmentedControl.mjs
++++ b/esm/components/SegmentedControl/SegmentedControl.mjs
+@@ -1,6 +1,6 @@
+ 'use client';
+ import { jsx, jsxs } from 'react/jsx-runtime';
+-import { useState, createElement } from 'react';
++import { useState, useMemo, createElement } from 'react';
+ import { useMounted, randomId, useUncontrolled, useId, useMergedRef, useShallowEffect } from '@mantine/hooks';
+ import '../../core/utils/units-converters/rem.mjs';
+ import { getFontSize, getSize, getRadius } from '../../core/utils/get-size/get-size.mjs';
+@@ -88,10 +88,9 @@ const SegmentedControl = factory((_props, ref) => {
+   const [key, setKey] = useState(randomId());
+   const [parent, setParent] = useState(null);
+   const [refs, setRefs] = useState({});
+-  const setElementRef = (element, val) => {
+-    refs[val] = element;
+-    setRefs(refs);
+-  };
++  const labelRefs = useMemo(() => new Map(_data.map((item) => [item.value, (node) => {
++    setRefs((current) => current[item.value] === node ? current : { ...current, [item.value]: node });
++  }])), [JSON.stringify(_data.map((item) => item.value))]);
+   const [_value, handleValueChange] = useUncontrolled({
+     value,
+     defaultValue,
+@@ -132,7 +131,7 @@ const SegmentedControl = factory((_props, ref) => {
+           "read-only": readOnly
+         },
+         htmlFor: `${uuid}-${item.value}`,
+-        ref: (node) => setElementRef(node, item.value),
++        ref: labelRefs.get(item.value),
+         __vars: {
+           "--sc-label-color": color !== void 0 ? getContrastColor({ color, theme, autoContrast }) : void 0
+         },
+@@ -141,7 +140,7 @@ const SegmentedControl = factory((_props, ref) => {
+       /* @__PURE__ */ jsx("span", { ...getStyles("innerLabel"), children: item.label })
+     )
+   ));
+-  const mergedRef = useMergedRef(ref, (node) => setParent(node));
++  const mergedRef = useMergedRef(ref, setParent);
+   useShallowEffect(() => {
+     setKey(randomId());
+   }, [data.length]);

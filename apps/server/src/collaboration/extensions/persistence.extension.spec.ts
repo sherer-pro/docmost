@@ -96,6 +96,7 @@ function createHarness() {
     eventEmitter as never,
     collabPageUpdates as never,
     pageTemplatePolicy as never,
+    { apply: jest.fn() } as never,
   );
   jest.spyOn(extension['logger'], 'debug').mockImplementation(() => undefined);
   jest.spyOn(extension['logger'], 'warn').mockImplementation(() => undefined);

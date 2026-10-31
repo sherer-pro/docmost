@@ -1060,6 +1060,7 @@ export interface PageTemplateGroupPolicies {
 }
 
 export interface PageTemplateOperations {
+  applyMetadata: Json | null;
   afterContentHash: string | null;
   attachmentMapping: Json | null;
   attemptCount: Generated<number>;

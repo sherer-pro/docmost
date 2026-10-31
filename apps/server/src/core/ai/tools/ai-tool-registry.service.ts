@@ -1055,8 +1055,8 @@ export class AiToolRegistryService {
     const tools: InternalAiToolDefinition[] = [false, true].map((summary) => ({
       name: summary ? 'summarizeDatabaseView' : 'queryDatabaseView',
       description: summary
-        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Use this tool for totals, never sum a context snapshot or one page of rows.'
-        : 'Query typed database cells using the frozen current view or an explicit validated viewState. Results are paginated; hasMore means the selection is incomplete.',
+        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Omit viewState to use the frozen current filters, calculations and selected rows. Use this tool for totals, never sum a context snapshot or one page of rows.'
+        : 'Query typed database cells. Omit viewState to use the frozen current view and selected rows. Supply a validated viewState only for a requested override. Results are paginated; hasMore means the selection is incomplete.',
       inputSchema: {
         type: 'object',
         additionalProperties: false,

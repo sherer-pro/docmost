@@ -209,6 +209,13 @@ export type PageTemplateCapabilitiesResponse = {
   capabilities: PageTemplateCapabilities;
 };
 
+export type ApplyPageTemplateRequest = { templatePageId: string };
+export type ApplyPageTemplateResult = {
+  pageId: string;
+  applied: true;
+  idempotent: boolean;
+};
+
 export type PageTemplateDiscoveryResponse =
   CursorPage<PageTemplateCatalogItem> & PageTemplateCapabilitiesResponse;
 

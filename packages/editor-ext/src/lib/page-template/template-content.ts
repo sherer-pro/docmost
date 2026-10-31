@@ -3,6 +3,17 @@ import type { JSONContent } from '@tiptap/core';
 export const TEMPLATE_MANAGED_BLOCK_TYPE = 'templateManagedBlock';
 export const TEMPLATE_FIELD_TYPE = 'templateField';
 
+export function isEmptyTemplateTarget(input: unknown): boolean {
+  const doc = input as JSONContent | null;
+  return Boolean(
+    doc?.type === 'doc' &&
+      Array.isArray(doc.content) &&
+      doc.content.every(
+        (node) => node.type === 'paragraph' && !node.content?.length,
+      ),
+  );
+}
+
 export type TemplateDiffSummary = {
   addedBlockIds: string[];
   removedBlockIds: string[];

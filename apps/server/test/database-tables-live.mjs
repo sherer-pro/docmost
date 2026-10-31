@@ -7,11 +7,16 @@ import { once } from 'node:events';
 import { cp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
+import {
+  databaseQualityConfiguration,
+  runDatabaseQuality,
+} from './ai-database-quality-live.mjs';
 
 const exec = promisify(execFile);
 const repo = path.resolve(import.meta.dirname, '../../..');
 const require = createRequire(path.join(repo, 'apps/server/package.json'));
 const postgres = require('postgres');
+const quality = databaseQualityConfiguration();
 const runId = randomUUID();
 const prefix = `docmost-tables-live-${runId.slice(0, 8)}`;
 const output = path.join(
@@ -27,11 +32,14 @@ let networkCreated = false;
 const report = {
   runId,
   isolated: true,
-  scope: process.argv.includes('--api-only')
-    ? 'api'
-    : process.argv.includes('--startup-only')
-      ? 'startup'
-      : 'full',
+  scope: quality
+    ? 'ai-database-quality'
+    : process.argv.includes('--templates-only') ? 'targeted-templates'
+    : process.argv.includes('--api-only')
+      ? 'api'
+      : process.argv.includes('--startup-only')
+        ? 'startup'
+        : 'full',
   tests: [],
   cleanup: {},
 };
@@ -161,6 +169,19 @@ try {
       image,
     ]);
     containers.push(name);
+    await writeFile(
+      path.join(output, 'resources.json'),
+      JSON.stringify(
+        {
+          runId,
+          network: prefix,
+          containers,
+          synthetic: true,
+        },
+        null,
+        2,
+      ),
+    );
   }
   const [pg, redis] = containers;
   await wait('PostgreSQL', async () => {
@@ -220,7 +241,12 @@ try {
     RAG_SYNC_ENABLED: 'false',
     AI_EXTERNAL_MCP_ENABLED: 'false',
     AI_BUILTIN_TOOL_EXTENSIONS_ENABLED: 'true',
-    AI_PROVIDER_ALLOWED_ORIGINS: `http://127.0.0.1:${modelPort}`,
+    AI_PROVIDER_ALLOWED_ORIGINS: [
+      `http://127.0.0.1:${modelPort}`,
+      quality?.origin,
+    ]
+      .filter(Boolean)
+      .join(','),
     PAGE_TEMPLATES_ENABLED: 'true',
     CLOUD: 'false',
     LOG_HTTP: 'false',
@@ -274,7 +300,10 @@ try {
   });
   if (
     !process.argv.includes('--startup-only') &&
-    !process.argv.includes('--api-only')
+    !process.argv.includes('--api-only') &&
+    !process.argv.includes('--skip-postgres') &&
+    !process.argv.includes('--templates-only') &&
+    !quality
   ) {
     const jest = require.resolve('jest/bin/jest');
     const check = spawn(
@@ -302,10 +331,12 @@ try {
   }
   if (!process.argv.includes('--startup-only')) {
     connection = postgres(env.DATABASE_URL, { max: 4, onnotice: () => {} });
-    const { runLiveAcceptance } = await import(
-      './database-tables-live-acceptance.mjs'
-    );
-    await runLiveAcceptance({
+    const acceptance = quality
+      ? runDatabaseQuality
+      : (await import('./database-tables-live-acceptance.mjs'))
+          .runLiveAcceptance;
+    await acceptance({
+      config: quality,
       providerURL,
       baseURL,
       collabURL,
@@ -315,7 +346,8 @@ try {
       exactSecrets,
     });
   }
-  report.passed = true;
+  report.passed = quality ? null : true;
+  if (quality) report.captureComplete = true;
 } catch (error) {
   report.passed = false;
   report.error = scrub(error.message);
@@ -326,6 +358,9 @@ try {
     .filter((line) => /ERROR|TypeError|Error:|at .*user/i.test(line));
   if (serverErrors?.length) console.error(serverErrors.slice(-14).join('\n'));
   console.error(report.error);
+  for (const child of children.filter((item) => ['api', 'collaboration'].includes(item.role))) {
+    await writeFile(path.join(output, `${child.role}-failure.log`), scrub(child.tail()));
+  }
   process.exitCode = 1;
 } finally {
   if (connection) await connection.end();
@@ -357,6 +392,6 @@ try {
     JSON.stringify(report, null, 2),
   );
   console.log(
-    `Live acceptance ${report.passed ? 'passed' : 'failed'}; compact result: ${path.relative(repo, output)}/result.json`,
+    `${quality && report.captureComplete ? 'Quality capture complete; acceptance and human review pending' : `Live acceptance ${report.passed ? 'passed' : 'failed'}`}; compact result: ${path.relative(repo, output)}/result.json`,
   );
 }

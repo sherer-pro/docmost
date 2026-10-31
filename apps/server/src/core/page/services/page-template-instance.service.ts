@@ -30,6 +30,7 @@ import { TransclusionService } from '../transclusion/transclusion.service';
 import { rewriteAttachmentsForUnsync } from '../transclusion/utils/transclusion-unsync.util';
 import {
   CreateFromTemplateDto,
+  ApplyPageTemplateDto,
   CreateIndependentPageCopyDto,
   CreatePageTemplateDto,
   DetachSyncedTemplateDto,
@@ -40,11 +41,15 @@ import {
 import { PageService } from './page.service';
 import { executeTx } from '@docmost/db/utils';
 import { PageHistoryRecorderService } from './page-history-recorder.service';
-import type { TemplateKind } from '@docmost/api-contract';
+import type {
+  TemplateKind,
+  ApplyPageTemplateResult,
+} from '@docmost/api-contract';
 import {
   createTemplateInstanceContent,
   detachTemplateContent,
   normalizeTemplateDraft,
+  isEmptyTemplateTarget,
 } from '@docmost/editor-ext/server';
 import { PageTemplateContentService } from './page-template-content.service';
 import { PageTemplateOperationService } from './page-template-operation.service';
@@ -1073,6 +1078,181 @@ export class PageTemplateInstanceService {
         copiedPaths,
         error,
       );
+      throw error;
+    }
+  }
+
+  async applyToEmpty(
+    pageId: string,
+    dto: ApplyPageTemplateDto,
+    key: string,
+    user: User,
+  ): Promise<ApplyPageTemplateResult> {
+    this.operations.assertIdempotencyKey(key);
+    const target = await this.content.requirePlainDocument(
+      pageId,
+      user.workspaceId,
+    );
+    await this.pageAccessService.assertCanWritePage(target, user);
+    const request = { pageId, ...dto };
+    const completed = await this.operations.findCompletedOperation(
+      'template_apply',
+      key,
+      user,
+      request,
+    );
+    if (completed) return { pageId, applied: true, idempotent: true };
+    const current = await this.content.getLiveContent(pageId, user);
+    if (target.templateKind || !isEmptyTemplateTarget(current)) {
+      throw this.conflict(
+        'page_template_target_not_empty',
+        'The document is no longer empty',
+      );
+    }
+    const existing = await this.db
+      .selectFrom('pageTemplateInstances')
+      .select('id')
+      .where('childPageId', '=', pageId)
+      .executeTakeFirst();
+    if (existing)
+      throw this.conflict(
+        'page_template_target_linked',
+        'The page already has template provenance',
+      );
+    const source = await this.content.requireTemplateSource(
+      dto.templatePageId,
+      user,
+    );
+    if (source.spaceId !== target.spaceId || source.templateArchivedAt) {
+      throw this.conflict(
+        'page_template_source_changed',
+        'An active template in the same space is required',
+      );
+    }
+    const kind = source.templateKind as TemplateKind;
+    await this.policy.assertAction(
+      user.workspaceId,
+      target.spaceId,
+      user.id,
+      kind === 'synced' ? 'use_synced_template' : 'use_regular_template',
+    );
+    const revision =
+      kind === 'synced'
+        ? await this.db
+            .selectFrom('pageTemplateRevisions')
+            .selectAll()
+            .where('templatePageId', '=', source.id)
+            .orderBy('revision', 'desc')
+            .executeTakeFirst()
+        : null;
+    if (kind === 'synced' && !revision) {
+      throw this.conflict(
+        'page_template_not_published',
+        'Publish the synchronized template before using it',
+      );
+    }
+    const sourceContent =
+      revision?.content ?? (await this.content.getLiveContent(source.id, user));
+    const sourceHash =
+      revision?.contentHash ?? hashPageTemplateInstanceContent(sourceContent);
+    const baseHash = hashPageTemplateInstanceContent(current);
+    const operation = await this.operations.beginOperation(
+      'template_apply',
+      key,
+      user,
+      request,
+      {
+        sourcePageId: source.id,
+        consumerPageId: pageId,
+        baseContentHash: baseHash,
+        applyMetadata: {
+          kind,
+          sourceHash,
+          revision: revision?.revision ?? null,
+          attachmentRows: [],
+        },
+      },
+    );
+    if (operation.status === 'completed')
+      return { pageId, applied: true, idempotent: true };
+    const copiedPaths: string[] = [];
+    try {
+      if (
+        operation.applyMetadata &&
+        (operation.applyMetadata.sourceHash !== sourceHash ||
+          operation.applyMetadata.kind !== kind ||
+          operation.baseContentHash !== baseHash)
+      )
+        throw this.conflict(
+          'page_template_source_changed',
+          'The template or target changed; start a new application',
+        );
+      const rewritten = await this.readOrStageAttachmentRewrittenContent(
+        operation,
+        async () =>
+          kind === 'synced'
+            ? createTemplateInstanceContent(sourceContent)
+            : sourceContent,
+      );
+      strictJsonToNode(rewritten.content as any);
+      const attachmentRows = await this.content.copyAttachments(
+        rewritten.copies,
+        source,
+        pageId,
+        target.spaceId,
+        user,
+        copiedPaths,
+        false,
+      );
+      const staged = await this.db
+        .updateTable('pageTemplateOperations')
+        .set({
+          applyMetadata: {
+            kind,
+            sourceHash,
+            revision: revision?.revision ?? null,
+            attachmentRows,
+          } as any,
+        })
+        .where('id', '=', operation.id)
+        .where('status', '=', 'pending')
+        .where('leaseToken', '=', operation.leaseToken)
+        .where('leaseExpiresAt', '>', new Date())
+        .returning('id')
+        .executeTakeFirst();
+      if (!staged)
+        throw this.conflict(
+          'page_template_operation_lease_lost',
+          'The template application lease was lost',
+        );
+      await this.content.applyMutation(
+        pageId,
+        current,
+        rewritten.content,
+        baseHash,
+        operation.id,
+        operation.leaseToken,
+        user,
+      );
+      return { pageId, applied: true, idempotent: false };
+    } catch (error) {
+      await this.operations.failOperation(
+        operation.id,
+        this.operations.errorCode(error),
+        operation.leaseToken,
+      );
+      const receipt = await this.operations.findOperation(
+        'template_apply',
+        key,
+        user,
+      );
+      if (receipt?.status === 'completed')
+        return { pageId, applied: true, idempotent: true };
+      if (receipt?.status === 'failed') {
+        await Promise.allSettled(
+          copiedPaths.map((file) => this.storageService.delete(file)),
+        );
+      }
       throw error;
     }
   }

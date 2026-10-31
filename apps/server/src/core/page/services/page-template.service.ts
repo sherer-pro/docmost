@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { User } from '@docmost/db/types/entity.types';
 import {
   CreateFromTemplateDto,
+  ApplyPageTemplateDto,
   CreateIndependentPageCopyDto,
   CreatePageTemplateDto,
   DetachSyncedTemplateDto,
@@ -50,6 +51,15 @@ export class PageTemplateService {
     user: User,
   ) {
     return this.instances.createFromTemplate(dto, idempotencyKey, user);
+  }
+
+  applyToEmpty(
+    pageId: string,
+    dto: ApplyPageTemplateDto,
+    key: string,
+    user: User,
+  ) {
+    return this.instances.applyToEmpty(pageId, dto, key, user);
   }
 
   listUsages(pageId: string, dto: PageTemplatePaginationDto, user: User) {

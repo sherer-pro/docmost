@@ -11,7 +11,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   DatabaseFilterGroup,
@@ -26,10 +26,12 @@ export function DatabaseViewControls({
   state,
   properties,
   onChange,
+  children,
 }: {
   state: DatabaseViewState;
   properties: IDatabaseProperty[];
   onChange: (state: DatabaseViewState) => void;
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [opened, setOpened] = useState(false);
@@ -49,6 +51,7 @@ export function DatabaseViewControls({
     );
   const content = (
     <Stack gap="md">
+      {children}
       <Text fw={600}>{t("Filters")}</Text>
       <FilterGroupEditor
         group={filter}

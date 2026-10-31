@@ -1,5 +1,5 @@
 {
-  "version": 31,
+  "version": 32,
   "anchors": [
     "assistant",
     "retrieval",
@@ -161,6 +161,11 @@
       "needles": [
         "tabs/tabItem"
       ]
+    },
+    {
+      "id": "database-agent-preparation-and-frozen-view",
+      "key": "scenario.assistant.technical",
+      "needles": ["viewState", "preparationMs"]
     }
   ],
   "requiredKeys": [
@@ -344,6 +349,7 @@
     "scenario.retrieval.steps.step4",
     "scenario.assistant.steps.step6",
     "scenario.assistant.steps.step7",
-    "scenario.assistant.steps.step8"
+    "scenario.assistant.steps.step8",
+    "scenario.assistant.steps.step9"
   ]
 }

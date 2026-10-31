@@ -59,3 +59,8 @@
 .readOnlyDescription :global(.ProseMirror) {
   cursor: default;
 }
+
+.descriptionViewport[data-collapsed="true"] {
+  max-height: 180px;
+  overflow: hidden;
+}

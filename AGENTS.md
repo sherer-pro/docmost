@@ -72,6 +72,7 @@
 - `apps/client/src/features/editor/components/tag` — inline TBD/TODO tag node view.
 - `apps/client/src/features/editor/components/{footnote,tabs,presentation}` — shared document block readers, editing controls and read-only presentation. `docs/EDITOR_BLOCKS.md` defines persistence, search, evidence, direction and export behavior. The presentation's `DocumentReadOnlyContext` also prevents embedded database editing.
 - `apps/client/src/features/editor/components/fixed-toolbar` — persistent editor toolbar shown when the user preference is enabled.
+- `apps/client/src/features/editor/isolated-editor-scope.tsx` — `jotai-scope` boundaries for record title/body editors, local find, comments and history; user/session/query state remains shared.
 - `apps/client/src/features/page/components/reading-time` — live page reading-time calculation, localized labels, and theme-aware indicator styling.
 - `apps/client/src/features/space/components/custom-links` — admin-managed space sidebar custom links: curated Tabler icon registry, URL safety helper, and the settings UI.
 - `apps/client/src/features/space/components/settings` — routed space administration, section forms, and the shared unsaved-change blocker. `/settings/spaces/:spaceSlug/:section?` defaults to `general`; the router uses `createBrowserRouter`/`RouterProvider`.
@@ -160,6 +161,7 @@
 - Space administration browser acceptance with synthetic local API data: `node apps/client/e2e/space-administration/run.mjs` (owns and closes Vite on port 5193).
 - Database table browser acceptance with synthetic local API data: `node apps/client/e2e/database/run.mjs` (owns and closes Vite on port 5195). See `docs/DATABASE_TABLES.md` for value/view contracts and recovery behavior.
 - Database table full local application acceptance: build first, then run `node apps/client/e2e/database/run-live.mjs`. It owns isolated PostgreSQL/Redis containers, application/collaboration processes, storage, and synthetic sessions; it never loads repository `.env`. See `docs/DATABASE_TABLES.md` for diagnostic subsets and receipts.
+- Empty-page template diagnostic: `node apps/client/e2e/database/run-live.mjs --templates-only --api-only`; remove `--api-only` and use `--grep="live empty template" --browser=all` for its browser matrix. `--skip-postgres` is a diagnostic-only option for browser/HTTP work; it never replaces the required final PostgreSQL suite. Failed runs retain sanitized API/collaboration tails and a resource ownership journal.
 - Database table PostgreSQL acceptance: set `DATABASE_TABLES_TEST_DATABASE_URL` to an isolated localhost database ending in `_test`, then run `pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/database-tables.e2e-spec.ts`. The suite owns a unique schema, exercises real mutation/outbox transactions, and never loads application `.env`.
 - Space administration PostgreSQL acceptance: set `SPACES_ADMIN_TEST_DATABASE_URL` to an isolated localhost database ending in `_test`, then run `pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/space-administration.e2e-spec.ts`. The suite owns a unique schema and never loads the application `.env`.
 - Editor extension package-local tests (run through client Vitest): `pnpm test:editor-ext`
@@ -294,6 +296,9 @@ Minimum:
   - architecture reports: `pnpm audit:deps`, `pnpm audit:dead-code`, `pnpm audit:duplicates`, `pnpm audit:architecture` use `dependency-cruiser`, `knip`, and `jscpd`; they are non-blocking local audit commands.
   - `pnpm check:maintenance-audit` is the blocking counterpart: it rejects new or silently resolved Knip/jscpd fingerprints and an overdue `docs/maintenance-audit-baseline.json` review date.
 - Dependency patches: keep and maintain them in `patches/` and root `package.json` `pnpm.patchedDependencies`.
+- `@hocuspocus/server@3.4.4` has a focused `try/finally` patch that releases rejected save-queue entries. Preserve it until the same native recovery tests pass on a reviewed replacement. `apps/server/src/collaboration/hocuspocus-debounce.spec.ts` exercises the real dependency and a direct connection after a storage failure.
+- `react-router@7.18.2` memoizes the Link merged ref. Recreating it on URL changes detaches stateful Floating UI references and can trigger React update-depth failures. Preserve the native ref regression and the database browser cases starting record editors in both read and edit modes before removing the patch.
+- `@mantine/core@8.3.14` keeps SegmentedControl and ScrollArea root/scrollbar merged refs stable by passing their state setters directly. SegmentedControl also memoizes label callbacks by value and updates its reference map immutably. The native reference regressions are independent of the Router regression; all must pass together with the database browser matrix before removing either patch.
 
 ---
 
@@ -519,6 +524,7 @@ AgentMemory is a shared machine service: one database, one port set, one `~/.age
 - The optional per-space `evidence-v1` profile uses `structured-knowledge-v3`; metadata write version 3 is required for its synchronization. `legacy-v1` retains canonical evidence and citation safety fixes.
 - Validate the 200-question synthetic corpus and evaluator with `node --test scripts/rag-quality-benchmark.test.mjs`. Regenerate fixtures with `node scripts/generate-rag-quality-corpus.mjs`.
 - Score recorded, human-reviewed runs with `node scripts/rag-quality-benchmark.mjs results.jsonl report.json holdout evidence-v1`; read `tests/rag-quality/README.md` before running a quality experiment. Unit tests do not establish production relevance or faithfulness.
+- Run real database Agent traces against an unauthenticated loopback model with `node apps/client/e2e/database/run-live.mjs --ai-quality --quality-split=tuning`; use `--quality-provider=http://127.0.0.1:56254/v1`, `--quality-model=google/gemma-4-12b-qat` and optional `--quality-limit=6`. The isolated PostgreSQL/Redis/application harness never loads `.env`, applies real ACL/content exclusions, writes no approved model changes and stores unreviewed results under `artifacts/database/live`. Holdout is a separate `--quality-split=holdout` run after fixing settings.
 - Isolated Open WebUI first startup may download embeddings; `OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS` accepts 1000-900000 ms. Use a unique `COMPOSE_PROJECT_NAME`; the runner removes only that test stack.
 
 ## Local results and graphs

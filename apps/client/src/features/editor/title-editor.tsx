@@ -37,6 +37,7 @@ export interface TitleEditorProps {
   title: string;
   spaceSlug: string;
   editable: boolean;
+  syncUrl?: boolean;
 }
 
 export function TitleEditor({
@@ -45,6 +46,7 @@ export function TitleEditor({
   title,
   spaceSlug,
   editable,
+  syncUrl = true,
 }: TitleEditorProps) {
   const { t } = useTranslation();
   const { mutateAsync: updateTitlePageMutationAsync } =
@@ -135,13 +137,12 @@ export function TitleEditor({
 
   useEffect(() => {
     return () => {
-      setTitleEditor((current) =>
-        current === titleEditor ? null : current,
-      );
+      setTitleEditor((current) => (current === titleEditor ? null : current));
     };
   }, [setTitleEditor, titleEditor]);
 
   useEffect(() => {
+    if (!syncUrl) return;
     const currentUrl = `${location.pathname}${location.search}${location.hash}`;
     const canonicalPath = buildPageUrl(spaceSlug, slugId, title);
 
@@ -157,10 +158,12 @@ export function TitleEditor({
     spaceSlug,
     syncCanonicalUrl,
     title,
+    syncUrl,
   ]);
 
   const saveTitle = useCallback(() => {
-    if (!titleEditor || titleEditor.isDestroyed || activePageId !== pageId) return;
+    if (!titleEditor || titleEditor.isDestroyed || activePageId !== pageId)
+      return;
 
     if (
       titleEditor.getText() === title ||
@@ -186,7 +189,8 @@ export function TitleEditor({
         },
       };
 
-      if (titleEditor.isDestroyed || page.title !== titleEditor.getText()) return;
+      if (titleEditor.isDestroyed || page.title !== titleEditor.getText())
+        return;
 
       updatePageData(page);
 
@@ -239,7 +243,8 @@ export function TitleEditor({
         titleEditor.isDestroyed ||
         !titleEditor.isInitialized ||
         !titleEditor.isEmpty
-      ) return;
+      )
+        return;
       // Do not steal focus after the user has selected another control.
       if (document.activeElement !== document.body) return;
       titleEditor.commands.focus("end");
@@ -264,7 +269,9 @@ export function TitleEditor({
   }, [isTitleEditable, titleEditor]);
 
   const openSearchDialog = () => {
-    const event = new CustomEvent("openFindDialogFromEditor", {});
+    const event = new CustomEvent("openFindDialogFromEditor", {
+      detail: { editor: pageEditor },
+    });
     document.dispatchEvent(event);
   };
 

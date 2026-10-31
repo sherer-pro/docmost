@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 31 -->
+<!-- ai-admin-guide-contract-version: 32 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -283,6 +283,21 @@ row dependencies are retained; the run API and approval endpoints revalidate
 them before returning tool results or previews. Losing access produces
 `source_access_changed` instead of exposing an older result.
 
+Omitting the optional tool `viewState` uses the run's frozen filters,
+calculations and selected rows. Agent instructions prefer this form for a
+current-view question and require a failed query to be reported as an error,
+  never as a zero total. These are model instructions; server validation remains
+mandatory and answer faithfulness still requires evaluation.
+
+The fixed Agent preamble treats document text and database cell values returned
+by built-in tools as untrusted source data. Embedded commands cannot authorize
+additional changes. Database quality fixtures include prompt injection alongside
+actual null budget and date cells; no source text counts as user approval.
+
+Agent diagnostics retain `preparationMs` before provider calls, including a
+pending approval or later provider failure. This uses the same pre-generation
+preparation interval as Chat and excludes model inference time.
+
 Enable `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED` at deployment level and explicitly
 grant the three capabilities in workspace/space policy before using this flow.
 Existing deployments and allowlists do not acquire the capabilities implicitly.
@@ -332,6 +347,12 @@ the currently configured provider, base URL, and chat model. The test forces a
 known tool call and records a configuration fingerprint only when the response
 is structurally valid. Changing those provider fields invalidates the
 fingerprint and disables agent mode until it is tested again.
+
+The space and profile probes offer only `capabilityProbe` and set
+`tool_choice: "required"`. Exactly one call with `{"value":"ok"}` must still
+be returned. This also supports providers such as LM Studio that accept the
+string choice but reject an object selecting a named function. Ordinary Agent
+requests retain `auto`; this probe does not grant additional tools or rights.
 
 ### Per-space assistant profiles
 

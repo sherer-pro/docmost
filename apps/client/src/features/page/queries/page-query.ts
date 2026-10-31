@@ -165,6 +165,24 @@ export function useCreatePageMutation({
   });
 }
 
+export function updatePageContentCache(
+  pageId: string,
+  slugId: string,
+  content: IPage["content"],
+) {
+  const page = queryClient.getQueryData<IPage>(PAGE_QUERY_KEYS.page(slugId));
+  if (!page || page.id !== pageId) return;
+  // Date instances must also be shared so alias readers can reach a fixed point.
+  const snapshot = {
+    ...page,
+    content,
+    updatedAt: new Date(),
+  };
+  queryClient.setQueryData(PAGE_QUERY_KEYS.page(slugId), snapshot);
+  if (pageId !== slugId)
+    queryClient.setQueryData(PAGE_QUERY_KEYS.page(pageId), snapshot);
+}
+
 export function updatePageData(data: IPage) {
   queryClient.setQueryData<IPage>(
     PAGE_QUERY_KEYS.page(data.slugId),

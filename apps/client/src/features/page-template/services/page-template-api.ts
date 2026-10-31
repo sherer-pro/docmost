@@ -5,6 +5,7 @@ import type {
   PageTemplatePolicyGroupsQuery,
   PageTemplatePolicyGroupsResponse,
   PageTemplateSpacePolicy,
+  ApplyPageTemplateResult,
 } from "@docmost/api-contract";
 import type {
   PageTemplateCapabilities,
@@ -101,6 +102,15 @@ export async function createPageFromTemplate(params: {
   title?: string;
 }) {
   return postIdempotent("/pages/actions/create-from-template", params);
+}
+
+export async function applyPageTemplate(
+  pageId: string,
+  templatePageId: string,
+): Promise<ApplyPageTemplateResult> {
+  return postIdempotent(`/pages/${pageId}/actions/apply-template`, {
+    templatePageId,
+  });
 }
 
 export async function createIndependentPageCopy(params: {

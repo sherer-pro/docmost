@@ -1096,7 +1096,7 @@ export class AiAssistantProfileService {
           },
         },
       ],
-      { type: 'function', function: { name: toolName } },
+      'required',
     );
     const call = completion.toolCalls[0];
     let argumentsValue: unknown = null;

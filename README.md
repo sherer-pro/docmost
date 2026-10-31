@@ -131,10 +131,11 @@ revocation still fail closed. Existing spaces and no-profile conversations keep
 their previous behavior.
 
 Agent mode is an optional per-conversation workflow. It can search and navigate
-accessible Docmost content, then propose bounded edits to the current page.
+accessible Docmost content, then propose bounded edits to the current page or
+existing cells of an explicitly selected database.
 Every write requires a separate initiator-only confirmation and is rejected if
-the page content, write permission, or built-in tool policy changed before
-approval. The shared built-in tool catalog is controlled by exact workspace and
+the relevant content or cell revisions, write permission, or built-in tool policy
+changed before approval. The shared built-in tool catalog is controlled by exact workspace and
 space capability allowlists; optional context, database, table, comment,
 history, transclusion, attachment-metadata, and public-share reads are off at
 the deployment boundary by default and require explicit opt-in.
@@ -146,9 +147,10 @@ the deployment boundary by default and require explicit opt-in.
 Search evidence is resolved from current Docmost content before generation, and
 only fragments actually sent to the model can be cited. The optional
 `evidence-v1` quality profile adds `structured-knowledge-v3` sections, local
-fallback and bounded query expansion. The 200-question synthetic evaluation
-corpus separates tuning and holdout cases; production quality and reranker
-benefit still require measurement. See the [evaluation runbook](tests/rag-quality/README.md).
+fallback and bounded query expansion. The synthetic evaluation corpus contains
+200 RAG questions and 160 database cases, split into tuning and holdout sets;
+production quality and reranker benefit still require measurement. See the
+[evaluation runbook](tests/rag-quality/README.md).
 
 The fork includes its own RAG API and integrations with external knowledge-retrieval systems.
 
@@ -318,7 +320,11 @@ The fork includes structured databases:
 
 - Kanban with full column counts, independent pagination and revision-checked moves;
 
-- linked database views, record previews and CSV of the complete accessible view;
+- linked database views and CSV of the complete accessible view;
+
+- a record side panel with title, body and property editing, comments, history and previous/next navigation that preserves the table position, filters and selection;
+
+- compact view controls, a personal pinned toolbar and a collapsible database description;
 
 - row and cell editing with revision conflicts, partial-batch feedback, personal view drafts and explicit shared saves;
 
@@ -469,6 +475,8 @@ The editor includes the following additional capabilities:
 - page templates presented by outcome as independent copies or linked pages, with a searchable responsive catalog, preview/details panel, archive and restore;
 
 - a two-step template creation flow and a single confirmation flow for choosing the template, page title, and same-space destination;
+
+- applying a regular or published linked template to an existing empty page while preserving its title and location, with idempotent retries and rejection if content was added concurrently;
 
 - published, immutable linked-template revisions with content-only background synchronization, localized progress and recovery states, version comparison, and safe detach or independent-copy actions;
 

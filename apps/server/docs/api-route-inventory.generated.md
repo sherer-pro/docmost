@@ -154,6 +154,7 @@
 | POST | `/pages/:pageId/actions/access/groups` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/resolve-users` | `apps/server/src/core/page/page.controller.ts` |
 | POST | `/pages/:pageId/actions/access/users` | `apps/server/src/core/page/page.controller.ts` |
+| POST | `/pages/:pageId/actions/apply-template` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/actions/create-independent-copy` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/actions/detach-template` | `apps/server/src/core/page/page-template.controller.ts` |
 | POST | `/pages/:pageId/actions/referenced-users/resolve` | `apps/server/src/core/page/page.controller.ts` |

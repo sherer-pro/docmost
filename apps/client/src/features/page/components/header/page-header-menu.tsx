@@ -542,7 +542,7 @@ function PageActionMenu({
   const handleCreateFromTemplate = () => {
     window.dispatchEvent(
       new CustomEvent("docmost:page-template-picker", {
-        detail: { mode: "create" },
+        detail: { mode: "create", pageId: page?.id },
       }),
     );
   };

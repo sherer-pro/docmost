@@ -48,6 +48,7 @@ import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-op
 import { validateTemplateInstanceMutation } from '@docmost/editor-ext/server';
 import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
 import { PageTemplatePolicyService } from '../../core/page/transclusion/page-template-policy.service';
+import { EmptyPageTemplatePersistenceService } from '../services/empty-page-template-persistence.service';
 
 @Injectable()
 export class PersistenceExtension implements Extension {
@@ -81,6 +82,7 @@ export class PersistenceExtension implements Extension {
     private readonly eventEmitter: EventEmitter2,
     private readonly collabPageUpdates: CollabPageUpdatePublisherService,
     private readonly pageTemplatePolicy: PageTemplatePolicyService,
+    private readonly emptyPageTemplates: EmptyPageTemplatePersistenceService,
   ) {}
 
   async onLoadDocument(data: onLoadDocumentPayload) {
@@ -199,7 +201,13 @@ export class PersistenceExtension implements Extension {
           const mutationOperation = context?.pageTemplateMutationId
             ? await trx
                 .selectFrom('pageTemplateOperations')
-                .select(['id', 'operationKind', 'sourcePageId'])
+                .select([
+                  'id',
+                  'operationKind',
+                  'sourcePageId',
+                  'applyMetadata',
+                  'attachmentMapping',
+                ])
                 .where('id', '=', context.pageTemplateMutationId)
                 .where('workspaceId', '=', lockedPage.workspaceId)
                 .where('requestedById', '=', context.user.id)
@@ -330,6 +338,15 @@ export class PersistenceExtension implements Extension {
                 message: 'The synchronized template link changed',
               });
             }
+          }
+
+          if (mutationOperation?.operationKind === 'template_apply') {
+            await this.emptyPageTemplates.apply(
+              trx,
+              lockedPage,
+              mutationOperation,
+              context.user,
+            );
           }
 
           const contributorIds = context?.pageTemplateSystemSyncRevision

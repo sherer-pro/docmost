@@ -1,0 +1,60 @@
+diff --git a/dist/hocuspocus-server.cjs b/dist/hocuspocus-server.cjs
+index b24ff6d091c32f733089eeaa47b03f7b37cf5964..cffa6a6e7fd1b8e834e12d862521a90e29d532fd 100644
+--- a/dist/hocuspocus-server.cjs
++++ b/dist/hocuspocus-server.cjs
+@@ -2182,9 +2182,12 @@ const useDebounce = () => {
+             timers.delete(id);
+             const execution = func();
+             runningExecutions.set(id, execution);
+-            const executionResult = await execution;
+-            runningExecutions.delete(id);
+-            return executionResult;
++            try {
++                return await execution;
++            }
++            finally {
++                runningExecutions.delete(id);
++            }
+         };
+         if (old === null || old === void 0 ? void 0 : old.timeout) {
+             clearTimeout(old.timeout);
+diff --git a/dist/hocuspocus-server.esm.js b/dist/hocuspocus-server.esm.js
+index 1f4dd80244e899128e2c4e5dad8eab7cfc1cbad6..6ef7cca405807d7e30167263fa211d7e353b6ce5 100644
+--- a/dist/hocuspocus-server.esm.js
++++ b/dist/hocuspocus-server.esm.js
+@@ -2162,9 +2162,12 @@ const useDebounce = () => {
+             timers.delete(id);
+             const execution = func();
+             runningExecutions.set(id, execution);
+-            const executionResult = await execution;
+-            runningExecutions.delete(id);
+-            return executionResult;
++            try {
++                return await execution;
++            }
++            finally {
++                runningExecutions.delete(id);
++            }
+         };
+         if (old === null || old === void 0 ? void 0 : old.timeout) {
+             clearTimeout(old.timeout);
+diff --git a/src/util/debounce.ts b/src/util/debounce.ts
+index 09b4cedaee5ae07d02986d1f399c9ffef90721ad..d9350fb0d3ef40ed53706a0250c0488d4e0072c0 100644
+--- a/src/util/debounce.ts
++++ b/src/util/debounce.ts
+@@ -32,10 +32,11 @@ export const useDebounce = () => {
+ 			const execution = func();
+ 
+ 			runningExecutions.set(id, execution);
+-			const executionResult = await execution;
+-			runningExecutions.delete(id);
+-
+-			return executionResult;
++			try {
++				return await execution;
++			} finally {
++				runningExecutions.delete(id);
++			}
+ 		};
+ 
+ 		if (old?.timeout) {

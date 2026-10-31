@@ -1644,11 +1644,12 @@
             "step5": "Alterne entre um documento e as configurações do espaço e use Voltar/Avançar; o assistente deve usar o título do documento atual.",
             "step6": "Selecione uma visualização e, se necessário, linhas. Use Agent para consultar os registros ou calcular totais. Revise cada alteração antes de aprovar. Uma proposta aceita até 20 linhas, 100 células e 32 KiB; um conflito de revisão rejeita a linha afetada.",
             "step7": "Verifique as notas com as mesmas regras de fontes e acesso do texto principal.",
-            "step8": "Inclua o conteúdo das abas inativas ao verificar uma resposta."
+            "step8": "Inclua o conteúdo das abas inativas ao verificar uma resposta.",
+            "step9": "O teste do Agent oferece uma função com tool_choice: required. Uma única chamada válida de capabilityProbe continua obrigatória; o LM Studio é compatível sem ampliar permissões."
           },
           "success": "Uma resposta de teste é concluída; Agent lista apenas ferramentas permitidas e pergunta antes de gravar",
           "rollback": "Desative Agent ou o modelo espacial e, em seguida, restaure as últimas configurações válidas",
-          "technical": "O assistente integrado mantém conversas privadas vinculadas à página por meio do provedor configurado para o espaço. As configurações do espaço mostram o uso de solicitações e tokens de hoje e dos últimos 7 dias. O modo Agente pode chamar ferramentas Docmost permitidas e só aplica alterações à página depois da confirmação do usuário que iniciou a operação. Imediatamente antes de aplicar uma alteração, o servidor verifica novamente o acesso de escrita à página atual e as políticas de ferramentas nos níveis deployment, workspace, space, profile e group. O editor de perfis do espaço mostra nomes de ferramentas localizados e recebe a política efetiva de substituição de modelo pela lista de perfis do espaço; somente administradores do workspace podem alterar os controles principais. A projeção de conhecimento compartilhada inclui na busca de AI e no contexto das ferramentas os campos de documento e personalizados habilitados, as propriedades e células nomeadas do banco e os termos ativos do dicionário (`dictionary_term`). O contrato selecionado `AI_ASSISTANT_PROFILE_ICONS` oferece {{profileIconCount}} opções de ícones localizadas, exibidas de forma consistente no editor de perfil e no painel de conversa. A seleção de arquivos do chat permanece ativa após fechar o menu Adicionar: o arquivo escolhido é enviado ou um erro de validação é exibido. Os hashes de aprovação do Agent incluem os atributos padrão do editor e a normalização Yjs antes de aplicar a alteração. Um campo text em um nó não textual é rejeitado antes da aprovação; o texto do parágrafo deve estar em nós de texto filhos.\n\nSelecione uma visualização e, se necessário, linhas. Use Agent para consultar os registros ou calcular totais. Revise cada alteração antes de aprovar. Uma proposta aceita até 20 linhas, 100 células e 32 KiB; um conflito de revisão rejeita a linha afetada. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exigir evidências de páginas, arquivos ou resultados de ferramentas acessíveis. Espaços e perfis não podem reduzir as restrições do espaço de trabalho.\n\nUm administrador deve habilitar os recursos de banco. Resultados e prévias ficam ocultos se o acesso às fontes for revogado. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nO texto das notas (footnote) faz parte do conteúdo do documento. Referências externas não são carregadas ou verificadas automaticamente e as permissões são mantidas.\n\nO conteúdo e os títulos de todas as tabs/tabItem fazem parte das evidências do documento. A aba ativa é um estado local de exibição; selecioná-la não restringe as evidências AI/RAG nem concede acesso às fontes."
+          "technical": "O assistente integrado mantém conversas privadas vinculadas à página por meio do provedor configurado para o espaço. As configurações do espaço mostram o uso de solicitações e tokens de hoje e dos últimos 7 dias. O modo Agente pode chamar ferramentas Docmost permitidas e só aplica alterações à página depois da confirmação do usuário que iniciou a operação. Imediatamente antes de aplicar uma alteração, o servidor verifica novamente o acesso de escrita à página atual e as políticas de ferramentas nos níveis deployment, workspace, space, profile e group. O editor de perfis do espaço mostra nomes de ferramentas localizados e recebe a política efetiva de substituição de modelo pela lista de perfis do espaço; somente administradores do workspace podem alterar os controles principais. A projeção de conhecimento compartilhada inclui na busca de AI e no contexto das ferramentas os campos de documento e personalizados habilitados, as propriedades e células nomeadas do banco e os termos ativos do dicionário (`dictionary_term`). O contrato selecionado `AI_ASSISTANT_PROFILE_ICONS` oferece {{profileIconCount}} opções de ícones localizadas, exibidas de forma consistente no editor de perfil e no painel de conversa. A seleção de arquivos do chat permanece ativa após fechar o menu Adicionar: o arquivo escolhido é enviado ou um erro de validação é exibido. Os hashes de aprovação do Agent incluem os atributos padrão do editor e a normalização Yjs antes de aplicar a alteração. Um campo text em um nó não textual é rejeitado antes da aprovação; o texto do parágrafo deve estar em nós de texto filhos.\n\nSelecione uma visualização e, se necessário, linhas. Use Agent para consultar os registros ou calcular totais. Revise cada alteração antes de aprovar. Uma proposta aceita até 20 linhas, 100 células e 32 KiB; um conflito de revisão rejeita a linha afetada. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. Exigir evidências de páginas, arquivos ou resultados de ferramentas acessíveis. Espaços e perfis não podem reduzir as restrições do espaço de trabalho.\n\nUm administrador deve habilitar os recursos de banco. Resultados e prévias ficam ocultos se o acesso às fontes for revogado. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\nO texto das notas (footnote) faz parte do conteúdo do documento. Referências externas não são carregadas ou verificadas automaticamente e as permissões são mantidas.\n\nO conteúdo e os títulos de todas as tabs/tabItem fazem parte das evidências do documento. A aba ativa é um estado local de exibição; selecioná-la não restringe as evidências AI/RAG nem concede acesso às fontes. O teste do Agent oferece uma função com tool_choice: required. Uma única chamada válida de capabilityProbe continua obrigatória; o LM Studio é compatível sem ampliar permissões. As consultas da base atual herdam viewState e as linhas selecionadas. Um erro não significa total zero. O diagnóstico do Agent preserva preparationMs antes da geração, inclusive na espera por aprovação ou falha do provedor. Textos de documentos e valores de células das ferramentas integradas são dados de origem não confiáveis. Comandos incorporados não autorizam alterações adicionais nem substituem a confirmação do usuário."
         },
         "retrieval": {
           "description": "A busca no espaço ocorre durante a geração da resposta.",
@@ -3119,7 +3120,12 @@
     "saving": "Salvando...",
     "saved": "Salvo",
     "error": "Falha ao atualizar dados",
-    "dirty": "Rascunho pessoal"
+    "dirty": "Rascunho pessoal",
+    "addProperty": "Adicionar propriedade",
+    "pinToolbar": "Fixar barra",
+    "unpinToolbar": "Desafixar barra",
+    "showDescription": "Mostrar descrição completa",
+    "hideDescription": "Recolher descrição"
   },
   "Move block": "Mover bloco",
   "dbBoard": {
@@ -3169,6 +3175,7 @@
     "inUse": "O arquivo ainda é usado em documentos, bases ou no histórico. A exclusão foi recusada."
   },
   "docBlocks": {
+    "recordContent": "Conteúdo do registro",
     "presentation": "Apresentar página",
     "slideNumber": "Slide {{number}} de {{total}}",
     "previousSlide": "Slide anterior",
@@ -3199,6 +3206,10 @@
     "footnoteReference": "Nota {{number}}",
     "backToReference": "Voltar à referência {{number}}",
     "emptyFootnote": "Nota vazia",
-    "footnoteChanged": "Esta nota foi alterada. Abra-a novamente antes de salvar."
+    "footnoteChanged": "Esta nota foi alterada. Abra-a novamente antes de salvar.",
+    "applyTemplate": "Usar um modelo",
+    "templateApplyHint": "O modelo preenche esta página vazia. O título e o local são preservados.",
+    "templateTargetChanged": "A página não está mais vazia. Seu conteúdo foi preservado.",
+    "applyAction": "Aplicar"
   }
 }

@@ -37,6 +37,8 @@ vi.mock("@mantine/core", () => {
 
 function editorFixture() {
   const editor = {
+    on: vi.fn(),
+    off: vi.fn(),
     isDestroyed: false,
     storage: { searchAndReplace: { results: [], resultIndex: 0 } } as any,
     state: {

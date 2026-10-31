@@ -45,10 +45,36 @@ view ordering data. Its down loses that preference; it does not delete cells.
 An application downgrade also needs an explicit decision about format 3 layouts.
 
 A row opens in a URL-addressable side panel without unmounting the table. It
-reuses document property editors, the read-only page renderer, comments and
-history. Content editing and history restoration use the full page. Previous
+reuses document property editors, the collaborative body and title editors,
+comments and restorable history. Page ACL and the record's own editing preference
+apply independently of the database description. A `jotai-scope` provider isolates
+editor, search, comment, history and database-context atoms while sharing user,
+session and query state. Find and comment events carry their owning editor or
+page ID; changing the record title does not navigate the database URL. Previous
 and next query neighbors across the full filtered, sorted and accessible selection; a direct `record` URL loads its page
 independently. Table scroll, selection and the local view survive closing it.
+
+The pinned React Router patch memoizes Link's combined DOM ref. A query-only
+navigation otherwise detaches stateful Floating UI references and can enter a
+React update loop while opening the panel. The native ref regression and the
+live panel matrix cover this interaction without changing the router version.
+An independent Mantine patch preserves SegmentedControl and ScrollArea
+root/scrollbar refs during updates. Recreating the internal scrollbar callback
+can repeatedly detach the same DOM element and trigger a state update loop.
+All native dependency regressions and the combined browser matrix must pass
+before either patch is removed.
+
+Local document-content cache updates give the UUID and slug aliases the same
+snapshot, including the same `Date` instance. Separate equal-looking timestamps
+can otherwise keep alias subscriptions exchanging objects during collaborative
+editor initialization. The cache helper also rejects a mismatched page ID.
+
+The compact toolbar groups view selection, layout, shared save and view settings.
+Property creation opens separately; view names and deletion live in settings.
+Readers can use personal filters and choose whether to pin the toolbar; the
+preference is local to the user and database. Embedded toolbars are not sticky.
+Long descriptions collapse in reading mode while their editor remains mounted.
+Editing and a revealed search match expand the description.
 
 The `databaseEmbed` atom links an existing database and optional saved view.
 The source is fetched under its own ACL; container write access does not grant

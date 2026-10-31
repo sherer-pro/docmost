@@ -60,6 +60,7 @@ export {
   formatTemplateDraftId,
   isTemplateFieldFilled,
   normalizeTemplateDraft,
+  isEmptyTemplateTarget,
   serializeTemplateDraftSeed,
   serializeTemplateInstanceContentForHash,
   summarizeTemplateDiff,

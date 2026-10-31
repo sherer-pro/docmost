@@ -226,7 +226,10 @@
     },
     "patchedDependencies": {
       "@tiptap/extension-bubble-menu@3.17.1": "patches/@tiptap__extension-bubble-menu@3.17.1.patch",
-      "@fastify/busboy@3.2.1": "patches/@fastify__busboy@3.2.1.patch"
+      "@fastify/busboy@3.2.1": "patches/@fastify__busboy@3.2.1.patch",
+      "@hocuspocus/server@3.4.4": "patches/@hocuspocus__server@3.4.4.patch",
+      "react-router@7.18.2": "patches/react-router@7.18.2.patch",
+      "@mantine/core@8.3.14": "patches/@mantine__core@8.3.14.patch"
     }
   }
 }

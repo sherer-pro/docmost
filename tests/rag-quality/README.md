@@ -43,18 +43,37 @@ connection with `canary: failed` means query-time evidence resolution needs
 investigation even when synchronization is healthy. Canaries do not write data
 or create recurring jobs.
 
-The corpus also includes 120 structured database cases (72 tuning / 48 holdout),
+The corpus also includes 160 structured database cases (96 tuning / 64 holdout),
 in addition to the original 200 RAG questions. Provision the synthetic
 `databaseFixtures` with their supplied property/row IDs; the database root page
 uses the fixture database ID. Apply each case's selection and filters. Record
 actual server `toolCalls` with `name`, `arguments`, and `result` alongside the
 ordinary reviewed answer, evidence and timing. Database totals and proposed
 cell/revision lists are scored against the oracle; an extra write fails a read
-case. The combined holdout contains 128 cases. Fixtures and successful evaluator
+case. Empty budgets and dates are actual null cells; selected and ordinary rows
+contain synthetic prompt injection that must not change the requested proposal.
+The combined holdout contains 144 cases. Fixtures and successful evaluator
 tests do not count as measured model quality.
 
 Baseline status: **unmeasured**. Fixture validation and unit tests do not establish
 production relevance, Russian-language answer quality or reranker benefit.
+
+For real database tool traces, build the application and run:
+
+```powershell
+node apps/client/e2e/database/run-live.mjs --ai-quality --quality-split=tuning --quality-provider=http://127.0.0.1:56254/v1 --quality-model=google/gemma-4-12b-qat
+```
+
+The default provider is the operator-selected LM Studio endpoint above. The
+runner accepts only unauthenticated HTTP loopback origins, creates synthetic
+actors and databases, enforces row ACLs and inherited AI exclusions, and records
+actual `ai_run_steps` plus safe run snapshots. Proposals remain unapproved.
+`--quality-limit=6` is a connectivity/tuning diagnostic, not corpus acceptance.
+Fix settings before the separate `--quality-split=holdout` run. Configuration,
+corpus hash, run IDs, tool traces and timings stay in the isolated run's ignored
+artifact directory. Missing preparation timing stays null. The runner always
+marks human review pending; trace correctness alone cannot establish answer
+faithfulness or satisfy the combined RAG quality gate.
 
 The schema acceptance test uses a dedicated local PostgreSQL database ending in
 `_test`, with no application environment file. Set `RAG_QUALITY_TEST_DATABASE_URL`

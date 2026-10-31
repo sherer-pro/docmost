@@ -362,12 +362,16 @@ export const mainExtensions = [
     addKeyboardShortcuts() {
       return {
         "Mod-f": () => {
-          const event = new CustomEvent("openFindDialogFromEditor", {});
+          const event = new CustomEvent("openFindDialogFromEditor", {
+            detail: { editor: this.editor },
+          });
           document.dispatchEvent(event);
           return true;
         },
         Escape: () => {
-          const event = new CustomEvent("closeFindDialogFromEditor", {});
+          const event = new CustomEvent("closeFindDialogFromEditor", {
+            detail: { editor: this.editor },
+          });
           document.dispatchEvent(event);
           return false;
         },

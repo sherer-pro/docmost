@@ -28,6 +28,7 @@ import {
 import {
   CreatePageTemplateDto,
   CreateFromTemplateDto,
+  ApplyPageTemplateDto,
   CreateIndependentPageCopyDto,
   DetachSyncedTemplateDto,
   PageTemplateDestinationsDto,
@@ -106,6 +107,18 @@ export class PageTemplateController {
     @AuthUser() user: User,
   ) {
     return this.templates.createFromTemplate(dto, idempotencyKey, user);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':pageId/actions/apply-template')
+  @AuthPolicyScope('page', { source: 'params', key: 'pageId' })
+  applyToEmpty(
+    @Param('pageId', ParseUUIDPipe) pageId: string,
+    @Body() dto: ApplyPageTemplateDto,
+    @Headers('idempotency-key') key: string,
+    @AuthUser() user: User,
+  ) {
+    return this.templates.applyToEmpty(pageId, dto, key, user);
   }
 
   @Get('templates/:pageId/actions/usages')

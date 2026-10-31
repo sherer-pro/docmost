@@ -12,7 +12,9 @@ complete; final release acceptance and CI remain pending.
   not been measured.
 - Kanban, view-specific row order, personal view drafts, column layout, linked
   database embeds, complete-view CSV and URL-addressable record previews. Record
-  body editing and history restoration still use the full page.
+  body/title editing and restorable history now use isolated editor state in the
+  side panel. Compact controls, personal toolbar pinning and collapsible long
+  descriptions complete the database navigation package.
 - Search author/OR-label/title filters, navigation to highlighted results,
   subpage ordering, arbitrary history comparison, comment deep links, `/time`
   and localized slash-command matching.
@@ -26,16 +28,22 @@ complete; final release acceptance and CI remain pending.
   stable citation anchors, complete exports and archive import; read-only page
   presentation with keyboard controls, long-slide scrolling, pointer and native
   full screen. Presentation forces database embeds to read-only.
+- Empty-page application of regular and published synchronized templates with
+  idempotency, current-access and source-revision checks, attachment compensation
+  and an atomic persistence receipt. Native save-queue recovery is patched in
+  Hocuspocus 3.4.4. Database descriptions and record panels do not offer this action.
 
-The first four implementation commits are `33a86bf2`, `26d7cf6b`, `1c8bb87c` and
-`f4b250be`; the tabs/presentation package follows them on local `main`. These packages have not been pushed or
+The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
+`f4b250be` and `85a71162`; the record/template package follows them on local `main`. These packages have not been pushed or
 deployed as part of this task.
 
 ## Remaining required work
 
-- Finish the database record editing experience and compact view controls,
-  including a collapsible long description.
-- Empty-page template selection.
+- Finish the trusted database query result summary and a link that restores the
+  exact frozen selection while retaining the AI content-policy intersection.
+  Add natural-language filter challenges that start from a different current
+  view. Record actual transmitted RAG evidence and complete human-reviewed
+  quality acceptance; database tool-trace correctness alone is insufficient.
 - Database system fields, multiple participants, file properties and a bounded
   formula language with consistent query/export/AI semantics.
 - Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
@@ -45,9 +53,10 @@ deployed as part of this task.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
   remaining editor, Agent and AI-context browser matrices and release gates on
   the final isolated production-like runtime.
-- Publish the final commits, wait for CI, build a verified immutable image,
-  rehearse against a production copy, perform coordinated backup and deployment,
-  and verify the resulting application and collaboration runtime.
+
+Push, remote CI for the new commits, image publication and deployment are a
+separate operational follow-up explicitly on hold. The current authorization is
+local implementation, verification and commits on `main`.
 
 Stage 5 items (personal/public spaces, SIEM, calendar, rollups and new retrieval
 drivers) remain outside the required scope of stages 1–4.
@@ -93,6 +102,17 @@ Local, ignored receipts are under `artifacts/`:
   `search-editor-replacement-fixed.log`: a reproduced loss of the URL search term
   during editor replacement now has a regression test.
 - `document-workflows-maintenance.log`: the reviewed maintenance baseline passed.
+- `record-template-final-browser-matrix.log`: all six record title/body editing
+  scenarios passed in Chromium, Firefox and WebKit, including mobile dark mode,
+  reader access and preservation of the background table state. The original
+  assertion timeouts are unchanged.
+- `record-template-verify-full-accepted.log`: `verify:full` passed, including
+  281 backend suites (2418 tests), 191 frontend files (928 tests), 79 backend
+  security suites (972 tests) and 78 frontend security tests. Lint retained its
+  existing 41 warnings and reported no errors.
+- `record-template-final-editor-ext.log`: all 127 shared editor tests passed.
+- `record-template-overview-contracts.log`: the approved English/Russian
+  enhancement overviews passed their source-backed parity contract.
 
 ## Model benchmark connection
 
@@ -103,6 +123,15 @@ at `http://127.0.0.1:56254` for benchmark work. Its loaded model is
 `google/gemma-4-12b-qat`, with a loaded context of 90624 tokens. Model-list and
 runtime connectivity checks are separate from the still-pending corpus run and
 human evidence review required by `tests/rag-quality/README.md`.
+
+LM Studio rejects a named-function `tool_choice` object with HTTP 400. The
+capability probe now offers one tool with the supported `required` choice and
+retains exact name, argument and single-call validation. The new isolated
+database quality runner records actual durable Agent tool steps. Its second
+six-case calibration produced six correct tool traces; human answer review is
+pending. The extended version 3 corpus contains 160 database cases (96 tuning,
+64 holdout), including actual null cells and prompt injection. The complete
+tuning capture is in progress; this is not a measured or accepted holdout result.
 
 These receipts establish only the checks actually completed for this checkpoint;
 they do not substitute for the remaining roadmap features or final release gate.

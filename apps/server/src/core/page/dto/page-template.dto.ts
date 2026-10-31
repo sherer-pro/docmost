@@ -19,6 +19,7 @@ import {
   PageTemplateArchiveState,
   PageTemplateDestinationPurpose,
   TemplateKind,
+  ApplyPageTemplateRequest,
 } from '@docmost/api-contract';
 
 export class PageTemplateDiscoveryDto {
@@ -147,6 +148,11 @@ export class CreateFromTemplateDto {
   @IsString()
   @MaxLength(500)
   title?: string;
+}
+
+export class ApplyPageTemplateDto implements ApplyPageTemplateRequest {
+  @IsUUID()
+  templatePageId!: string;
 }
 
 export class CreateIndependentPageCopyDto {
