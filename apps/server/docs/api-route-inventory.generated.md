@@ -128,6 +128,12 @@
 | POST | `/groups/members/remove` | `apps/server/src/core/group/group.controller.ts` |
 | GET | `/health` | `apps/server/src/integrations/health/health.controller.ts` |
 | GET | `/health/live` | `apps/server/src/integrations/health/health.controller.ts` |
+| POST | `/integration-previews/actions/resolve` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
+| GET | `/integration-previews/connections` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
+| DELETE | `/integration-previews/connections/:provider` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
+| PUT | `/integration-previews/connections/:provider` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
+| GET | `/integration-previews/settings` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
+| PATCH | `/integration-previews/settings` | `apps/server/src/core/integration-preview/integration-preview.controller.ts` |
 | POST | `/internal/collaboration/commands` | `apps/server/src/collaboration/server/collaboration-internal.controller.ts` |
 | POST | `/labels` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/delete` | `apps/server/src/core/label/label.controller.ts` |

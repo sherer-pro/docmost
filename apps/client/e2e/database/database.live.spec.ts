@@ -130,6 +130,43 @@ async function expectViewName(page: Page, name: string) {
 const fixture = JSON.parse(process.env.DATABASE_LIVE_FIXTURE!);
 const sessions = JSON.parse(process.env.DATABASE_LIVE_SESSIONS!);
 
+for (const [theme, width] of [['light', 1440], ['dark', 390]] as const)
+  test(`live integration previews isolate viewer credentials ${theme} ${width}`, async ({ page, browser }, info) => {
+    const admin = await browser.newContext({ storageState: sessions.admin, baseURL: process.env.DATABASE_LIVE_URL });
+    const reader = await browser.newContext({ storageState: sessions.reader, baseURL: process.env.DATABASE_LIVE_URL });
+    try {
+      await api(admin.request, '/integration-previews/settings', 'PATCH', { enabled: true });
+      await api(page.request, '/integration-previews/connections/github', 'PUT', { credential: 'synthetic-preview-browser' });
+      await page.addInitScript((value) => localStorage.setItem('mantine-color-scheme-value', value), theme);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(fixture.integrationPreviews.route);
+      const card = page.locator('[data-type="integrationPreview"]');
+      await expect(card.getByRole('link', { name: 'Private github metadata', exact: true })).toBeVisible();
+      const other = await reader.newPage();
+      await other.goto(fixture.integrationPreviews.route);
+      await expect(other.locator('[data-type="integrationPreview"]')).toContainText('Public GitHub metadata');
+      await expect(other.locator('[data-type="integrationPreview"]')).not.toContainText('Private github metadata');
+      await page.reload();
+      await expect(card).toContainText('Private github metadata');
+      const saved = await api(page.request, `/pages/info?pageId=${fixture.integrationPreviews.pageId}`);
+      expect(JSON.stringify(saved.content)).not.toContain('Private github metadata');
+      await page.screenshot({ path: info.outputPath(`integration-preview-${theme}-${width}.png`) });
+      await page.goto('/settings/account/connections?tab=previews');
+      await expect(page.getByRole('heading', { name: 'Connected applications', exact: true })).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'MCP', exact: true })).toBeVisible();
+      await expect(page.getByText('Configured', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+      await expect(page.getByText('Configured', { exact: true })).toHaveCount(0);
+      await page.goto(fixture.integrationPreviews.route);
+      await expect(card).toContainText('Public GitHub metadata');
+    } finally {
+      await api(page.request, '/integration-previews/connections/github', 'DELETE');
+      await api(admin.request, '/integration-previews/settings', 'PATCH', { enabled: false });
+      await reader.close();
+      await admin.close();
+    }
+  });
+
 const browserErrors = new WeakMap<Page, string[]>();
 const browserErrorTasks = new WeakMap<Page, Promise<unknown>[]>();
 test.beforeEach(async ({ page }) => {

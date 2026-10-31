@@ -1648,7 +1648,8 @@
             "step8": "Inclua o conteúdo das abas inativas ao verificar uma resposta.",
             "step9": "O teste do Agent oferece uma função com tool_choice: required. Uma única chamada válida de capabilityProbe continua obrigatória; o LM Studio é compatível sem ampliar permissões.",
             "step10": "Campos do sistema, fórmulas e arquivos são somente leitura para Agent. Verifique os erros antes de usar um total; propostas de participantes podem incluir até 20 membros existentes elegíveis.",
-            "step11": "Confira o cartão de resultado do servidor, o horário do cálculo e as condições salvas. Os registros são lidos novamente com os direitos e a política de IA atuais. Uma mudança de esquema exige nova consulta; ler registros individuais também exige a permissão de consulta."
+            "step11": "Confira o cartão de resultado do servidor, o horário do cálculo e as condições salvas. Os registros são lidos novamente com os direitos e a política de IA atuais. Uma mudança de esquema exige nova consulta; ler registros individuais também exige a permissão de consulta.",
+            "step12": "Cartões e menções guardam apenas uma URL em documentos compartilhados, exportações e conteúdo AI/RAG. Metadados privados são carregados com a conexão de cada leitor e não são fonte de conhecimento para a IA. INTEGRATION_PREVIEW_ALLOWED_ORIGINS é independente das listas de provedores de IA, busca e MCP."
           },
           "success": "Uma resposta de teste é concluída; Agent lista apenas ferramentas permitidas e pergunta antes de gravar",
           "rollback": "Desative Agent ou o modelo espacial e, em seguida, restaure as últimas configurações válidas",
@@ -3286,5 +3287,37 @@
     "noConnections": "Nenhum aplicativo conectado",
     "disconnect": "Desconectar",
     "revoked": "Revogado"
+  },
+  "integrationPreviews": {
+    "title": "Prévias de links",
+    "privacy": "Fontes privadas exigem sua própria conexão. Documentos compartilhados salvam apenas links.",
+    "enabled": "Ativar prévias das integrações",
+    "enableDescription": "Desativar preserva links salvos e conexões pessoais.",
+    "noApprovedProviders": "Peça ao operador do servidor que aprove os endereços de API dos provedores.",
+    "publicGithub": "Prévias públicas do GitHub não precisam de token; o operador deve aprovar o provedor.",
+    "configured": "Configurado",
+    "token": "Token de acesso",
+    "tokenHint": "Use apenas as permissões de leitura necessárias. O token é armazenado criptografado e não é compartilhado com leitores.",
+    "save": "Salvar token",
+    "saved": "Token salvo. O acesso a cada link é verificado ao solicitar sua prévia.",
+    "disconnect": "Desconectar",
+    "failed": "A solicitação falhou. Confira suas permissões e tente novamente.",
+    "disabled": "As prévias foram desativadas pelo administrador ou operador.",
+    "connectionRequired": "Conecte sua conta para visualizar esta prévia.",
+    "unavailable": "Prévia indisponível. Você pode abrir o link original.",
+    "rateLimited": "Limite de prévias atingido. Tente novamente mais tarde.",
+    "connections": "Gerenciar conexões",
+    "retry": "Tentar novamente",
+    "insertAs": "Inserir link como",
+    "link": "Link",
+    "mention": "Menção",
+    "card": "Cartão",
+    "state": {
+      "open": "Aberto",
+      "closed": "Fechado",
+      "merged": "Mesclado",
+      "archived": "Arquivado"
+    },
+    "searchReadOnly": "As URLs são encontradas por inteiro. A substituição de texto preserva esses links."
   }
 }

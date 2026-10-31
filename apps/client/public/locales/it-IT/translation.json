@@ -1648,7 +1648,8 @@
             "step8": "Consideri il contenuto delle schede inattive quando verifica una risposta.",
             "step9": "Il test Agent offre una funzione con tool_choice: required. Resta obbligatoria una sola chiamata capabilityProbe valida; LM Studio è supportato senza ampliare i permessi.",
             "step10": "I campi di sistema, le formule e i file sono di sola lettura per Agent. Verificare gli errori prima di usare un totale; le proposte di partecipanti possono includere fino a 20 membri esistenti idonei.",
-            "step11": "Controlli la scheda del risultato del server, l’ora del calcolo e le condizioni salvate. I record vengono riletti con i permessi e la politica IA attuali. Una modifica dello schema richiede una nuova query; leggere i singoli record richiede anche la relativa autorizzazione."
+            "step11": "Controlli la scheda del risultato del server, l’ora del calcolo e le condizioni salvate. I record vengono riletti con i permessi e la politica IA attuali. Una modifica dello schema richiede una nuova query; leggere i singoli record richiede anche la relativa autorizzazione.",
+            "step12": "Le schede e le menzioni conservano solo un URL nei documenti condivisi, nelle esportazioni e nei contenuti AI/RAG. I metadati privati vengono caricati con la connessione di ciascun lettore e non sono una fonte di conoscenza per l’IA. INTEGRATION_PREVIEW_ALLOWED_ORIGINS è separato dagli elenchi per fornitori IA, ricerca e MCP."
           },
           "success": "Viene completata una risposta di prova; Agent elenca solo gli strumenti consentiti e chiede prima della scrittura",
           "rollback": "Disattiva Agent o il modello spaziale, quindi ripristina le ultime impostazioni funzionanti",
@@ -3286,5 +3287,37 @@
     "noConnections": "Nessuna applicazione collegata",
     "disconnect": "Scollega",
     "revoked": "Revocato"
+  },
+  "integrationPreviews": {
+    "title": "Anteprime dei collegamenti",
+    "privacy": "Le fonti private richiedono la sua connessione personale. I documenti condivisi salvano solo i collegamenti.",
+    "enabled": "Abilita anteprime delle integrazioni",
+    "enableDescription": "La disattivazione conserva i collegamenti e le connessioni personali.",
+    "noApprovedProviders": "Chieda all’operatore del server di autorizzare gli indirizzi API dei fornitori.",
+    "publicGithub": "Le anteprime pubbliche di GitHub non richiedono token; l’operatore deve autorizzare il fornitore.",
+    "configured": "Configurato",
+    "token": "Token di accesso",
+    "tokenHint": "Usi solo i permessi di lettura necessari. Il token è cifrato e non viene condiviso con i lettori.",
+    "save": "Salva token",
+    "saved": "Token salvato. L’accesso a ogni collegamento viene verificato alla richiesta dell’anteprima.",
+    "disconnect": "Scollega",
+    "failed": "Richiesta non riuscita. Controlli i permessi e riprovi.",
+    "disabled": "Le anteprime sono disabilitate dall’amministratore o dall’operatore.",
+    "connectionRequired": "Colleghi il suo account per visualizzare l’anteprima.",
+    "unavailable": "Anteprima non disponibile. Può aprire il collegamento originale.",
+    "rateLimited": "Limite di anteprime raggiunto. Riprovi più tardi.",
+    "connections": "Gestisci connessioni",
+    "retry": "Riprova",
+    "insertAs": "Inserisci collegamento come",
+    "link": "Collegamento",
+    "mention": "Menzione",
+    "card": "Scheda",
+    "state": {
+      "open": "Aperto",
+      "closed": "Chiuso",
+      "merged": "Unito",
+      "archived": "Archiviato"
+    },
+    "searchReadOnly": "Gli URL vengono trovati per intero. La sostituzione del testo conserva questi collegamenti."
   }
 }

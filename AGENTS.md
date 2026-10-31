@@ -68,6 +68,7 @@
 - `apps/client/src/features/dictionary` — dictionary page, term editor, matching/highlighting UI.
 - `apps/client/src/features/session` — account active sessions UI.
 - `apps/client/src/features/attachments/components` — authenticated page attachment gallery and sequential media preview; unused-file removal uses the transactional cleanup outbox and retains files referenced by history.
+- `apps/server/src/core/integration-preview` and `apps/client/src/features/integration-preview` — disabled-by-default GitHub/GitLab/Figma metadata reads with personal encrypted credentials. `docs/INTEGRATION_PREVIEWS.md` defines URL-only shared nodes, per-viewer cache/ACL, the independent origin allowlist and test boundaries. `node apps/client/e2e/integration-previews/run.mjs` owns Vite on port 5205.
 - `apps/client/src/features/presence` — authenticated Socket.IO presence heartbeat/reporting hooks.
 - `apps/client/src/features/favorite` — favorite star/actions and favorite lists.
 - `apps/client/src/features/transclusion` and `apps/client/src/features/editor/components/transclusion` — synced block lookup UI and editor node views.

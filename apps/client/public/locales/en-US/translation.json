@@ -1648,7 +1648,8 @@
             "step8": "Include content from inactive document tabs when checking an answer.",
             "step9": "The Agent capability test offers one function with tool_choice: required. A single valid capabilityProbe call is still mandatory; this supports LM Studio without relaxing tool permissions.",
             "step10": "System fields, formulas and file properties are read-only for Agent. Check calculation errors before using a total; participant proposals may use up to 20 existing eligible members.",
-            "step11": "Inspect the server result card, its calculation time and frozen conditions. Matching records are read again under the current ACL and AI policy. A schema change requires a new query; reading individual records also requires the query capability."
+            "step11": "Inspect the server result card, its calculation time and frozen conditions. Matching records are read again under the current ACL and AI policy. A schema change requires a new query; reading individual records also requires the query capability.",
+            "step12": "Integration cards and mentions retain only a URL in shared documents, exports and AI/RAG content. Private metadata is resolved for each viewer using their own connection and is not an AI knowledge source. INTEGRATION_PREVIEW_ALLOWED_ORIGINS is separate from AI provider, retrieval and MCP allowlists."
           },
           "success": "A test answer completes; Agent lists only allowed tools and asks before writes",
           "rollback": "Disable Agent or the space model, then restore the last known-good settings",
@@ -3286,5 +3287,37 @@
     "noConnections": "No connected applications",
     "disconnect": "Disconnect",
     "revoked": "Revoked"
+  },
+  "integrationPreviews": {
+    "title": "Link previews",
+    "privacy": "Closed sources require your own connection. Shared documents save only links.",
+    "enabled": "Enable integration link previews",
+    "enableDescription": "Turning this off preserves saved links and personal connections.",
+    "noApprovedProviders": "Ask the server operator to approve provider API addresses.",
+    "publicGithub": "Public GitHub previews need no token; the operator must approve the provider.",
+    "configured": "Configured",
+    "token": "Access token",
+    "tokenHint": "Use a token with only the required read permissions. It is stored encrypted and is never shared with readers.",
+    "save": "Save token",
+    "saved": "Token saved. Access to each link is checked when its preview is requested.",
+    "disconnect": "Disconnect",
+    "failed": "The request failed. Check your permissions and try again.",
+    "disabled": "Link previews are disabled by the administrator or operator.",
+    "connectionRequired": "Connect your account to view this preview.",
+    "unavailable": "Preview unavailable. You can still open the original link.",
+    "rateLimited": "Preview limit reached. Try again later.",
+    "connections": "Manage connections",
+    "retry": "Retry",
+    "insertAs": "Insert link as",
+    "link": "Link",
+    "mention": "Mention",
+    "card": "Card",
+    "state": {
+      "open": "Open",
+      "closed": "Closed",
+      "merged": "Merged",
+      "archived": "Archived"
+    },
+    "searchReadOnly": "Link URLs are found as a whole. Text replacement leaves these links unchanged."
   }
 }

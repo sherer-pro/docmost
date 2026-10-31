@@ -1,0 +1,30 @@
+.card {
+  color: var(--mantine-color-text);
+  margin-block: 0.5rem;
+  max-width: 100%;
+}
+.card[data-selected] {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  border-radius: var(--mantine-radius-md);
+}
+.title {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.mention {
+  color: var(--mantine-color-text);
+  display: inline;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-default-hover);
+  padding: 0.1em 0.25em;
+}
+.mention > span {
+  display: inline;
+}
+.mention svg {
+  vertical-align: -0.15em;
+  margin-inline-end: 0.25em;
+}
+.mention[data-selected] {
+  outline: 2px solid var(--mantine-primary-color-filled);
+}

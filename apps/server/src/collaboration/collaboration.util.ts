@@ -10,6 +10,8 @@ import { TaskList, TaskItem } from '@tiptap/extension-list';
 import {
   Heading,
   DatabaseEmbed,
+  IntegrationPreview,
+  IntegrationMention,
   Footnote,
   TextDirection,
   Tabs,
@@ -67,6 +69,8 @@ export const tiptapExtensions = [
   Tabs,
   TabItem,
   TextDirection,
+  IntegrationPreview,
+  IntegrationMention,
   DatabaseEmbed,
   Footnote,
   StarterKit.configure({

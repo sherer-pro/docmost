@@ -1648,7 +1648,8 @@
             "step8": "Tenez compte des onglets inactifs du document pour vérifier une réponse.",
             "step9": "Le test Agent propose une fonction avec tool_choice: required. Un seul appel capabilityProbe valide reste obligatoire ; LM Studio est pris en charge sans élargir les autorisations.",
             "step10": "Les champs système, les formules et les fichiers sont en lecture seule pour Agent. Vérifiez les erreurs avant d’utiliser un total ; les propositions de participants peuvent inclure jusqu’à 20 membres existants autorisés.",
-            "step11": "Vérifiez la carte du résultat serveur, l’heure du calcul et les conditions enregistrées. Les enregistrements sont relus selon les droits et la politique IA actuels. Un changement de schéma exige une nouvelle requête ; la lecture des enregistrements individuels nécessite aussi la capacité de requête."
+            "step11": "Vérifiez la carte du résultat serveur, l’heure du calcul et les conditions enregistrées. Les enregistrements sont relus selon les droits et la politique IA actuels. Un changement de schéma exige une nouvelle requête ; la lecture des enregistrements individuels nécessite aussi la capacité de requête.",
+            "step12": "Les cartes et mentions ne conservent qu’une URL dans les documents partagés, exports et contenus AI/RAG. Les métadonnées privées sont chargées avec la connexion propre à chaque lecteur et ne sont pas une source de connaissances pour l’IA. INTEGRATION_PREVIEW_ALLOWED_ORIGINS est distinct des listes des fournisseurs IA, de recherche et MCP."
           },
           "success": "Une réponse au test se termine ; Agent répertorie uniquement les outils autorisés et demande avant l'écriture",
           "rollback": "Désactivez Agent ou le modèle spatial, puis restaurez les derniers paramètres connus.",
@@ -3286,5 +3287,37 @@
     "noConnections": "Aucune application connectée",
     "disconnect": "Déconnecter",
     "revoked": "Révoqué"
+  },
+  "integrationPreviews": {
+    "title": "Aperçus des liens",
+    "privacy": "Les sources privées nécessitent votre connexion personnelle. Les documents partagés ne stockent que les liens.",
+    "enabled": "Activer les aperçus des intégrations",
+    "enableDescription": "La désactivation conserve les liens et les connexions personnelles.",
+    "noApprovedProviders": "Demandez à l’opérateur du serveur d’autoriser les adresses API des fournisseurs.",
+    "publicGithub": "Les aperçus GitHub publics ne nécessitent pas de jeton ; l’opérateur doit autoriser le fournisseur.",
+    "configured": "Configuré",
+    "token": "Jeton d’accès",
+    "tokenHint": "Utilisez uniquement les droits de lecture nécessaires. Le jeton est chiffré et n’est pas partagé avec les lecteurs.",
+    "save": "Enregistrer le jeton",
+    "saved": "Jeton enregistré. L’accès à chaque lien est vérifié lors de la demande d’aperçu.",
+    "disconnect": "Déconnecter",
+    "failed": "La demande a échoué. Vérifiez vos droits et réessayez.",
+    "disabled": "Les aperçus ont été désactivés par l’administrateur ou l’opérateur.",
+    "connectionRequired": "Connectez votre compte pour afficher cet aperçu.",
+    "unavailable": "Aperçu indisponible. Vous pouvez ouvrir le lien d’origine.",
+    "rateLimited": "Limite d’aperçus atteinte. Réessayez plus tard.",
+    "connections": "Gérer les connexions",
+    "retry": "Réessayer",
+    "insertAs": "Insérer le lien comme",
+    "link": "Lien",
+    "mention": "Mention",
+    "card": "Carte",
+    "state": {
+      "open": "Ouvert",
+      "closed": "Fermé",
+      "merged": "Fusionné",
+      "archived": "Archivé"
+    },
+    "searchReadOnly": "Les URL sont trouvées en entier. Le remplacement de texte conserve ces liens."
   }
 }

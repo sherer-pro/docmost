@@ -32,6 +32,7 @@ import { TransclusionModule } from './page/transclusion/transclusion.module';
 import { PresenceModule } from './presence/presence.module';
 import { AiModule } from './ai/ai.module';
 import { McpModule } from './mcp/mcp.module';
+import { IntegrationPreviewModule } from './integration-preview/integration-preview.module';
 import { SsoModule } from './sso/sso.module';
 import { SpacePolicyModule } from './space-policy/space-policy.module';
 import { RagSyncModule } from './rag-sync/rag-sync.module';
@@ -67,6 +68,7 @@ import { RagSyncModule } from './rag-sync/rag-sync.module';
     PresenceModule,
     AiModule,
     McpModule,
+    IntegrationPreviewModule,
     SsoModule,
   ],
   exports: [PageModule, AttachmentModule],

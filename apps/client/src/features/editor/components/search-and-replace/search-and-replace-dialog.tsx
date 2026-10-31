@@ -51,6 +51,11 @@ function SearchAndReplaceDialog({
       return {
         count: search?.results?.length ?? 0,
         index: search?.resultIndex ?? 0,
+        readOnly: Boolean(
+          search?.results?.[search?.resultIndex ?? 0]?.readOnly,
+        ),
+        replaceable:
+          search?.results?.some((result) => !result.readOnly) ?? false,
       };
     },
   });
@@ -379,46 +384,53 @@ function SearchAndReplaceDialog({
           </ActionIcon.Group>
         </Flex>
         {replaceButton.isReplaceShow && editable && (
-          <Flex align="center" gap="xs">
-            <Input
-              placeholder={t("Replace")}
-              leftSection={<IconReplace size={16} />}
-              rightSection={<div></div>}
-              rightSectionPointerEvents="all"
-              size="xs"
-              w={180}
-              autoFocus
-              onChange={replaceInputEvent}
-              value={replaceText}
-              onKeyDown={getHotkeyHandler([
-                ["Escape", closeDialog],
-                ["Enter", replace],
-                ["ctrl+alt+Enter", replaceAll],
-              ])}
-            />
-            <ActionIcon.Group>
-              <Tooltip label={t("Replace (Enter)")}>
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="gray"
-                  onClick={replace}
-                >
-                  {t("Replace")}
-                </Button>
-              </Tooltip>
-              <Tooltip label={t("Replace all (Ctrl+Alt+Enter)")}>
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="gray"
-                  onClick={replaceAll}
-                >
-                  {t("Replace all")}
-                </Button>
-              </Tooltip>
-            </ActionIcon.Group>
-          </Flex>
+          <>
+            {searchSnapshot?.readOnly && (
+              <Text size="xs">{t("integrationPreviews.searchReadOnly")}</Text>
+            )}
+            <Flex align="center" gap="xs">
+              <Input
+                placeholder={t("Replace")}
+                leftSection={<IconReplace size={16} />}
+                rightSection={<div></div>}
+                rightSectionPointerEvents="all"
+                size="xs"
+                w={180}
+                autoFocus
+                onChange={replaceInputEvent}
+                value={replaceText}
+                onKeyDown={getHotkeyHandler([
+                  ["Escape", closeDialog],
+                  ["Enter", replace],
+                  ["ctrl+alt+Enter", replaceAll],
+                ])}
+              />
+              <ActionIcon.Group>
+                <Tooltip label={t("Replace (Enter)")}>
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color="gray"
+                    onClick={replace}
+                    disabled={searchSnapshot?.readOnly}
+                  >
+                    {t("Replace")}
+                  </Button>
+                </Tooltip>
+                <Tooltip label={t("Replace all (Ctrl+Alt+Enter)")}>
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color="gray"
+                    onClick={replaceAll}
+                    disabled={!searchSnapshot?.replaceable}
+                  >
+                    {t("Replace all")}
+                  </Button>
+                </Tooltip>
+              </ActionIcon.Group>
+            </Flex>
+          </>
         )}
       </Stack>
     </Dialog>

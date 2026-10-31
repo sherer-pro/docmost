@@ -38,3 +38,5 @@ export * from './lib/tag';
 export * from './lib/footnote';
 export * from './lib/text-direction';
 export * from './lib/tabs';
+export * from './lib/integration-preview';
+export * from './lib/integration-preview-url';

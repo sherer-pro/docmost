@@ -79,6 +79,10 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
+  INTEGRATION_PREVIEW_ALLOWED_ORIGINS: string;
+
+  @IsOptional()
+  @IsString()
   SSO_ALLOWED_ENDPOINTS: string;
 
   @IsOptional()

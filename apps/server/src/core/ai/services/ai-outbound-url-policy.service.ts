@@ -4,7 +4,7 @@ import { isIP } from 'node:net';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 
 export interface AiOutboundUrlPolicy {
-  kind: 'provider' | 'retrieval' | 'rag-sync' | 'mcp';
+  kind: 'provider' | 'retrieval' | 'rag-sync' | 'mcp' | 'integration-preview';
   allowedOrigins: string;
   allowQuery: boolean;
   trimTrailingSlash?: boolean;
@@ -302,12 +302,14 @@ export class AiOutboundUrlPolicyService {
   }
 
   private labelFor(kind: AiOutboundUrlPolicy['kind']): string {
+    if (kind === 'integration-preview') return 'Integration preview';
     if (kind === 'mcp') return 'AI external MCP';
     if (kind === 'rag-sync') return 'RAG sync';
     return `AI ${kind}`;
   }
 
   private allowlistName(kind: AiOutboundUrlPolicy['kind']): string {
+    if (kind === 'integration-preview') return 'INTEGRATION_PREVIEW_ALLOWED_ORIGINS';
     if (kind === 'provider') {
       return 'AI_PROVIDER_ALLOWED_ORIGINS';
     }

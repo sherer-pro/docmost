@@ -1,5 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { getLinkPreview } from "@/features/page/services/page-service";
+import { parseIntegrationPreviewUrl } from '@docmost/editor-ext';
+import { chooseIntegrationPaste } from '../integration-preview/integration-preview-paste';
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -76,6 +78,8 @@ function replaceLinkPreviewWithUrl(editor: Editor, requestId: string, url: strin
 
 export async function createLinkPreviewAction(editor: Editor, rawUrl: string) {
   const url = rawUrl.trim();
+  const integration = parseIntegrationPreviewUrl(url);
+  if (integration) return chooseIntegrationPaste(editor, integration);
 
   if (!isHttpUrl(url)) {
     return false;

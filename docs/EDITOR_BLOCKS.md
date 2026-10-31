@@ -1,5 +1,13 @@
 # Shared document blocks
 
+## Integration links
+
+`integrationPreview` and `integrationMention` retain only a canonical URL across
+client/server/collaboration schemas, copy, search and exports. Provider titles
+and descriptions are resolved privately for each viewer and never become
+document, AI or RAG content. See [integration previews](INTEGRATION_PREVIEWS.md)
+for configuration, supported links, credentials and acceptance boundaries.
+
 ## Footnotes
 
 `footnote` is an inline atom containing plain child text (`text*`, no marks).

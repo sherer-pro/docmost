@@ -16,6 +16,8 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Comment,
   DatabaseEmbed,
+  IntegrationPreview,
+  IntegrationMention,
   Footnote,
   TextDirection,
   Tabs,
@@ -75,6 +77,8 @@ import TransclusionReferenceView from "@/features/editor/components/transclusion
 import {
   LazyAttachmentView,
   LazyDatabaseEmbedView,
+  LazyIntegrationPreviewView,
+  LazyIntegrationMentionView,
   LazyAudioView,
   LazyCodeBlockView,
   LazyDrawioView,
@@ -133,6 +137,8 @@ export const mainExtensions = [
   DatabaseEmbed.configure({
     view: ReactNodeViewRenderer(LazyDatabaseEmbedView),
   }),
+  IntegrationPreview.configure({ view: ReactNodeViewRenderer(LazyIntegrationPreviewView) }),
+  IntegrationMention.configure({ view: ReactNodeViewRenderer(LazyIntegrationMentionView) }),
   StarterKit.configure({
     heading: false,
     undoRedo: false,

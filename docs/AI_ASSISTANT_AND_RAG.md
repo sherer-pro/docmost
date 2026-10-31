@@ -1,6 +1,13 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 36 -->
+<!-- ai-admin-guide-contract-version: 37 -->
+
+Integration cards and mentions expose only their canonical URL to document text,
+search, AI and RAG. Provider metadata is loaded for each viewer with their own
+connection, stays outside shared document state and is not an AI knowledge
+source. `INTEGRATION_PREVIEW_ALLOWED_ORIGINS` independently restricts provider API
+origins; it never widens AI provider, retrieval or MCP access. See
+[integration preview boundaries](INTEGRATION_PREVIEWS.md).
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -1175,6 +1182,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20261030T180000-ai-database-context.ts`](../apps/server/src/database/migrations/20261030T180000-ai-database-context.ts) | Adds frozen database context to runs and backward-compatible read-only/knowledge-only tool-policy flags. | Drain active runs first. Removes context and policy flags; approved cell values and their revisions remain. |
 | [`20261031T130000-database-computed-and-file-properties.ts`](../apps/server/src/database/migrations/20261031T130000-database-computed-and-file-properties.ts) | Extends the legacy adapter for participant/file arrays and backfills row mutation metadata from the latest cell mutation without rewriting values. | Refuses while computed/file properties or participant arrays exist, including retained data. The compatible adapter and corrected metadata remain; disable creation instead of removing saved data. |
 | [`20261031T140000-mcp-user-oauth.ts`](../apps/server/src/database/migrations/20261031T140000-mcp-user-oauth.ts) | Adds disabled-by-default workspace OAuth settings, registered clients, pending authorization codes, user/session/space grants and hashed access/refresh tokens. No API key or existing configuration is changed. | Refuses while any grant remains. Disable OAuth to revoke access while retaining records. |
+| [`20261031T150000-integration-link-previews.ts`](../apps/server/src/database/migrations/20261031T150000-integration-link-previews.ts) | Adds disabled-by-default preview settings and personal encrypted connections. Preview nodes supply only URLs to AI/RAG. | Refuses while any connection remains. Disable previews to preserve credentials and existing nodes. |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation

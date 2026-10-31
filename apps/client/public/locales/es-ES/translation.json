@@ -1648,7 +1648,8 @@
             "step8": "Incluya el contenido de las pestañas inactivas al comprobar una respuesta.",
             "step9": "La prueba de Agent ofrece una función con tool_choice: required. Sigue exigiendo una única llamada válida a capabilityProbe y admite LM Studio sin ampliar permisos.",
             "step10": "Los campos del sistema, las fórmulas y los archivos son de solo lectura para Agent. Compruebe los errores antes de usar un total; las propuestas de participantes pueden incluir hasta 20 miembros existentes aptos.",
-            "step11": "Revise la tarjeta de resultado del servidor, la hora del cálculo y las condiciones guardadas. Los registros coincidentes se vuelven a leer con los permisos y la política de IA actuales. Un cambio de esquema requiere una nueva consulta; leer registros individuales también requiere el permiso de consulta."
+            "step11": "Revise la tarjeta de resultado del servidor, la hora del cálculo y las condiciones guardadas. Los registros coincidentes se vuelven a leer con los permisos y la política de IA actuales. Un cambio de esquema requiere una nueva consulta; leer registros individuales también requiere el permiso de consulta.",
+            "step12": "Las tarjetas y menciones guardan solo una URL en documentos compartidos, exportaciones y contenido AI/RAG. Los metadatos privados se consultan con la conexión de cada lector y no son una fuente de conocimiento para la IA. INTEGRATION_PREVIEW_ALLOWED_ORIGINS es independiente de las listas de proveedores de IA, búsqueda y MCP."
           },
           "success": "Se completa una respuesta de prueba; Agent enumera solo las herramientas permitidas y pregunta antes de escribir",
           "rollback": "Deshabilite Agent o el modelo espacial, luego restaure la última configuración correcta conocida",
@@ -3286,5 +3287,37 @@
     "noConnections": "No hay aplicaciones conectadas",
     "disconnect": "Desconectar",
     "revoked": "Revocado"
+  },
+  "integrationPreviews": {
+    "title": "Vistas previas de enlaces",
+    "privacy": "Las fuentes privadas requieren su propia conexión. Los documentos compartidos solo guardan enlaces.",
+    "enabled": "Activar vistas previas de integraciones",
+    "enableDescription": "Desactivar conserva los enlaces y las conexiones personales.",
+    "noApprovedProviders": "Pida al operador del servidor que autorice las direcciones API de los proveedores.",
+    "publicGithub": "Las vistas previas públicas de GitHub no necesitan token; el operador debe autorizar el proveedor.",
+    "configured": "Configurado",
+    "token": "Token de acceso",
+    "tokenHint": "Use solo los permisos de lectura necesarios. El token se guarda cifrado y no se comparte con los lectores.",
+    "save": "Guardar token",
+    "saved": "Token guardado. El acceso a cada enlace se comprueba al solicitar su vista previa.",
+    "disconnect": "Desconectar",
+    "failed": "La solicitud falló. Compruebe sus permisos e inténtelo de nuevo.",
+    "disabled": "El administrador u operador ha desactivado las vistas previas.",
+    "connectionRequired": "Conecte su cuenta para ver esta vista previa.",
+    "unavailable": "Vista previa no disponible. Puede abrir el enlace original.",
+    "rateLimited": "Se alcanzó el límite de vistas previas. Inténtelo más tarde.",
+    "connections": "Gestionar conexiones",
+    "retry": "Reintentar",
+    "insertAs": "Insertar enlace como",
+    "link": "Enlace",
+    "mention": "Mención",
+    "card": "Tarjeta",
+    "state": {
+      "open": "Abierto",
+      "closed": "Cerrado",
+      "merged": "Fusionado",
+      "archived": "Archivado"
+    },
+    "searchReadOnly": "Las URL se encuentran completas. Reemplazar texto conserva estos enlaces."
   }
 }

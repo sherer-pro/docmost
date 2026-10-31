@@ -87,7 +87,11 @@ import type {
 
 import type { McpOauthSettings, McpOauthClients, McpOauthAuthorizations, McpOauthGrants, McpOauthTokens } from './mcp-oauth.types';
 
+import type { IntegrationPreviewSettingsRow, IntegrationPreviewConnections } from './integration-preview.types';
+
 export interface DbInterface {
+  integrationPreviewSettings: IntegrationPreviewSettingsRow;
+  integrationPreviewConnections: IntegrationPreviewConnections;
   mcpOauthSettings: McpOauthSettings;
   mcpOauthClients: McpOauthClients;
   mcpOauthAuthorizations: McpOauthAuthorizations;

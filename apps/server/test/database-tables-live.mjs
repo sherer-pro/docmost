@@ -361,6 +361,10 @@ try {
   console.log(
     'Starting isolated API and collaboration with real PostgreSQL and Redis.',
   );
+  if (!quality) {
+    env.INTEGRATION_PREVIEW_ALLOWED_ORIGINS = 'https://api.github.com,https://gitlab.com,https://api.figma.com';
+    qualityPreloadArgs = ['--require', path.join(repo, 'apps/server/test/integration-preview-fixture.cjs'), '--synthetic-integration-previews'];
+  }
   start(
     'ai-model',
     path.join(repo, 'apps/client/e2e/ai-agent/deterministic-agent-model.mjs'),
@@ -405,6 +409,7 @@ try {
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&
     !process.argv.includes('--mcp-oauth-only') &&
+    !process.argv.includes('--integration-previews-only') &&
     !process.argv.includes('--templates-only') &&
     !process.argv.includes('--advanced-only') &&
     !quality

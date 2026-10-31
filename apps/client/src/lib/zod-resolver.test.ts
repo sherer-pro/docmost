@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { requiredString, zodResolver } from "./zod-resolver";
 
@@ -71,5 +71,28 @@ describe("Zod 4 form compatibility", () => {
       );
     expect(short.success).toBe(false);
     if (!short.success) expect(short.error.issues[0].message).toBe("Too short");
+  });
+});
+
+describe("CSP-safe form validation", () => {
+  it("validates objects without attempting dynamic code compilation", () => {
+    const probe = vi.spyOn(globalThis, "Function").mockImplementation(() => {
+      throw new EvalError("CSP forbids dynamic code");
+    });
+    try {
+      const validate = zodResolver(
+        z.object({ name: z.string().min(2), count: z.number().int() }),
+      );
+      expect(validate({ name: "Valid", count: 2 })).toEqual({});
+      expect(validate({ name: "", count: 2.5 })).toEqual(
+        expect.objectContaining({
+          name: expect.any(String),
+          count: expect.any(String),
+        }),
+      );
+      expect(probe).not.toHaveBeenCalled();
+    } finally {
+      probe.mockRestore();
+    }
   });
 });

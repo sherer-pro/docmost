@@ -58,6 +58,11 @@ complete; final release acceptance and CI remain pending.
   consent, hashed session-bound tokens, refresh rotation and replay revocation.
   Users can list and revoke their own applications. API keys remain supported;
   both MCP directions are read-only. Full release acceptance remains pending.
+- Disabled-by-default GitHub/GitLab/Figma link previews with personal encrypted
+  connections and link/mention/card insertion. Shared nodes, search, exports and
+  AI/RAG retain only URLs. Private metadata revalidates provider authorization;
+  current page access and connection revision are checked before returning it.
+  Public documents never enrich links. See [integration previews](../INTEGRATION_PREVIEWS.md).
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 `f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
@@ -76,7 +81,6 @@ pending as listed below.
 - Complete measured natural-language filter and actual-transmission RAG quality
   acceptance. The corpus and observation harness are implemented; full tuning,
   holdout and human evidence review remain required. Tool traces alone are insufficient.
-- Public GitHub previews and authorized GitHub/GitLab/Figma connections.
 - Check the applicability of the listed upstream fixes before changing the
   corresponding fork paths. Keep stack upgrades separate.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
@@ -101,6 +105,35 @@ No production configuration, permission or container was changed. Address this
 in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
+
+- `integration-previews-server-tests.log`: 19 tests passed, including real
+  loopback HTTP redirect/header/decompression boundaries and authorization/cache
+  races. `integration-previews-editor-tests.log`: 34 files / 147 tests passed.
+- `integration-previews-final-browser.log`: six Chromium/Firefox/WebKit cases
+  passed in desktop/light and mobile/dark configurations, including private
+  metadata isolation, URL search, undo/redo, public documents and token controls.
+- `integration-previews-exports-live.log`: PostgreSQL, Redis and API checks passed
+  for settings, encrypted personal credentials, ACL, revocation, node persistence
+  and downloaded Markdown/HTML/PDF/DOCX/Docmost URL-only content. Provider metadata
+  in this harness is explicitly synthetic. `integration-previews-public-github.json`
+  separately records a successful real unauthenticated GitHub API read with the
+  ordinary pinned transport and TLS validation. Real private provider tokens were
+  not used.
+- `integration-previews-verify-full-complete.log`: the complete contract/build,
+  bundle, maintenance, lint, server and security pipeline passed (290 server
+  suites / 2507 tests; 85 server-security suites / 1022 tests). A test inventory
+  comparison then restored three existing Zod compatibility cases alongside the
+  new CSP case. `integration-previews-preserved-client-tests.log` verifies all
+  195 current files / 942 tests; `integration-previews-preserved-client-security.log`
+  verifies 82 security tests. No existing Zod case or assertion is removed.
+- `integration-previews-final-production-matrix.log`: all 12 production-browser
+  cases passed across Chromium, Firefox and WebKit, including editor/reader
+  credential isolation, reload, disconnect and existing MCP consent/connections.
+  Each fresh runtime passed all 27 PostgreSQL tests and complete HTTP/export/import
+  acceptance. Both Chromium integration screenshots were visually inspected.
+  Earlier failures exposed a node-view page-ID initialization race and a Zod eval
+  probe blocked by CSP. The reader now reuses `useEditorPageId`; form validation
+  uses Zod's `jitless` mode. The dedicated regressions pass, and CSP is unchanged.
 
 - `mcp-oauth-verify-full-accepted.log`: full verification passed with 288 server
   suites (2488 tests), 194 frontend files (940 tests), 83 server-security suites

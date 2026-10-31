@@ -36,6 +36,8 @@ export const LazyDatabaseEmbedView = createLazyNodeView(
   "LazyDatabaseEmbedView",
   () => import("./database-embed/database-embed-view"),
 );
+export const LazyIntegrationPreviewView = createLazyNodeView('LazyIntegrationPreviewView', () => import('./integration-preview/integration-preview-view'));
+export const LazyIntegrationMentionView = createLazyNodeView('LazyIntegrationMentionView', () => import('./integration-preview/integration-preview-view'), true);
 export const LazyMathBlockView = createLazyNodeView(
   "LazyMathBlockView",
   () => import("./math/math-block"),

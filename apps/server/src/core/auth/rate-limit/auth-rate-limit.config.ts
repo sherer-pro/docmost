@@ -6,6 +6,10 @@
  * operations (verify-token) use softer limits.
  */
 export const AUTH_RATE_LIMITS = {
+  integrationPreview: {
+    ip: { limit: 120, windowMs: 60 * 1000 },
+    account: { limit: 60, windowMs: 60 * 1000 },
+  },
   login: {
     ip: { limit: 10, windowMs: 10 * 60 * 1000 },
     account: { limit: 5, windowMs: 10 * 60 * 1000 },

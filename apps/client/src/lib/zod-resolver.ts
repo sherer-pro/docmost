@@ -1,6 +1,9 @@
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import { z } from "zod";
 
+// The application's CSP forbids both JIT parsers and capability probes using eval.
+z.config({ jitless: true });
+
 export function zodResolver(...args: Parameters<typeof zod4Resolver>) {
   const validate = zod4Resolver(...args);
   // Form interfaces need no index signature; Zod validates their input at runtime.

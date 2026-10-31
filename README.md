@@ -194,6 +194,7 @@ Supported capabilities include:
 
 - separate RAG and MCP key types managed from one API keys page with dedicated tabs and onboarding presets;
 - opt-in user MCP OAuth with PKCE, explicit space consent, session-bound read access, rotating tokens and a private connected-applications list; API keys remain compatible;
+- opt-in GitHub, GitLab and Figma link previews with link/mention/card insertion, personal encrypted read credentials and per-viewer authorization; shared documents, exports and AI/RAG retain only the source URL ([contract](docs/INTEGRATION_PREVIEWS.md));
 
 - a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
 

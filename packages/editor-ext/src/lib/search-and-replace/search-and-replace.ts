@@ -29,6 +29,7 @@ import {
   type Transaction,
 } from '@tiptap/pm/state';
 import { Node as PMNode, Mark } from '@tiptap/pm/model';
+import { parseIntegrationPreviewUrl } from '../integration-preview-url';
 
 declare module '@tiptap/core' {
   interface Storage {
@@ -93,9 +94,13 @@ export const getRegex = (
   );
 };
 
+export interface SearchResult extends Range {
+  readOnly?: boolean;
+}
+
 interface ProcessedSearches {
   decorationsToReturn: DecorationSet;
-  results: Range[];
+  results: SearchResult[];
 }
 
 function processSearches(
@@ -105,7 +110,7 @@ function processSearches(
   resultIndex: number,
 ): ProcessedSearches {
   const decorations: Decoration[] = [];
-  const results: Range[] = [];
+  const results: SearchResult[] = [];
 
   let textNodesWithPosition: TextNodesWithPosition[] = [];
 
@@ -117,9 +122,24 @@ function processSearches(
   }
 
   doc?.descendants((node, pos, parent) => {
+    if (
+      node.type.name === 'integrationPreview' ||
+      node.type.name === 'integrationMention'
+    ) {
+      const url = parseIntegrationPreviewUrl(node.attrs.url)?.url;
+      searchTerm.lastIndex = 0;
+      if (url && searchTerm.test(url))
+        results.push({ from: pos, to: pos + node.nodeSize, readOnly: true });
+      searchTerm.lastIndex = 0;
+      return false;
+    }
     if (node.isText) {
       const previous = textNodesWithPosition.at(-1);
-      if (previous && previous.parent === parent && previous.pos + previous.text.length === pos) {
+      if (
+        previous &&
+        previous.parent === parent &&
+        previous.pos + previous.text.length === pos
+      ) {
         previous.text += node.text;
       } else {
         textNodesWithPosition.push({
@@ -151,15 +171,16 @@ function processSearches(
     }
   }
 
+  results.sort((a, b) => a.from - b.from);
   for (let i = 0; i < results.length; i += 1) {
     const r = results[i];
     const className =
       i === resultIndex
         ? `${searchResultClass} ${searchResultClass}-current`
         : searchResultClass;
-    const decoration: Decoration = Decoration.inline(r.from, r.to, {
-      class: className,
-    });
+    const decoration = r.readOnly
+      ? Decoration.node(r.from, r.to, { class: className })
+      : Decoration.inline(r.from, r.to, { class: className });
 
     decorations.push(decoration);
   }
@@ -172,13 +193,13 @@ function processSearches(
 
 const replace = (
   replaceTerm: string,
-  results: Range[],
+  results: SearchResult[],
   resultIndex: number,
   { state, dispatch }: { state: EditorState; dispatch: Dispatch },
 ) => {
   const firstResult = results[resultIndex];
 
-  if (!firstResult) return;
+  if (!firstResult || firstResult.readOnly) return;
 
   const { from, to } = results[resultIndex];
 
@@ -209,10 +230,10 @@ const replace = (
 
 const replaceAll = (
   replaceTerm: string,
-  results: Range[],
+  results: SearchResult[],
   { tr, dispatch }: { tr: Transaction; dispatch: Dispatch },
 ) => {
-  const resultsCopy = results.slice();
+  const resultsCopy = results.filter((result) => !result.readOnly);
 
   if (!resultsCopy.length) return;
 
@@ -254,7 +275,7 @@ export interface SearchAndReplaceOptions {
 export interface SearchAndReplaceStorage {
   searchTerm: string;
   replaceTerm: string;
-  results: Range[];
+  results: SearchResult[];
   lastSearchTerm: string;
   caseSensitive: boolean;
   lastCaseSensitive: boolean;

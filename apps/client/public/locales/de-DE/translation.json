@@ -1648,7 +1648,8 @@
             "step8": "Berücksichtigen Sie beim Prüfen einer Antwort auch inaktive Dokumentregisterkarten.",
             "step9": "Der Agent-Test bietet eine Funktion mit tool_choice: required an. Genau ein gültiger capabilityProbe-Aufruf bleibt erforderlich; LM Studio wird ohne zusätzliche Werkzeugrechte unterstützt.",
             "step10": "Systemfelder, Formeln und Dateieigenschaften sind für Agent schreibgeschützt. Prüfen Sie Berechnungsfehler vor der Verwendung einer Summe; Teilnehmervorschläge dürfen bis zu 20 vorhandene zulässige Mitglieder enthalten.",
-            "step11": "Prüfen Sie die Server-Ergebniskarte, den Berechnungszeitpunkt und die gespeicherten Bedingungen. Passende Datensätze werden mit den aktuellen Zugriffsrechten und der KI-Richtlinie erneut gelesen. Schemaänderungen erfordern eine neue Abfrage; einzelne Datensätze benötigen zusätzlich die Abfrageberechtigung."
+            "step11": "Prüfen Sie die Server-Ergebniskarte, den Berechnungszeitpunkt und die gespeicherten Bedingungen. Passende Datensätze werden mit den aktuellen Zugriffsrechten und der KI-Richtlinie erneut gelesen. Schemaänderungen erfordern eine neue Abfrage; einzelne Datensätze benötigen zusätzlich die Abfrageberechtigung.",
+            "step12": "Integrationskarten und Erwähnungen speichern nur eine URL in gemeinsamen Dokumenten, Exporten und AI/RAG-Inhalten. Private Metadaten werden mit der eigenen Verbindung jedes Lesers geladen und sind keine KI-Wissensquelle. INTEGRATION_PREVIEW_ALLOWED_ORIGINS ist von den Freigabelisten für KI-Anbieter, Suche und MCP getrennt."
           },
           "success": "Eine Testantwort wird abgeschlossen; Agent listet nur zulässige Tools auf und fragt vor dem Schreiben",
           "rollback": "Deaktivieren Sie Agent oder das Weltraummodell und stellen Sie dann die letzten als funktionierend bekannten Einstellungen wieder her",
@@ -3286,5 +3287,37 @@
     "noConnections": "Keine verbundenen Anwendungen",
     "disconnect": "Trennen",
     "revoked": "Widerrufen"
+  },
+  "integrationPreviews": {
+    "title": "Linkvorschauen",
+    "privacy": "Geschützte Quellen erfordern Ihre eigene Verbindung. Gemeinsame Dokumente speichern nur Links.",
+    "enabled": "Integrationsvorschauen aktivieren",
+    "enableDescription": "Das Deaktivieren erhält gespeicherte Links und persönliche Verbindungen.",
+    "noApprovedProviders": "Bitten Sie den Serverbetreiber, die API-Adressen der Anbieter freizugeben.",
+    "publicGithub": "Öffentliche GitHub-Vorschauen benötigen kein Token; der Betreiber muss den Anbieter freigeben.",
+    "configured": "Konfiguriert",
+    "token": "Zugriffstoken",
+    "tokenHint": "Verwenden Sie nur die nötigen Leserechte. Das Token wird verschlüsselt gespeichert und nicht mit Lesern geteilt.",
+    "save": "Token speichern",
+    "saved": "Token gespeichert. Der Zugriff auf jeden Link wird beim Abruf geprüft.",
+    "disconnect": "Trennen",
+    "failed": "Anfrage fehlgeschlagen. Prüfen Sie Ihre Rechte und versuchen Sie es erneut.",
+    "disabled": "Linkvorschauen wurden vom Administrator oder Betreiber deaktiviert.",
+    "connectionRequired": "Verbinden Sie Ihr Konto, um diese Vorschau anzuzeigen.",
+    "unavailable": "Vorschau nicht verfügbar. Sie können den ursprünglichen Link öffnen.",
+    "rateLimited": "Vorschaulimit erreicht. Versuchen Sie es später erneut.",
+    "connections": "Verbindungen verwalten",
+    "retry": "Erneut versuchen",
+    "insertAs": "Link einfügen als",
+    "link": "Link",
+    "mention": "Erwähnung",
+    "card": "Karte",
+    "state": {
+      "open": "Offen",
+      "closed": "Geschlossen",
+      "merged": "Zusammengeführt",
+      "archived": "Archiviert"
+    },
+    "searchReadOnly": "Link-URLs werden als Ganzes gefunden. Beim Textersetzen bleiben diese Links erhalten."
   }
 }

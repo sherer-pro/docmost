@@ -118,6 +118,10 @@ export class EnvironmentService {
     return this.configService.get<string>('AI_MCP_ALLOWED_ORIGINS', '');
   }
 
+  getIntegrationPreviewAllowedOrigins(): string {
+    return this.configService.get<string>('INTEGRATION_PREVIEW_ALLOWED_ORIGINS', '');
+  }
+
   getSsoAllowedEndpoints(): string {
     return this.configService.get<string>('SSO_ALLOWED_ENDPOINTS', '');
   }

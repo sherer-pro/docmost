@@ -8,6 +8,7 @@ import {
   Stack,
   Switch,
   Text,
+  Tabs,
 } from "@mantine/core";
 import { IconPlugConnected } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,6 +17,8 @@ import SettingsTitle from "@/components/settings/settings-title";
 import { EmptyState } from "@/components/ui/empty-state";
 import useUserRole from "@/hooks/use-user-role";
 import { formattedDate } from "@/lib/time";
+import { useSearchParams } from 'react-router-dom';
+import IntegrationPreviewConnections from '@/features/integration-preview/integration-preview-connections';
 import {
   disconnectMcpOAuth,
   getMcpOAuthConnections,
@@ -62,7 +65,14 @@ function McpOAuthSettings() {
   );
 }
 
-export default function McpConnectedApplications() {
+export default function ConnectedApplications() {
+  const { t } = useTranslation();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'previews' ? 'previews' : 'mcp';
+  return <Stack><SettingsTitle title={t('mcpOAuth.title')} /><Tabs value={tab} onChange={(value) => setParams(value === 'previews' ? { tab: 'previews' } : {})}><Tabs.List><Tabs.Tab value="mcp">MCP</Tabs.Tab><Tabs.Tab value="previews">{t('integrationPreviews.title')}</Tabs.Tab></Tabs.List><Tabs.Panel value="mcp" pt="md">{tab === 'mcp' && <McpApplications />}</Tabs.Panel><Tabs.Panel value="previews" pt="md">{tab === 'previews' && <IntegrationPreviewConnections />}</Tabs.Panel></Tabs></Stack>;
+}
+
+function McpApplications() {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
   const client = useQueryClient();
@@ -76,7 +86,6 @@ export default function McpConnectedApplications() {
   });
   return (
     <Stack>
-      <SettingsTitle title={t("mcpOAuth.title")} />
       {isAdmin && <McpOAuthSettings />}
       <Text c="dimmed" size="sm">
         {t("mcpOAuth.sessionBound")}
