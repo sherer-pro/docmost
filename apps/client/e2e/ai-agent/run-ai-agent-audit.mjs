@@ -14,6 +14,7 @@ const dateRoot = path.resolve(
 );
 const runId = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(4).toString("hex")}`;
 const auditRoot = path.join(dateRoot, runId);
+const composeEnvironmentFile = path.join(auditRoot, "compose.fixture.env");
 const composeProject = `docmost-ai-agent-${runId.toLowerCase()}`;
 const playwrightCli = createRequire(import.meta.url).resolve("@playwright/test/cli");
 const composeFiles = [
@@ -41,6 +42,8 @@ async function reservePort(preferred) {
 function composeArgs(...args) {
   return [
     "compose",
+    "--env-file",
+    composeEnvironmentFile,
     "-p",
     composeProject,
     ...composeFiles.flatMap((file) => ["-f", file]),
@@ -150,6 +153,7 @@ async function scanArtifacts(root, exactSecrets) {
 }
 
 await fs.mkdir(auditRoot, { recursive: true });
+await fs.writeFile(composeEnvironmentFile, "", { flag: "wx" });
 const appPort = Number(process.env.DOCMOST_AI_AGENT_APP_PORT ?? await reservePort(0));
 const collabPort = Number(process.env.DOCMOST_AI_AGENT_COLLAB_PORT ?? await reservePort(0));
 const modelPort = Number(process.env.DOCMOST_AI_AGENT_MODEL_PORT ?? await reservePort(0));

@@ -118,6 +118,7 @@
 - Quick local verification (CE/architecture/version/release/env/telemetry/AI-doc contracts → lint → backend test + frontend build smoke → hostile MCP/server/client security): `pnpm verify:quick`
 - Full local verification (quick contracts plus maintenance baseline → build → client bundle budget → lint → backend tests + frontend build/unit → hostile MCP/server/client security): `pnpm verify:full`
 - Release-candidate verification (full verification plus route/RAG/bilingual-fork-docs/comments/audit/text/editor-extension/RAG Sync/inbound MCP/dependency contracts and AI administrator-guide/Agent/editor/AI-context browser acceptance): `pnpm verify:release`; it requires the production-like PostgreSQL, Redis, API, and collaboration runtime plus the documented audit environment variables.
+- Isolated complete release verification: build first, use Node 22 with Corepack on `PATH`, then run `node apps/client/e2e/database/run-live.mjs --release`. It owns the synthetic PostgreSQL/Redis/API/collaboration runtime and passes in-memory authentication to the unchanged `verify:release` command. An unused explicit `--subnet=10.x.x.0/28` is optional; diagnostic subsets cannot be combined with this mode. See `docs/DATABASE_TABLES.md` for receipts and cleanup.
 - Clean build artifacts: `pnpm clean`
 - Check `.env.example`, `.env.compose.example`, local `.env`, server validation, and frontend runtime env drift: `pnpm check:env`
 - Enforce the permanent absence of external product telemetry code, configuration, and dependencies: `pnpm check:telemetry`

@@ -6,6 +6,30 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The final acceptance work now includes a dedicated `--release` mode for the
+owned database runtime. It requires Node 22, freezes shared package artifacts,
+provisions synthetic authentication and invokes the unchanged complete
+`verify:release` command. Docker builds exclude `artifacts/`, and the nested
+Agent Compose audit uses an empty explicit environment file. These harness
+changes do not establish successful release acceptance; its receipts remain
+pending until the run completes.
+
+The first complete Node 22 database/browser attempt exposed persistent fixture
+state: the AI results case left the synthetic user's drawer preference enabled,
+covering later mobile controls. Its Chromium worker was intentionally stopped
+after the screenshots identified the overlay. The owned runtime cleaned up all
+processes, containers and temporary files. Subsequent scenarios now explicitly
+start with the synthetic user's drawer closed; application behavior and original
+assertion timeouts are unchanged. The interrupted run is not final acceptance.
+
+The release dependency audit independently found GHSA-mrwp-f3q8-3g9p in
+`follow-redirects` 1.16.1. The root override and lockfile now select 1.16.2;
+the old library fails and the SHA512-verified patched artifact passes the same
+loopback credential-isolation reproducer. Installed dependencies have not been
+changed underneath the active real-model capture. Frozen-install and final
+release acceptance are still required. No Axios, Node, pnpm or UI stack major
+upgrade is part of this repair.
+
 - AI view queries and full-selection aggregates, internal Agent cell proposals
   with revision checks and transactional receipts, administrative restrictions,
   and a deterministic database benchmark corpus. Real-model holdout quality has

@@ -195,6 +195,10 @@ for limits, policy controls, transaction recovery and MCP boundaries.
   cannot be mistaken for product recovery. Synthetic paste explicitly supplies
   its clipboard payload because Firefox strips constructor-provided data from
   untrusted `ClipboardEvent` instances.
+- Every browser scenario resets only the shared synthetic user's `aiPanelOpen`
+  preference before navigation. AI scenarios can open it normally. This prevents
+  a previous result-link case from covering subsequent mobile controls with a
+  persisted drawer; timeout and pointer-interception assertions stay unchanged.
 - Keyboard-editing acceptance selects a cell fully inside the scroll viewport;
   the first rendered virtual row can be overscan above it. Both starting the
   edit and saving it must preserve scroll. Footnote creation explicitly moves
@@ -211,5 +215,19 @@ starting them. Later repository builds cannot replace assets served by an active
 acceptance run. Dependencies are linked from the installed workspace; no package
 installation or environment file is copied into the snapshot.
 - Required broad verification: `corepack pnpm verify:full`, route inventory, AI/fork documentation, and English comment checks.
+
+For the complete release gate, use Node 22 and an installed Corepack on `PATH`,
+build first, then run `node apps/client/e2e/database/run-live.mjs --release`.
+An optional verified-unused `--subnet=10.x.x.0/28` has the same meaning as above;
+other diagnostic/browser flags are rejected. This mode runs the PostgreSQL
+acceptance, copies shared package artifacts into the immutable runtime, creates
+a synthetic administrator, and executes the unmodified `corepack pnpm verify:release`
+command. It supplies only the owned API/collaboration URLs, in-memory cookies and
+local mock provider/retrieval origins. The full editor export verifier remains
+enabled. Each browser audit writes into that run's own `release/` directory;
+`verify-release.log` is scrubbed before it is saved or printed. The nested Agent
+audit uses its own Compose project and an empty explicit environment file, so
+Compose cannot load the repository `.env`. No existing runtime or user account is
+used. Runtime cleanup follows the same ownership checks as ordinary acceptance.
 
 The synthetic browser fixture is test-only and is not reachable from the production application entry point. Its API stores synthetic records in memory. The live runner instead exercises the actual local application, its PostgreSQL transactions, and Redis workers.

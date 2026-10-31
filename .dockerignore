@@ -45,6 +45,7 @@ rag-sync.config.json
 secrets/
 /graphify-out
 /output
+/artifacts
 /tmp
 # Retired local standalone-worker artifacts are not part of the embedded runtime.
 /apps/rag-sync

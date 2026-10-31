@@ -30,6 +30,22 @@ const repo = path.resolve(import.meta.dirname, '../../..');
 const require = createRequire(path.join(repo, 'apps/server/package.json'));
 const postgres = require('postgres');
 const quality = databaseQualityConfiguration();
+const release = process.argv.includes('--release');
+if (release && process.versions.node.split('.')[0] !== '22')
+  throw new Error('Isolated release acceptance requires Node 22');
+if (release && quality)
+  throw new Error(
+    'Release acceptance and real-model quality capture use separate runtimes',
+  );
+if (
+  release &&
+  process.argv.slice(2).some(
+    (arg) => arg !== '--release' && !arg.startsWith('--subnet='),
+  )
+)
+  throw new Error(
+    'Full release acceptance accepts only --release and an optional isolated --subnet',
+  );
 const runId = randomUUID();
 const prefix = `docmost-tables-live-${runId.slice(0, 8)}`;
 const output = path.join(
@@ -50,17 +66,19 @@ const report = {
   isolated: true,
   scope: quality
     ? `ai-${quality.scope}-quality`
-    : process.argv.includes('--templates-only')
-      ? 'targeted-templates'
-      : process.argv.includes('--postgres-only')
-        ? 'postgres'
-        : process.argv.includes('--advanced-only')
-          ? 'targeted-database-values'
-          : process.argv.includes('--api-only')
-            ? 'api'
-            : process.argv.includes('--startup-only')
-              ? 'startup'
-              : 'full',
+    : release
+      ? 'release'
+      : process.argv.includes('--templates-only')
+        ? 'targeted-templates'
+        : process.argv.includes('--postgres-only')
+          ? 'postgres'
+          : process.argv.includes('--advanced-only')
+            ? 'targeted-database-values'
+            : process.argv.includes('--api-only')
+              ? 'api'
+              : process.argv.includes('--startup-only')
+                ? 'startup'
+                : 'full',
   tests: [],
   cleanup: {},
 };
@@ -172,7 +190,7 @@ try {
     path.join(cwd, 'node_modules'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
-  if (quality) {
+  if (quality || release) {
     const aliases = path.join(cwd, 'dist/node_modules/@docmost');
     await mkdir(aliases, { recursive: true });
     report.sharedArtifactSha256 = {};
@@ -202,7 +220,7 @@ try {
         path.join(cwd, 'dist/apps/server/src/main.js'),
       ).resolve(`@docmost/${name}${name === 'editor-ext' ? '/server' : ''}`);
       if (!resolved.startsWith(frozen + path.sep))
-        throw new Error('Quality shared package escaped its frozen snapshot');
+        throw new Error('Shared package escaped its frozen runtime snapshot');
       report.sharedArtifactSha256[name] = await artifactHash(
         path.join(frozen, 'dist'),
       );
@@ -340,10 +358,14 @@ try {
       `http://127.0.0.1:${modelPort}`,
       quality?.origin,
       providerCapture?.origin,
+      release ? 'http://127.0.0.1:1080' : null,
     ]
       .filter(Boolean)
       .join(','),
-    AI_RETRIEVAL_ALLOWED_ORIGINS: staleIndex?.origin ?? '',
+    AI_RETRIEVAL_ALLOWED_ORIGINS: release
+      ? 'http://127.0.0.1:1080'
+      : staleIndex?.origin ?? '',
+    ...(release ? { DRAWIO_URL: 'https://embed.diagrams.net' } : {}),
     PAGE_TEMPLATES_ENABLED: 'true',
     CLOUD: 'false',
     LOG_HTTP: 'false',
@@ -361,7 +383,7 @@ try {
   console.log(
     'Starting isolated API and collaboration with real PostgreSQL and Redis.',
   );
-  if (!quality) {
+  if (!quality && !release) {
     env.INTEGRATION_PREVIEW_ALLOWED_ORIGINS = 'https://api.github.com,https://gitlab.com,https://api.figma.com';
     qualityPreloadArgs = ['--require', path.join(repo, 'apps/server/test/integration-preview-fixture.cjs'), '--synthetic-integration-previews'];
   }
@@ -444,7 +466,9 @@ try {
     !process.argv.includes('--postgres-only')
   ) {
     connection = postgres(env.DATABASE_URL, { max: 4, onnotice: () => {} });
-    const acceptance = quality
+    const acceptance = release
+      ? (await import('./release-live-acceptance.mjs')).runReleaseAcceptance
+      : quality
       ? quality.scope === 'rag'
         ? runRagQuality
         : runDatabaseQuality

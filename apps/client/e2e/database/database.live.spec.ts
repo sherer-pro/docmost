@@ -170,6 +170,8 @@ for (const [theme, width] of [['light', 1440], ['dark', 390]] as const)
 const browserErrors = new WeakMap<Page, string[]>();
 const browserErrorTasks = new WeakMap<Page, Promise<unknown>[]>();
 test.beforeEach(async ({ page }) => {
+  // The shared synthetic user can retain an AI drawer opened by an earlier case.
+  await api(page.request, "/users/update", "POST", { aiPanelOpen: false });
   const errors: string[] = [];
   const tasks: Promise<unknown>[] = [];
   browserErrors.set(page, errors);

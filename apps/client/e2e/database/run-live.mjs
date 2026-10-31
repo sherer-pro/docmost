@@ -4,7 +4,7 @@ import path from "node:path";
 
 const args = process.argv.slice(2);
 const apiOnly = args.some((arg) =>
-  ["--api-only", "--startup-only", "--postgres-only", "--ai-quality"].includes(
+  ["--api-only", "--startup-only", "--postgres-only", "--ai-quality", "--release"].includes(
     arg,
   ),
 );
