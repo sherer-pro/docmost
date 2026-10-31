@@ -2,9 +2,66 @@
 
 Date: 2026-11-01. The user resumed implementation of all remaining work in
 stages 1–4. Push and deployment are explicitly on hold. Stages 1–4 are not
-complete; final release acceptance and CI remain pending.
+complete; final release acceptance and human-reviewed model quality remain
+pending. Remote CI for the new commits is on hold with push.
 
-## Implemented packages
+## Current acceptance state
+
+The local candidate is `818d0bb2`. Its application code is identical to
+`4fa57820`; the later commit establishes the tabs fixture's initial Read mode
+and records endpoint-only navigation timings without credentials or bodies.
+
+- `roadmap-final-firefox-attempt2.log` passed readiness, the complete 48-case
+  browser suite, all 30 PostgreSQL cases and all 33 HTTP/export/import groups. Both deletion
+  cases retain the original five-second navigation bound and six-second undo
+  period; destination readiness took 3811 and 4145 ms from confirmation.
+  Rendered cell counts remained 580 before and after each optimistic deletion.
+  A sample during deletion recorded 7% CPU load and no ffmpeg process.
+  The owned processes, containers and temporary runtime were removed.
+- `roadmap-final-chromium-attempt2.log` passed the same complete 48-case browser
+  suite, readiness, 30 PostgreSQL cases and 33 HTTP/export/import groups on
+  `818d0bb2`; cleanup completed.
+- `roadmap-final-webkit-attempt2.log` passed readiness, all 30 PostgreSQL cases
+  and the HTTP/export/import checks. During browser acceptance, CPU load reached
+  a sustained 100%, with user ffmpeg measured at 26 core equivalents. The mobile
+  OAuth heading missed its original five-second wait. After preserving that
+  failure, only the verified owned Playwright process tree was stopped; the
+  parent performed normal runtime cleanup. This interrupted run is not accepted.
+  The preceding 48-case WebKit pass on `4fa57820` is not relabeled as a
+  final-candidate result. The final WebKit and complete release runs require
+  another period without heavy concurrent load; no user process or timeout
+  was changed.
+- `diagram-copy-fixed-ai-context-diagnostic.log` passed actual same-page and
+  cross-page Draw.io copying in Chromium and Firefox, including independent
+  attachment IDs, saved source bytes and reload. Its context phase stopped at
+  a missing Python dependency, so the combined diagnostic is not a release pass.
+  `diagram-upload-conflict-http.log` independently passed all HTTP groups,
+  including the uniform absent/foreign-target response and reader denial.
+- An isolated Python 3.14.6 environment now contains the exact project-pinned
+  document libraries; fixture generation and verification passed. With that
+  environment, `ai-context-venv-diagnostic.log` passed all 30 PostgreSQL cases
+  and the complete `test:ai-context:e2e` command. The temporary context-only
+  release-helper patch was reversed and the checkout is clean.
+- The complete `verify:full` and extended release contracts passed in
+  `roadmap-verify-release-v41.log`, followed by all 28 AI browser cases and
+  the Agent Docker audit. That release attempt stopped at the Draw.io defects
+  described below. The unchanged complete `verify:release` still must pass
+  on the final candidate, including export-artifact verification.
+- Full database tuning captured 120 cases; the separate six-case diagnostic
+  passed the two observed date failures and four controls. Full RAG tuning
+  captured 120 answers; the separate eight-case diagnostic passed all six
+  attachment misses and two controls after the indexing repair. Neither has
+  human annotations. The 160-case combined holdout remains unopened.
+
+The model remains `google/gemma-4-12b-qat` at
+`http://127.0.0.1:1234/v1`, temperature 0, output limit 4096 tokens, configured
+context window 65536 and request timeout 600000 ms. No model or user process
+was restarted or reconfigured. No push or deployment was performed.
+
+## Historical implementation and diagnosis
+
+The following checkpoints retain earlier observations and pending states for
+traceability. The current acceptance state above takes precedence.
 
 The focused Draw.io rerun passed the saved-image identity check and reached an
 actual cross-page defect: the upload HTTP wrapper converted the service's scope
@@ -157,6 +214,8 @@ Its runner now accepts two explicit private test subnets and passes its exact
 empty env-file and Compose file list to worker-restart/SQL checks. This keeps
 nested operations on the same owned network configuration. Daemon pools, user
 networks and production services are not changed.
+
+## Implemented packages
 
 - AI view queries and full-selection aggregates, internal Agent cell proposals
   with revision checks and transactional receipts, administrative restrictions,
