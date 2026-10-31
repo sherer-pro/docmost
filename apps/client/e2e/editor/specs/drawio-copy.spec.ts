@@ -137,9 +137,8 @@ test("Draw.io copies detach within and across pages without changing source byte
       .toBe(2);
     const sourceIds = await nodeIds(source.id);
     expect(sourceIds[0]).toBe(attachment.id);
-    const samePageCopyUrl = await page
-      .getByAltText("Draw.io preserved source", { exact: true })
-      .nth(1)
+    const samePageCopyUrl = await editor
+      .locator(`img[src*="/${sourceIds[1]}/"]`)
       .getAttribute("src");
     expect(samePageCopyUrl).toContain("/api/attachments/files/");
 
@@ -166,18 +165,15 @@ test("Draw.io copies detach within and across pages without changing source byte
     const samePageFile = await api.get(samePageCopyUrl!);
     expect(samePageFile.ok()).toBe(true);
     expect(await samePageFile.text()).toContain("Same page copy revision");
-    const targetCopyUrl = await page
-      .getByAltText("Draw.io preserved source", { exact: true })
-      .getAttribute("src");
+    const targetIds = await nodeIds(target.id);
+    const targetImage = editor.locator(`img[src*="/${targetIds[0]}/"]`);
+    const targetCopyUrl = await targetImage.getAttribute("src");
     expect(targetCopyUrl).toContain("/api/attachments/files/");
     const targetFile = await api.get(targetCopyUrl!);
     expect(targetFile.ok()).toBe(true);
     expect(await targetFile.text()).toContain("Cross page copy revision");
-    const targetIds = await nodeIds(target.id);
     await page.reload();
-    await expect(
-      page.getByAltText("Draw.io preserved source", { exact: true }),
-    ).toBeVisible();
+    await expect(targetImage).toBeVisible();
     expect(await nodeIds(target.id)).toEqual(targetIds);
     await captureStep(page, testInfo, "drawio-cross-page-source-preserved");
   } finally {

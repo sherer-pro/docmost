@@ -10,7 +10,11 @@ The added Draw.io browser scenario copies actual attachment-backed nodes within
 and between pages, edits each copy, compares the original file bytes, and checks
 that source and destination attachment identities survive reload. It uses the
 existing local iframe fixture and editor clipboard handlers without replacing
-the host clipboard. Browser execution is pending. The owned release runtime now
+the host clipboard. The first full run exposed an incorrect post-save selector
+in the new test: Draw.io changes the image label to the saved filename. Distinct
+attachment IDs were already persisted. The corrected fixture locates saved
+images by those IDs; source-byte and cross-page checks are unchanged and require
+a focused rerun. The owned release runtime now
 enables its existing collaboration statistics endpoint and passes its exact URL
 to the lifecycle suite. The next complete release run must pass its actual
 duplicate-connection assertions rather than the unconfigured capability branch.
@@ -30,7 +34,16 @@ The guide passed 21 client tests; lint and documentation contracts passed.
 The built Node 22 candidate passed all HTTP/export/import checks, including the
 real text indexing worker and search ACL, in `attachment-text-postgres-http.log`.
 That diagnostic explicitly used `--api-only`; it did not run the PostgreSQL
-suite. The new migration suite and post-fix model captures remain pending.
+suite. The combined real PostgreSQL suite then passed all 30 tests in the v41
+release runtime, including the new backfill and fenced-worker cases. Post-fix
+model captures remain pending.
+
+The v41 release attempt also passed the complete `verify:full`, all extended
+contracts, all 28 AI browser cases and the Agent Docker audit. The editor suite
+is still running and the new selector failure prevents this attempt from being
+complete release acceptance. The current Graphify graph has 17721 nodes and
+50580 edges. The explicitly approved AgentMemory import admitted 5000 nodes and
+9779 edges within its limits; its repeated import added no nodes or edges.
 
 The isolated AI browser diagnostic passed all 28 cases across Russian and English
 desktop, Firefox streaming, Pixel 7, mobile WebKit and a narrow AI panel. Its
