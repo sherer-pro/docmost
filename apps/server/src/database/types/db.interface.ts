@@ -85,7 +85,14 @@ import type {
   Workspaces,
 } from '@docmost/db/types/db';
 
+import type { McpOauthSettings, McpOauthClients, McpOauthAuthorizations, McpOauthGrants, McpOauthTokens } from './mcp-oauth.types';
+
 export interface DbInterface {
+  mcpOauthSettings: McpOauthSettings;
+  mcpOauthClients: McpOauthClients;
+  mcpOauthAuthorizations: McpOauthAuthorizations;
+  mcpOauthGrants: McpOauthGrants;
+  mcpOauthTokens: McpOauthTokens;
   aiAgentToolVerifications: AiAgentToolVerifications;
   aiAssistantProfileGroupPolicies: AiAssistantProfileGroupPolicies;
   aiAssistantProfileMcpTools: AiAssistantProfileMcpTools;

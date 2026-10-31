@@ -48,6 +48,7 @@
 - `apps/server/src/core/presence` — Redis-backed live member presence for active sessions and current page/space locations.
 - `apps/server/src/core/rag` — API-key-only RAG export and sync API.
 - `apps/server/src/core/mcp` — stateless read-only MCP Streamable HTTP endpoint backed by the shared AI tool registry.
+- `apps/server/src/core/mcp/oauth` — opt-in user OAuth for inbound MCP: PKCE, exact resource binding, one-space consent and session-bound grants. `/settings/account/connections` lists and revokes personal grants. Discovery and token responses are raw protocol JSON; keep `SkipTransform` on each protocol method.
 - `apps/server/src/core/session` — user session API and active session revocation.
 - `apps/server/src/core/sso` — core OIDC, SAML, and LDAP provider management and authentication.
 - `apps/server/src/collaboration` and `apps/server/src/ws` — collaboration server, Yjs helpers, Socket.IO relay, and presence events.
@@ -177,6 +178,7 @@
 - AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
 - Outbound external-MCP live audit: `pnpm test:ai-external-mcp:e2e`; this mutation-heavy Docker audit is intentionally separate from `verify:release`. It accepts runtime auth cookies or `DOCMOST_ADMIN_EMAIL`/`DOCMOST_ADMIN_PASSWORD`, temporarily recreates the application container and mutates MCP settings, then restores settings/environment and removes its synthetic containers and records. See `apps/client/e2e/ai-external-mcp/README.md`.
 - AI context, citations, retrieval, and editor-selection acceptance: `pnpm test:ai-context:e2e`
+- MCP user OAuth diagnostic: `node apps/client/e2e/database/run-live.mjs --mcp-oauth-only --api-only`. It exercises code/refresh replay, PKCE, ACL, session revocation, CORS and API-key compatibility. The complete live runner also covers this path; the diagnostic does not replace final PostgreSQL/browser acceptance. If Docker address pools are exhausted, check networks and host routes before using the existing `--subnet=10.x.x.0/28` option.
 - Real-model quality captures use `apps/client/e2e/database/run-live.mjs --ai-quality`; see `tests/rag-quality/README.md`. The test-only observer decodes the complete `UNTRUSTED_REFERENCE_DATA_JSON` envelope before checking exact source transmission. Captures alone do not establish human-reviewed answer quality.
 - Cross-platform line-ending contract tests for generated docs and route inventory: `pnpm test:text-contracts`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`

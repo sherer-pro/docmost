@@ -1,6 +1,7 @@
 import {
   createCorsOriginValidator,
   getAllowedCorsOrigins,
+  createApplicationCorsOptions,
 } from './cors.util';
 
 describe('cors.util', () => {
@@ -13,6 +14,21 @@ describe('cors.util', () => {
 
   afterAll(() => {
     process.env = originalEnv;
+  });
+
+  it('permits bearer-only OAuth and MCP browser transport without opening account APIs', () => {
+    const delegate = createApplicationCorsOptions();
+    for (const path of ['/mcp', '/api/mcp-oauth/token', '/.well-known/oauth-protected-resource/mcp']) {
+      const callback = jest.fn();
+      delegate({ url: path }, callback);
+      expect(callback.mock.calls[0][1]).toMatchObject({ origin: '*', credentials: false });
+    }
+    for (const path of ['/api/mcp-oauth/account/consent', '/api/pages', '/mcp/anything']) {
+      const callback = jest.fn();
+      delegate({ url: path }, callback);
+      expect(callback.mock.calls[0][1].credentials).toBe(true);
+      expect(typeof callback.mock.calls[0][1].origin).toBe('function');
+    }
   });
 
   describe('getAllowedCorsOrigins', () => {

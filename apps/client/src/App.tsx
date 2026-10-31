@@ -85,6 +85,8 @@ const AiIntegrationsSettings = lazy(
 const AiSpaceSettingsPage = lazy(
   () => import("@/features/ai/pages/ai-space-settings-page.tsx"),
 );
+const McpOAuthConsentPage = lazy(() => import('@/features/mcp-oauth/mcp-oauth-consent-page'));
+const McpConnectedApplications = lazy(() => import('@/features/mcp-oauth/mcp-connected-applications'));
 
 function RouteFallback() {
   return (
@@ -143,6 +145,7 @@ export const appRoutes = createRoutesFromElements(
     <Route element={<Layout />}>
       <Route path={"/home"} element={<Home />} />
       <Route path={"/spaces"} element={<SpacesPage />} />
+      <Route path="/mcp/authorize" element={<McpOAuthConsentPage />} />
       <Route path={"/s/:spaceSlug"} element={<SpaceHome />} />
       <Route path={"/s/:spaceSlug/dictionary"} element={<SpaceDictionary />} />
       <Route path={"/s/:spaceSlug/templates"} element={<SpaceTemplates />} />
@@ -160,6 +163,7 @@ export const appRoutes = createRoutesFromElements(
       <Route path={"/settings"}>
         <Route path={"account/profile"} element={<AccountSettings />} />
         <Route path={"account/preferences"} element={<AccountPreferences />} />
+        <Route path="account/connections" element={<McpConnectedApplications />} />
         <Route path={"members"} element={<WorkspaceMembers />} />
         <Route path={"groups"} element={<Groups />} />
         <Route path={"groups/:groupId"} element={<GroupInfo />} />

@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 35 -->
+<!-- ai-admin-guide-contract-version: 36 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -25,8 +25,8 @@ Paths 4 and 5 are opposite directions. They share no configuration and no
 credentials: an inbound `keyType=mcp` API key has nothing to do with an outbound
 server's request headers.
 
-All HTTP paths below include the global `/api` prefix except `/mcp`, which is
-an explicit root-level protocol endpoint.
+All HTTP paths below include the global `/api` prefix except `/mcp` and the
+explicit root-level `/.well-known/oauth-*` discovery endpoints.
 
 Footnote text (`footnote`) is part of the owning document's searchable text and
 Markdown evidence, subject to the same page ACL, AI content policy and context
@@ -136,7 +136,7 @@ The main components are:
 | `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                                                  |
 | `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots                                        |
 | `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                                           |
-| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter and MCP-key-only authentication                                                      |
+| `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter with typed MCP API keys or session-bound user OAuth access tokens                    |
 
 Execution uses `AI_CHAT_QUEUE`. BullMQ delivery is at least once, so a worker
 atomically claims a specific `ai_runs` row from `queued` to `running`; a
@@ -1174,6 +1174,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20261013T120000-database-revisions.ts`](../apps/server/src/database/migrations/20261013T120000-database-revisions.ts) | Adds cell/view revisions and the read-only legacy JSON value adapter used by view and AI queries. | Drops revisions and the adapter; cell values are retained. An older application is not a compatible downgrade after new property types are used. |
 | [`20261030T180000-ai-database-context.ts`](../apps/server/src/database/migrations/20261030T180000-ai-database-context.ts) | Adds frozen database context to runs and backward-compatible read-only/knowledge-only tool-policy flags. | Drain active runs first. Removes context and policy flags; approved cell values and their revisions remain. |
 | [`20261031T130000-database-computed-and-file-properties.ts`](../apps/server/src/database/migrations/20261031T130000-database-computed-and-file-properties.ts) | Extends the legacy adapter for participant/file arrays and backfills row mutation metadata from the latest cell mutation without rewriting values. | Refuses while computed/file properties or participant arrays exist, including retained data. The compatible adapter and corrected metadata remain; disable creation instead of removing saved data. |
+| [`20261031T140000-mcp-user-oauth.ts`](../apps/server/src/database/migrations/20261031T140000-mcp-user-oauth.ts) | Adds disabled-by-default workspace OAuth settings, registered clients, pending authorization codes, user/session/space grants and hashed access/refresh tokens. No API key or existing configuration is changed. | Refuses while any grant remains. Disable OAuth to revoke access while retaining records. |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -1446,7 +1447,7 @@ user. It does not replace query-time retrieval or the synchronization API:
 | ----------------------- | --------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | query-time retrieval    | the Docmost AI worker             | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
 | `/api/rag/*`            | an external indexer               | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
-| `/mcp` (inbound)        | an external MCP-capable assistant | interactive search and targeted document reading         | `keyType=mcp`                     | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
+| `/mcp` (inbound)        | an external MCP-capable assistant | interactive search and targeted document reading         | `keyType=mcp` or user OAuth        | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
 | external MCP (outbound) | the Docmost AI worker             | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
@@ -1497,6 +1498,54 @@ the create mutation discards its response immediately after handing the token
 to the one-time modal. The step polls `lastUsedAt` and reports when the first
 connection reaches Docmost.
 
+### User OAuth and connected applications
+
+Workspace administrators enable user MCP OAuth in
+`/settings/account/connections`; it is disabled for existing and new workspaces
+until explicitly enabled. Disabling revokes existing grants while retaining
+their records. API keys keep their existing behavior.
+
+The implementation follows the [MCP HTTP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+using public dynamic client registration, authorization-server and protected-resource
+metadata, authorization codes, PKCE `S256` and explicit resource binding to the
+canonical configured `/mcp` URL. Only public clients with exact HTTPS or loopback
+HTTP callback URIs are registered. Client ID Metadata Documents and confidential
+client authentication are not implemented. Registration does not fetch remote
+metadata. Names are unverified developer-supplied labels; consent displays the
+callback URI. Registration is limited to 200 clients per workspace and 10
+requests per minute per workspace/IP. Other public OAuth operations allow 60
+requests per minute per workspace/IP through the existing fail-closed limiter.
+At most 1000 undecided requests are retained per workspace; expired undecided
+requests are removed before admitting another one.
+
+Discovery is served at `/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource/mcp`. A rejected MCP request advertises
+`resource_metadata` and the sole `mcp:read` scope in `WWW-Authenticate`. Endpoints
+under `/api/mcp-oauth` implement `clients`, `authorize`, `token` and `revoke`.
+Token exchange accepts JSON and form-encoded requests. These bearer-only
+protocol/discovery routes allow cross-origin requests without credentials;
+ordinary account/consent APIs retain the configured origin and CSRF checks.
+
+After normal login, SSO and MFA, `/mcp/authorize` shows a pending request and
+requires an explicit decision plus one accessible space. Shared MCP policy
+capabilities are frozen as the grant maximum and intersected with live policy
+for each tool call. The grant is bound to the authorizing user session: logout,
+session revocation, expiry, deactivation, membership removal, space archival or
+new SSO/MFA requirements prevent use. The connected-applications list is private
+to its user; another user cannot revoke or inspect those grants.
+
+Pending authorization requests expire after 15 minutes; one-use codes after 5
+minutes; access tokens after at most 15 minutes. Rotating refresh tokens and
+their grant expire after at most 30 days and are usable only while the original
+session remains valid. Code/refresh-token replay revokes the whole grant in a
+transaction that commits before returning `invalid_grant`. Tokens and codes are
+stored as SHA-256 hashes. Losing a token response requires reconnecting rather
+than replaying an issued token. Current rights and assurance are checked before
+each read and again before returning its result. Redis traffic admission uses
+the grant ID with the existing MCP limits. OAuth credentials work only at `/mcp`;
+they cannot authenticate ordinary application APIs or `/api/rag/*`. Both MCP
+directions remain read-only, including after user consent.
+
 ### Creating and validating an MCP key
 
 Workspace owners and administrators create the key on the MCP tab of
@@ -1536,7 +1585,7 @@ Archiving the scoped space invalidates its RAG and MCP keys immediately. New
 keys cannot be created for an archived space; unarchive the space and rotate the
 integration key if the integration must be restored.
 
-An MCP token is accepted only on `/mcp`. RAG tokens, user access tokens,
+An MCP API key or OAuth access token is accepted only on `/mcp`. RAG tokens, ordinary login tokens,
 cookies, and revoked or wrong-space keys are rejected. MCP tokens are rejected
 on `/api/rag/*` and ordinary user API routes. The endpoint is CSRF-exempt
 because it is bearer-only and does not accept cookie authentication.

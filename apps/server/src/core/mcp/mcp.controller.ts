@@ -14,7 +14,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ApiKey, User, Workspace, Space } from '@docmost/db/types/entity.types';
+import { User, Workspace, Space } from '@docmost/db/types/entity.types';
 import { CsrfExempt } from '../../common/decorators/csrf-exempt.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -25,9 +25,13 @@ import { McpApiKeyAuthGuard } from './mcp-api-key-auth.guard';
 import { ApiKeyTrafficGuard } from '../api-key/traffic/api-key-traffic.guard';
 import { ApiKeyTraffic } from '../api-key/traffic/api-key-traffic.decorator';
 import { ApiKeyTrafficService } from '../api-key/traffic/api-key-traffic.service';
-import { AuthApiKey } from '../../common/decorators/auth-api-key.decorator';
+import { AuthMcpPrincipal } from './auth-mcp-principal.decorator';
 import { getAppVersion } from '../../common/helpers/get-app-version';
-import { AiBuiltinToolPolicyService } from '../ai/tools/ai-builtin-tool-policy.service';
+import {
+  AiBuiltinToolPolicyService,
+  type McpToolPrincipal,
+} from '../ai/tools/ai-builtin-tool-policy.service';
+import { McpOAuthService } from './oauth/mcp-oauth.service';
 
 /*
  * The shared tool-registry approach and Streamable HTTP adapter were adapted
@@ -42,6 +46,7 @@ export class McpController {
     private readonly tools: AiToolRegistryService,
     private readonly traffic: ApiKeyTrafficService,
     private readonly toolPolicy: AiBuiltinToolPolicyService,
+    private readonly oauth: McpOAuthService,
   ) {}
 
   @All()
@@ -54,7 +59,7 @@ export class McpController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @AuthSpace() space: Space,
-    @AuthApiKey() apiKey: ApiKey,
+    @AuthMcpPrincipal() apiKey: McpToolPrincipal,
   ): Promise<void> {
     const allowedTools = await this.toolPolicy.listForMcp(apiKey);
     const server = new Server(
@@ -62,7 +67,7 @@ export class McpController {
       {
         capabilities: { tools: {} },
         instructions:
-          'Read-only access to the single Docmost space scoped by the MCP API key.',
+          'Read-only access to the single Docmost space explicitly authorized by the user or API key.',
       },
     );
 
@@ -83,17 +88,20 @@ export class McpController {
     server.setRequestHandler(CallToolRequestSchema, async (call) => {
       const startedAt = Date.now();
       try {
-        await this.toolPolicy.assertMcpToolAllowed(apiKey, call.params.name);
+        const actor = await this.revalidateOAuth(request, workspace);
+        const principal = actor?.mcpScope ?? apiKey;
+        await this.toolPolicy.assertMcpToolAllowed(principal, call.params.name);
         const result = await this.tools.execute(
           call.params.name,
           call.params.arguments ?? {},
           {
-            user,
+            user: actor?.user ?? user,
             workspaceId: workspace.id,
             spaceId: space.id,
             source: 'mcp',
           },
         );
+        await this.revalidateOAuth(request, workspace);
         const text = JSON.stringify(result.content);
         this.traffic.observeMcpTool(
           'success',
@@ -137,6 +145,15 @@ export class McpController {
     } finally {
       await server.close().catch(() => undefined);
     }
+  }
+
+  private async revalidateOAuth(request: FastifyRequest, workspace: Workspace) {
+    if ((request as any).user?.authType !== 'mcp_oauth') return null;
+    const token = /^Bearer (\S+)$/i.exec(
+      String(request.headers?.authorization ?? ''),
+    )?.[1];
+    if (!token) throw new HttpException('MCP authorization is invalid', 401);
+    return this.oauth.authenticate(workspace, token);
   }
 
   private safeError(error: unknown): string {

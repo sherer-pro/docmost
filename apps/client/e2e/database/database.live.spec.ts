@@ -26,6 +26,37 @@ async function editViewName(page: Page, name: string) {
   await settings.getByRole("button", { name: "Close", exact: true }).click();
 }
 
+for (const [index, theme, width] of [[0, 'light', 1440], [1, 'dark', 390]] as const)
+  test(`live MCP OAuth consent and connected applications ${theme} ${width}`, async ({ page }, info) => {
+    await page.addInitScript((value) => localStorage.setItem('mantine-color-scheme-value', value), theme);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(fixture.mcpOAuth.consentRoutes[index]);
+    await expect(page.getByRole('heading', { name: 'Authorize MCP application', exact: true })).toBeVisible();
+    await expect(page.getByText(fixture.mcpOAuth.clientName, { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Allow read access', exact: true })).toBeDisabled();
+    await page.getByRole('textbox', { name: 'Select a space', exact: true }).click();
+    await page.getByRole('option', { name: 'Database acceptance', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Allow read access', exact: true })).toBeEnabled();
+    await page.screenshot({ path: info.outputPath(`mcp-oauth-consent-${theme}-${width}.png`) });
+    let callbackReached = false;
+    await page.route(`${fixture.mcpOAuth.callback}**`, async (route) => {
+      callbackReached = true;
+      const returnTo = new URL('/settings/account/connections', process.env.DATABASE_LIVE_URL).href;
+      await route.fulfill({ status: 200, contentType: 'text/html', body: `<script>history.replaceState(null,"","/callback");location.replace(${JSON.stringify(returnTo)})</script>` });
+    });
+    await page.getByRole('button', { name: 'Allow read access', exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/account\/connections$/);
+    expect(callbackReached).toBe(true);
+    await expect(page.getByRole('heading', { name: 'Connected applications', exact: true })).toBeVisible();
+    const disconnect = page.getByRole('button', { name: 'Disconnect', exact: true }).first();
+    await expect(disconnect).toBeVisible();
+    await disconnect.click();
+    await expect(disconnect).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Connected applications', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`mcp-oauth-connections-${theme}-${width}.png`) });
+  });
+
 for (const [theme, width] of [
   ["light", 1440],
   ["dark", 390],

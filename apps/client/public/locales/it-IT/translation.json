@@ -1699,18 +1699,19 @@
           "technical": "La sincronizzazione integrata legge tramite servizi interni Docmost e non chiama mai /api/rag/*. Pagine, righe e fonti `dictionary_term` usano structured-knowledge-v2; solo gli allegati `.md` e `.txt` usano `attachment-text-v1`. I processori PDF, DOCX, immagini e audio restano disabilitati. Il reader accetta metadata schema v1, v2 firmato e schema v3 firmato; v2 resta il valore di scrittura predefinito, multipart richiede v3 e upstream file_hash=operationId. Le credenziali di query e writer restano separate, i feed sono at-least-once e la perdita del lease impedisce scritture unfenced. La verifica del writer elimina solo i marcatori target-test firmati e obsoleti di questa associazione; i file senza appartenenza verificata vengono ignorati e conservati. La proiezione dei file remoti conserva pageId: null per i termini del dizionario, così da riconoscere i metadati di proprietà firmati e riutilizzare i file esistenti. Una riconciliazione anticipata prosegue su tutte le pagine anche dopo la rimozione dell’ultimo caricamento in sospeso. Compose di produzione inoltra RAG_SYNC_METADATA_WRITE_VERSION=2 e RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1 ai servizi API e di collaborazione. Conservare questi valori durante gli aggiornamenti; attivare separatamente le nuove modalità di ricerca per ogni spazio."
         },
         "inboundMcp": {
-          "description": "Gli assistenti esterni si connettono all'endpoint root /mcp con una chiave MCP con ambito.",
-          "owner": "Amministratore dell'area di lavoro e proprietario del cliente MCP",
-          "prerequisite": "Una chiave MCP con ambito spaziale con una lista consentita di funzionalità esatta",
+          "description": "Usi una chiave API MCP limitata a uno spazio oppure abiliti OAuth utente e confermi uno spazio.",
+          "owner": "Amministratore del workspace e utente che autorizza",
+          "prerequisite": "Chiave API MCP oppure OAuth abilitato dall’amministratore con consenso esplicito",
           "result": "Il client può chiamare gli strumenti Docmost di sola lettura autorizzati tramite /mcp",
           "steps": {
-            "step1": "Create la chiave MCP e copiarla una volta",
-            "step2": "Test inizializza, tools/list e una chiamata consentita",
-            "step3": "Avvia l'integrazione del client"
+            "step1": "Abiliti OAuth utente come amministratore oppure crei una chiave API MCP limitata a uno spazio.",
+            "step2": "Per OAuth, registri il client e approvi un solo spazio accessibile nella schermata di consenso.",
+            "step3": "Verifichi initialize, tools/list e una lettura consentita. Gestisca le connessioni OAuth nelle impostazioni dell’account.",
+            "step4": "L’accesso è legato alla sessione corrente. Uscire, revocare la sessione o scollegare l’applicazione termina l’accesso."
           },
           "success": "Gli strumenti consentiti funzionano; le funzionalità negate e le letture degli allegati binari rimangono non disponibili",
-          "rollback": "Revoca la chiave o rimuovi il creatore dallo spazio; l'accesso attivo si chiude alla richiesta successiva",
-          "technical": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati. I batch JSON-RPC con più di 100 messaggi vengono rifiutati con HTTP 400 prima della convalida del protocollo; inviate messaggi MCP singoli."
+          "rollback": "Revochi la chiave o la connessione OAuth. Uscire termina anche l’accesso OAuth legato alla sessione.",
+          "technical": "/mcp accetta chiavi API MCP o token OAuth; rifiuta normali token di accesso e chiavi RAG. /api/rag/* accetta solo chiavi RAG. Workspace, utente, appartenenza, ACL e capacità sono verificati a ogni richiesta. OAuth usa PKCE S256 e resource /mcp per uno spazio scelto. I codici durano 5 minuti, i token di accesso 15 minuti e le autorizzazioni al massimo 30 giorni, entro la durata della sessione autorizzante. Riutilizzare un refresh token revoca la connessione. Disabilitare OAuth revoca gli accessi conservando i dati. I batch JSON-RPC oltre 100 messaggi restituiscono HTTP 400. OAuth: refresh_token."
         },
         "outboundMcp": {
           "description": "Docmost Agent può richiamare strumenti su server MCP remoti approvati.",
@@ -1759,17 +1760,18 @@
         },
         "mcp": {
           "label": "Flusso di autorizzazione MCP in entrata / Flusso di autorizzazione MCP in uscita",
-          "caption": "Ogni richiesta /mcp ricontrolla l'ambito della chiave prima dell'ammissione Redis e della policy dello strumento di sola lettura condiviso. Ogni livello di autorizzazione deve consentire la richiesta; il consenso segue l'URL del destinatario e la risoluzione DNS è bloccata.",
+          "caption": "Usi una chiave API MCP limitata a uno spazio oppure abiliti OAuth utente e confermi uno spazio. Applicare i criteri di gruppo Nega prima e il consenso dell'utente Risolvi e blocca l'indirizzo remoto approvato, quindi tratta gli schemi e i risultati come non attendibili",
           "textAlternative": {
-            "step1": "Create una chiave MCP digitata con ambito spaziale",
-            "step2": "Convalida la chiave live, l'area di lavoro, il creatore e lo spazio",
+            "step1": "Usi una chiave API MCP limitata a uno spazio oppure abiliti OAuth utente e confermi uno spazio.",
+            "step2": "L’accesso è legato alla sessione corrente. Uscire, revocare la sessione o scollegare l’applicazione termina l’accesso.",
             "step3": "Applicare i criteri di gruppo Nega prima e il consenso dell'utente",
             "step4": "Risolvi e blocca l'indirizzo remoto approvato, quindi tratta gli schemi e i risultati come non attendibili"
           },
           "nodes": {
             "readTools": "Politica dello strumento, ACL della pagina e politica del contenuto",
             "approval": "Controllo della distribuzione · Consenso dell'utente",
-            "remoteServer": "Server MCP remoto"
+            "remoteServer": "Server MCP remoto",
+            "userAuthorization": "Autorizza applicazione MCP"
           }
         }
       },
@@ -1811,14 +1813,15 @@
           "spaceAdmin": "Amministratore dello spazio; l'operatore approva l'origine",
           "workspaceAdmin": "Proprietario o amministratore dell'area di lavoro",
           "operatorAndSpaceAdmin": "Operatore di distribuzione e amministratore di spazio",
-          "layered": "Operatore, amministratore dell'area di lavoro, amministratore dello spazio, policy di gruppo e utente"
+          "layered": "Operatore, amministratore dell'area di lavoro, amministratore dello spazio, policy di gruppo e utente",
+          "workspaceAdminAndUser": "Amministratore del workspace e utente che autorizza"
         },
         "boundaries": {
           "provider": "Configura e verifica il modello e il recupero opzionale per ogni spazio. Approva prima le origini di distribuzione, mantieni la ricerca disabilitata finché un adattatore non è pronto e utilizza le politiche degli strumenti integrati ed esterni per limitare l’accesso. Abilita la comprensione delle immagini prima di inviare immagini o PDF contenenti solo immagini; altrimenti il server rifiuterà questi dati invece di ometterli senza avviso.",
           "retrieval": "Docmost ricontrolla stato reale della fonte, esclusioni e ACL prima e durante la generazione, quando riutilizza la cronologia della chat e prima di restituire risultati per una selezione. Anche gli allegati di pagina e i file privati della chat sono protetti; il testo selezionato resta un input non attendibile. Se l’accesso cambia, testo parziale, ragionamento e citazioni vengono cancellati e il messaggio diventa limitato.",
           "ragApi": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati.",
           "ragSync": "Le credenziali del provider, del recupero, del writer Open WebUI, di RAG e dei MCP in entrata e in uscita sono segreti distinti. Non inserire le credenziali dei singoli spazi nell’ambiente o nei metadata Docker, nei log o negli URL. Prima di ruotare APP_SECRET, disabilita tutti i binding RAG e attendi la pulizia; il segreto firma anche i metadata di proprietà remota. Se è stato ruotato troppo presto, ripristina il valore precedente prima della pulizia, quindi reinserisci le credenziali cifrate.",
-          "inboundMcp": "Gli accessi in entrata a /mcp e /api/rag/* accettano solo il rispettivo tipo di chiave; le sessioni utente e l’altro tipo di chiave vengono rifiutati. Le chiavi restano limitate dall’accesso corrente del creatore allo spazio e dalla visibilità delle pagine. L’archiviazione dello spazio associato invalida immediatamente le relative chiavi. Il token viene restituito solo alla creazione; tipo, spazio, creatore e scadenza non possono essere modificati.",
+          "inboundMcp": "Usi una chiave API MCP limitata a uno spazio oppure abiliti OAuth utente e confermi uno spazio. L’applicazione può leggere i contenuti a cui lei ha accesso in uno spazio selezionato tramite gli strumenti MCP abilitati. Non può scrivere dati. L’accesso è legato alla sessione corrente. Uscire, revocare la sessione o scollegare l’applicazione termina l’accesso.",
           "outboundMcp": "Il MCP in uscita resta chiuso a meno che l’interruttore di distribuzione, l’interruttore del workspace, il server abilitato, l’associazione allo spazio, la politica di gruppo e il consenso dell’utente non lo consentano tutti. L’interruttore di emergenza della distribuzione è AI_EXTERNAL_MCP_ENABLED. Il MCP in uscita invia dati Docmost selezionati a un altro sistema. Descrizioni, schemi e risultati remoti non sono attendibili; «sola lettura» è una classificazione della politica Docmost, non la prova che l’implementazione remota non abbia effetti collaterali."
         }
       },
@@ -3262,5 +3265,26 @@
     "templateApplyHint": "Il modello riempie questa pagina vuota. Titolo e posizione restano invariati.",
     "templateTargetChanged": "La pagina non è più vuota. Il contenuto è stato conservato.",
     "applyAction": "Applica"
+  },
+  "mcpOAuth": {
+    "title": "Applicazioni collegate",
+    "consentTitle": "Autorizza applicazione MCP",
+    "unverified": "Il nome è fornito dallo sviluppatore e non è verificato. Controlli l’indirizzo di ritorno prima di consentire l’accesso.",
+    "scopeRead": "L’applicazione può leggere i contenuti a cui lei ha accesso in uno spazio selezionato tramite gli strumenti MCP abilitati. Non può scrivere dati.",
+    "sessionBound": "L’accesso è legato alla sessione corrente. Uscire, revocare la sessione o scollegare l’applicazione termina l’accesso.",
+    "redirect": "Indirizzo di ritorno",
+    "space": "Selezioni uno spazio",
+    "allow": "Consenti lettura",
+    "deny": "Nega",
+    "failed": "Richiesta non riuscita. Controlli i permessi e riprovi.",
+    "expired": "La richiesta non è valida, è scaduta o è già stata elaborata.",
+    "reload": "Riprova",
+    "emptySpaces": "Nessuno spazio disponibile",
+    "settingsTitle": "OAuth MCP utente",
+    "settingsDescription": "Disabilitato per impostazione predefinita. Disabilitarlo revoca le connessioni OAuth esistenti. Le chiavi API restano disponibili.",
+    "enabled": "Consenti OAuth MCP utente",
+    "noConnections": "Nessuna applicazione collegata",
+    "disconnect": "Scollega",
+    "revoked": "Revocato"
   }
 }

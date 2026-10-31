@@ -1,4 +1,4 @@
-import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import type { CorsOptions, CorsOptionsDelegate } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 const DEFAULT_ORIGIN = 'http://localhost:3000';
 
@@ -55,5 +55,26 @@ export function createCorsOptions(): CorsOptions {
   return {
     origin: createCorsOriginValidator(allowedOrigins),
     credentials: true,
+  };
+}
+
+export function createApplicationCorsOptions(): CorsOptionsDelegate<any> {
+  const authenticated = createCorsOptions();
+  const publicPaths = new Set([
+    '/mcp',
+    '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-authorization-server',
+    '/api/mcp-oauth/clients',
+    '/api/mcp-oauth/token',
+    '/api/mcp-oauth/revoke',
+  ]);
+  return (request, callback) => {
+    const path = String(request.raw?.url ?? request.url ?? '').split('?')[0];
+    callback(null, publicPaths.has(path) ? {
+      origin: '*', credentials: false,
+      methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'MCP-Protocol-Version', 'Mcp-Session-Id', 'Last-Event-ID'],
+      exposedHeaders: ['WWW-Authenticate', 'Retry-After', 'Mcp-Session-Id'],
+    } : authenticated);
   };
 }

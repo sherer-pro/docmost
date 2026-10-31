@@ -37,6 +37,8 @@ import {
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
+export type McpToolPrincipal = Pick<ApiKey, 'workspaceId' | 'spaceId' | 'allowedCapabilities'>;
+
 @Injectable()
 export class AiBuiltinToolPolicyService {
   constructor(
@@ -250,7 +252,7 @@ export class AiBuiltinToolPolicyService {
     return this.getSpaceView(spaceId, user, workspace);
   }
 
-  async listForMcp(apiKey: ApiKey): Promise<AiToolDefinition[]> {
+  async listForMcp(apiKey: McpToolPrincipal): Promise<AiToolDefinition[]> {
     const resolved = await this.resolve(
       apiKey.workspaceId,
       apiKey.spaceId,
@@ -277,7 +279,7 @@ export class AiBuiltinToolPolicyService {
     };
   }
 
-  async assertMcpToolAllowed(apiKey: ApiKey, toolName: string): Promise<void> {
+  async assertMcpToolAllowed(apiKey: McpToolPrincipal, toolName: string): Promise<void> {
     const tools = await this.listForMcp(apiKey);
     if (!tools.some((tool) => tool.name === toolName)) {
       throw new ForbiddenException('MCP tool is not allowed by API key policy');

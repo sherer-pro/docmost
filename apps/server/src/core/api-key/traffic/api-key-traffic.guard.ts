@@ -29,7 +29,7 @@ export class ApiKeyTrafficGuard implements CanActivate {
     const http = context.switchToHttp();
     const request = http.getRequest<any>();
     const response = http.getResponse<any>();
-    const apiKeyId = request?.user?.apiKey?.id;
+    const apiKeyId = request?.user?.apiKey?.id ?? (profile === 'mcp' ? request?.user?.mcpScope?.id : undefined);
     if (!apiKeyId) return true;
     const path = String(request.raw?.url ?? request.url ?? '').split('?')[0];
     const bulk = profile === 'rag' && this.isBulkRagPath(path);

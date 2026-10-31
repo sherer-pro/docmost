@@ -8,6 +8,7 @@ import path from 'node:path';
 import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
 import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
 import { runDocxAcceptance } from './docx-live-acceptance.mjs';
+import { runMcpOAuthAcceptance } from './mcp-oauth-live-acceptance.mjs';
 import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
 import { runAdvancedDatabaseAcceptance } from './database-advanced-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -144,6 +145,11 @@ export async function runLiveAcceptance({
       spaceId: space.id,
       title: 'Acceptance parent',
     });
+    if (process.argv.includes('--mcp-oauth-only')) {
+      await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture: { workspaceId }, test, baseURL, sql, exactSecrets });
+      await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
+      return;
+    }
     const database = await api(admin, '/databases', 'POST', {
       spaceId: space.id,
       parentPageId: parent.id,
@@ -666,6 +672,8 @@ export async function runLiveAcceptance({
       test,
       output,
     });
+    await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture, test, baseURL, sql, exactSecrets });
+
     fixture.aiApproval = await runAiDatabaseAcceptance({
       api,
       fetchApi,

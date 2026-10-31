@@ -1,5 +1,5 @@
 {
-  "version": 35,
+  "version": 36,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,15 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "inbound-mcp-user-oauth",
+      "key": "scenario.inboundMcp.technical",
+      "needles": [
+        "PKCE S256",
+        "resource /mcp",
+        "refresh_token"
+      ]
+    },
     {
       "id": "typed-database-calculation-overrides",
       "key": "scenario.assistant.technical",
@@ -393,6 +402,9 @@
     "scenario.assistant.steps.step9",
     "scenario.assistant.steps.step11",
     "scenario.retrieval.steps.step5",
-    "diagram.rag.nodes.localSearch"
+    "diagram.rag.nodes.localSearch",
+    "scenario.inboundMcp.steps.step4",
+    "security.owners.workspaceAdminAndUser",
+    "diagram.mcp.nodes.userAuthorization"
   ]
 }

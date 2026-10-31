@@ -193,6 +193,7 @@ Supported capabilities include:
 - deduplication of contextual search results;
 
 - separate RAG and MCP key types managed from one API keys page with dedicated tabs and onboarding presets;
+- opt-in user MCP OAuth with PKCE, explicit space consent, session-bound read access, rotating tokens and a private connected-applications list; API keys remain compatible;
 
 - a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
 

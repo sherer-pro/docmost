@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | GET | `/` | `apps/server/src/core/attachment/page-attachments.controller.ts` |
 | POST | `/:attachmentId/actions/remove` | `apps/server/src/core/attachment/page-attachments.controller.ts` |
+| GET | `/.well-known/oauth-authorization-server` | `apps/server/src/core/mcp/oauth/mcp-oauth-metadata.controller.ts` |
+| GET | `/.well-known/oauth-protected-resource/mcp` | `apps/server/src/core/mcp/oauth/mcp-oauth-metadata.controller.ts` |
 | GET | `/ai/conversations` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | POST | `/ai/conversations` | `apps/server/src/core/ai/controllers/ai-conversation.controller.ts` |
 | GET | `/ai/conversations/:conversationId/files` | `apps/server/src/core/ai/controllers/ai-file.controller.ts` |
@@ -132,6 +134,16 @@
 | POST | `/labels/pages` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/registry` | `apps/server/src/core/label/label.controller.ts` |
 | POST | `/labels/rename` | `apps/server/src/core/label/label.controller.ts` |
+| GET | `/mcp-oauth/account/connections` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| GET | `/mcp-oauth/account/consent` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| POST | `/mcp-oauth/account/consent` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| POST | `/mcp-oauth/account/disconnect` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| GET | `/mcp-oauth/account/settings` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| PATCH | `/mcp-oauth/account/settings` | `apps/server/src/core/mcp/oauth/mcp-oauth-account.controller.ts` |
+| GET | `/mcp-oauth/authorize` | `apps/server/src/core/mcp/oauth/mcp-oauth.controller.ts` |
+| POST | `/mcp-oauth/clients` | `apps/server/src/core/mcp/oauth/mcp-oauth.controller.ts` |
+| POST | `/mcp-oauth/revoke` | `apps/server/src/core/mcp/oauth/mcp-oauth.controller.ts` |
+| POST | `/mcp-oauth/token` | `apps/server/src/core/mcp/oauth/mcp-oauth.controller.ts` |
 | POST | `/mfa/cancel-login` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/disable` | `apps/server/src/core/mfa/mfa.controller.ts` |
 | POST | `/mfa/enable` | `apps/server/src/core/mfa/mfa.controller.ts` |

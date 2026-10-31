@@ -404,6 +404,7 @@ try {
     !process.argv.includes('--startup-only') &&
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&
+    !process.argv.includes('--mcp-oauth-only') &&
     !process.argv.includes('--templates-only') &&
     !process.argv.includes('--advanced-only') &&
     !quality

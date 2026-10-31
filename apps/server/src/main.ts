@@ -11,7 +11,7 @@ import { WsRedisIoAdapter } from './ws/adapter/ws-redis.adapter';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
 import { InternalLogFilter } from './common/logger/internal-log-filter';
-import { createCorsOptions } from './common/security/cors.util';
+import { createApplicationCorsOptions } from './common/security/cors.util';
 import { EnvironmentService } from './integrations/environment/environment.service';
 import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
 import { envPath } from './common/helpers';
@@ -297,7 +297,7 @@ async function bootstrap() {
       }),
     );
 
-    app.enableCors(createCorsOptions());
+    app.enableCors({ delegator: createApplicationCorsOptions() });
     app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
     app.enableShutdownHooks();
 

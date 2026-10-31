@@ -1699,18 +1699,19 @@
           "technical": "De ingebouwde synchronisatie leest via interne Docmost-services en roept /api/rag/* nooit aan. Pagina’s, rijen en `dictionary_term` gebruiken structured-knowledge-v2; alleen `.md`- en `.txt`-bijlagen gebruiken `attachment-text-v1`. PDF-, DOCX-, beeld- en audioprocessors blijven uitgeschakeld. De reader accepteert metadata schema v1, ondertekend v2 en ondertekend schema v3; v2 blijft de schrijfstandaard, multipart vereist v3 en upstream file_hash=operationId. Query- en writersleutels blijven gescheiden, feeds zijn at-least-once en leaseverlies voorkomt unfenced statuswrites. De writercontrole verwijdert alleen verouderde ondertekende target-test-markeringen van deze koppeling; bestanden zonder geverifieerd eigendom worden overgeslagen en behouden. De projectie van externe bestanden behoudt pageId: null voor woordenboektermen, zodat ondertekende eigendomsgegevens herkenbaar blijven en bestaande bestanden opnieuw worden gebruikt. Een vervroegde controle gaat door op alle lijstpagina’s, ook nadat de laatste openstaande upload is verwijderd. Production Compose geeft RAG_SYNC_METADATA_WRITE_VERSION=2 en RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1 door aan de API- en samenwerkingsdiensten. Behoud deze standaardwaarden bij upgrades; schakel nieuwe zoekmodi afzonderlijk per ruimte in."
         },
         "inboundMcp": {
-          "description": "Externe assistenten maken verbinding met het root-/mcp-eindpunt met een scoped MCP-sleutel.",
-          "owner": "Werkruimtebeheerder en MCP-clienteigenaar",
-          "prerequisite": "Een in de ruimte ingedeelde MCP-sleutel met een exacte toelatingslijst voor mogelijkheden",
+          "description": "Gebruik een ruimtegebonden MCP-API-sleutel of schakel gebruikers-OAuth in en bevestig één ruimte.",
+          "owner": "Workspace-beheerder en autoriserende gebruiker",
+          "prerequisite": "MCP-API-sleutel of door de beheerder ingeschakelde OAuth met expliciete toestemming",
           "result": "De klant kan geautoriseerde alleen-lezen Docmost-tools oproepen via /mcp",
           "steps": {
-            "step1": "Create de MCP-sleutel en kopieer deze één keer",
-            "step2": "Test initialiseren, tools/list en één toegestane oproep",
-            "step3": "Start de klantintegratie"
+            "step1": "Schakel gebruikers-OAuth als beheerder in of maak een ruimtegebonden MCP-API-sleutel.",
+            "step2": "Registreer voor OAuth de client en keur precies één toegankelijke ruimte goed op het toestemmingsscherm.",
+            "step3": "Test initialize, tools/list en een toegestane leesactie. Beheer OAuth-verbindingen in uw accountinstellingen.",
+            "step4": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang."
           },
           "success": "Toegestane tools werken; geweigerde mogelijkheden en het lezen van binaire bijlagen blijven niet beschikbaar",
-          "rollback": "Trek de sleutel in of verwijder de maker uit de ruimte; actieve toegang wordt gesloten bij het volgende verzoek",
-          "technical": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd. JSON-RPC-batches met meer dan 100 berichten worden vóór de protocolvalidatie geweigerd met HTTP 400; verstuur afzonderlijke MCP-berichten."
+          "rollback": "Trek de sleutel of OAuth-verbinding in. Uitloggen beëindigt ook de sessiegebonden OAuth-toegang.",
+          "technical": "/mcp accepteert MCP-API-sleutels of OAuth-tokens; gewone inlogtokens en RAG-sleutels worden geweigerd. /api/rag/* accepteert alleen RAG-sleutels. Workspace, gebruiker, lidmaatschap, pagina-ACL en mogelijkheden worden opnieuw gecontroleerd. OAuth gebruikt PKCE S256 en resource /mcp voor één gekozen ruimte. Codes gelden 5 minuten, toegangstokens 15 minuten, machtigingen maximaal 30 dagen en niet langer dan de autoriserende sessie. Hergebruik van een refresh token trekt de verbinding in. Uitschakelen trekt toegang in en behoudt gegevens. JSON-RPC-batches boven 100 berichten geven HTTP 400. OAuth: refresh_token."
         },
         "outboundMcp": {
           "description": "De Docmost Agent kan tools op goedgekeurde externe MCP-servers aanroepen.",
@@ -1759,17 +1760,18 @@
         },
         "mcp": {
           "label": "Inkomende autorisatiestroom MCP / Uitgaande autorisatiestroom MCP",
-          "caption": "Bij elk /mcp-verzoek wordt het sleutelbereik opnieuw gecontroleerd voordat de Redis wordt toegelaten en het gedeelde alleen-lezen toolbeleid wordt toegepast. Elke autorisatielaag moet het verzoek toestaan; toestemming volgt de ontvanger-URL en DNS-resolutie is vastgezet.",
+          "caption": "Gebruik een ruimtegebonden MCP-API-sleutel of schakel gebruikers-OAuth in en bevestig één ruimte. Pas 'deny-first'-groepsbeleid en toestemming van de gebruiker toe Los het goedgekeurde externe adres op en zet het vast, en behandel schema's en resultaten vervolgens als niet-vertrouwd",
           "textAlternative": {
-            "step1": "Create een getypte MCP-sleutel met ruimtebereik",
-            "step2": "Valideer de live-sleutel, werkruimte, maker en ruimte",
+            "step1": "Gebruik een ruimtegebonden MCP-API-sleutel of schakel gebruikers-OAuth in en bevestig één ruimte.",
+            "step2": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang.",
             "step3": "Pas 'deny-first'-groepsbeleid en toestemming van de gebruiker toe",
             "step4": "Los het goedgekeurde externe adres op en zet het vast, en behandel schema's en resultaten vervolgens als niet-vertrouwd"
           },
           "nodes": {
             "readTools": "Toolbeleid, pagina-ACL en inhoudsbeleid",
             "approval": "Implementatiecontrole · Toestemming van de gebruiker",
-            "remoteServer": "Externe MCP-server"
+            "remoteServer": "Externe MCP-server",
+            "userAuthorization": "MCP-applicatie autoriseren"
           }
         }
       },
@@ -1811,14 +1813,15 @@
           "spaceAdmin": "Ruimtebeheerder; exploitant keurt de oorsprong goed",
           "workspaceAdmin": "Eigenaar of beheerder van de werkruimte",
           "operatorAndSpaceAdmin": "Implementatieoperator en ruimtebeheerder",
-          "layered": "Operator, werkruimtebeheerder, ruimtebeheerder, groepsbeleid en gebruiker"
+          "layered": "Operator, werkruimtebeheerder, ruimtebeheerder, groepsbeleid en gebruiker",
+          "workspaceAdminAndUser": "Workspace-beheerder en autoriserende gebruiker"
         },
         "boundaries": {
           "provider": "Configureer en test voor elke ruimte het model en de optionele ophaalfunctie. Keur eerst de implementatie-origins goed, laat zoeken uitgeschakeld totdat een adapter gereed is en gebruik het beleid voor ingebouwde en externe tools om de toegang te beperken. Schakel beeldherkenning in voordat afbeeldingen of PDF's met alleen afbeeldingen worden verzonden; anders weigert de server die invoer in plaats van deze stilzwijgend weg te laten.",
           "retrieval": "Docmost controleert de actuele bronstatus, uitsluitingen en ACL vóór en tijdens generatie, bij hergebruik van chatgeschiedenis en voordat resultaten voor een selectie worden teruggegeven. Pagina-bijlagen en privéchatbestanden vallen onder dezelfde bewaking; geselecteerde tekst blijft niet-vertrouwde invoer. Bij gewijzigde toegang worden gedeeltelijke tekst, redenering en citaten gewist en wordt het bericht beperkt.",
           "ragApi": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd.",
           "ragSync": "Referenties voor de provider, het ophalen, de Open WebUI-writer, RAG en inkomend en uitgaand MCP zijn afzonderlijke geheimen. Plaats referenties per ruimte niet in de Docker-omgeving of -metadata, logboeken of URLs. Schakel vóór het wijzigen van APP_SECRET alle RAG-bindings uit en wacht op de opschoning; het geheim ondertekent ook metadata over extern eigendom. Is het te vroeg gewijzigd, herstel dan vóór de opschoning de vorige waarde en voer daarna versleutelde referenties opnieuw in.",
-          "inboundMcp": "Inkomende toegang tot /mcp en /api/rag/* accepteert alleen het eigen sleuteltype; gebruikerssessies en het andere sleuteltype worden geweigerd. Sleutels blijven beperkt door de huidige toegang van de maker tot de ruimte en de zichtbaarheid van pagina’s. Door de gekoppelde ruimte te archiveren, worden de sleutels onmiddellijk ongeldig. Het token wordt alleen bij het aanmaken teruggegeven; type, ruimte, maker en vervaldatum kunnen niet worden gewijzigd.",
+          "inboundMcp": "Gebruik een ruimtegebonden MCP-API-sleutel of schakel gebruikers-OAuth in en bevestig één ruimte. De applicatie kan via ingeschakelde MCP-tools inhoud lezen waartoe u toegang hebt in één geselecteerde ruimte. Schrijven is niet mogelijk. Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang.",
           "outboundMcp": "Uitgaand MCP blijft gesloten tenzij de implementatieschakelaar, workspace-schakelaar, ingeschakelde server, ruimtekoppeling, het groepsbeleid en de toestemming van de gebruiker dit allemaal toestaan. De noodschakelaar voor de implementatie is AI_EXTERNAL_MCP_ENABLED. Uitgaand MCP verzendt geselecteerde Docmost-gegevens naar een ander systeem. Externe beschrijvingen, schema’s en resultaten zijn niet vertrouwd; ‘alleen-lezen’ is een beleidsclassificatie van Docmost en geen bewijs dat de externe implementatie geen neveneffecten heeft."
         }
       },
@@ -3262,5 +3265,26 @@
     "templateApplyHint": "Het sjabloon vult deze lege pagina. Titel en locatie blijven behouden.",
     "templateTargetChanged": "De pagina is niet meer leeg. Uw inhoud is behouden.",
     "applyAction": "Toepassen"
+  },
+  "mcpOAuth": {
+    "title": "Verbonden applicaties",
+    "consentTitle": "MCP-applicatie autoriseren",
+    "unverified": "De naam is opgegeven door de ontwikkelaar en is niet geverifieerd. Controleer het terugkeeradres voordat u toegang verleent.",
+    "scopeRead": "De applicatie kan via ingeschakelde MCP-tools inhoud lezen waartoe u toegang hebt in één geselecteerde ruimte. Schrijven is niet mogelijk.",
+    "sessionBound": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang.",
+    "redirect": "Terugkeeradres",
+    "space": "Selecteer een ruimte",
+    "allow": "Leestoegang toestaan",
+    "deny": "Weigeren",
+    "failed": "Het verzoek is mislukt. Controleer uw rechten en probeer het opnieuw.",
+    "expired": "Dit verzoek is ongeldig, verlopen of al afgehandeld.",
+    "reload": "Opnieuw proberen",
+    "emptySpaces": "Geen beschikbare ruimtes",
+    "settingsTitle": "MCP OAuth voor gebruikers",
+    "settingsDescription": "Standaard uitgeschakeld. Uitschakelen trekt bestaande OAuth-verbindingen in. API-sleutels blijven beschikbaar.",
+    "enabled": "MCP OAuth voor gebruikers toestaan",
+    "noConnections": "Geen verbonden applicaties",
+    "disconnect": "Ontkoppelen",
+    "revoked": "Ingetrokken"
   }
 }

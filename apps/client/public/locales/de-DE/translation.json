@@ -1699,18 +1699,19 @@
           "technical": "Die integrierte Synchronisierung liest über interne Docmost-Dienste und ruft /api/rag/* nie auf. Seiten, Datenbankzeilen und `dictionary_term` verwenden structured-knowledge-v2; nur `.md`- und `.txt`-Anhänge verwenden `attachment-text-v1`. PDF-, DOCX-, Bild- und Audio-Prozessoren bleiben deaktiviert. Der Reader akzeptiert metadata schema v1, signiertes v2 und signiertes schema v3; v2 bleibt Schreibstandard, Multipart erfordert v3 und upstream file_hash=operationId. Abfrage- und Writer-Schlüssel bleiben getrennt, Feeds sind at-least-once und Lease-Verlust verhindert unfenced Statusschreibvorgänge. Die Writer-Prüfung löscht nur veraltete signierte target-test-Marker dieser Bindung; Dateien ohne bestätigte Zugehörigkeit werden übersprungen und beibehalten. Die Projektion entfernter Dateien bewahrt pageId: null für Wörterbuchbegriffe, damit signierte Eigentumsdaten erkannt und vorhandene Dateien wiederverwendet werden. Ein vorzeitiger Abgleich wird über alle Listenseiten fortgesetzt, auch wenn der letzte ausstehende Upload bereits entfernt wurde. Production Compose reicht RAG_SYNC_METADATA_WRITE_VERSION=2 und RAG_CONTENT_PROCESSORS_ENABLED=attachment-text-v1 an API und Zusammenarbeit weiter. Behalten Sie diese Standardwerte beim Upgrade bei; aktivieren Sie neue Suchmodi separat pro Bereich."
         },
         "inboundMcp": {
-          "description": "Externe Assistenten stellen mit einem bereichsbezogenen MCP-Schlüssel eine Verbindung zum Root-Endpunkt /mcp her.",
-          "owner": "Workspace-Administrator und Besitzer des MCP-Clients",
-          "prerequisite": "Ein raumbezogener MCP-Schlüssel mit einer genauen Zulassungsliste für Funktionen",
+          "description": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich.",
+          "owner": "Workspace-Administrator und autorisierender Benutzer",
+          "prerequisite": "MCP-API-Schlüssel oder vom Administrator aktiviertes OAuth mit ausdrücklicher Zustimmung",
           "result": "Der Client kann autorisierte schreibgeschützte Docmost-Tools über /mcp aufrufen",
           "steps": {
-            "step1": "Create den Schlüssel MCP und kopieren Sie ihn einmal",
-            "step2": "Test-Initialisierung, tools/list und ein zulässiger Aufruf",
-            "step3": "Starten Sie die Client-Integration"
+            "step1": "Aktivieren Sie Benutzer-OAuth als Administrator oder erstellen Sie einen bereichsgebundenen MCP-API-Schlüssel.",
+            "step2": "Registrieren Sie für OAuth den Client und bestätigen Sie genau einen zugänglichen Bereich im Zustimmungsdialog.",
+            "step3": "Testen Sie initialize, tools/list und einen erlaubten Lesezugriff. Verwalten Sie OAuth-Verbindungen in den Kontoeinstellungen.",
+            "step4": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff."
           },
           "success": "Zulässige Werkzeuge funktionieren; verweigerte Funktionen und Lesevorgänge für binäre Anhänge bleiben weiterhin nicht verfügbar",
-          "rollback": "Den Schlüssel widerrufen oder den Ersteller aus dem Space entfernen; Der aktive Zugriff wird bei der nächsten Anfrage geschlossen",
-          "technical": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden. JSON-RPC-Batches mit mehr als 100 Nachrichten werden vor der Protokollvalidierung mit HTTP 400 abgewiesen; senden Sie einzelne MCP-Nachrichten."
+          "rollback": "Widerrufen Sie Schlüssel oder OAuth-Verbindung. Abmelden beendet auch den sitzungsgebundenen OAuth-Zugriff.",
+          "technical": "/mcp akzeptiert MCP-API-Schlüssel oder OAuth-Zugriffstoken; normale Anmeldetoken und RAG-Schlüssel werden abgewiesen. /api/rag/* akzeptiert nur RAG-Schlüssel. Workspace, Benutzer, Mitgliedschaft, Seiten-ACL und Werkzeugrechte werden aktuell geprüft. OAuth nutzt PKCE S256 und resource /mcp für einen gewählten Bereich. Codes gelten 5 Minuten, Zugriffstoken 15 Minuten, Freigaben höchstens 30 Tage und bis zum Ende der bestätigenden Sitzung. Wiederverwendung eines Refresh-Tokens widerruft die Verbindung. Deaktivieren widerruft Freigaben und erhält Datensätze. JSON-RPC-Stapel über 100 Nachrichten liefern HTTP 400. OAuth: refresh_token."
         },
         "outboundMcp": {
           "description": "Der Docmost Agent kann Werkzeuge auf genehmigten entfernten MCP-Servern aufrufen.",
@@ -1759,17 +1760,18 @@
         },
         "mcp": {
           "label": "Eingehender MCP-Autorisierungsfluss / Ausgehender MCP-Autorisierungsablauf",
-          "caption": "Bei jeder /mcp-Anfrage wird der Schlüsselbereich vor der Redis-Zulassung und der Richtlinie für das gemeinsame schreibgeschützte Tool erneut überprüft. Jede Autorisierungsschicht muss die Anfrage zulassen; Die Einwilligung folgt der Empfänger-URL und die DNS-Auflösung ist angeheftet.",
+          "caption": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich. Wenden Sie die Deny-First-Gruppenrichtlinie und die Benutzereinwilligung an Lösen Sie die genehmigte Remote-Adresse auf und heften Sie sie an. Behandeln Sie dann Schemata und Ergebnisse als nicht vertrauenswürdig",
           "textAlternative": {
-            "step1": "Create ein typisierter MCP-Schlüssel mit Leerzeichenbereich",
-            "step2": "Validieren Sie den Live-Schlüssel, den Arbeitsbereich, den Ersteller und den Bereich",
+            "step1": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich.",
+            "step2": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
             "step3": "Wenden Sie die Deny-First-Gruppenrichtlinie und die Benutzereinwilligung an",
             "step4": "Lösen Sie die genehmigte Remote-Adresse auf und heften Sie sie an. Behandeln Sie dann Schemata und Ergebnisse als nicht vertrauenswürdig"
           },
           "nodes": {
             "readTools": "Tool-Richtlinie, Seiten-ACL und Inhaltsrichtlinie",
             "approval": "Bereitstellungskontrolle · Einwilligung des Nutzers",
-            "remoteServer": "Remote-MCP-Server"
+            "remoteServer": "Remote-MCP-Server",
+            "userAuthorization": "MCP-Anwendung autorisieren"
           }
         }
       },
@@ -1811,14 +1813,15 @@
           "spaceAdmin": "Raumadministrator; Der Betreiber genehmigt die Herkunft",
           "workspaceAdmin": "Arbeitsbereichseigentümer oder -administrator",
           "operatorAndSpaceAdmin": "Bereitstellungsbetreiber und Raumadministrator",
-          "layered": "Operator, Arbeitsbereichsadministrator, Bereichsadministrator, Gruppenrichtlinie und Benutzer"
+          "layered": "Operator, Arbeitsbereichsadministrator, Bereichsadministrator, Gruppenrichtlinie und Benutzer",
+          "workspaceAdminAndUser": "Workspace-Administrator und autorisierender Benutzer"
         },
         "boundaries": {
           "provider": "Konfigurieren und testen Sie für jeden Bereich das Modell und den optionalen Abruf. Genehmigen Sie zuerst die Bereitstellungsursprünge, lassen Sie die Suche deaktiviert, bis ein Adapter einsatzbereit ist, und begrenzen Sie den Zugriff über die Richtlinien für integrierte und externe Werkzeuge. Aktivieren Sie die Bilderkennung, bevor Bilder oder reine Bild-PDFs gesendet werden; andernfalls lehnt der Server diese Eingaben ab, statt sie unbemerkt wegzulassen.",
           "retrieval": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt.",
           "ragApi": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden.",
           "ragSync": "Anmeldedaten für Anbieter, Abruf, Open WebUI Writer, RAG sowie eingehendes und ausgehendes MCP sind getrennte Geheimnisse. Speichern Sie Anmeldedaten pro Space nicht in der Docker-Umgebung oder in Docker-Metadaten, Protokollen oder URLs. Deaktivieren Sie vor einer Änderung von APP_SECRET alle RAG-Bindings und warten Sie auf die Bereinigung; das Geheimnis signiert auch Metadaten zum Besitz entfernter Dateien. Wurde es zu früh geändert, stellen Sie vor der Bereinigung den vorherigen Wert wieder her und geben Sie danach verschlüsselte Anmeldedaten erneut ein.",
-          "inboundMcp": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden.",
+          "inboundMcp": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich. Die Anwendung kann über freigegebene MCP-Werkzeuge Inhalte eines ausgewählten Bereichs lesen, auf die Sie Zugriff haben. Schreibzugriff ist ausgeschlossen. Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
           "outboundMcp": "Ausgehendes MCP bleibt gesperrt, sofern nicht Bereitstellungsschalter, Workspace-Schalter, aktivierter Server, Bereichsbindung, Gruppenrichtlinie und Zustimmung des Benutzers gemeinsam den Zugriff erlauben. Der Notausschalter der Bereitstellung ist AI_EXTERNAL_MCP_ENABLED. Ausgehendes MCP sendet ausgewählte Docmost-Daten an ein anderes System. Entfernte Beschreibungen, Schemas und Ergebnisse sind nicht vertrauenswürdig. „Schreibgeschützt“ ist eine Richtlinienklassifizierung von Docmost und kein Beweis dafür, dass die entfernte Implementierung keine Nebenwirkungen hat."
         }
       },
@@ -3262,5 +3265,26 @@
     "templateApplyHint": "Die Vorlage füllt diese leere Seite. Titel und Speicherort bleiben erhalten.",
     "templateTargetChanged": "Die Seite ist nicht mehr leer. Ihr Inhalt wurde beibehalten.",
     "applyAction": "Anwenden"
+  },
+  "mcpOAuth": {
+    "title": "Verbundene Anwendungen",
+    "consentTitle": "MCP-Anwendung autorisieren",
+    "unverified": "Der Name stammt vom Entwickler und wurde nicht überprüft. Prüfen Sie vor der Freigabe die Rückrufadresse.",
+    "scopeRead": "Die Anwendung kann über freigegebene MCP-Werkzeuge Inhalte eines ausgewählten Bereichs lesen, auf die Sie Zugriff haben. Schreibzugriff ist ausgeschlossen.",
+    "sessionBound": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
+    "redirect": "Rückrufadresse",
+    "space": "Bereich auswählen",
+    "allow": "Lesezugriff erlauben",
+    "deny": "Ablehnen",
+    "failed": "Anfrage fehlgeschlagen. Prüfen Sie Ihre Berechtigungen und versuchen Sie es erneut.",
+    "expired": "Diese Anfrage ist ungültig, abgelaufen oder bereits entschieden.",
+    "reload": "Erneut versuchen",
+    "emptySpaces": "Keine verfügbaren Bereiche",
+    "settingsTitle": "Benutzer-MCP-OAuth",
+    "settingsDescription": "Standardmäßig deaktiviert. Das Deaktivieren widerruft bestehende OAuth-Verbindungen. API-Schlüssel bleiben verfügbar.",
+    "enabled": "Benutzer-MCP-OAuth erlauben",
+    "noConnections": "Keine verbundenen Anwendungen",
+    "disconnect": "Trennen",
+    "revoked": "Widerrufen"
   }
 }

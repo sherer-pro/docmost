@@ -5,13 +5,16 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { once } from 'node:events';
 import { createServer, Server as HttpServer } from 'node:http';
 import { AddressInfo } from 'node:net';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { McpController } from './mcp.controller';
 import { getAppVersion } from '../../common/helpers/get-app-version';
 
 describe('McpController protocol', () => {
   let httpServer: HttpServer;
   let client: Client;
+  let oauthRequest = false;
+  const oauthActor = { user: { id: 'user-1' }, mcpScope: { workspaceId: 'workspace-1', spaceId: 'space-1', allowedCapabilities: [] } };
+  const oauth = { authenticate: jest.fn().mockResolvedValue(oauthActor) };
   const execute = jest.fn(async () => ({ content: { title: 'Allowed' } }));
   const tools = {
     list: jest.fn(() => [
@@ -44,6 +47,7 @@ describe('McpController protocol', () => {
       tools as any,
       traffic as any,
       toolPolicy as any,
+      oauth as any,
     );
     httpServer = createServer(async (request, response) => {
       try {
@@ -54,7 +58,7 @@ describe('McpController protocol', () => {
         const raw = Buffer.concat(chunks).toString('utf8');
         const body = raw ? JSON.parse(raw) : undefined;
         await controller.handle(
-          { raw: request } as any,
+          { raw: request, headers: { ...request.headers, ...(oauthRequest ? { authorization: 'Bearer dmoa_synthetic' } : {}) }, user: oauthRequest ? { authType: 'mcp_oauth' } : undefined } as any,
           { raw: response, hijack: () => undefined } as any,
           body,
           { id: 'user-1' } as any,
@@ -87,9 +91,23 @@ describe('McpController protocol', () => {
   });
 
   beforeEach(() => {
+    oauthRequest = false;
+    oauth.authenticate.mockReset().mockResolvedValue(oauthActor);
     execute.mockClear();
     toolPolicy.assertMcpToolAllowed.mockReset();
     toolPolicy.assertMcpToolAllowed.mockResolvedValue(undefined);
+  });
+
+  it('discards a read result when OAuth is revoked before publication', async () => {
+    oauthRequest = true;
+    execute.mockImplementationOnce(async () => {
+      oauth.authenticate.mockRejectedValueOnce(new UnauthorizedException('Authorization revoked'));
+      return { content: { title: 'OAUTH_RESULT_MUST_NOT_LEAK' } };
+    });
+    const response = await client.callTool({ name: 'getPage', arguments: { pageId: 'page-1' } });
+    expect(response.isError).toBe(true);
+    expect(JSON.stringify(response)).not.toContain('OAUTH_RESULT_MUST_NOT_LEAK');
+    expect(oauth.authenticate).toHaveBeenCalledTimes(2);
   });
 
   it('lists only read-only MCP tools with safety annotations', async () => {

@@ -152,6 +152,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
   },
   {
     anchor: "inbound-mcp",
+    stepKeys: ["step1", "step2", "step3", "step4"],
     titleKey: "ai.integrations.mcpTitle",
     contentKey: "ai.adminGuide.scenario.inboundMcp",
     settingsPath: "/settings/keys/mcp",
@@ -199,7 +200,7 @@ export const AI_ADMIN_GUIDE_SECURITY_ROWS = [
   {
     id: "inboundMcp",
     nameKey: "ai.integrations.mcpTitle",
-    ownerKey: "ai.adminGuide.security.owners.workspaceAdmin",
+    ownerKey: "ai.adminGuide.security.owners.workspaceAdminAndUser",
     boundaryKey: "ai.adminGuide.security.boundaries.inboundMcp",
   },
   {
@@ -324,6 +325,8 @@ export function buildAiAdminGuideDiagrams(
       textAlternativeKeys: alternativeKeys("mcp"),
       source: `flowchart TB
   Client["${label("ai.integrations.mcpTitle")}"] --> Inbound["/mcp"]
+  Client --> OAuth["${label("ai.adminGuide.diagram.mcp.nodes.userAuthorization")}"]
+  OAuth --> Inbound
   Inbound --> ReadTools["${label("ai.adminGuide.diagram.mcp.nodes.readTools")}"]
   ReadTools --> Docmost["Docmost"]
   Agent["${label("ai.externalTools.title")}"] --> Approval["${label("ai.adminGuide.diagram.mcp.nodes.approval")}"]

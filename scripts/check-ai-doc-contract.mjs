@@ -56,11 +56,12 @@ export const AI_GUIDE_MIGRATION_FILES = [
   "20261013T120000-database-revisions.ts",
   "20261030T180000-ai-database-context.ts",
   "20261031T130000-database-computed-and-file-properties.ts",
+  "20261031T140000-mcp-user-oauth.ts",
 ];
 
 const LOGIC_PATH_PATTERNS = [
   /^apps\/server\/src\/core\/(?:ai|rag|rag-sync|mcp|api-key)\//u,
-  /^apps\/client\/src\/features\/(?:ai|ai-external-mcp|api-key)\//u,
+  /^apps\/client\/src\/features\/(?:ai|ai-external-mcp|api-key|mcp-oauth)\//u,
   /^packages\/api-contract\/src\//u,
   /^apps\/server\/src\/database\/migrations\//u,
   /^apps\/server\/src\/environment\//u,

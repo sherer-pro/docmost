@@ -2,6 +2,14 @@ import { EventEmitter } from 'node:events';
 import { ApiKeyTrafficGuard } from './api-key-traffic.guard';
 
 describe('ApiKeyTrafficGuard', () => {
+  it('admits OAuth requests using the grant ID and the same MCP lease limits', async () => {
+    const traffic = { acquire: jest.fn().mockResolvedValue({ allowed: true, retryAfterMs: 0 }), release: jest.fn(), observeRequest: jest.fn() };
+    const raw = new EventEmitter();
+    const guard = new ApiKeyTrafficGuard({ getAllAndOverride: () => 'mcp' } as any, traffic as any, { getMcpTrafficLimits: () => ({ rate: 10 }) } as any);
+    await expect(guard.canActivate({ getHandler: () => undefined, getClass: () => undefined, switchToHttp: () => ({ getRequest: () => ({ user: { mcpScope: { id: 'oauth-grant' } }, raw: new EventEmitter(), url: '/mcp' }), getResponse: () => ({ raw }) }) } as any)).resolves.toBe(true);
+    expect(traffic.acquire).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: 'oauth-grant', profile: 'mcp', limits: { rate: 10 } }));
+    raw.emit('finish');
+  });
   afterEach(() => {
     jest.useRealTimers();
   });

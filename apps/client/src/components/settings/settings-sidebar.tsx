@@ -56,6 +56,7 @@ const groupedData: DataGroup[] = [
     heading: "Account",
     items: [
       { label: "Profile", icon: IconUser, path: "/settings/account/profile" },
+      { label: "mcpOAuth.title", icon: IconKey, path: "/settings/account/connections" },
       {
         label: "Preferences",
         icon: IconBrush,

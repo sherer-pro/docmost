@@ -54,6 +54,10 @@ complete; final release acceptance and CI remain pending.
   Conservative RU/EN dialogue fallback preserves a single previously quoted
   name without extending the two-second model rewrite deadline. Database tools
   accept typed calculation arrays instead of requiring dynamic property-ID keys.
+- Opt-in inbound MCP user OAuth with PKCE, dynamic client registration, one-space
+  consent, hashed session-bound tokens, refresh rotation and replay revocation.
+  Users can list and revoke their own applications. API keys remain supported;
+  both MCP directions are read-only. Full release acceptance remains pending.
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 `f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
@@ -72,8 +76,7 @@ pending as listed below.
 - Complete measured natural-language filter and actual-transmission RAG quality
   acceptance. The corpus and observation harness are implemented; full tuning,
   holdout and human evidence review remain required. Tool traces alone are insufficient.
-- Public GitHub previews, authorized GitHub/GitLab/Figma connections,
-  read-only user OAuth for inbound MCP.
+- Public GitHub previews and authorized GitHub/GitLab/Figma connections.
 - Check the applicability of the listed upstream fixes before changing the
   corresponding fork paths. Keep stack upgrades separate.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
@@ -99,6 +102,29 @@ in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
 
+- `mcp-oauth-verify-full-accepted.log`: full verification passed with 288 server
+  suites (2488 tests), 194 frontend files (940 tests), 83 server-security suites
+  (1003 tests) and 78 frontend-security tests. The first full run found a diagram
+  label outside the explicit AI locale namespace. Moving that label into the
+  guide manifest passed all 12 targeted localization/guide tests and the repeated
+  full gate; no assertion or security rule was relaxed.
+- `mcp-oauth-official-sdk-focused.log`: all six isolated HTTP acceptance groups
+  passed, including the installed official SDK's discovery, dynamic registration,
+  PKCE and actual authenticated MCP read. Tests also cover wrong verifier,
+  one-use code/refresh replay, concurrent form-encoded exchange, page ACL,
+  capability revocation, other-user disconnect denial, token/session expiry,
+  membership loss and disable/re-enable revocation. Original API keys still work.
+- `mcp-oauth-final-browser-matrix.log`: all nine browser cases passed across
+  Chromium, Firefox and WebKit: light/desktop and dark/mobile consent plus one
+  existing AI cell approval per engine. Each fresh runtime also passed all 27
+  PostgreSQL cases and full HTTP/export/import acceptance. The earlier matrix
+  exposed test setup ordering and a WebKit callback-stub restriction; policy
+  assertions and time budgets were retained. Four Chromium consent/connections
+  screenshots were inspected with no clipping or overlap.
+- `ai-typed-calculations-calibration.log`: all ten database tuning traces were
+  correct after introducing calculation arrays, including both natural-language
+  selection overrides and an unapproved write proposal. Full tuning, holdout and
+  human answer review remain outstanding.
 - `ai-local-query-final-verify-full.log`: complete verification passed with
   285 server suites (2464 tests), 194 frontend files (940 tests), 79 server
   security suites (975 tests) and 78 frontend security tests. The existing lint
