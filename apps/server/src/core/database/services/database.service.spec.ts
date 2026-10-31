@@ -91,6 +91,7 @@ describe('DatabaseService mixed tree flows', () => {
   };
   const pageHistoryRecorder = {
     recordPageEvent: jest.fn(),
+    recordPageEvents: jest.fn(),
     enqueuePageEvents: jest.fn(),
   };
   const notificationOutbox = { enqueueNotificationDispatch: jest.fn() };
@@ -98,17 +99,11 @@ describe('DatabaseService mixed tree flows', () => {
     add: jest.fn(),
   };
 
-  const trx = {
-    updateTable: jest.fn(() => ({
-      set: jest.fn(() => ({
-        where: jest.fn(() => ({
-          where: jest.fn(() => ({
-            where: jest.fn(() => ({ execute: jest.fn() })),
-          })),
-        })),
-      })),
-    })),
-  };
+  const updateQuery: any = {};
+  updateQuery.set = jest.fn(() => updateQuery);
+  updateQuery.where = jest.fn(() => updateQuery);
+  updateQuery.execute = jest.fn(async () => []);
+  const trx = { updateTable: jest.fn(() => updateQuery) };
 
   const db = {
     transaction: jest.fn(() => ({
@@ -1457,6 +1452,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
       'cell-1',
       {
+        updatedById: user.id,
         value: {
           value: 'Yes',
           rawValueBeforeTypeChange: true,
@@ -1498,6 +1494,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
       'cell-1',
       {
+        updatedById: user.id,
         value: {
           value: 'Jane Doe',
           rawValueBeforeTypeChange: { id: 'user-42' },
@@ -1534,6 +1531,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
       'cell-1',
       {
+        updatedById: user.id,
         value: {
           value: null,
           rawValueBeforeTypeChange: 'legacy',
@@ -1577,6 +1575,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.updateCell).toHaveBeenCalledWith(
       'cell-1',
       {
+        updatedById: user.id,
         value: 'legacy',
       },
       trx,
@@ -1765,6 +1764,7 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.updateCell).toHaveBeenLastCalledWith(
       'cell-1',
       {
+        updatedById: user.id,
         value: {
           value: 'in_progress',
           rawValueBeforeTypeChange: 'in_progress',
@@ -1864,11 +1864,23 @@ describe('DatabaseService mixed tree flows', () => {
       service.batchUpdateRowCells(
         'db-1',
         'row-page-1',
-        { cells: [{ propertyId: 'prop-user', value: { id: 'user-former' } }] },
+        {
+          cells: [
+            {
+              propertyId: 'prop-user',
+              value: { id: '9c7101da-738b-4321-9123-70c9d680fc2f' },
+            },
+          ],
+        },
         user,
         'ws-1',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(pageAccessService.getAssignableSpaceUserIds).toHaveBeenCalledWith(
+      ['9c7101da-738b-4321-9123-70c9d680fc2f'],
+      'space-1',
+      'ws-1',
+    );
     expect(databaseCellRepo.upsertCell).not.toHaveBeenCalled();
   });
 
@@ -2244,6 +2256,63 @@ describe('DatabaseService mixed tree flows', () => {
     expect(databaseCellRepo.upsertCell).not.toHaveBeenCalled();
     expect(databaseCellRepo.updateCell).not.toHaveBeenCalled();
     expect(pageHistoryRecorder.enqueuePageEvents).not.toHaveBeenCalled();
+  });
+
+  it('retains cleared file references in transactional row history and queues only a private root summary', async () => {
+    const attachmentId = '11111111-1111-4111-8111-111111111111';
+    databaseRowRepo.findByDatabaseAndPage.mockResolvedValue({
+      id: 'row-1',
+      databaseId: 'db-1',
+      pageId: 'row-page-1',
+      archivedAt: null,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'prop-file', type: 'file', name: 'Files' },
+    ]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      { id: 'cell-file', propertyId: 'prop-file', value: [{ attachmentId }] },
+    ]);
+    databaseCellRepo.upsertCell.mockResolvedValue({
+      id: 'cell-file',
+      propertyId: 'prop-file',
+      value: [],
+    });
+    await service.batchUpdateRowCells(
+      'db-1',
+      'row-page-1',
+      {
+        contractVersion: 4,
+        cells: [{ propertyId: 'prop-file', value: [] }],
+      },
+      user,
+      'ws-1',
+    );
+    expect(pageHistoryRecorder.recordPageEvents).toHaveBeenCalledWith({
+      pageIds: ['row-page-1'],
+      actorId: user.id,
+      changeType: 'database.row.cells.updated',
+      changeData: {
+        databaseId: 'db-1',
+        changes: [
+          expect.objectContaining({
+            propertyId: 'prop-file',
+            oldValue: [{ attachmentId }],
+            newValue: [],
+          }),
+        ],
+      },
+      trx,
+    });
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledTimes(1);
+    expect(pageHistoryRecorder.enqueuePageEvents).toHaveBeenCalledWith({
+      pageIds: ['db-root-page'],
+      actorId: user.id,
+      changeType: 'database.row.cells.updated',
+      changeData: {
+        databaseId: 'db-1',
+        rowContext: { rowPageId: 'row-page-1' },
+      },
+    });
   });
 
   it('stores readable history payload for select, user, and page reference cells', async () => {

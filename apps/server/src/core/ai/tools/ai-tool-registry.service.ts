@@ -16,6 +16,7 @@ import {
   strictJsonToNode,
 } from '../../../collaboration/collaboration.util';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { resolveComputedDatabaseRows } from '@docmost/db/utils/database-resolved-cells';
 import { User } from '@docmost/db/types/entity.types';
 import {
   AI_BUILTIN_TOOL_CATEGORIES,
@@ -1686,8 +1687,18 @@ export class AiToolRegistryService {
             .execute(),
         ])
       : [[], []];
+    const projectedRows = await resolveComputedDatabaseRows(
+      this.db,
+      readableRows.map((row) => ({
+        ...row,
+        cells: cells.filter((cell) => cell.pageId === row.pageId),
+      })),
+      properties,
+      database.id,
+      context.workspaceId,
+    );
     const cellsByPage = new Map<string, typeof cells>();
-    for (const cell of cells) {
+    for (const cell of projectedRows.flatMap((row) => row.cells)) {
       const values = cellsByPage.get(cell.pageId) ?? [];
       values.push(this.curatedDatabaseCell(cell) as (typeof cells)[number]);
       cellsByPage.set(cell.pageId, values);
@@ -1776,7 +1787,7 @@ export class AiToolRegistryService {
       .executeTakeFirst();
     if (!row) throw new NotFoundException('Database row not found');
     const database = await this.getReadableDatabase(row.databaseId, context);
-    const [properties, cells] = await Promise.all([
+    const [properties, storedCells] = await Promise.all([
       this.db
         .selectFrom('databaseProperties')
         .select(['id', 'name', 'type', 'position', 'settings'])
@@ -1794,6 +1805,16 @@ export class AiToolRegistryService {
         .where('deletedAt', 'is', null)
         .execute(),
     ]);
+    const cells =
+      (
+        await resolveComputedDatabaseRows(
+          this.db,
+          [{ ...row, cells: storedCells }],
+          properties,
+          database.id,
+          context.workspaceId,
+        )
+      )[0]?.cells ?? [];
     const projectedFields = await this.projectPageDocumentFields(page, context);
     const renderedCells = this.knowledgeProjection.renderRowFields(
       properties,

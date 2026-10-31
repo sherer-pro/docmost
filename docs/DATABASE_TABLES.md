@@ -10,6 +10,73 @@ Numbers are finite JSON numbers; optional settings select number, percent, or cu
 
 The server validates new writes using the actual active property type and settings. Legacy stored representations remain readable. Type conversion preserves the existing fallback container for values that cannot be converted. Conversion and property metadata changes commit in one transaction with database-scoped mutation locking.
 
+### System fields, participants, files and formulas
+
+`created_at`, `updated_at` and `updated_by` are computed, read-only properties.
+Created time comes from the row page. Modified time and actor follow the latest
+page or row mutation. Cell writes and type conversions update row mutation
+metadata in their transaction; computed cells are never stored in `database_cells`.
+
+The title column remains pinned. Narrow layouts constrain its width, place row
+actions below the title, and reserve scroll padding for the pinned columns so
+property controls remain reachable at 320 and 390 px.
+
+User values retain compatible reading of a single ID or `{id}`. New multiple
+values are sorted, unique arrays of `{id}`, with at most 20 participants. New
+assignments require active, assignable space members. Every newly assigned user
+other than the actor receives the existing transactional notification. Membership
+filters match any selected ID; `not_equals` matches none. A row may belong to
+several participant groups while the global count includes it once.
+
+File properties store up to 20 `{attachmentId}` references. Attachments must be
+active and owned by the row page in the same workspace. Displayed names, MIME
+types and sizes come from the server. Readers can download; writers can select
+existing row attachments or upload through the normal attachment API. Removing a
+cell value retains the file in the page gallery. References in cell history
+`change_data` also block unused-file removal. File-property row history commits
+with the cell mutation rather than waiting for history aggregation; its failure
+rolls the mutation back. Failed uploads remain ordinary
+page attachments for the existing cleanup workflow; cell saves retain revision
+checks and row atomicity.
+
+Formulas use `{languageVersion: 1, expression, resultType}`. Supported results
+are number, text, date and checkbox. `prop("property-uuid")` stores a stable
+dependency; `prop("title")` reads the record title. The closed function set is
+`add`, `subtract`, `multiply`, `divide`, `if`, `eq`, `gt`, `and`, `or`, `not`,
+`concat`, `text`, `length`, `trim`, `slice`, `date`, `dateAdd` and `dateDiff`.
+There is no JavaScript, `eval`, SQL input, clock or network access. User, page,
+file and multi-select dependencies are excluded. A select dependency returns its
+option ID. Rename preserves dependencies; deletion or a type change is rejected
+while a dependent formula would become invalid. Cycles and incompatible result
+types are rejected before schema changes commit.
+
+Expressions are limited to 4096 characters, 1024 characters per literal,
+128 syntax nodes, depth 16, 16 formula properties and 400 expanded nodes per
+formula. SQL compilation additionally bounds lateral expressions to 512 nodes.
+Numbers and arithmetic results have absolute value at most `1e15`; text results
+are limited to 16 KiB. `slice(text, offset, length)` uses nonnegative Unicode
+character offsets/lengths up to 16384. Date arithmetic uses calendar days in the
+source field time zone, dates from year 0001 through 9999 and integer day shifts
+up to 366000. Empty arithmetic operands return empty results; `text(null)` is
+empty text, `eq(null, null)` is true and an empty `if` condition selects its else
+branch. Runtime failures are typed `{error}` cell values. Aggregates exclude
+failed numeric/date values and report per-property error counts; AI marks these
+totals incomplete with `formula_errors`.
+
+Table, Kanban, CSV, API/AI queries and RAG projections use the same server value
+compiler. Portable archives store schema and manual values, then recompute system
+and formula cells after import. Import and duplication remap formula dependency
+tokens and file references; literal text is preserved. Converting to or from a
+computed/file property is rejected; create a separate property instead.
+
+New property/cell mutations send `contractVersion: 4`. The server rejects legacy
+mutations of computed/file properties or participant arrays, including clearing
+an existing array. Existing single-user and other legacy writes remain supported.
+Migration `20261031T130000-database-computed-and-file-properties.ts` expands the
+legacy value adapter and backfills row mutation metadata from existing cells. It
+does not rewrite values. Its down refuses while new property types or participant
+arrays exist and retains the compatible adapter and corrected metadata.
+
 ## Views and queries
 
 Version 2 view state contains `filter`, `sorts`, `groupBy`, `visibleColumns`, and `calculations`. Legacy `filters` and `sortState` configurations are adapted on read. Filters support AND/OR, at most two group levels and ten rules. Sorts contain at most five keys; `title` is a built-in field. Numeric values sort numerically, date values chronologically. Position and page ID provide stable pagination tie-breakers.
@@ -118,6 +185,16 @@ for limits, policy controls, transaction recovery and MCP boundaries.
 
 - Unit regressions: `corepack pnpm --filter ./apps/client exec vitest run src/features/database` and the server database suites.
 - PostgreSQL: set `DATABASE_TABLES_TEST_DATABASE_URL` to an isolated localhost database ending in `_test`, then run `corepack pnpm --filter ./apps/server exec jest --config test/jest-e2e.json --runInBand test/database-tables.e2e-spec.ts`. The suite owns a unique schema and does not load application environment files.
+- PostgreSQL diagnostic with managed local services: `node apps/client/e2e/database/run-live.mjs --postgres-only` runs only that suite against its own containers. It does not establish HTTP or browser acceptance.
+- Advanced value diagnostic: build first, then run `node apps/client/e2e/database/run-live.mjs --advanced-only --api-only` for live values, CSV, history retention, import and duplication. Remove `--api-only` and add `--grep="live advanced database" --browser=all` for the desktop/light and mobile/dark browser matrix. A full default run includes these scenarios.
+- `--browser=all` runs Chromium, Firefox and WebKit sequentially with a fresh isolated application and database for each browser. PostgreSQL, HTTP and browser assertions run unchanged; a failed browser does not seed or prevent the other browser runs. API-only, startup-only, PostgreSQL-only and model-quality diagnostics start a single runtime.
+- Service Workers stay enabled for ordinary browser scenarios. Only the four
+  scenarios that inject network faults block them in their isolated browser
+  context, because a worker-controlled request bypasses Playwright routing.
+  The mutation-error case records its injection count; a missing injected fault
+  cannot be mistaken for product recovery. Synthetic paste explicitly supplies
+  its clipboard payload because Firefox strips constructor-provided data from
+  untrusted `ClipboardEvent` instances.
 - Browser: `node apps/client/e2e/database/run.mjs` owns Vite on localhost port 5195. It mounts the production table component with a synthetic API; this confirms browser behavior, while the separate PostgreSQL suite verifies backend transactions and query semantics.
 - Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>/`. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
 

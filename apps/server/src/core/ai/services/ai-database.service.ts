@@ -16,6 +16,8 @@ import {
   normalizeDatabaseViewState,
   normalizeDatabaseValue,
   unwrapDatabaseValue,
+  databaseUserIds,
+  isDatabaseComputedProperty,
   DatabaseViewState,
   formatDatabaseValue,
   getDatabaseViewPropertyIds,
@@ -261,7 +263,8 @@ export class AiDatabaseService {
           : undefined,
     };
     const filterReferences = await this.referenceDependencies(input, trx);
-    if (summary)
+    if (summary) {
+      const totals = await this.query.summary(input);
       return {
         dependencyPageIds: [
           ...new Set([
@@ -274,10 +277,14 @@ export class AiDatabaseService {
         groupKey: scoped.input.state.groupBy
           ? scoped.input.groupKey
           : undefined,
-        ...(await this.query.summary(input)),
+        ...totals,
         scope: 'accessible_ai_allowed_rows',
-        complete: true,
+        complete: !Object.keys(totals.errors ?? {}).length,
+        ...(Object.keys(totals.errors ?? {}).length
+          ? { warnings: ['formula_errors'] }
+          : {}),
       };
+    }
     const limit = args.limit === undefined ? 20 : Number(args.limit);
     if (
       !Number.isInteger(limit) ||
@@ -293,16 +300,9 @@ export class AiDatabaseService {
       cursor: args.cursor as string,
     });
     const ids = result.items.map((row: any) => row.pageId);
-    const cells = ids.length
-      ? await trx
-          .selectFrom('databaseCells')
-          .select(['pageId', 'propertyId', 'value', 'revision'])
-          .where('databaseId', '=', scoped.database.id)
-          .where('workspaceId', '=', context.workspaceId)
-          .where('pageId', 'in', ids)
-          .where('deletedAt', 'is', null)
-          .execute()
-      : [];
+    const cells = result.items.flatMap((row: any) =>
+      (row.cells ?? []).map((cell) => ({ ...cell, pageId: row.pageId })),
+    );
     const visible = scoped.input.state.visibleColumns;
     const referenced = (value: unknown) =>
       typeof value === 'string' ? value : (value as any)?.id;
@@ -423,6 +423,8 @@ export class AiDatabaseService {
         );
         if (
           !property ||
+          isDatabaseComputedProperty(property?.type) ||
+          property?.type === 'file' ||
           !Number.isInteger(cell.expectedRevision) ||
           cell.expectedRevision < 0 ||
           Object.keys(cell).some(
@@ -466,12 +468,13 @@ export class AiDatabaseService {
             throw new ForbiddenException('Page reference is inaccessible');
         }
         if (property.type === 'user' && value) {
+          const userIds = databaseUserIds(value);
           const assignable = await this.access.getAssignableSpaceUserIds(
-            [String(value)],
+            userIds,
             context.spaceId,
             context.workspaceId,
           );
-          if (!assignable.has(String(value)))
+          if (userIds.some((id) => !assignable.has(id)))
             throw new BadRequestException('User is not an active space member');
         }
         changes.push({
@@ -594,7 +597,7 @@ export class AiDatabaseService {
         await this.databases.batchUpdateRowCells(
           operation.databaseId,
           row.pageId,
-          { cells: row.cells },
+          { cells: row.cells, contractVersion: 4 },
           context.user,
           context.workspaceId,
           {

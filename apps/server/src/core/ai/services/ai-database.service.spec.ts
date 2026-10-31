@@ -75,7 +75,13 @@ function setup() {
       groups: [],
     })),
     list: jest.fn(async () => ({
-      items: [{ pageId: rowId, title: 'Record' }],
+      items: [
+        {
+          pageId: rowId,
+          title: 'Record',
+          cells: tables.databaseCells.filter((cell) => cell.pageId === rowId),
+        },
+      ],
       hasMore: false,
       nextCursor: null,
     })),
@@ -95,6 +101,43 @@ function setup() {
 }
 
 describe('AI database view and cell boundaries', () => {
+  it('reports a partial calculation when formula cells contain errors', async () => {
+    const { service, query } = setup();
+    query.summary.mockResolvedValue({
+      count: 271,
+      values: { [propertyId]: 2700 },
+      groups: [],
+      errors: { [propertyId]: 1 },
+    } as any);
+    const result = await service.read({ databaseId }, context, true);
+    expect(result).toMatchObject({
+      count: 271,
+      complete: false,
+      errors: { [propertyId]: 1 },
+      warnings: ['formula_errors'],
+    });
+  });
+  it.each(['formula', 'created_at', 'updated_at', 'updated_by', 'file'])(
+    'rejects a proposal clearing the %s property',
+    async (type) => {
+      const { service, tables } = setup();
+      tables.databaseProperties[0].type = type;
+      await expect(
+        service.propose(
+          {
+            databaseId,
+            rows: [
+              {
+                pageId: rowId,
+                cells: [{ propertyId, value: null, expectedRevision: 2 }],
+              },
+            ],
+          },
+          context,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    },
+  );
   it('previews option labels without changing the stored canonical values', async () => {
     const { service, tables } = setup();
     tables.databaseProperties[0].type = 'select';

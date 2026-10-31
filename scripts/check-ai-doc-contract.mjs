@@ -53,6 +53,9 @@ export const AI_GUIDE_MIGRATION_FILES = [
   "20260820T140000-search-dictionary-database-projection.ts",
   "20260919T180000-space-owned-template-policy.ts",
   "20260929T120000-rag-evidence-quality.ts",
+  "20261013T120000-database-revisions.ts",
+  "20261030T180000-ai-database-context.ts",
+  "20261031T130000-database-computed-and-file-properties.ts",
 ];
 
 const LOGIC_PATH_PATTERNS = [

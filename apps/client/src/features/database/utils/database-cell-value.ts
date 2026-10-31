@@ -1,12 +1,12 @@
 import {
   normalizeDatabaseValue,
   formatDatabaseValue,
-} from '@docmost/api-contract';
+} from "@docmost/api-contract";
 import {
   IDatabaseProperty,
   IDatabaseSelectOption,
   IDatabaseSelectPropertySettings,
-} from '@/features/database/types/database.types';
+} from "@/features/database/types/database.types";
 
 interface LegacyCellValueContainer {
   value: unknown;
@@ -22,22 +22,22 @@ interface DatabaseCellDisplayValueParams {
 }
 
 const SERIALIZED_STRING_NORMALIZE_DEPTH = 6;
-const LEGACY_RU_TRUE_TOKEN = '\u0434\u0430';
-const LEGACY_RU_FALSE_TOKEN = '\u043d\u0435\u0442';
+const LEGACY_RU_TRUE_TOKEN = "\u0434\u0430";
+const LEGACY_RU_FALSE_TOKEN = "\u043d\u0435\u0442";
 const BOOLEAN_TRUE_TOKENS = new Set([
-  'true',
-  '1',
-  'yes',
-  'on',
+  "true",
+  "1",
+  "yes",
+  "on",
   LEGACY_RU_TRUE_TOKEN,
 ]);
 const BOOLEAN_FALSE_TOKENS = new Set([
-  'false',
-  '0',
-  'no',
-  'off',
+  "false",
+  "0",
+  "no",
+  "off",
   LEGACY_RU_FALSE_TOKEN,
-  '',
+  "",
 ]);
 
 /**
@@ -60,7 +60,7 @@ function normalizeSerializedDatabaseString(value: string): string {
 
     try {
       const parsedValue = JSON.parse(normalizedValue);
-      if (typeof parsedValue !== 'string') {
+      if (typeof parsedValue !== "string") {
         break;
       }
 
@@ -90,7 +90,7 @@ function normalizeDatabaseBooleanToken(value: string): boolean | null {
 }
 
 function extractDatabaseUserId(value: unknown): string | null {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const normalizedValue = normalizeSerializedDatabaseString(value).trim();
 
     if (!normalizedValue) {
@@ -111,9 +111,9 @@ function extractDatabaseUserId(value: unknown): string | null {
     return normalizedValue;
   }
 
-  if (value && typeof value === 'object' && 'id' in value) {
+  if (value && typeof value === "object" && "id" in value) {
     const candidateId = (value as { id?: unknown }).id;
-    return typeof candidateId === 'string'
+    return typeof candidateId === "string"
       ? normalizeSerializedDatabaseString(candidateId).trim() || null
       : null;
   }
@@ -122,7 +122,7 @@ function extractDatabaseUserId(value: unknown): string | null {
 }
 
 function extractDatabaseUserName(value: unknown): string | null {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const normalizedValue = normalizeSerializedDatabaseString(value).trim();
     if (!normalizedValue) {
       return null;
@@ -136,9 +136,9 @@ function extractDatabaseUserName(value: unknown): string | null {
     }
   }
 
-  if (value && typeof value === 'object' && 'name' in value) {
+  if (value && typeof value === "object" && "name" in value) {
     const candidateName = (value as { name?: unknown }).name;
-    if (typeof candidateName !== 'string') {
+    if (typeof candidateName !== "string") {
       return null;
     }
 
@@ -155,12 +155,12 @@ function extractDatabaseUserName(value: unknown): string | null {
  * used after property type conversion.
  */
 export function extractCurrentDatabaseCellValue(value: unknown): unknown {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== "object") {
     return value;
   }
 
   const candidate = value as Partial<LegacyCellValueContainer>;
-  if (!('value' in candidate) || !('rawValueBeforeTypeChange' in candidate)) {
+  if (!("value" in candidate) || !("rawValueBeforeTypeChange" in candidate)) {
     return value;
   }
 
@@ -173,8 +173,8 @@ export function extractCurrentDatabaseCellValue(value: unknown): unknown {
 export function normalizeDatabaseStringValue(value: unknown): string {
   const currentValue = extractCurrentDatabaseCellValue(value);
 
-  if (typeof currentValue !== 'string') {
-    return '';
+  if (typeof currentValue !== "string") {
+    return "";
   }
 
   return normalizeSerializedDatabaseString(currentValue);
@@ -195,11 +195,11 @@ export function normalizeDatabaseUserId(value: unknown): string | null {
 export function normalizeDatabaseCheckboxValue(value: unknown): boolean {
   const currentValue = extractCurrentDatabaseCellValue(value);
 
-  if (typeof currentValue === 'boolean') {
+  if (typeof currentValue === "boolean") {
     return currentValue;
   }
 
-  if (typeof currentValue === 'string') {
+  if (typeof currentValue === "string") {
     const normalizedToken = normalizeDatabaseBooleanToken(currentValue);
 
     if (normalizedToken !== null) {
@@ -209,7 +209,7 @@ export function normalizeDatabaseCheckboxValue(value: unknown): boolean {
     return Boolean(normalizeSerializedDatabaseString(currentValue).trim());
   }
 
-  if (currentValue === null || typeof currentValue === 'undefined') {
+  if (currentValue === null || typeof currentValue === "undefined") {
     return false;
   }
 
@@ -238,7 +238,7 @@ export function normalizeDatabasePageReferenceValue(value: unknown): string {
 export function getDatabaseSelectSettings(
   property?: IDatabaseProperty,
 ): IDatabaseSelectPropertySettings {
-  if (!property?.settings || typeof property.settings !== 'object') {
+  if (!property?.settings || typeof property.settings !== "object") {
     return { options: [] };
   }
 
@@ -250,14 +250,14 @@ export function getDatabaseSelectSettings(
 
   const options: IDatabaseSelectOption[] = maybeOptions
     .filter((option): option is IDatabaseSelectOption => {
-      if (!option || typeof option !== 'object') {
+      if (!option || typeof option !== "object") {
         return false;
       }
 
       const candidate = option as IDatabaseSelectOption;
       return (
-        typeof candidate.label === 'string' &&
-        typeof candidate.value === 'string'
+        typeof candidate.label === "string" &&
+        typeof candidate.value === "string"
       );
     })
     .map((option) => ({
@@ -301,21 +301,31 @@ export function getDatabaseCellDisplayValue({
   const currentValue = extractCurrentDatabaseCellValue(value);
 
   if (!property) {
-    if (typeof currentValue === 'string') {
+    if (typeof currentValue === "string") {
       return normalizeSerializedDatabaseString(currentValue);
     }
 
-    if (currentValue === null || typeof currentValue === 'undefined') {
-      return '';
+    if (currentValue === null || typeof currentValue === "undefined") {
+      return "";
     }
 
     return JSON.stringify(currentValue);
   }
 
   if (
-    ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
-      property.type,
-    )
+    [
+      "number",
+      "date",
+      "multi_select",
+      "url",
+      "email",
+      "phone",
+      "formula",
+      "file",
+      "created_at",
+      "updated_at",
+      "updated_by",
+    ].includes(property.type)
   )
     return formatDatabaseValue(
       property.type,
@@ -323,46 +333,48 @@ export function getDatabaseCellDisplayValue({
       property.settings,
       locale,
     );
-  if (property.type === 'user') {
+  if (property.type === "user") {
+    if (Array.isArray(currentValue))
+      return formatDatabaseValue("user", currentValue, undefined, locale);
     const displayName = extractDatabaseUserName(currentValue);
     if (displayName) {
       return displayName;
     }
 
-    return normalizeDatabaseUserId(currentValue) || '';
+    return normalizeDatabaseUserId(currentValue) || "";
   }
 
-  if (property.type === 'select') {
+  if (property.type === "select") {
     const normalizedValue = normalizeDatabaseSelectValue(currentValue);
 
     if (!normalizedValue) {
-      return '';
+      return "";
     }
 
     const selectedOption = getDatabaseSelectOption(property, normalizedValue);
     return selectedOption?.label || normalizedValue;
   }
 
-  if (property.type === 'page_reference') {
+  if (property.type === "page_reference") {
     const pageId = normalizeDatabasePageReferenceValue(currentValue);
 
     if (!pageId) {
-      return '';
+      return "";
     }
 
     return pageTitleById?.[pageId] || pageId;
   }
 
-  if (property.type === 'checkbox') {
+  if (property.type === "checkbox") {
     return String(normalizeDatabaseCheckboxValue(currentValue));
   }
 
-  if (typeof currentValue === 'string') {
+  if (typeof currentValue === "string") {
     return normalizeSerializedDatabaseString(currentValue);
   }
 
-  if (currentValue === null || typeof currentValue === 'undefined') {
-    return '';
+  if (currentValue === null || typeof currentValue === "undefined") {
+    return "";
   }
 
   return JSON.stringify(currentValue);
@@ -376,15 +388,24 @@ export function buildDatabaseCellPayloadValue(
   value: unknown,
 ): unknown {
   const currentValue = extractCurrentDatabaseCellValue(value);
+  if (property.type === "file")
+    return normalizeDatabaseValue(
+      "file",
+      Array.isArray(currentValue)
+        ? currentValue.map((file) => ({ attachmentId: file.attachmentId }))
+        : null,
+    );
+  if (property.type === "user" && Array.isArray(currentValue))
+    return normalizeDatabaseValue("user", currentValue);
   if (
-    ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
+    ["number", "date", "multi_select", "url", "email", "phone"].includes(
       property.type,
     )
   ) {
     const input =
-      property.type === 'multi_select' && typeof currentValue === 'string'
+      property.type === "multi_select" && typeof currentValue === "string"
         ? currentValue
-            .split(',')
+            .split(",")
             .map((v) => v.trim())
             .filter(Boolean)
             .map(
@@ -397,28 +418,28 @@ export function buildDatabaseCellPayloadValue(
     return normalizeDatabaseValue(property.type, input, property.settings);
   }
 
-  if (property.type === 'checkbox') {
+  if (property.type === "checkbox") {
     return normalizeDatabaseCheckboxValue(currentValue);
   }
 
-  if (property.type === 'user') {
+  if (property.type === "user") {
     const userId = normalizeDatabaseUserId(currentValue);
     return userId ? { id: userId } : null;
   }
 
-  if (property.type === 'page_reference') {
+  if (property.type === "page_reference") {
     const pageId = normalizeDatabasePageReferenceValue(currentValue).trim();
     return pageId || null;
   }
 
-  if (property.type === 'select') {
+  if (property.type === "select") {
     const selectValue = normalizeDatabaseSelectValue(currentValue);
     return selectValue || null;
   }
 
-  if (typeof currentValue === 'string') {
+  if (typeof currentValue === "string") {
     return normalizeSerializedDatabaseString(currentValue);
   }
 
-  return currentValue ?? '';
+  return currentValue ?? "";
 }

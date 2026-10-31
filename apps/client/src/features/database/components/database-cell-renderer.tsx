@@ -1,27 +1,33 @@
-import { DatabaseValueEditor } from './database-value-editor';
-import { getDatabaseCellDisplayValue } from '../utils/database-cell-value';
+import { DatabaseValueEditor } from "./database-value-editor";
+import { DatabaseFileCell } from "./database-file-cell";
+import { getDatabaseCellDisplayValue } from "../utils/database-cell-value";
 import {
   alpha,
   Badge,
   Checkbox,
   Group,
   Select,
+  MultiSelect,
   Text,
   TextInput,
   useMantineTheme,
-} from '@mantine/core';
-import { DatabasePropertyType } from '@docmost/api-contract';
-import { useTranslation } from 'react-i18next';
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+} from "@mantine/core";
+import {
+  DatabasePropertyType,
+  databaseUserIds,
+  isDatabaseComputedProperty,
+} from "@docmost/api-contract";
+import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   getSpaceMemberSearchProps,
   renderSpaceMemberOption,
   renderSpaceMemberValue,
   useSpaceMemberSelectOptions,
-} from '@/features/page/components/document-fields/space-member-select-utils.tsx';
-import { IDatabaseProperty } from '@/features/database/types/database.types.ts';
-import { CustomAvatar } from '@/components/ui/custom-avatar.tsx';
+} from "@/features/page/components/document-fields/space-member-select-utils.tsx";
+import { IDatabaseProperty } from "@/features/database/types/database.types.ts";
+import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import {
   getDatabaseSelectOption,
   normalizeDatabaseCheckboxValue,
@@ -29,12 +35,12 @@ import {
   normalizeDatabaseSelectValue,
   normalizeDatabaseStringValue,
   normalizeDatabaseUserId,
-} from '@/features/database/utils/database-cell-value.ts';
-import type { SpaceMemberSelectOption } from '@/features/page/components/document-fields/space-member-select-utils.tsx';
-import { DictionaryTextHighlighter } from '@/features/dictionary/components/dictionary-text-highlighter';
-import { DictionaryTextarea } from '@/features/dictionary/components/dictionary-textarea';
-import { IDictionaryTerm } from '@/features/dictionary/types/dictionary.types';
-import { DictionaryMatcherIndex } from '@/features/dictionary/utils/dictionary-matcher';
+} from "@/features/database/utils/database-cell-value.ts";
+import type { SpaceMemberSelectOption } from "@/features/page/components/document-fields/space-member-select-utils.tsx";
+import { DictionaryTextHighlighter } from "@/features/dictionary/components/dictionary-text-highlighter";
+import { DictionaryTextarea } from "@/features/dictionary/components/dictionary-textarea";
+import { IDictionaryTerm } from "@/features/dictionary/types/dictionary.types";
+import { DictionaryMatcherIndex } from "@/features/dictionary/utils/dictionary-matcher";
 
 interface DatabasePageReferenceOption {
   value: string;
@@ -66,10 +72,10 @@ function getSelectedUserIdentity(
   value: unknown,
   userId: string | null,
 ): SpaceMemberSelectOption[] {
-  if (!userId || !value || typeof value !== 'object') return [];
+  if (!userId || !value || typeof value !== "object") return [];
   const candidate = value as { name?: unknown; avatarUrl?: unknown };
   if (
-    typeof candidate.name !== 'string' ||
+    typeof candidate.name !== "string" ||
     !candidate.name ||
     candidate.name === userId
   ) {
@@ -80,7 +86,7 @@ function getSelectedUserIdentity(
       value: userId,
       label: candidate.name,
       avatarUrl:
-        typeof candidate.avatarUrl === 'string'
+        typeof candidate.avatarUrl === "string"
           ? candidate.avatarUrl
           : undefined,
     },
@@ -97,15 +103,15 @@ function DatabaseUserViewValue({
   pageId?: string;
 }) {
   const { t, i18n } = useTranslation();
-  const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
+  const selectedUserIds = useMemo(() => databaseUserIds(value), [value]);
 
-  if (!selectedUserId) {
-    return <Text c="dimmed">{t('Empty value')}</Text>;
+  if (!selectedUserIds.length) {
+    return <Text c="dimmed">{t("Empty value")}</Text>;
   }
 
   return (
     <ResolvedDatabaseUserViewValue
-      selectedUserId={selectedUserId}
+      selectedUserIds={selectedUserIds}
       value={value}
       spaceId={spaceId}
       pageId={pageId}
@@ -114,48 +120,50 @@ function DatabaseUserViewValue({
 }
 
 function ResolvedDatabaseUserViewValue({
-  selectedUserId,
+  selectedUserIds,
   value,
   spaceId,
   pageId,
 }: {
-  selectedUserId: string;
+  selectedUserIds: string[];
   value: unknown;
   spaceId: string;
   pageId?: string;
 }) {
   const { t, i18n } = useTranslation();
   const selectedUsers = useMemo(
-    () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
-    [pageId, value, selectedUserId],
+    () =>
+      pageId
+        ? []
+        : (Array.isArray(value) ? value : [value]).flatMap((user) =>
+            getSelectedUserIdentity(user, databaseUserIds(user)[0]),
+          ),
+    [pageId, value],
   );
   const { options: memberOptions, knownUsersById } =
-    useSpaceMemberSelectOptions(spaceId, [selectedUserId], {
+    useSpaceMemberSelectOptions(spaceId, selectedUserIds, {
       pageId,
       selectedUsers,
     });
-  const selectedMember = useMemo(
-    () =>
-      knownUsersById[selectedUserId] ??
-      memberOptions.find((option) => option.value === selectedUserId),
-    [knownUsersById, memberOptions, selectedUserId],
-  );
-
-  if (selectedMember) {
-    return (
-      <Group gap="xs" wrap="nowrap">
-        {renderSpaceMemberValue(selectedMember)}
-        <Text lineClamp={1}>{selectedMember.label}</Text>
-      </Group>
-    );
-  }
-
   return (
-    <Group gap="xs" wrap="nowrap">
-      <CustomAvatar avatarUrl="" size={18} name={t('Unknown')} />
-      <Text c="dimmed" lineClamp={1}>
-        {t('Unknown')}
-      </Text>
+    <Group gap="xs">
+      {selectedUserIds.map((id) => {
+        const member =
+          knownUsersById[id] ??
+          memberOptions.find((option) => option.value === id);
+        return (
+          <Group gap={4} wrap="nowrap" key={id}>
+            {member ? (
+              renderSpaceMemberValue(member)
+            ) : (
+              <CustomAvatar avatarUrl="" size={18} name={t("Unknown")} />
+            )}
+            <Text lineClamp={1} c={member ? undefined : "dimmed"}>
+              {member?.label ?? t("Unknown")}
+            </Text>
+          </Group>
+        );
+      })}
     </Group>
   );
 }
@@ -180,10 +188,15 @@ function DatabaseUserEditor({
   onBlur: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const selectedUserId = useMemo(() => normalizeDatabaseUserId(value), [value]);
+  const selectedUserIds = useMemo(() => databaseUserIds(value), [value]);
   const selectedUsers = useMemo(
-    () => (pageId ? [] : getSelectedUserIdentity(value, selectedUserId)),
-    [pageId, value, selectedUserId],
+    () =>
+      pageId
+        ? []
+        : (Array.isArray(value) ? value : [value]).flatMap((user) =>
+            getSelectedUserIdentity(user, databaseUserIds(user)[0]),
+          ),
+    [pageId, value],
   );
   const {
     options: memberOptions,
@@ -191,42 +204,32 @@ function DatabaseUserEditor({
     setSearchValue,
     isLoading: isMembersLoading,
     knownUsersById,
-  } = useSpaceMemberSelectOptions(
-    spaceId,
-    selectedUserId ? [selectedUserId] : [],
-    { pageId, selectedUsers },
-  );
-  const selectedMember = useMemo(
-    () =>
-      selectedUserId
-        ? (knownUsersById[selectedUserId] ??
-          memberOptions.find((option) => option.value === selectedUserId))
-        : null,
-    [knownUsersById, memberOptions, selectedUserId],
-  );
-
+  } = useSpaceMemberSelectOptions(spaceId, selectedUserIds, {
+    pageId,
+    selectedUsers,
+  });
   return (
-    <Select
+    <MultiSelect
       autoFocus={autoFocus}
       aria-label={ariaLabel}
       data={memberOptions}
-      value={selectedUserId}
+      value={selectedUserIds}
+      maxValues={20}
       onChange={(nextValue) => {
-        const normalizedValue = nextValue ? { id: nextValue } : null;
+        const normalizedValue = nextValue.map((id) => ({ id }));
         onChange(normalizedValue);
         onSave(normalizedValue);
       }}
       {...getSpaceMemberSearchProps(
         {
-          placeholder: t('Select member'),
-          loadingMessage: t('Loading...'),
-          nothingFoundMessage: t('No members found'),
+          placeholder: t("Select member"),
+          loadingMessage: t("Loading..."),
+          nothingFoundMessage: t("No members found"),
         },
         searchValue,
         setSearchValue,
         isMembersLoading,
       )}
-      leftSection={renderSpaceMemberValue(selectedMember)}
       renderOption={renderSpaceMemberOption}
       onBlur={onBlur}
     />
@@ -243,7 +246,7 @@ function DatabaseUserEditor({
 export function DatabaseCellRenderer({
   property,
   value,
-  isEditable,
+  isEditable: canEdit,
   isEditing,
   editingValue,
   spaceId,
@@ -262,6 +265,7 @@ export function DatabaseCellRenderer({
 }: DatabaseCellRendererProps) {
   const { t, i18n } = useTranslation();
   const theme = useMantineTheme();
+  const isEditable = canEdit && !isDatabaseComputedProperty(property.type);
   const editorValue = isEditing ? editingValue : value;
   const activeDictionaryTerms = dictionaryEnabled ? dictionaryTerms : [];
   const activeDictionaryMatcherIndex = dictionaryEnabled
@@ -270,10 +274,10 @@ export function DatabaseCellRenderer({
 
   const isDropdownPropertyType = (type: DatabasePropertyType) => {
     return (
-      type === 'select' ||
-      type === 'multi_select' ||
-      type === 'user' ||
-      type === 'page_reference'
+      type === "select" ||
+      type === "multi_select" ||
+      type === "user" ||
+      type === "page_reference"
     );
   };
 
@@ -289,10 +293,64 @@ export function DatabaseCellRenderer({
   };
 
   const renderViewValue = () => {
-    if (property.type === 'checkbox') {
+    if (property.type === "file")
+      return (
+        <DatabaseFileCell
+          value={value}
+          pageId={pageId}
+          editing={false}
+          label={cellLabel ?? property.name}
+          onChange={onChange}
+          onSave={onSave}
+          onEdit={isEditable ? onStartEdit : undefined}
+        />
+      );
+    if (isDatabaseComputedProperty(property.type)) {
+      if (value && typeof value === "object" && "error" in value)
+        return (
+          <Text c="red" role="status">
+            {t(`dbTable.formulaErrors.${String(value.error)}`, {
+              defaultValue: t("dbTable.error"),
+            })}
+          </Text>
+        );
+      if (property.type === "updated_by")
+        return (
+          <DatabaseUserViewValue
+            value={value}
+            spaceId={spaceId}
+            pageId={pageId}
+          />
+        );
+      if (
+        property.type === "formula" &&
+        property.settings &&
+        "resultType" in property.settings &&
+        property.settings.resultType === "checkbox" &&
+        typeof value === "boolean"
+      )
+        return (
+          <Checkbox
+            aria-label={cellLabel ?? property.name}
+            checked={value}
+            disabled
+            readOnly
+          />
+        );
+      return (
+        <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {getDatabaseCellDisplayValue({
+            property,
+            value,
+            locale: i18n.language,
+          }) || t("Empty value")}
+        </Text>
+      );
+    }
+    if (property.type === "checkbox") {
       const checked = normalizeDatabaseCheckboxValue(value);
       const checkboxLabel = cellLabel
-        ? `${cellLabel}: ${checked ? t('Checked') : t('Unchecked')}`
+        ? `${cellLabel}: ${checked ? t("Checked") : t("Unchecked")}`
         : undefined;
 
       if (!isEditable) {
@@ -329,35 +387,35 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (property.type === 'code') {
+    if (property.type === "code") {
       const codeValue = normalizeDatabaseStringValue(value);
 
       return codeValue ? (
-        <Text component="div" ff="monospace" style={{ whiteSpace: 'pre-wrap' }}>
+        <Text component="div" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
           {codeValue}
         </Text>
       ) : (
-        <Text c="dimmed">{t('Empty value')}</Text>
+        <Text c="dimmed">{t("Empty value")}</Text>
       );
     }
 
-    if (property.type === 'select') {
+    if (property.type === "select") {
       const selectValue = normalizeDatabaseSelectValue(value);
       if (!selectValue) {
-        return <Text c="dimmed">{t('Empty value')}</Text>;
+        return <Text c="dimmed">{t("Empty value")}</Text>;
       }
 
       const selectedOption = getDatabaseSelectOption(property, selectValue);
       const label = selectedOption?.label || selectValue;
 
       return (
-        <Badge color={selectedOption?.color || 'gray'} variant="light">
+        <Badge color={selectedOption?.color || "gray"} variant="light">
           {label}
         </Badge>
       );
     }
 
-    if (property.type === 'user') {
+    if (property.type === "user") {
       return (
         <DatabaseUserViewValue
           value={value}
@@ -367,10 +425,10 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (property.type === 'page_reference') {
+    if (property.type === "page_reference") {
       const refId = normalizeDatabasePageReferenceValue(value);
       if (!refId) {
-        return <Text c="dimmed">{t('Empty value')}</Text>;
+        return <Text c="dimmed">{t("Empty value")}</Text>;
       }
 
       const targetPage = pageOptions.find((option) => option.value === refId);
@@ -387,7 +445,7 @@ export function DatabaseCellRenderer({
       return <Text>{targetPage?.label || refId}</Text>;
     }
 
-    if (property.type === 'multi_select')
+    if (property.type === "multi_select")
       return (
         <Group gap="xs">
           {(Array.isArray(value) ? value : []).map((id) => {
@@ -395,25 +453,25 @@ export function DatabaseCellRenderer({
               (option) => option.value === id,
             );
             return (
-              <Badge key={id} color={option?.color ?? 'gray'}>
+              <Badge key={id} color={option?.color ?? "gray"}>
                 {option?.label ?? id}
               </Badge>
             );
           })}
         </Group>
       );
-    if (['number', 'date', 'url', 'email', 'phone'].includes(property.type)) {
+    if (["number", "date", "url", "email", "phone"].includes(property.type)) {
       const display = getDatabaseCellDisplayValue({
         property,
         value,
         locale: i18n.language,
       });
-      if (display && ['url', 'email', 'phone'].includes(property.type)) {
+      if (display && ["url", "email", "phone"].includes(property.type)) {
         const href =
-          property.type === 'email'
+          property.type === "email"
             ? `mailto:${display}`
-            : property.type === 'phone'
-              ? `tel:${display.replace(/[^+\d]/g, '')}`
+            : property.type === "phone"
+              ? `tel:${display.replace(/[^+\d]/g, "")}`
               : /^https?:\/\//i.test(display)
                 ? display
                 : undefined;
@@ -421,7 +479,7 @@ export function DatabaseCellRenderer({
           <Text
             component="a"
             href={href}
-            target={property.type === 'url' ? '_blank' : undefined}
+            target={property.type === "url" ? "_blank" : undefined}
             rel="noopener noreferrer"
             onClick={(event) => event.stopPropagation()}
           >
@@ -432,17 +490,17 @@ export function DatabaseCellRenderer({
       return (
         <Text
           style={{
-            textAlign: property.type === 'number' ? 'right' : undefined,
+            textAlign: property.type === "number" ? "right" : undefined,
           }}
         >
-          {display || t('Empty value')}
+          {display || t("Empty value")}
         </Text>
       );
     }
     const textValue = normalizeDatabaseStringValue(value);
 
     return textValue ? (
-      <Text component="div" style={{ whiteSpace: 'pre-wrap' }}>
+      <Text component="div" style={{ whiteSpace: "pre-wrap" }}>
         <DictionaryTextHighlighter
           text={textValue}
           terms={activeDictionaryTerms}
@@ -451,13 +509,24 @@ export function DatabaseCellRenderer({
         />
       </Text>
     ) : (
-      <Text c="dimmed">{t('Empty value')}</Text>
+      <Text c="dimmed">{t("Empty value")}</Text>
     );
   };
 
   const renderEditorByType = (type: DatabasePropertyType) => {
+    if (type === "file")
+      return (
+        <DatabaseFileCell
+          value={editorValue}
+          pageId={pageId}
+          editing
+          label={cellLabel ?? property.name}
+          onChange={onChange}
+          onSave={onSave}
+        />
+      );
     if (
-      ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(type)
+      ["number", "date", "multi_select", "url", "email", "phone"].includes(type)
     )
       return (
         <DatabaseValueEditor
@@ -470,10 +539,10 @@ export function DatabaseCellRenderer({
           autoFocus={isEditing}
         />
       );
-    if (type === 'checkbox') {
+    if (type === "checkbox") {
       const checked = normalizeDatabaseCheckboxValue(editorValue);
       const checkboxLabel = cellLabel
-        ? `${cellLabel}: ${checked ? t('Checked') : t('Unchecked')}`
+        ? `${cellLabel}: ${checked ? t("Checked") : t("Unchecked")}`
         : undefined;
 
       return (
@@ -495,7 +564,7 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (type === 'multiline_text') {
+    if (type === "multiline_text") {
       return (
         <DictionaryTextarea
           autoFocus={isEditing}
@@ -511,7 +580,7 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (type === 'code') {
+    if (type === "code") {
       return (
         <DictionaryTextarea
           autoFocus={isEditing}
@@ -528,9 +597,9 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (type === 'select') {
+    if (type === "select") {
       const settings =
-        property.settings && 'options' in property.settings
+        property.settings && "options" in property.settings
           ? property.settings.options
           : [];
       const selectValue = normalizeDatabaseSelectValue(editorValue);
@@ -560,7 +629,7 @@ export function DatabaseCellRenderer({
           }))}
           value={selectValue || null}
           onChange={(nextValue) => {
-            const normalizedValue = nextValue || '';
+            const normalizedValue = nextValue || "";
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
@@ -571,7 +640,7 @@ export function DatabaseCellRenderer({
             const selectOption = selectOptionByValue.get(option.value);
 
             return (
-              <Badge color={selectOption?.color || 'gray'} variant="light">
+              <Badge color={selectOption?.color || "gray"} variant="light">
                 {option.label}
               </Badge>
             );
@@ -580,7 +649,7 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (type === 'user') {
+    if (type === "user") {
       return (
         <DatabaseUserEditor
           value={editorValue}
@@ -595,7 +664,7 @@ export function DatabaseCellRenderer({
       );
     }
 
-    if (type === 'page_reference') {
+    if (type === "page_reference") {
       const pageReferenceValue =
         normalizeDatabasePageReferenceValue(editorValue);
 
@@ -608,12 +677,12 @@ export function DatabaseCellRenderer({
           data={pageOptions}
           value={pageReferenceValue || null}
           onChange={(nextValue) => {
-            const normalizedValue = nextValue || '';
+            const normalizedValue = nextValue || "";
             onChange(normalizedValue);
             onSave(normalizedValue);
           }}
           nothingFoundMessage={
-            isPageOptionsLoading ? t('Loading...') : t('No pages found')
+            isPageOptionsLoading ? t("Loading...") : t("No pages found")
           }
           onBlur={handleBlurSave}
         />
@@ -628,7 +697,7 @@ export function DatabaseCellRenderer({
         onChange={(event) => onChange(event.currentTarget.value)}
         onBlur={handleBlurSave}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') {
+          if (event.key === "Enter") {
             onSave();
           }
         }}
@@ -642,7 +711,7 @@ export function DatabaseCellRenderer({
         if (
           !isEditing &&
           isEditable &&
-          property.type !== 'checkbox' &&
+          property.type !== "checkbox" &&
           !isDropdownPropertyType(property.type)
         ) {
           onStartEdit();
@@ -650,12 +719,12 @@ export function DatabaseCellRenderer({
       }}
       style={{
         cursor: isEditable
-          ? property.type === 'checkbox'
-            ? 'pointer'
+          ? property.type === "checkbox"
+            ? "pointer"
             : shouldRenderDropdownEditor
-              ? 'default'
-              : 'text'
-          : 'default',
+              ? "default"
+              : "text"
+          : "default",
       }}
     >
       {shouldRenderEditor

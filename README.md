@@ -314,6 +314,12 @@ The fork includes structured databases:
 
 - typed properties, including numbers with number/percent/currency formats, dates with optional time and ranges, multi-select, URL, email, and phone;
 
+- multiple participants with transactional assignment notifications, plus row-owned file properties with authenticated downloads and history retention;
+
+- read-only creation/modification dates and modifier identity;
+
+- a bounded row formula language for arithmetic, conditions, text and dates, with property-ID dependencies, cycle checks and visible errors; the same computed values drive views, filters, sorting, CSV, AI and RAG, and references are remapped in portable archives and duplication;
+
 - nested AND/OR filters, up to five sort keys, categorical grouping, and server-side totals over accessible rows;
 
 - per-view column ordering and widths;

@@ -1,4 +1,9 @@
 import { NumberPropertySettingsModal } from "./number-property-settings-modal";
+import { FormulaPropertySettingsModal } from "./formula-property-settings-modal";
+import {
+  isDatabaseComputedProperty,
+  type DatabaseFormulaSettings,
+} from "@docmost/api-contract";
 import { databaseAiContextAtom } from "../atoms/database-ai-context-atom";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -219,6 +224,11 @@ const DATABASE_PROPERTY_TYPE_ICONS: Record<DatabasePropertyType, TablerIcon> = {
   url: IconFileDescription,
   email: IconFileDescription,
   phone: IconFileDescription,
+  created_at: IconFileDescription,
+  updated_at: IconFileDescription,
+  updated_by: IconUser,
+  file: IconFileDescription,
+  formula: IconCode,
 };
 
 const getPropertyTypeIcon = (
@@ -306,9 +316,19 @@ export function DatabaseTableView({
   const deletePropertyMutationRef = useRef(deletePropertyMutation);
 
   const [newPropertyName, setNewPropertyName] = useState("");
+  const [formulaSettingsProperty, setFormulaSettingsProperty] =
+    useState<IDatabaseProperty | null>(null);
+  const [formulaDraftName, setFormulaDraftName] = useState<string | null>(null);
   const [newPropertyType, setNewPropertyType] =
     useState<DatabasePropertyType>("multiline_text");
-  const [editingCellKey, setEditingCellKey] = useState<string | null>(null);
+  const [editingCellKey, setEditingCellKeyState] = useState<string | null>(
+    null,
+  );
+  const editingCellKeyRef = useRef<string | null>(null);
+  const setEditingCellKey = useCallback((key: string | null) => {
+    editingCellKeyRef.current = key;
+    setEditingCellKeyState(key);
+  }, []);
   const [editingValue, setEditingValue] = useState<unknown>("");
   const [rows, setRows] = useState<IDatabaseRowWithCells[]>([]);
   const [optimisticallyDeletedRowPageIds, setOptimisticallyDeletedRowPageIds] =
@@ -1433,10 +1453,12 @@ export function DatabaseTableView({
   );
 
   const preparedRows = useMemo(() => visibleRows, [visibleRows]);
+  // An optimistic removal must not expand a virtualized grid into a full render.
+  const virtualizationRowCount = Math.max(preparedRows.length, rows.length);
 
   const virtualizedRows = useMemo(() => {
     if (
-      preparedRows.length < DATABASE_ROW_VIRTUALIZATION_MIN_ROWS ||
+      virtualizationRowCount < DATABASE_ROW_VIRTUALIZATION_MIN_ROWS ||
       tableViewportHeight <= 0
     ) {
       return {
@@ -1472,7 +1494,12 @@ export function DatabaseTableView({
         (preparedRows.length - endIndex) * ROW_VIRTUALIZATION_ESTIMATED_HEIGHT,
       ),
     };
-  }, [preparedRows, tableScrollTop, tableViewportHeight]);
+  }, [
+    preparedRows,
+    virtualizationRowCount,
+    tableScrollTop,
+    tableViewportHeight,
+  ]);
 
   const activeFilterCount = activeServerFilters.length;
 
@@ -1553,7 +1580,11 @@ export function DatabaseTableView({
     row: IDatabaseRowWithCells,
     property: IDatabaseProperty,
   ) => {
-    if (!isEditable || row.canWrite === false) {
+    if (
+      !isEditable ||
+      row.canWrite === false ||
+      isDatabaseComputedProperty(property.type)
+    ) {
       return;
     }
 
@@ -1570,11 +1601,16 @@ export function DatabaseTableView({
     property: IDatabaseProperty,
     nextValue?: unknown,
   ) => {
+    const key = `${row.pageId}:${property.id}`;
     /**
      * For regular fields, we save only from the active edit-state.
      * For checkboxes, we allow direct saving from view mode via nextValue.
      */
-    if (!isEditable || (typeof nextValue === "undefined" && !editingCellKey)) {
+    if (
+      !isEditable ||
+      isDatabaseComputedProperty(property.type) ||
+      (typeof nextValue === "undefined" && editingCellKeyRef.current !== key)
+    ) {
       return;
     }
 
@@ -1589,12 +1625,13 @@ export function DatabaseTableView({
       return false;
     }
     if (!nextCellChange) {
-      setEditingCellKey(null);
-      setEditingValue("");
+      if (editingCellKeyRef.current === key) {
+        setEditingCellKey(null);
+        setEditingValue("");
+      }
       return;
     }
 
-    const key = `${row.pageId}:${property.id}`;
     const session = editingSession.current;
     setCellSaveState("saving");
     try {
@@ -1650,7 +1687,10 @@ export function DatabaseTableView({
         invalidateRowContext: true,
       });
       void summaryQuery.refetch();
-      if (session === editingSession.current) {
+      if (
+        session === editingSession.current &&
+        editingCellKeyRef.current === key
+      ) {
         setEditingCellKey(null);
         setEditingValue("");
       }
@@ -1772,6 +1812,11 @@ export function DatabaseTableView({
         if (!targetProperty) {
           break;
         }
+        if (
+          isDatabaseComputedProperty(targetProperty.type) ||
+          targetProperty.type === "file"
+        )
+          continue;
 
         const rawValue = values[propertyOffset] ?? "";
         const sourceValue =
@@ -1997,6 +2042,11 @@ export function DatabaseTableView({
           options: [{ label: "", value: "", color: "gray" }],
         },
       });
+      return;
+    }
+    if (newPropertyType === "formula") {
+      setPropertyCreatorOpened(false);
+      setFormulaDraftName(trimmedName);
       return;
     }
 
@@ -2754,10 +2804,16 @@ export function DatabaseTableView({
               aria-label={t("Bulk update property")}
               w={220}
               placeholder={t("Property")}
-              data={displayedProperties.map((property) => ({
-                value: property.id,
-                label: property.name,
-              }))}
+              data={displayedProperties
+                .filter(
+                  (property) =>
+                    !isDatabaseComputedProperty(property.type) &&
+                    property.type !== "file",
+                )
+                .map((property) => ({
+                  value: property.id,
+                  label: property.name,
+                }))}
               value={bulkPropertyId}
               onChange={(value) => setBulkPropertyId(value)}
             />
@@ -2845,12 +2901,21 @@ export function DatabaseTableView({
           <ScrollArea
             viewportRef={tableViewportRef}
             h={getDatabaseTableViewportHeight(
-              preparedRows.length,
+              virtualizationRowCount,
               Boolean(isMobileViewport),
             )}
             mah={isMobileViewport ? 520 : 620}
             onScrollPositionChange={(position) => setTableScrollTop(position.y)}
             className={classes.databaseScroll}
+            style={
+              {
+                "--database-title-column-left": isEditable
+                  ? isMobileViewport
+                    ? "40px"
+                    : "52px"
+                  : "0px",
+              } as CSSProperties
+            }
           >
             <Table
               stickyHeader
@@ -2859,16 +2924,14 @@ export function DatabaseTableView({
               miw={isMobileViewport ? 760 : 900}
               layout="auto"
               className={classes.databaseTable}
-              style={
-                {
-                  "--database-title-column-left": isEditable ? "52px" : "0px",
-                } as CSSProperties
-              }
             >
               <Table.Thead>
                 <Table.Tr>
                   {isEditable && (
-                    <Table.Th w={52} className={classes.selectColumn}>
+                    <Table.Th
+                      w={isMobileViewport ? 40 : 52}
+                      className={classes.selectColumn}
+                    >
                       <Checkbox
                         aria-label={t("Select all rows")}
                         checked={
@@ -2887,10 +2950,7 @@ export function DatabaseTableView({
                       />
                     </Table.Th>
                   )}
-                  <Table.Th
-                    miw={isMobileViewport ? 220 : 280}
-                    className={classes.titleColumn}
-                  >
+                  <Table.Th className={classes.titleColumn}>
                     {t("Title")}
                   </Table.Th>
                   {displayedProperties.map((property, propertyIndex) => (
@@ -3142,6 +3202,11 @@ export function DatabaseTableView({
                               <Menu.Sub>
                                 <Menu.Sub.Target>
                                   <Menu.Sub.Item
+                                    disabled={
+                                      isDatabaseComputedProperty(
+                                        property.type,
+                                      ) || property.type === "file"
+                                    }
                                     leftSection={
                                       <IconSwitchHorizontal size={14} />
                                     }
@@ -3150,40 +3215,40 @@ export function DatabaseTableView({
                                   </Menu.Sub.Item>
                                 </Menu.Sub.Target>
                                 <Menu.Sub.Dropdown>
-                                  {DATABASE_PROPERTY_TYPES.map(
-                                    (propertyType) => (
-                                      <Menu.Item
-                                        key={`${property.id}-${propertyType}`}
-                                        leftSection={renderPropertyTypeIcon(
-                                          propertyType,
-                                          14,
-                                        )}
-                                        disabled={
-                                          propertyType === property.type
-                                        }
-                                        onClick={() =>
-                                          updatePropertyMutation.mutate(
-                                            {
-                                              propertyId: property.id,
-                                              payload: { type: propertyType },
+                                  {DATABASE_PROPERTY_TYPES.filter(
+                                    (type) =>
+                                      !isDatabaseComputedProperty(type) &&
+                                      type !== "file",
+                                  ).map((propertyType) => (
+                                    <Menu.Item
+                                      key={`${property.id}-${propertyType}`}
+                                      leftSection={renderPropertyTypeIcon(
+                                        propertyType,
+                                        14,
+                                      )}
+                                      disabled={propertyType === property.type}
+                                      onClick={() =>
+                                        updatePropertyMutation.mutate(
+                                          {
+                                            propertyId: property.id,
+                                            payload: { type: propertyType },
+                                          },
+                                          {
+                                            onSuccess: () => {
+                                              emitDatabaseInvalidation({
+                                                invalidateProperties: true,
+                                                invalidateRows: true,
+                                                invalidateRowContext: true,
+                                              });
+                                              resetRowsPagination();
                                             },
-                                            {
-                                              onSuccess: () => {
-                                                emitDatabaseInvalidation({
-                                                  invalidateProperties: true,
-                                                  invalidateRows: true,
-                                                  invalidateRowContext: true,
-                                                });
-                                                resetRowsPagination();
-                                              },
-                                            },
-                                          )
-                                        }
-                                      >
-                                        {propertyTypeLabels[propertyType]}
-                                      </Menu.Item>
-                                    ),
-                                  )}
+                                          },
+                                        )
+                                      }
+                                    >
+                                      {propertyTypeLabels[propertyType]}
+                                    </Menu.Item>
+                                  ))}
                                 </Menu.Sub.Dropdown>
                               </Menu.Sub>
                               {property.type === "number" && (
@@ -3193,6 +3258,15 @@ export function DatabaseTableView({
                                   }
                                 >
                                   {t("dbTable.numberFormat")}
+                                </Menu.Item>
+                              )}
+                              {property.type === "formula" && (
+                                <Menu.Item
+                                  onClick={() =>
+                                    setFormulaSettingsProperty(property)
+                                  }
+                                >
+                                  {t("dbTable.formula")}
                                 </Menu.Item>
                               )}
                               {(property.type === "select" ||
@@ -3259,7 +3333,7 @@ export function DatabaseTableView({
                           wrap="nowrap"
                           align="flex-start"
                         >
-                          <div>
+                          <div className={classes.titleContent}>
                             {renamingRowPageId === row.pageId ? (
                               <TextInput
                                 aria-label={t("Row title")}
@@ -3536,6 +3610,22 @@ export function DatabaseTableView({
             <Text key={id} size="sm">
               {properties.find((property) => property.id === id)?.name}:{" "}
               {value ?? t("Empty value")}
+              {((activeGroupKey
+                ? summaryQuery.data.groups.find(
+                    (group) => group.key === activeGroupKey,
+                  )?.errors
+                : summaryQuery.data.errors)?.[id] ?? 0) > 0 && (
+                <Text span c="orange">
+                  {" "}
+                  {t("dbTable.calculationErrors", {
+                    count: (activeGroupKey
+                      ? summaryQuery.data.groups.find(
+                          (group) => group.key === activeGroupKey,
+                        )?.errors
+                      : summaryQuery.data.errors)?.[id],
+                  })}
+                </Text>
+              )}
             </Text>
           ))}
         </Group>
@@ -3560,6 +3650,46 @@ export function DatabaseTableView({
               propertyId: numberSettingsProperty.id,
               payload: { settings },
             });
+        }}
+      />
+      <FormulaPropertySettingsModal
+        opened={Boolean(formulaSettingsProperty || formulaDraftName)}
+        title={
+          formulaSettingsProperty?.name ??
+          formulaDraftName ??
+          t("dbTable.formula")
+        }
+        propertyId={formulaSettingsProperty?.id}
+        initialSettings={
+          formulaSettingsProperty?.settings as
+            | DatabaseFormulaSettings
+            | undefined
+        }
+        properties={properties}
+        onClose={() => {
+          setFormulaSettingsProperty(null);
+          setFormulaDraftName(null);
+        }}
+        onSave={async (settings) => {
+          if (formulaSettingsProperty)
+            await updatePropertyMutation.mutateAsync({
+              propertyId: formulaSettingsProperty.id,
+              payload: { settings },
+            });
+          else if (formulaDraftName)
+            await createPropertyMutation.mutateAsync({
+              name: formulaDraftName,
+              type: "formula",
+              settings,
+            });
+          emitDatabaseInvalidation({
+            invalidateProperties: true,
+            invalidateRows: true,
+            invalidateRowContext: true,
+          });
+          resetRowsPagination();
+          setNewPropertyName("");
+          setNewPropertyType("multiline_text");
         }}
       />
       <SelectPropertySettingsModal

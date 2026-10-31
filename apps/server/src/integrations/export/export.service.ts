@@ -1,4 +1,8 @@
 import {
+  databaseFileIds,
+  isDatabaseComputedProperty,
+} from '@docmost/api-contract';
+import {
   BadRequestException,
   HttpException,
   HttpStatus,
@@ -2783,7 +2787,12 @@ export class ExportService {
       .filter(
         (cell) =>
           exportedRowPageIds.has(cell.pageId) &&
-          exportedPropertyIds.has(cell.propertyId),
+          exportedPropertyIds.has(cell.propertyId) &&
+          !isDatabaseComputedProperty(
+            archiveProperties.find(
+              (property) => property.id === cell.propertyId,
+            )?.type,
+          ),
       )
       .map((cell) => ({
         id: cell.id,
@@ -2907,6 +2916,8 @@ export class ExportService {
     }
     for (const cell of archiveCells) {
       if (cell.attachmentId) allowAttachment(cell.attachmentId, cell.pageId);
+      for (const id of databaseFileIds(cell.value))
+        allowAttachment(id, cell.pageId);
     }
     const attachmentRows =
       attachmentIds.size > 0

@@ -205,26 +205,28 @@ export function DocumentFieldsPanel({
       (databaseProperties ?? []).map((property) => [property.id, property]),
     );
 
-    const mergedProperties = propertiesFromContext.map((contextProperty, contextIndex) => {
-      const knownProperty = propertyById.get(contextProperty.id);
-      if (knownProperty) {
-        return knownProperty;
-      }
+    const mergedProperties = propertiesFromContext.map(
+      (contextProperty, contextIndex) => {
+        const knownProperty = propertyById.get(contextProperty.id);
+        if (knownProperty) {
+          return knownProperty;
+        }
 
-      return {
-        id: contextProperty.id,
-        databaseId: rowContext?.database.id ?? "",
-        workspaceId: page.workspaceId,
-        name: contextProperty.name,
-        type: contextProperty.type as DatabasePropertyType,
-        position: contextProperty.position ?? contextIndex,
-        settings: {},
-        creatorId: null,
-        createdAt: "",
-        updatedAt: "",
-        deletedAt: null,
-      };
-    });
+        return {
+          id: contextProperty.id,
+          databaseId: rowContext?.database.id ?? "",
+          workspaceId: page.workspaceId,
+          name: contextProperty.name,
+          type: contextProperty.type as DatabasePropertyType,
+          position: contextProperty.position ?? contextIndex,
+          settings: {},
+          creatorId: null,
+          createdAt: "",
+          updatedAt: "",
+          deletedAt: null,
+        };
+      },
+    );
 
     return sortDatabasePropertiesByPosition(mergedProperties);
   }, [
@@ -361,6 +363,26 @@ export function DocumentFieldsPanel({
 
   const renderReadOnlyDbValue = (property: IDatabaseProperty) => {
     const value = dbFieldValues.get(property.id);
+    if (
+      ["formula", "file", "created_at", "updated_at", "updated_by"].includes(
+        property.type,
+      ) ||
+      (property.type === "user" && Array.isArray(value))
+    )
+      return (
+        <DatabaseCellRenderer
+          property={property}
+          value={value}
+          isEditable={false}
+          isEditing={false}
+          editingValue={null}
+          spaceId={page.spaceId}
+          pageId={page.id}
+          onStartEdit={() => undefined}
+          onChange={() => undefined}
+          onSave={() => undefined}
+        />
+      );
 
     if (property.type === "page_reference") {
       const refId = normalizeDatabasePageReferenceValue(value);
@@ -566,9 +588,7 @@ export function DocumentFieldsPanel({
     );
   };
 
-  const renderAiRoleOption: SelectProps["renderOption"] = ({
-    option,
-  }) => {
+  const renderAiRoleOption: SelectProps["renderOption"] = ({ option }) => {
     const selected = AI_ROLE_OPTIONS.find(
       (item) => item.value === option.value,
     );

@@ -1,5 +1,5 @@
 {
-  "version": 32,
+  "version": 33,
   "anchors": [
     "assistant",
     "retrieval",
@@ -166,9 +166,15 @@
       "id": "database-agent-preparation-and-frozen-view",
       "key": "scenario.assistant.technical",
       "needles": ["viewState", "preparationMs"]
+    },
+    {
+      "id": "database-computed-cell-boundaries",
+      "key": "scenario.assistant.technical",
+      "needles": ["languageVersion: 1", "contractVersion: 4", "formula_errors"]
     }
   ],
   "requiredKeys": [
+    "scenario.assistant.steps.step10",
     "description",
     "diagram.expand",
     "diagram.invalid",

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
-import type { DatabasePropertyType } from '@docmost/api-contract';
+import {
+  databaseUserIds,
+  type DatabasePropertyType,
+} from '@docmost/api-contract';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
 import type { SearchDatabaseMatchDto } from '../../search/dto/search-response.dto';
@@ -287,7 +290,7 @@ export class DatabaseSearchProjectionService {
       ...new Set(
         cells
           .filter((cell) => cell.propertyType === 'user')
-          .map((cell) => this.extractReferenceId(cell.value))
+          .flatMap((cell) => databaseUserIds(cell.value))
           .filter((value): value is string => Boolean(value)),
       ),
     ];
@@ -325,8 +328,10 @@ export class DatabaseSearchProjectionService {
   ): string {
     const propertyType = this.normalizePropertyType(cell.propertyType);
     if (propertyType === 'user') {
-      const userId = this.extractReferenceId(cell.value);
-      return userId ? (userNames.get(userId)?.trim() ?? '') : '';
+      return databaseUserIds(cell.value)
+        .map((id) => userNames.get(id)?.trim())
+        .filter(Boolean)
+        .join(', ');
     }
     if (propertyType === 'select') {
       const selected = this.extractSelectValue(cell.value);

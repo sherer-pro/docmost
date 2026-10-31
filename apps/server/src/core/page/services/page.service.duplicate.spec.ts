@@ -60,6 +60,7 @@ function linkedInstanceDb(result?: unknown) {
     query[method] = jest.fn(() => query);
   }
   query.executeTakeFirst = jest.fn().mockResolvedValue(result);
+  query.execute = jest.fn().mockResolvedValue([]);
   return { selectFrom: jest.fn(() => query) };
 }
 

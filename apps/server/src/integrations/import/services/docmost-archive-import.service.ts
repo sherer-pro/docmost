@@ -1,4 +1,10 @@
-import { normalizeDatabaseValue } from '@docmost/api-contract';
+import {
+  normalizeDatabaseValue,
+  isDatabaseComputedProperty,
+  remapDatabaseFormulaSettings,
+  remapDatabaseAttachmentReferences,
+  validateDatabaseFormulaSchema,
+} from '@docmost/api-contract';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -833,6 +839,12 @@ export class DocmostArchiveImportService {
       )
       .execute();
     if (data.databaseProperties.length > 0) {
+      for (const database of data.databases)
+        validateDatabaseFormulaSchema(
+          data.databaseProperties.filter(
+            (property) => property.databaseId === database.id,
+          ),
+        );
       await trx
         .insertInto('databaseProperties')
         .values(
@@ -842,7 +854,9 @@ export class DocmostArchiveImportService {
             name: property.name,
             type: property.type,
             position: property.position,
-            settings: property.settings as any,
+            settings: (property.type === 'formula'
+              ? remapDatabaseFormulaSettings(property.settings, propertyIdMap)
+              : property.settings) as any,
             workspaceId: fileTask.workspaceId,
             creatorId: fileTask.creatorId!,
           })),
@@ -870,50 +884,65 @@ export class DocmostArchiveImportService {
       data.databaseProperties.map((property) => [property.id, property.type]),
     );
     if (data.databaseCells.length > 0) {
-      const importedCells = data.databaseCells.map((cell) => {
-        const type = propertyTypeById.get(cell.propertyId);
-        let value = cell.value;
-        if (type === 'page_reference') {
-          value = remapDatabasePageReference(value, type, pageIdMap, null);
-          if (value === null && cell.value !== null) {
-            report.skipped.pageReferences += 1;
+      const importedCells = data.databaseCells
+        .filter(
+          (cell) =>
+            !isDatabaseComputedProperty(propertyTypeById.get(cell.propertyId)),
+        )
+        .map((cell) => {
+          const type = propertyTypeById.get(cell.propertyId);
+          let value = remapDatabaseAttachmentReferences(
+            cell.value,
+            attachmentIdMap,
+            true,
+          );
+          if (type === 'page_reference') {
+            value = remapDatabasePageReference(value, type, pageIdMap, null);
+            if (value === null && cell.value !== null) {
+              report.skipped.pageReferences += 1;
+            }
+          } else if (type === 'user') {
+            value = this.remapDatabaseUserReference(value, userIdMap, report);
           }
-        } else if (type === 'user') {
-          value = this.remapDatabaseUserReference(value, userIdMap, report);
-        }
-        if (
-          ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
-            type,
-          ) &&
-          !(
-            value &&
-            typeof value === 'object' &&
-            'rawValueBeforeTypeChange' in value
-          )
-        ) {
-          const settings = data.databaseProperties.find(
-            (property) => property.id === cell.propertyId,
-          )?.settings;
-          value = normalizeDatabaseValue(
-            type as any,
-            value,
-            settings as any,
-          ) as any;
-        }
-        return {
-          id: uuid7(),
-          databaseId: databaseIdMap.get(cell.databaseId)!,
-          pageId: pageIdMap.get(cell.pageId)!,
-          propertyId: propertyIdMap.get(cell.propertyId)!,
-          attachmentId: cell.attachmentId
-            ? (attachmentIdMap.get(cell.attachmentId) ?? null)
-            : null,
-          value: sql`${JSON.stringify(value ?? null)}::text::jsonb` as any,
-          workspaceId: fileTask.workspaceId,
-          createdById: fileTask.creatorId!,
-          updatedById: fileTask.creatorId!,
-        };
-      });
+          if (
+            [
+              'number',
+              'date',
+              'multi_select',
+              'url',
+              'email',
+              'phone',
+              'file',
+            ].includes(type) &&
+            !(
+              value &&
+              typeof value === 'object' &&
+              'rawValueBeforeTypeChange' in value
+            )
+          ) {
+            const settings = data.databaseProperties.find(
+              (property) => property.id === cell.propertyId,
+            )?.settings;
+            value = normalizeDatabaseValue(
+              type as any,
+              value,
+              settings as any,
+            ) as any;
+          }
+          return {
+            id: uuid7(),
+            databaseId: databaseIdMap.get(cell.databaseId)!,
+            pageId: pageIdMap.get(cell.pageId)!,
+            propertyId: propertyIdMap.get(cell.propertyId)!,
+            attachmentId: cell.attachmentId
+              ? (attachmentIdMap.get(cell.attachmentId) ?? null)
+              : null,
+            value: sql`${JSON.stringify(value ?? null)}::text::jsonb` as any,
+            workspaceId: fileTask.workspaceId,
+            createdById: fileTask.creatorId!,
+            updatedById: fileTask.creatorId!,
+          };
+        });
       for (let index = 0; index < importedCells.length; index += 1000) {
         await trx
           .insertInto('databaseCells')
@@ -1380,6 +1409,10 @@ export class DocmostArchiveImportService {
     userIdMap: Map<string, string>,
     report: ImportReport,
   ): unknown {
+    if (Array.isArray(value))
+      return value
+        .map((item) => this.remapDatabaseUserReference(item, userIdMap, report))
+        .filter((item) => item !== null);
     const sourceId = extractReferenceId(value, ['id', 'userId']);
     if (!sourceId) return value === null ? null : value;
     const mapped = userIdMap.get(sourceId);

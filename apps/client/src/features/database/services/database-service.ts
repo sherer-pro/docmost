@@ -1,4 +1,5 @@
 import api from "@/lib/api-client";
+import { DATABASE_MUTATION_CONTRACT_VERSION } from "@docmost/api-contract";
 import {
   IBatchUpdateDatabaseCellsPayload,
   IBatchUpdateDatabaseCellsResponse,
@@ -96,7 +97,7 @@ export async function createDatabaseProperty(
 ): Promise<IDatabaseProperty> {
   const req = await api.post<IDatabaseProperty>(
     `/databases/${databaseId}/properties`,
-    payload,
+    { ...payload, contractVersion: DATABASE_MUTATION_CONTRACT_VERSION },
   );
 
   return req.data;
@@ -112,7 +113,7 @@ export async function updateDatabaseProperty(
 ): Promise<IDatabaseProperty> {
   const req = await api.patch<IDatabaseProperty>(
     `/databases/${databaseId}/properties/${propertyId}`,
-    payload,
+    { ...payload, contractVersion: DATABASE_MUTATION_CONTRACT_VERSION },
   );
 
   return req.data;
@@ -191,7 +192,7 @@ export async function batchUpdateDatabaseCells(
 ): Promise<IBatchUpdateDatabaseCellsResponse> {
   const req = await api.patch<IBatchUpdateDatabaseCellsResponse>(
     `/databases/${databaseId}/rows/${pageId}/cells`,
-    payload,
+    { ...payload, contractVersion: DATABASE_MUTATION_CONTRACT_VERSION },
   );
 
   return req.data;
@@ -203,7 +204,7 @@ export async function batchUpdateDatabaseRows(
 ): Promise<IBatchUpdateDatabaseRowsResponse> {
   const req = await api.patch<IBatchUpdateDatabaseRowsResponse>(
     `/databases/${databaseId}/rows/batch`,
-    payload,
+    { ...payload, contractVersion: DATABASE_MUTATION_CONTRACT_VERSION },
   );
 
   return req.data;

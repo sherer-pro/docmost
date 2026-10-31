@@ -48,6 +48,9 @@ import {
   formatDatabaseValue,
   validateDatabaseSettings,
   normalizeDatabaseViewState,
+  isDatabaseComputedProperty,
+  databaseUserIds,
+  validateDatabaseFormulaSchema,
 } from '@docmost/api-contract';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
 import type {
@@ -232,13 +235,16 @@ export class DatabaseService {
       | 'database.row.deleted'
       | 'database.row.cells.updated';
     changeData: Record<string, unknown>;
+    rowHistoryRecorded?: boolean;
   }): Promise<void> {
-    await this.recordDatabaseHistoryEvent({
-      pageIds: [params.rowPageId],
-      actorId: params.actorId,
-      changeType: params.changeType,
-      changeData: params.changeData,
-    });
+    if (!params.rowHistoryRecorded) {
+      await this.recordDatabaseHistoryEvent({
+        pageIds: [params.rowPageId],
+        actorId: params.actorId,
+        changeType: params.changeType,
+        changeData: params.changeData,
+      });
+    }
 
     const databasePageId = params.database.pageId;
     if (!databasePageId || databasePageId === params.rowPageId) {
@@ -564,6 +570,16 @@ export class DatabaseService {
     }
 
     if (params.propertyType === 'user') {
+      if (Array.isArray(params.value))
+        return Promise.all(
+          databaseUserIds(params.value).map((id) =>
+            this.resolveHistoryUserValue(
+              { id },
+              params.workspaceId,
+              params.userNameCache,
+            ),
+          ),
+        );
       const userValue = await this.resolveHistoryUserValue(
         params.value,
         params.workspaceId,
@@ -617,7 +633,7 @@ export class DatabaseService {
         rows.flatMap((row) =>
           (row?.cells ?? [])
             .filter((cell) => userPropertyIds.has(cell.propertyId))
-            .map((cell) => this.extractUserIdFromCellValue(cell.value))
+            .flatMap((cell) => databaseUserIds(cell.value))
             .filter((userId): userId is string => Boolean(userId)),
         ),
       ),
@@ -646,18 +662,21 @@ export class DatabaseService {
           return cell;
         }
 
-        const userId = this.extractUserIdFromCellValue(cell.value);
-        if (!userId) {
+        const userIds = databaseUserIds(cell.value);
+        if (!userIds.length) {
           return cell;
         }
 
+        const identities = userIds.map((userId) => ({
+          id: userId,
+          name: userById.get(userId)?.name?.trim() || userId,
+          avatarUrl: userById.get(userId)?.avatarUrl ?? null,
+        }));
         return {
           ...cell,
-          value: {
-            id: userId,
-            name: userById.get(userId)?.name?.trim() || userId,
-            avatarUrl: userById.get(userId)?.avatarUrl ?? null,
-          },
+          value: Array.isArray(this.extractCurrentCellValue(cell.value))
+            ? identities
+            : identities[0],
         };
       }),
     }));
@@ -883,9 +902,19 @@ export class DatabaseService {
 
     const normalizedPropertyType = this.normalizePropertyType(property.type);
     if (
-      ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
-        normalizedPropertyType,
-      )
+      [
+        'number',
+        'date',
+        'multi_select',
+        'url',
+        'email',
+        'phone',
+        'formula',
+        'created_at',
+        'updated_at',
+        'updated_by',
+        'file',
+      ].includes(normalizedPropertyType)
     )
       return formatDatabaseValue(
         normalizedPropertyType,
@@ -893,6 +922,8 @@ export class DatabaseService {
         property.settings,
       );
     if (normalizedPropertyType === 'user') {
+      if (Array.isArray(currentValue))
+        return formatDatabaseValue('user', currentValue);
       const userName = this.extractUserNameFromCellValue(rawCellValue);
       if (userName) {
         return userName;
@@ -1186,6 +1217,7 @@ export class DatabaseService {
     spaceId: string,
     trx: KyselyTransaction,
     settings?: unknown,
+    actorId?: string,
   ): Promise<void> {
     const rows =
       (await this.databaseRowRepo.findByDatabaseId(
@@ -1197,11 +1229,13 @@ export class DatabaseService {
     const userDisplayCache = new Map<string, string>();
 
     for (const row of rows) {
-      const cells = await this.databaseCellRepo.findByDatabaseAndPage(
-        databaseId,
-        row.pageId,
-        trx,
-      );
+      const cells = Array.isArray(row.cells)
+        ? row.cells
+        : await this.databaseCellRepo.findByDatabaseAndPage(
+            databaseId,
+            row.pageId,
+            trx,
+          );
       const targetCell = cells.find((cell) => cell.propertyId === propertyId);
 
       if (!targetCell) {
@@ -1243,10 +1277,23 @@ export class DatabaseService {
         targetCell.id,
         {
           value: nextValue as never,
+          ...(actorId ? { updatedById: actorId } : {}),
         },
         trx,
       );
     }
+    if (actorId && rows.length)
+      await trx
+        .updateTable('databaseRows')
+        .set({ updatedAt: new Date(), updatedById: actorId })
+        .where('databaseId', '=', databaseId)
+        .where('workspaceId', '=', workspaceId)
+        .where(
+          'pageId',
+          'in',
+          rows.map((row) => row.pageId),
+        )
+        .execute();
   }
 
   /**
@@ -1291,14 +1338,24 @@ export class DatabaseService {
     const properties =
       await this.databasePropertyRepo.findByDatabaseId(databaseId);
     let rows: any[];
-    if (currentView?.viewState) {
+    if (this.viewQuery) {
       const input = await this.getViewQueryInput(
         database,
         user,
         workspaceId,
-        currentView.viewState,
-        currentView.groupKey,
-        currentView.viewId,
+        currentView?.viewState ?? {
+          filters: this.parseRowsFilters(currentView?.filters),
+          sorts: currentView?.sortPropertyId
+            ? [
+                {
+                  propertyId: currentView.sortPropertyId,
+                  direction: currentView.sortDirection ?? 'asc',
+                },
+              ]
+            : [],
+        },
+        currentView?.groupKey,
+        currentView?.viewId,
       );
       rows = (await this.viewQuery.list(input, {})).items;
     } else
@@ -1334,7 +1391,10 @@ export class DatabaseService {
 
     const userPropertyIds = new Set(
       normalizedProperties
-        .filter((property) => property.type === 'user')
+        .filter(
+          (property) =>
+            property.type === 'user' || property.type === 'updated_by',
+        )
         .map((property) => property.id),
     );
     const readableRows = hasWorkspaceAdminAccess
@@ -1351,7 +1411,7 @@ export class DatabaseService {
       workspaceId,
     );
     const preparedRows =
-      currentView && !currentView.viewState
+      !this.viewQuery && currentView && !currentView.viewState
         ? this.applyRowsServerState({
             rows: normalizedRows,
             filters: rowsFilters,
@@ -1725,6 +1785,11 @@ export class DatabaseService {
 
     try {
       validateDatabaseSettings(dto.type, dto.settings);
+      if (
+        (isDatabaseComputedProperty(dto.type) || dto.type === 'file') &&
+        dto.contractVersion !== 4
+      )
+        throw new Error('Refresh the client before creating this property');
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Invalid database input',
@@ -1735,8 +1800,20 @@ export class DatabaseService {
       await this.databaseRepo.lockForMutation(databaseId, trx);
       const currentProperties =
         await this.databasePropertyRepo.findByDatabaseId(databaseId, trx);
+      const id = uuid7();
+      try {
+        validateDatabaseFormulaSchema([
+          ...currentProperties,
+          { id, type: dto.type, settings: dto.settings },
+        ]);
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error ? error.message : 'Invalid formula schema',
+        );
+      }
       return this.databasePropertyRepo.insertProperty(
         {
+          id,
           databaseId,
           workspaceId,
           creatorId: actor.id,
@@ -1811,6 +1888,33 @@ export class DatabaseService {
         (dto.type && dto.type !== property.type ? null : property.settings);
       try {
         validateDatabaseSettings(nextType, nextSettings);
+        if (
+          [nextType, property.type].some(
+            (type) => isDatabaseComputedProperty(type) || type === 'file',
+          ) &&
+          dto.contractVersion !== 4
+        )
+          throw new Error('Refresh the client before editing this property');
+        if (
+          nextType !== property.type &&
+          [nextType, property.type].some(
+            (type) => isDatabaseComputedProperty(type) || type === 'file',
+          )
+        )
+          throw new Error(
+            'Create a separate property instead of converting a computed or file property',
+          );
+        const schema = await this.databasePropertyRepo.findByDatabaseId(
+          databaseId,
+          trx,
+        );
+        validateDatabaseFormulaSchema(
+          schema.map((item) =>
+            item.id === propertyId
+              ? { ...item, type: nextType, settings: nextSettings }
+              : item,
+          ),
+        );
       } catch (error) {
         throw new BadRequestException(
           error instanceof Error ? error.message : 'Invalid database input',
@@ -1859,6 +1963,7 @@ export class DatabaseService {
           database.spaceId,
           trx,
           nextSettings,
+          actor.id,
         );
     });
 
@@ -1948,6 +2053,19 @@ export class DatabaseService {
       const current = await this.databasePropertyRepo.findById(propertyId, trx);
       if (!current || current.databaseId !== databaseId)
         throw new NotFoundException('Database property not found');
+      try {
+        validateDatabaseFormulaSchema(
+          (
+            await this.databasePropertyRepo.findByDatabaseId(databaseId, trx)
+          ).filter((item) => item.id !== propertyId),
+        );
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : 'Property is used by a formula',
+        );
+      }
       await this.databasePropertyRepo.softDeleteProperty(propertyId, trx);
       return current;
     });
@@ -2168,18 +2286,40 @@ export class DatabaseService {
     await this.assertCanReadDatabasePages(user, database.spaceId);
     await this.assertCanAccessDatabasePage(database, workspaceId, user);
 
-    if (query?.viewState || query?.neighborOf) {
+    if (this.viewQuery) {
       const input = await this.getViewQueryInput(
         database,
         user,
         workspaceId,
-        query.viewState ?? {},
-        query.groupKey,
-        query.viewId,
+        query?.viewState ?? {
+          filters: this.parseRowsFilters(query?.filters),
+          sorts:
+            query?.sortPropertyId || query?.sortField === 'title'
+              ? [
+                  {
+                    propertyId: query.sortPropertyId ?? 'title',
+                    direction: query.sortDirection ?? 'asc',
+                  },
+                ]
+              : [],
+        },
+        query?.groupKey,
+        query?.viewId,
       );
-      const result = await this.viewQuery.list(input, query);
+      const result = await this.viewQuery.list(
+        {
+          ...input,
+          positionDirection:
+            query?.sortDirection === 'desc' && query?.sortField === 'position'
+              ? 'desc'
+              : 'asc',
+        },
+        query ?? {},
+      );
       const users = new Set(
-        input.properties.filter((p) => p.type === 'user').map((p) => p.id),
+        input.properties
+          .filter((p) => p.type === 'user' || p.type === 'updated_by')
+          .map((p) => p.id),
       );
       const items = await this.enrichRowsWithUserNames(
         result.items,
@@ -2191,7 +2331,7 @@ export class DatabaseService {
         ...row,
         canWrite: writable.has(row.pageId),
       }));
-      return query.limit ? { ...result, items: projected } : projected;
+      return query?.limit ? { ...result, items: projected } : projected;
     }
 
     const properties =
@@ -2480,6 +2620,40 @@ export class DatabaseService {
       this.databaseCellRepo.findByDatabaseAndPage(database.id, pageId),
     ]);
 
+    if (this.viewQuery) {
+      const input = await this.getViewQueryInput(
+        database,
+        user,
+        workspaceId,
+        {},
+      );
+      const result = await this.viewQuery.list(
+        {
+          ...input,
+          readablePageIds: input.readablePageIds.filter((id) => id === pageId),
+        },
+        { limit: 1 },
+      );
+      const enriched = await this.enrichRowsWithUserNames(
+        result.items,
+        new Set(
+          properties
+            .filter(
+              (property) =>
+                property.type === 'user' || property.type === 'updated_by',
+            )
+            .map((property) => property.id),
+        ),
+        workspaceId,
+      );
+      return {
+        database,
+        row,
+        properties: this.normalizeProperties(properties),
+        cells: enriched[0]?.cells ?? [],
+      };
+    }
+
     return {
       database,
       row,
@@ -2551,28 +2725,50 @@ export class DatabaseService {
               'Database cell property does not belong to this database',
             );
           }
+          const type = propertyById.get(cell.propertyId).type;
+          if (isDatabaseComputedProperty(type))
+            throw new BadRequestException('Computed properties are read-only');
+          if (
+            (type === 'file' ||
+              (type === 'user' &&
+                (Array.isArray(cell.value) ||
+                  Array.isArray(
+                    this.extractCurrentCellValue(
+                      existingCells.find(
+                        (item) => item.propertyId === cell.propertyId,
+                      )?.value,
+                    ),
+                  )))) &&
+            dto.contractVersion !== 4
+          )
+            throw new BadRequestException(
+              'Refresh the client before editing this property',
+            );
+          if (type === 'file' && options?.requireExistingRow)
+            throw new BadRequestException('AI cannot modify file properties');
+          if (type === 'file' && cell.attachmentId)
+            throw new BadRequestException(
+              'Use the file list for this property',
+            );
         }
 
         const currentUserIds = new Map(
           existingCells.map((cell) => [
             cell.propertyId,
-            this.extractUserIdFromCellValue(cell.value),
+            databaseUserIds(cell.value),
           ]),
         );
         const newUserIds: string[] = [];
         for (const cell of dto.cells) {
           if (propertyById.get(cell.propertyId)?.type !== 'user') continue;
-          const nextUserId =
-            cell.operation === 'delete'
-              ? null
-              : this.extractUserIdFromCellValue(cell.value);
-          if (
-            nextUserId &&
-            nextUserId !== currentUserIds.get(cell.propertyId)
-          ) {
-            newUserIds.push(nextUserId);
-          }
-          currentUserIds.set(cell.propertyId, nextUserId);
+          const nextIds =
+            cell.operation === 'delete' ? [] : databaseUserIds(cell.value);
+          newUserIds.push(
+            ...nextIds.filter(
+              (id) => !(currentUserIds.get(cell.propertyId) ?? []).includes(id),
+            ),
+          );
+          currentUserIds.set(cell.propertyId, nextIds);
         }
         if (newUserIds.length > 0) {
           const assignableIds =
@@ -2632,10 +2828,10 @@ export class DatabaseService {
             cell.expectedRevision !== (previousCell?.revision ?? 0)
           )
             throw new ConflictException('Database cell was changed');
-          const previousUserId =
+          const previousUserIds =
             property?.type === 'user'
-              ? this.extractUserIdFromCellValue(previousCell?.value)
-              : null;
+              ? databaseUserIds(previousCell?.value)
+              : [];
           const propertyType = property
             ? this.normalizePropertyType(property.type)
             : null;
@@ -2705,6 +2901,26 @@ export class DatabaseService {
               'read',
             );
           }
+          if (propertyType === 'file') {
+            const attachmentIds = (
+              (normalizedValue ?? []) as Array<{ attachmentId: string }>
+            ).map((file) => file.attachmentId);
+            if (attachmentIds.length) {
+              const files = await trx
+                .selectFrom('attachments')
+                .select('id')
+                .where('id', 'in', attachmentIds)
+                .where('workspaceId', '=', workspaceId)
+                .where('pageId', '=', pageId)
+                .where('deletedAt', 'is', null)
+                .forShare()
+                .execute();
+              if (files.length !== attachmentIds.length)
+                throw new BadRequestException(
+                  'File must be an active attachment of this row page',
+                );
+            }
+          }
           const upserted = await this.databaseCellRepo.upsertCell(
             {
               databaseId,
@@ -2720,12 +2936,9 @@ export class DatabaseService {
           );
 
           if (property?.type === 'user') {
-            const nextUserId = this.extractUserIdFromCellValue(normalizedValue);
-            if (
-              nextUserId &&
-              nextUserId !== previousUserId &&
-              nextUserId !== user.id
-            ) {
+            for (const nextUserId of databaseUserIds(normalizedValue).filter(
+              (id) => !previousUserIds.includes(id) && id !== user.id,
+            )) {
               await this.notifyDatabaseUserAssignment(
                 {
                   eventId: uuid7(),
@@ -2761,13 +2974,24 @@ export class DatabaseService {
         }
 
         if (cellChanges.length > 0) {
+          await trx
+            .updateTable('databaseRows')
+            .set({ updatedAt: new Date(), updatedById: user.id })
+            .where('id', '=', row.id)
+            .execute();
           await this.databaseSearchProjection?.refreshRow(
             pageId,
             workspaceId,
             trx,
           );
         }
-        if (options?.trx && cellChanges.length) {
+        // File references must reach retained history before a cleared cell can
+        // commit, otherwise attachment cleanup can race the history debounce.
+        const rowHistoryRecorded =
+          cellChanges.length > 0 &&
+          (Boolean(options?.trx) ||
+            cellChanges.some((change) => change.propertyType === 'file'));
+        if (rowHistoryRecorded) {
           await this.pageHistoryRecorder.recordPageEvents({
             pageIds: [pageId],
             actorId: user.id,
@@ -2776,7 +3000,7 @@ export class DatabaseService {
             trx,
           });
         }
-        return { row, cells, cellChanges };
+        return { row, cells, cellChanges, rowHistoryRecorded };
       },
       options?.trx,
     );
@@ -2787,6 +3011,7 @@ export class DatabaseService {
         rowPageId: pageId,
         actorId: user.id,
         changeType: 'database.row.cells.updated',
+        rowHistoryRecorded: mutation.rowHistoryRecorded,
         changeData: {
           databaseId: database.id,
           rowContext: {
@@ -2850,7 +3075,7 @@ export class DatabaseService {
         await this.batchUpdateRowCells(
           databaseId,
           rowOperation.pageId,
-          { cells },
+          { cells, contractVersion: dto.contractVersion },
           user,
           workspaceId,
         );

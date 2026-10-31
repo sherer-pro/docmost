@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { resolveComputedDatabaseRows } from '@docmost/db/utils/database-resolved-cells';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { DatabaseRepo } from '@docmost/db/repos/database/database.repo';
 import { DatabasePropertyRepo } from '@docmost/db/repos/database/database-property.repo';
@@ -463,9 +464,20 @@ export class RagContentExportService {
       return [
         row.page?.title || row.pageTitle || '',
         ...properties.map((property) =>
-          ['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(
-            property.type,
-          )
+          [
+            'number',
+            'date',
+            'multi_select',
+            'url',
+            'email',
+            'phone',
+            'formula',
+            'file',
+            'created_at',
+            'updated_at',
+            'updated_by',
+            'user',
+          ].includes(property.type)
             ? formatDatabaseValue(
                 property.type,
                 valueByPropertyId.get(property.id),
@@ -508,9 +520,7 @@ export class RagContentExportService {
     // page. Apply the creator's current page ACL before loading row content or
     // returning cell values.
     const readablePageIds = await this.getReadablePageIds(scope);
-    const rowList = selectedRows.filter((row) =>
-      readablePageIds.has(row.pageId),
-    );
+    let rowList = selectedRows.filter((row) => readablePageIds.has(row.pageId));
 
     const rowPageIds = rowList.map((row) => row.pageId);
     const rowPages =
@@ -538,6 +548,14 @@ export class RagContentExportService {
     const properties = rowList[0]?.databaseId
       ? await this.databasePropertyRepo.findByDatabaseId(rowList[0].databaseId)
       : [];
+    if (rowList.length)
+      rowList = await resolveComputedDatabaseRows(
+        this.db,
+        rowList,
+        properties,
+        rowList[0].databaseId,
+        scope.workspace.id,
+      );
     const customFields = rowList.map((row) =>
       this.buildCustomFields(
         rowPageMap.get(row.pageId)?.settings,
@@ -567,6 +585,9 @@ export class RagContentExportService {
       const projectionBaseUpdatedAt = new Date(
         Math.max(
           updatedAt.getTime(),
+          ...properties.map((property) =>
+            property.updatedAt ? new Date(property.updatedAt).getTime() : 0,
+          ),
           ...(row.cells ?? []).map((cell: { updatedAt?: Date | string }) =>
             cell.updatedAt ? new Date(cell.updatedAt).getTime() : 0,
           ),

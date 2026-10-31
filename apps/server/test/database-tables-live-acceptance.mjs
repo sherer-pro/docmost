@@ -8,6 +8,7 @@ import path from 'node:path';
 import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
 import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
 import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
+import { runAdvancedDatabaseAcceptance } from './database-advanced-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
 
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -68,7 +69,12 @@ export async function runLiveAcceptance({
   };
   const test = async (name, check) => {
     const started = performance.now();
-    await check();
+    try {
+      await check();
+    } catch (error) {
+      report.tests.push({ name, passed: false, ms: performance.now() - started });
+      throw new Error(`${name}: ${error.message}`, { cause: error });
+    }
     report.tests.push({ name, passed: true, ms: performance.now() - started });
     console.log(`Passed: ${name}`);
   };
@@ -332,8 +338,9 @@ export async function runLiveAcceptance({
         'PATCH',
         { cells },
       );
-    await runEmptyTemplateAcceptance({ api, fetchApi, actors, space, parent, fixture, test, sql });
-    if (!process.argv.includes('--templates-only')) {
+    if (!process.argv.includes('--advanced-only')) await runEmptyTemplateAcceptance({ api, fetchApi, actors, space, parent, fixture, test, sql });
+    if (!process.argv.includes('--templates-only')) await runAdvancedDatabaseAcceptance({ api, fetchApi, actors, space, parent, sql, fixture, test });
+    if (!process.argv.includes('--templates-only') && !process.argv.includes('--advanced-only')) {
     await test('real ACL before pagination and global summaries', async () => {
       const page = await rows(actors.editor);
       assert.equal(page.items.length, 100);
@@ -878,7 +885,7 @@ export async function runLiveAcceptance({
             .slice(2)
             .filter(
               (arg) =>
-                !arg.startsWith('--subnet=') && arg !== '--skip-postgres' && arg !== '--templates-only',
+                !arg.startsWith('--subnet=') && arg !== '--skip-postgres' && arg !== '--templates-only' && arg !== '--advanced-only',
             ),
         ],
         {

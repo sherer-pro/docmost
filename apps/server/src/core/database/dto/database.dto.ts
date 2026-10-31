@@ -273,6 +273,18 @@ class SelectPropertyOptionDto {
 
 class DatabasePropertySettingsDto {
   @IsOptional()
+  @IsIn([1])
+  languageVersion?: 1;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  expression?: string;
+
+  @IsOptional()
+  @IsIn(['number', 'text', 'date', 'checkbox'])
+  resultType?: 'number' | 'text' | 'date' | 'checkbox';
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_SELECT_PROPERTY_OPTIONS)
   @ArrayUnique((option: SelectPropertyOptionDto) => option.value)
@@ -300,6 +312,9 @@ class DatabasePropertySettingsDto {
  * DTO for creating a property (column) in the database.
  */
 export class CreateDatabasePropertyDto {
+  @IsOptional()
+  @IsIn([4])
+  contractVersion?: 4;
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
@@ -322,6 +337,9 @@ export class CreateDatabasePropertyDto {
  * DTO for updating a database property.
  */
 export class UpdateDatabasePropertyDto {
+  @IsOptional()
+  @IsIn([4])
+  contractVersion?: 4;
   @IsOptional()
   @IsString()
   @IsNotEmpty()
@@ -402,6 +420,9 @@ export class BatchUpdateDatabaseCellValueDto {
  * DTO for batch updating row cells.
  */
 export class BatchUpdateDatabaseCellsDto {
+  @IsOptional()
+  @IsIn([4])
+  contractVersion?: 4;
   @IsArray()
   @ArrayMaxSize(MAX_DATABASE_BATCH_CELLS)
   @ValidateNested({ each: true })
@@ -426,6 +447,9 @@ export class BatchUpdateDatabaseRowDto {
 }
 
 export class BatchUpdateDatabaseRowsDto {
+  @IsOptional()
+  @IsIn([4])
+  contractVersion?: 4;
   @IsArray()
   @ArrayMaxSize(MAX_DATABASE_BATCH_ROWS)
   @ValidateNested({ each: true })

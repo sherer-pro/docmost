@@ -248,7 +248,7 @@ export class KnowledgeProjectionService {
           ? `## Database fields\n\n${namedCells
               .map(
                 (cell) =>
-                  `- ${cell.propertyName}: ${(['number', 'date', 'multi_select', 'url', 'email', 'phone'].includes(cell.propertyType) ? formatDatabaseValue(cell.propertyType, cell.value, properties.find((property) => property.id === cell.propertyId)?.settings) : this.stringifyValue(cell.value)) || 'Not set'}`,
+                  `- ${cell.propertyName}: ${(['number', 'date', 'multi_select', 'url', 'email', 'phone', 'formula', 'file', 'created_at', 'updated_at', 'updated_by', 'user'].includes(cell.propertyType) ? formatDatabaseValue(cell.propertyType, cell.value, properties.find((property) => property.id === cell.propertyId)?.settings) : this.stringifyValue(cell.value)) || 'Not set'}`,
               )
               .join('\n')}`
           : '',

@@ -91,7 +91,14 @@ import {
   remapDatabaseViewConfig,
 } from '../../database/utils/database-copy.utils';
 import { QueueOutboxService } from '../../../integrations/queue/outbox/queue-outbox.service';
-import type { TemplateKind } from '@docmost/api-contract';
+import {
+  databaseFileIds,
+  databaseUserIds,
+  isDatabaseComputedProperty,
+  remapDatabaseFormulaSettings,
+  remapDatabaseAttachmentReferences,
+  type TemplateKind,
+} from '@docmost/api-contract';
 import { PageTemplatePolicyService } from '../transclusion/page-template-policy.service';
 
 interface IHistoryUserRef {
@@ -201,21 +208,14 @@ export class PageService {
       );
       for (const cell of cells) {
         if (!userPropertyIds.has(cell.propertyId)) continue;
-        const value = cell.value as unknown;
-        let userId: string | null = null;
-        if (typeof value === 'string') {
-          try {
-            const parsed = JSON.parse(value);
-            userId = typeof parsed === 'string' ? parsed : parsed?.id;
-          } catch {
-            userId = value;
-          }
-        } else if (value && typeof value === 'object' && 'id' in value) {
-          userId = (value as { id?: unknown }).id as string;
-        }
-        if (typeof userId === 'string' && userId.trim()) {
-          referencedIds.add(userId.trim());
-        }
+        databaseUserIds(cell.value).forEach((id) => referencedIds.add(id));
+      }
+      if (properties.some((property) => property.type === 'updated_by')) {
+        const actor =
+          new Date(page.updatedAt).getTime() > new Date(row.updatedAt).getTime()
+            ? page.lastUpdatedById
+            : row.updatedById;
+        if (actor) referencedIds.add(actor);
       }
     }
 
@@ -275,6 +275,7 @@ export class PageService {
   }
 
   private async duplicateLinkedDatabases(params: {
+    attachmentIds?: Map<string, string>;
     pageMap: Map<string, CopyPageMapEntry>;
     copiedPageByOriginalId: CopiedPageByOriginalId;
     spaceId: string;
@@ -350,7 +351,9 @@ export class PageService {
               workspaceId: property.workspaceId,
               name: property.name,
               type: property.type,
-              settings: property.settings as never,
+              settings: (property.type === 'formula'
+                ? remapDatabaseFormulaSettings(property.settings, propertyIdMap)
+                : property.settings) as never,
               position: property.position,
               creatorId: params.authUser.id,
             })),
@@ -395,7 +398,8 @@ export class PageService {
       const copiedCells = cells.filter(
         (cell) =>
           copiedRowPageIds.has(cell.pageId) &&
-          propertyIdMap.has(cell.propertyId),
+          propertyIdMap.has(cell.propertyId) &&
+          !isDatabaseComputedProperty(propertyTypeById.get(cell.propertyId)),
       );
 
       if (copiedCells.length > 0) {
@@ -408,12 +412,18 @@ export class PageService {
               workspaceId: cell.workspaceId,
               pageId: params.pageMap.get(cell.pageId)!.newPageId,
               propertyId: propertyIdMap.get(cell.propertyId)!,
-              value: remapDatabasePageReference(
-                cell.value,
-                propertyTypeById.get(cell.propertyId),
-                duplicatedPageIdMap,
+              value: remapDatabaseAttachmentReferences(
+                remapDatabasePageReference(
+                  cell.value,
+                  propertyTypeById.get(cell.propertyId),
+                  duplicatedPageIdMap,
+                ),
+                params.attachmentIds ?? new Map(),
               ) as never,
-              attachmentId: cell.attachmentId,
+              attachmentId: cell.attachmentId
+                ? (params.attachmentIds?.get(cell.attachmentId) ??
+                  cell.attachmentId)
+                : null,
               createdById: params.authUser.id,
               updatedById: params.authUser.id,
             })),
@@ -473,6 +483,7 @@ export class PageService {
   }
 
   private async duplicateRowsInExistingDatabases(params: {
+    attachmentIds?: Map<string, string>;
     pageMap: Map<string, CopyPageMapEntry>;
     authUser: User;
     trx: KyselyTransaction;
@@ -562,8 +573,10 @@ export class PageService {
         properties.map((property) => [property.id, property.type]),
       );
       const activePropertyIds = new Set(propertyTypeById.keys());
-      const cellsToCopy = cells.filter((cell) =>
-        activePropertyIds.has(cell.propertyId),
+      const cellsToCopy = cells.filter(
+        (cell) =>
+          activePropertyIds.has(cell.propertyId) &&
+          !isDatabaseComputedProperty(propertyTypeById.get(cell.propertyId)),
       );
 
       if (cellsToCopy.length === 0) {
@@ -579,12 +592,18 @@ export class PageService {
             workspaceId: cell.workspaceId,
             pageId: params.pageMap.get(cell.pageId)!.newPageId,
             propertyId: cell.propertyId,
-            value: remapDatabasePageReference(
-              cell.value,
-              propertyTypeById.get(cell.propertyId),
-              duplicatedPageIdMap,
+            value: remapDatabaseAttachmentReferences(
+              remapDatabasePageReference(
+                cell.value,
+                propertyTypeById.get(cell.propertyId),
+                duplicatedPageIdMap,
+              ),
+              params.attachmentIds ?? new Map(),
             ) as never,
-            attachmentId: cell.attachmentId,
+            attachmentId: cell.attachmentId
+              ? (params.attachmentIds?.get(cell.attachmentId) ??
+                cell.attachmentId)
+              : null,
             createdById: params.authUser.id,
             updatedById: params.authUser.id,
           })),
@@ -1840,6 +1859,28 @@ export class PageService {
       }
     }
 
+    const rowFileCells = await this.db
+      .selectFrom('databaseCells')
+      .select(['pageId', 'value', 'attachmentId'])
+      .where('workspaceId', '=', rootPage.workspaceId)
+      .where(
+        'pageId',
+        'in',
+        pages.map((page) => page.id),
+      )
+      .where('deletedAt', 'is', null)
+      .execute();
+    for (const cell of rowFileCells)
+      for (const id of [
+        ...databaseFileIds(cell.value),
+        ...(cell.attachmentId ? [cell.attachmentId] : []),
+      ]) {
+        const owners =
+          referencingPageIdsByAttachmentId.get(id) ?? new Set<string>();
+        owners.add(cell.pageId);
+        referencingPageIdsByAttachmentId.set(id, owners);
+      }
+
     const referencedAttachmentIds = [
       ...referencingPageIdsByAttachmentId.keys(),
     ];
@@ -2011,6 +2052,12 @@ export class PageService {
     await executeTx(this.db, async (trx) => {
       await trx.insertInto('pages').values(insertablePages).execute();
       await this.duplicateLinkedDatabases({
+        attachmentIds: new Map(
+          attachmentMappings.map((mapping) => [
+            mapping.oldAttachmentId,
+            mapping.newAttachmentId,
+          ]),
+        ),
         pageMap,
         copiedPageByOriginalId,
         spaceId,
@@ -2019,6 +2066,12 @@ export class PageService {
       });
       if (isDuplicateInSameSpace) {
         await this.duplicateRowsInExistingDatabases({
+          attachmentIds: new Map(
+            attachmentMappings.map((mapping) => [
+              mapping.oldAttachmentId,
+              mapping.newAttachmentId,
+            ]),
+          ),
           pageMap,
           authUser,
           trx,

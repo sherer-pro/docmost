@@ -32,9 +32,16 @@ complete; final release acceptance and CI remain pending.
   idempotency, current-access and source-revision checks, attachment compensation
   and an atomic persistence receipt. Native save-queue recovery is patched in
   Hocuspocus 3.4.4. Database descriptions and record panels do not offer this action.
+- System creation/modification fields, multiple participants, row-owned file
+  properties and a bounded row formula language. Views, filters, sorting,
+  aggregates, CSV, AI and RAG use the shared resolved values; import and
+  duplication remap property/file references. File-cell history commits with
+  its mutation and prevents premature attachment cleanup. Mutation contract 4
+  protects advanced values from older clients. See [database values](../DATABASE_TABLES.md).
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
-`f4b250be` and `85a71162`; the record/template package follows them on local `main`. These packages have not been pushed or
+`f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
+The advanced-property package is under final local acceptance. These packages have not been pushed or
 deployed as part of this task.
 
 ## Remaining required work
@@ -44,8 +51,6 @@ deployed as part of this task.
   Add natural-language filter challenges that start from a different current
   view. Record actual transmitted RAG evidence and complete human-reviewed
   quality acceptance; database tool-trace correctness alone is insufficient.
-- Database system fields, multiple participants, file properties and a bounded
-  formula language with consistent query/export/AI semantics.
 - Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
   read-only user OAuth for inbound MCP.
 - Check the applicability of the listed upstream fixes before changing the
@@ -113,6 +118,45 @@ Local, ignored receipts are under `artifacts/`:
 - `record-template-final-editor-ext.log`: all 127 shared editor tests passed.
 - `record-template-overview-contracts.log`: the approved English/Russian
   enhancement overviews passed their source-backed parity contract.
+- `database-advanced-verify-full.log`: contracts, maintenance, build, lint,
+  282 backend suites (2429 tests), 193 frontend files (937 tests), 79 backend
+  security suites (972 tests) and 78 frontend security tests passed. Lint retained
+  41 warnings; Jest also reported a worker teardown warning despite successful tests.
+- `database-advanced-final-verify-full-accepted.log`: the repeated complete gate
+  passed after the editor-session and deletion-virtualization fixes, with the
+  same 2429 backend, 937 frontend, 972 backend-security and 78 frontend-security
+  tests. Lint reported 41 warnings and no errors. The teardown warning did not
+  recur with `JEST_MAX_WORKERS=2`. This does not replace browser acceptance.
+- `database-advanced-atomic-postgres.log`: 27 PostgreSQL cases passed, including
+  rollback of both a file mutation and its history receipt after a history failure.
+- `database-advanced-subtree-http.log`: live values, full CSV, synchronous history
+  retention, portable archives, queued import and attachment duplication passed.
+- `database-advanced-final-native-actions.log`: nine desktop/light and 320/390 px
+  mobile/dark cases passed across Chromium, Firefox and WebKit, including real
+  file downloads by a reader. The mobile title-width conflict was reproduced
+  with a pointer hit test and corrected without increasing assertion timeouts.
+- `database-advanced-isolated-full-matrix.log`: the preceding full matrix exposed
+  native clipboard fixture differences, Service Worker interception, a stale
+  blur closing a newer editor and virtualization disappearing after an
+  optimistic deletion. Each browser now has a fresh PostgreSQL/Redis/application
+  fixture; fault injection alone blocks Service Workers.
+- `database-advanced-virtualization-browser-fixed.log`: both undo and navigation
+  after deletion passed in all three engines (six cases). The reproduced
+  100-to-99-row transition previously increased rendered cells from 580 to 1980;
+  the corrected path preserves 580 cells without changing the six-second undo
+  grace or the five-second navigation assertion.
+- `database-advanced-edit-session-webkit.log` and
+  `database-advanced-webkit-fault-routing-fixed.log`: date reopening, delayed
+  saves and all three fault-injection cases passed with the original assertions.
+- `database-advanced-final-accepted-full-matrix.log`: final full acceptance is
+  still incomplete. Chromium passed 38 cases. Firefox has exposed footnote
+  cursor placement and record-opening failures that are under investigation;
+  the final result must not be inferred from focused checks.
+- `database-advanced-final-graph.log` and
+  `database-advanced-final-graph-import.log`: AST graph updated to 17269 nodes and
+  49993 edges. The operator-approved AgentMemory import passed its repeated
+  idempotency check. Shared import limits admit 5000 nodes and 13191 edges;
+  the complete graph remains in the local Graphify artifact.
 
 ## Model benchmark connection
 
@@ -131,7 +175,13 @@ database quality runner records actual durable Agent tool steps. Its second
 six-case calibration produced six correct tool traces; human answer review is
 pending. The extended version 3 corpus contains 160 database cases (96 tuning,
 64 holdout), including actual null cells and prompt injection. The complete
-tuning capture is in progress; this is not a measured or accepted holdout result.
+tuning capture is incomplete: 87 of 96 cases were recorded, including five
+`provider_unavailable` outcomes. Human review and holdout remain pending. The
+operator subsequently selected `http://127.0.0.1:1234`; its model list confirms
+the same 12B model is loaded. `ai-database-lm-studio-1234-calibration.log` records
+two successful real-model traces (totals and pagination, approximately 6.4 and
+15.8 seconds). No model or user workload was restarted or reconfigured. This
+calibration is not corpus or human-reviewed quality acceptance.
 
 These receipts establish only the checks actually completed for this checkpoint;
 they do not substitute for the remaining roadmap features or final release gate.

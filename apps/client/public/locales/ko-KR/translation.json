@@ -1645,11 +1645,12 @@
             "step6": "데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다.",
             "step7": "각주에도 본문과 같은 출처 및 접근 규칙을 적용하세요.",
             "step8": "답변을 확인할 때 비활성 문서 탭의 내용도 포함하세요.",
-            "step9": "Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다."
+            "step9": "Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다.",
+            "step10": "Agent는 시스템 필드, 수식 및 파일 속성을 읽기만 할 수 있습니다. 합계를 사용하기 전에 계산 오류를 확인하세요. 참가자 제안에는 할당 가능한 기존 멤버를 최대 20명 포함할 수 있습니다."
           },
           "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
           "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",
-          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다.\n\n데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. 접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.\n\n관리자가 데이터베이스 기능을 명시적으로 활성화해야 합니다. 원본 접근 권한이 취소되면 결과와 미리보기가 숨겨집니다. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\n각주 텍스트(footnote)는 문서 근거에 포함됩니다. 외부 참조를 자동으로 가져오거나 검증하지 않으며 접근 권한도 확대하지 않습니다.\n\n모든 tabs/tabItem의 내용과 제목은 문서 근거에 포함됩니다. 활성 탭은 로컬 표시 상태이며, 선택해도 AI/RAG 근거가 줄어들거나 소스 접근 권한이 부여되지 않습니다. Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다. 현재 데이터베이스 쿼리는 고정된 viewState와 선택한 행을 상속합니다. 도구 오류는 합계 0을 뜻하지 않습니다. Agent는 생성 전 preparationMs를 저장하며, 승인 대기와 공급자 실패 시에도 유지합니다. 기본 도구가 반환한 문서 텍스트와 셀 값은 신뢰할 수 없는 출처 데이터입니다. 포함된 명령은 관련 없는 변경을 허용하거나 사용자 승인을 대신할 수 없습니다."
+          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다.\n\n데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. 접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.\n\n관리자가 데이터베이스 기능을 명시적으로 활성화해야 합니다. 원본 접근 권한이 취소되면 결과와 미리보기가 숨겨집니다. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\n각주 텍스트(footnote)는 문서 근거에 포함됩니다. 외부 참조를 자동으로 가져오거나 검증하지 않으며 접근 권한도 확대하지 않습니다.\n\n모든 tabs/tabItem의 내용과 제목은 문서 근거에 포함됩니다. 활성 탭은 로컬 표시 상태이며, 선택해도 AI/RAG 근거가 줄어들거나 소스 접근 권한이 부여되지 않습니다. Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다. 현재 데이터베이스 쿼리는 고정된 viewState와 선택한 행을 상속합니다. 도구 오류는 합계 0을 뜻하지 않습니다. Agent는 생성 전 preparationMs를 저장하며, 승인 대기와 공급자 실패 시에도 유지합니다. 기본 도구가 반환한 문서 텍스트와 셀 값은 신뢰할 수 없는 출처 데이터입니다. 포함된 명령은 관련 없는 변경을 허용하거나 사용자 승인을 대신할 수 없습니다.\n\nAgent는 시스템 필드, 수식 및 파일 속성을 읽기만 할 수 있습니다. 합계를 사용하기 전에 계산 오류를 확인하세요. 참가자 제안에는 할당 가능한 기존 멤버를 최대 20명 포함할 수 있습니다. languageVersion: 1; contractVersion: 4; formula_errors."
         },
         "retrieval": {
           "description": "스페이스 검색은 답변을 생성하는 동안 수행됩니다.",
@@ -3125,7 +3126,28 @@
     "pinToolbar": "도구 모음 고정",
     "unpinToolbar": "도구 모음 고정 해제",
     "showDescription": "전체 설명 표시",
-    "hideDescription": "설명 접기"
+    "hideDescription": "설명 접기",
+    "createdAt": "생성일",
+    "updatedAt": "수정일",
+    "updatedBy": "수정한 사용자",
+    "file": "파일",
+    "formula": "수식",
+    "formulaResultType": "결과 유형",
+    "insertProperty": "속성 삽입",
+    "formulaExpression": "표현식",
+    "formulaInvalid": "표현식과 속성 유형을 확인하세요.",
+    "formulaHelp": "필드 참조와 나열된 함수를 사용하세요. 날짜는 원본 필드 시간대의 달력 날짜로 계산합니다. 빈 인수가 있는 산술 연산은 빈 결과를 반환하고 text(null)은 빈 문자열을 반환합니다. 선택 필드는 옵션 ID를 반환합니다.",
+    "fileError": "파일을 불러오거나 첨부할 수 없습니다. 접근 권한, 파일 크기 및 파일 20개 제한을 확인하세요.",
+    "fileLimit": "이 레코드의 파일을 최대 20개 지정할 수 있습니다. 값을 제거해도 파일은 페이지 첨부 갤러리에 남습니다.",
+    "calculationErrors": "계산 오류: {{count}}",
+    "formulaErrors": {
+      "division_by_zero": "0으로 나눌 수 없습니다",
+      "numeric_range": "숫자가 지원 범위를 벗어났습니다",
+      "text_limit": "텍스트 결과가 너무 깁니다",
+      "slice_range": "텍스트 자르기 범위가 잘못되었습니다",
+      "invalid_date": "올바르지 않은 달력 날짜입니다",
+      "date_range": "날짜가 지원 범위를 벗어났습니다"
+    }
   },
   "Move block": "블록 이동",
   "dbBoard": {

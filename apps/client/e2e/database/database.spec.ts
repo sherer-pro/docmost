@@ -191,13 +191,16 @@ test("TSV preserves blank rows and retries only failed operations", async ({
   await cell.evaluate((element) => {
     const transfer = new DataTransfer();
     transfer.setData("text", "first\n\nthird");
-    element.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: transfer,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+    const event = new ClipboardEvent("paste", {
+      clipboardData: transfer,
+      bubbles: true,
+      cancelable: true,
+    });
+    // Firefox strips constructor-supplied data from an untrusted paste event.
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    if (event.clipboardData?.getData("text") !== transfer.getData("text"))
+      throw new Error("The synthetic clipboard fixture lost its payload");
+    element.dispatchEvent(event);
   });
   await expect(
     page.getByText("1 rows failed. Successful rows were saved."),

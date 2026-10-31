@@ -1,4 +1,5 @@
 import type { DatabasePropertyType } from "./database-property-type";
+import type { DatabaseFormulaSettings } from "./database-formula";
 
 export enum DatabaseExportFormat {
   Docmost = "docmost",
@@ -21,6 +22,7 @@ export interface DatabaseSelectPropertySettings {
 export type DatabasePropertySettings =
   | DatabaseSelectPropertySettings
   | DatabaseNumberPropertySettings
+  | DatabaseFormulaSettings
   | Record<string, never>;
 
 export interface DatabaseNumberPropertySettings {
@@ -33,6 +35,10 @@ export interface DatabaseDateValue {
   start: string;
   end?: string;
   timeZone?: string;
+}
+
+export interface DatabaseFileValue {
+  attachmentId: string;
 }
 
 export type DatabaseFilterOperator =
@@ -88,11 +94,13 @@ export interface DatabaseViewState {
 export interface DatabaseSummary {
   count: number;
   values: Record<string, number | string | null>;
+  errors?: Record<string, number>;
   groups: Array<{
     key: string;
     label: string;
     count: number;
     values: Record<string, number | string | null>;
+    errors?: Record<string, number>;
   }>;
 }
 
@@ -113,12 +121,14 @@ export interface UpdateDatabasePayload {
 }
 
 export interface CreateDatabasePropertyPayload {
+  contractVersion?: 4;
   name: string;
   type: DatabasePropertyType;
   settings?: DatabasePropertySettings;
 }
 
 export interface UpdateDatabasePropertyPayload {
+  contractVersion?: 4;
   name?: string;
   type?: DatabasePropertyType;
   position?: number;
@@ -150,6 +160,7 @@ export interface DatabaseCellBatchOperation {
 }
 
 export interface BatchUpdateDatabaseCellsPayload {
+  contractVersion?: 4;
   cells: DatabaseCellBatchOperation[];
 }
 
@@ -160,6 +171,7 @@ export interface BatchUpdateDatabaseRowOperation {
 }
 
 export interface BatchUpdateDatabaseRowsPayload {
+  contractVersion?: 4;
   rows: BatchUpdateDatabaseRowOperation[];
 }
 

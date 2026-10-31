@@ -153,7 +153,9 @@ export class PageAttachmentsService {
         .selectFrom('pageHistory')
         .select('id')
         .where('workspaceId', '=', user.workspaceId)
-        .where(sql<boolean>`content::text ilike ${pattern}`)
+        .where(
+          sql<boolean>`(content::text ilike ${pattern} or change_data::text ilike ${pattern})`,
+        )
         .executeTakeFirst();
       const templates = await trx
         .selectFrom('pageTemplateRevisions')

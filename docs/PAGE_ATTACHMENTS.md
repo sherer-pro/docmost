@@ -21,8 +21,12 @@ by that page. A reader, ordinary writer or container-page editor without source
 access cannot remove another page's files.
 
 Removal locks the page and attachment metadata and checks references in all
-workspace pages (including trash), page history, template revisions and database
-cells. A reference returns `409 attachment_in_use`, including files referenced
+workspace pages (including trash), page history content and change data, template
+revisions and database cells. File-property mutations persist their row history
+in the same transaction as the cells, so clearing a file cannot open a gap before
+the ordinary history aggregation window expires. A history write failure rolls
+back the cell mutation. The database root receives only its access-safe summary.
+A reference returns `409 attachment_in_use`, including files referenced
 only by a historical version. This conservative check may retain an unused file
 if its identifier occurs in text. History is never rewritten to make it deletable.
 The existing duplicate-copy pin check also remains authoritative.

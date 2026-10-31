@@ -35,6 +35,8 @@ const report = {
   scope: quality
     ? 'ai-database-quality'
     : process.argv.includes('--templates-only') ? 'targeted-templates'
+    : process.argv.includes('--postgres-only') ? 'postgres'
+    : process.argv.includes('--advanced-only') ? 'targeted-database-values'
     : process.argv.includes('--api-only')
       ? 'api'
       : process.argv.includes('--startup-only')
@@ -303,6 +305,7 @@ try {
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&
     !process.argv.includes('--templates-only') &&
+    !process.argv.includes('--advanced-only') &&
     !quality
   ) {
     const jest = require.resolve('jest/bin/jest');
@@ -329,7 +332,7 @@ try {
       passed: true,
     });
   }
-  if (!process.argv.includes('--startup-only')) {
+  if (!process.argv.includes('--startup-only') && !process.argv.includes('--postgres-only')) {
     connection = postgres(env.DATABASE_URL, { max: 4, onnotice: () => {} });
     const acceptance = quality
       ? runDatabaseQuality

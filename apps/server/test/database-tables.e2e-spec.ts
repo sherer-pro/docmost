@@ -11,6 +11,7 @@ import { PostgresJSDialect } from 'kysely-postgres-js';
 import { postgres } from '../src/database/postgres-client';
 import { up as createDatabaseTables } from '../src/database/migrations/20260301T120000-databases';
 import { up as addViewRowOrder } from '../src/database/migrations/20261030T190000-database-view-row-order';
+import { up as addComputedProperties } from '../src/database/migrations/20261031T130000-database-computed-and-file-properties';
 import {
   up as addRevisions,
   down as removeRevisions,
@@ -53,6 +54,14 @@ suite('Database tables PostgreSQL acceptance', () => {
   let properties: DatabasePropertyRepo;
   let views: DatabaseViewRepo;
   let rowRepo: DatabaseRowRepo;
+  const recordPageEvents = jest.fn(async (input: any) => {
+    for (const pageId of input.pageIds) {
+      await input.trx
+        .insertInto('historyReceipts')
+        .values({ pageId, changeData: input.changeData })
+        .execute();
+    }
+  });
   const readable = new Set(ids.slice(100));
   let queryCount = 0;
   let baseline: { ms: number; queries: number };
@@ -109,7 +118,7 @@ suite('Database tables PostgreSQL acceptance', () => {
     await sql`create table spaces(id uuid primary key, workspace_id uuid, name text, slug text, description text, settings jsonb default '{}')`.execute(
       db,
     );
-    await sql`create table pages(id uuid primary key, title text, slug_id text, icon text, content jsonb, parent_page_id uuid, position text, workspace_id uuid, space_id uuid, settings jsonb default '{}', deleted_at timestamptz)`.execute(
+    await sql`create table pages(id uuid primary key, title text, slug_id text, icon text, content jsonb, parent_page_id uuid, position text, workspace_id uuid, space_id uuid, settings jsonb default '{}', deleted_at timestamptz, created_at timestamptz default now(), updated_at timestamptz default now(), last_updated_by_id uuid)`.execute(
       db,
     );
     await sql`create table labels(id uuid primary key, space_id uuid, name text)`.execute(
@@ -118,13 +127,19 @@ suite('Database tables PostgreSQL acceptance', () => {
     await sql`create table page_labels(page_id uuid, label_id uuid)`.execute(
       db,
     );
-    await sql`create table attachments(id uuid primary key)`.execute(db);
+    await sql`create table attachments(id uuid primary key, workspace_id uuid, page_id uuid, deleted_at timestamptz, file_name text, mime_type text, file_size bigint)`.execute(
+      db,
+    );
+    await sql`create table history_receipts(page_id uuid, change_data jsonb)`.execute(
+      db,
+    );
     await createDatabaseTables(db);
     await sql`alter table databases add column page_id uuid, add column description_content jsonb`.execute(
       db,
     );
     await addRevisions(db);
     await addViewRowOrder(db);
+    await addComputedProperties(db);
     await sql`create table ai_runs(id uuid primary key, user_id uuid, workspace_id uuid, space_id uuid, page_id uuid, database_context jsonb, status text, sequence integer default 1, heartbeat_at timestamptz, enqueued_at timestamptz, updated_at timestamptz)`.execute(
       db,
     );
@@ -270,7 +285,7 @@ suite('Database tables PostgreSQL acceptance', () => {
       } as any,
       {
         enqueuePageEvents: async () => {},
-        recordPageEvents: async () => {},
+        recordPageEvents,
       } as any,
       {} as any,
       db as any,
@@ -1435,4 +1450,488 @@ suite('Database tables PostgreSQL acceptance', () => {
         ),
       ).toEqual(original.value);
   }, 60_000);
+
+  it('evaluates row formulas consistently in values, filters, cursor sorting and full-view totals', async () => {
+    const selected = ids.slice(100, 115);
+    const original = await db
+      .selectFrom('databaseCells')
+      .select(['pageId', 'value'])
+      .where('databaseId', '=', databaseId)
+      .where('propertyId', '=', propertyIds[0])
+      .where('pageId', 'in', selected)
+      .execute();
+    const source = new Map(
+      original.map((cell) => [cell.pageId, Number(cell.value)]),
+    );
+    const formulaId = randomUUID();
+    const request: any = { ...input(), readablePageIds: selected };
+    request.properties.push({
+      id: formulaId,
+      type: 'formula',
+      settings: {
+        languageVersion: 1,
+        resultType: 'number',
+        expression: `if(gt(prop("${propertyIds[0]}"), 103), multiply(prop("${propertyIds[0]}"), 2), add(prop("${propertyIds[0]}"), 1))`,
+      },
+    });
+    request.state = queryService.validateState(
+      {
+        filter: {
+          conjunction: 'and',
+          conditions: [{ propertyId: formulaId, operator: 'gt', value: 104 }],
+        },
+        sorts: [{ propertyId: formulaId, direction: 'desc' }],
+        calculations: { [formulaId]: 'sum' },
+      },
+      request.properties,
+    );
+    const calculate = (value: number) => (value > 103 ? value * 2 : value + 1);
+    const expected = selected
+      .map((pageId) => ({ pageId, value: calculate(source.get(pageId)!) }))
+      .filter((row) => row.value > 104)
+      .sort((a, b) => b.value - a.value || a.pageId.localeCompare(b.pageId));
+    const first = await queryService.list(request, { limit: 4 });
+    const next = await queryService.list(request, {
+      limit: 4,
+      cursor: first.nextCursor,
+    });
+    const observed = [...first.items, ...next.items];
+    expect(observed.map((row) => row.pageId)).toEqual(
+      expected.slice(0, 8).map((row) => row.pageId),
+    );
+    expect(
+      observed.map(
+        (row) => row.cells.find((cell) => cell.propertyId === formulaId).value,
+      ),
+    ).toEqual(expected.slice(0, 8).map((row) => row.value));
+    const summary = await queryService.summary(request);
+    expect(summary.count).toBe(expected.length);
+    expect(summary.values[formulaId]).toBe(
+      expected.reduce((total, row) => total + row.value, 0),
+    );
+  });
+
+  it('reports formula errors separately from successful sums and keeps date and title operations bounded', async () => {
+    const zero = randomUUID(),
+      invalidDate = randomUUID(),
+      title = randomUUID(),
+      date = randomUUID();
+    const request: any = { ...input(), readablePageIds: ids.slice(100, 103) };
+    request.properties.push(
+      {
+        id: zero,
+        type: 'formula',
+        settings: {
+          languageVersion: 1,
+          resultType: 'number',
+          expression: 'divide(1, 0)',
+        },
+      },
+      {
+        id: invalidDate,
+        type: 'formula',
+        settings: {
+          languageVersion: 1,
+          resultType: 'date',
+          expression: 'date("2026-02-30")',
+        },
+      },
+      {
+        id: title,
+        type: 'formula',
+        settings: {
+          languageVersion: 1,
+          resultType: 'text',
+          expression: 'concat(prop("title"), " value")',
+        },
+      },
+      {
+        id: date,
+        type: 'formula',
+        settings: {
+          languageVersion: 1,
+          resultType: 'date',
+          expression: 'dateAdd(date("2026-10-31"), 1)',
+        },
+      },
+    );
+    request.state = queryService.validateState(
+      { calculations: { [zero]: 'sum', [invalidDate]: 'latest' } },
+      request.properties,
+    );
+    const result = await queryService.list(request, { limit: 10 });
+    const values = new Map(
+      result.items[0].cells.map((cell) => [cell.propertyId, cell.value]),
+    );
+    expect(values.get(zero)).toEqual({ error: 'division_by_zero' });
+    expect(values.get(invalidDate)).toEqual({ error: 'invalid_date' });
+    expect(values.get(title)).toBe(`${result.items[0].page.title} value`);
+    expect(values.get(date)).toEqual({ start: '2026-11-01' });
+    expect(await queryService.summary(request)).toMatchObject({
+      count: 3,
+      values: { [zero]: null, [invalidDate]: null },
+      errors: { [zero]: 3, [invalidDate]: 3 },
+    });
+  });
+
+  it('validates formula dependency changes and blocks writes to computed fields even when clearing a cell', async () => {
+    await db
+      .updateTable('databases')
+      .set({ pageId: ids[100] })
+      .where('id', '=', databaseId)
+      .execute();
+    const formula = await service.createProperty(
+      databaseId,
+      {
+        name: 'Computed budget',
+        type: 'formula',
+        contractVersion: 4,
+        settings: {
+          languageVersion: 1,
+          resultType: 'number',
+          expression: `multiply(prop("${propertyIds[0]}"), 2)`,
+        },
+      },
+      actor,
+      workspaceId,
+    );
+    try {
+      await expect(
+        service.updateProperty(
+          databaseId,
+          propertyIds[0],
+          { type: 'multiline_text' },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toThrow('type');
+      await expect(
+        service.deleteProperty(databaseId, propertyIds[0], actor, workspaceId),
+      ).rejects.toThrow('missing');
+      await expect(
+        service.batchUpdateRowCells(
+          databaseId,
+          ids[995],
+          {
+            contractVersion: 4,
+            cells: [
+              { propertyId: formula.id, value: null, operation: 'delete' },
+            ],
+          },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toThrow('read-only');
+      await expect(
+        service.updateProperty(
+          databaseId,
+          formula.id,
+          { name: 'Old client rename' },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toThrow('Refresh');
+      expect((await properties.findById(propertyIds[0])).type).toBe('number');
+    } finally {
+      await service.deleteProperty(databaseId, formula.id, actor, workspaceId);
+    }
+  });
+
+  it('preserves multiple participants, validates new assignments and computes membership groups without duplicate global counts', async () => {
+    const original = await cells.findByDatabaseAndPage(databaseId, ids[996]);
+    const before = original.find((cell) => cell.propertyId === propertyIds[3]);
+    const payload = {
+      contractVersion: 4 as const,
+      cells: [
+        {
+          propertyId: propertyIds[3],
+          value: [{ id: actorId }, { id: assignedId }],
+          expectedRevision: before.revision,
+        },
+      ],
+    };
+    await service.batchUpdateRowCells(
+      databaseId,
+      ids[996],
+      payload,
+      actor,
+      workspaceId,
+    );
+    const saved = (
+      await cells.findByDatabaseAndPage(databaseId, ids[996])
+    ).find((cell) => cell.propertyId === propertyIds[3]);
+    expect(saved.value).toEqual(
+      [{ id: actorId }, { id: assignedId }].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
+    );
+    await expect(
+      service.batchUpdateRowCells(
+        databaseId,
+        ids[996],
+        { cells: [{ propertyId: propertyIds[3], operation: 'delete' }] },
+        actor,
+        workspaceId,
+      ),
+    ).rejects.toThrow('Refresh');
+    await expect(
+      service.batchUpdateRowCells(
+        databaseId,
+        ids[996],
+        {
+          contractVersion: 4,
+          cells: [
+            { propertyId: propertyIds[3], value: [{ id: randomUUID() }] },
+          ],
+        },
+        actor,
+        workspaceId,
+      ),
+    ).rejects.toThrow('active space member');
+    const request: any = {
+      ...input(),
+      readablePageIds: [ids[996]],
+      properties: await properties.findByDatabaseId(databaseId),
+    };
+    request.state = queryService.validateState(
+      {
+        groupBy: propertyIds[3],
+        filter: {
+          conjunction: 'and',
+          conditions: [
+            {
+              propertyId: propertyIds[3],
+              operator: 'equals',
+              value: assignedId,
+            },
+          ],
+        },
+      },
+      request.properties,
+    );
+    const summary = await queryService.summary(request);
+    expect(summary.count).toBe(1);
+    expect(summary.groups.map((group) => JSON.parse(group.key)).sort()).toEqual(
+      [actorId, assignedId].sort(),
+    );
+    request.state.filter.conditions[0].operator = 'not_equals';
+    expect((await queryService.summary(request)).count).toBe(0);
+  });
+
+  it('accepts only row-owned files, projects authoritative metadata and blocks legacy clients from clearing them', async () => {
+    const file = await service.createProperty(
+      databaseId,
+      { name: 'Files', type: 'file', contractVersion: 4 },
+      actor,
+      workspaceId,
+    );
+    const owned = randomUUID(),
+      foreign = randomUUID();
+    await db
+      .insertInto('attachments')
+      .values([
+        {
+          id: owned,
+          workspaceId,
+          pageId: ids[997],
+          fileName: 'Allowed document.txt',
+          mimeType: 'text/plain',
+          fileSize: 42,
+        },
+        {
+          id: foreign,
+          workspaceId,
+          pageId: ids[998],
+          fileName: 'Restricted document.txt',
+          mimeType: 'text/plain',
+          fileSize: 99,
+        },
+      ])
+      .execute();
+    try {
+      await expect(
+        service.batchUpdateRowCells(
+          databaseId,
+          ids[997],
+          {
+            contractVersion: 4,
+            cells: [
+              { propertyId: file.id, value: [{ attachmentId: foreign }] },
+            ],
+          },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toThrow('row page');
+      await service.batchUpdateRowCells(
+        databaseId,
+        ids[997],
+        {
+          contractVersion: 4,
+          cells: [{ propertyId: file.id, value: [{ attachmentId: owned }] }],
+        },
+        actor,
+        workspaceId,
+      );
+      await expect(
+        service.batchUpdateRowCells(
+          databaseId,
+          ids[997],
+          { cells: [{ propertyId: file.id, operation: 'delete' }] },
+          actor,
+          workspaceId,
+        ),
+      ).rejects.toThrow('Refresh');
+      const request: any = {
+        ...input(),
+        readablePageIds: [ids[997]],
+        properties: await properties.findByDatabaseId(databaseId),
+      };
+      const result = await queryService.list(request, { limit: 1 });
+      expect(
+        result.items[0].cells.find((cell) => cell.propertyId === file.id).value,
+      ).toEqual([
+        {
+          attachmentId: owned,
+          name: 'Allowed document.txt',
+          mimeType: 'text/plain',
+          size: 42,
+        },
+      ]);
+      await db
+        .updateTable('attachments')
+        .set({ deletedAt: new Date() })
+        .where('id', '=', owned)
+        .execute();
+      request.state = queryService.validateState(
+        {
+          filter: {
+            conjunction: 'and',
+            conditions: [{ propertyId: file.id, operator: 'is_empty' }],
+          },
+        },
+        request.properties,
+      );
+      expect((await queryService.summary(request)).count).toBe(1);
+    } finally {
+      await service.deleteProperty(databaseId, file.id, actor, workspaceId);
+    }
+  });
+
+  it('derives system fields from current page and row mutations without persisted computed cells', async () => {
+    const created = randomUUID(),
+      modified = randomUUID(),
+      modifiedBy = randomUUID();
+    const before = Date.now();
+    await service.batchUpdateRowCells(
+      databaseId,
+      ids[999],
+      { cells: [{ propertyId: propertyIds[18], value: 'Metadata change' }] },
+      actor,
+      workspaceId,
+    );
+    const request: any = { ...input(), readablePageIds: [ids[999]] };
+    request.properties.push(
+      { id: created, type: 'created_at' },
+      { id: modified, type: 'updated_at' },
+      { id: modifiedBy, type: 'updated_by' },
+    );
+    const result = await queryService.list(request, { limit: 1 });
+    const byId = new Map(
+      result.items[0].cells.map((cell) => [cell.propertyId, cell]),
+    );
+    expect(
+      Date.parse((byId.get(created) as any).value.start),
+    ).toBeLessThanOrEqual(Date.now());
+    expect(
+      Date.parse((byId.get(modified) as any).value.start),
+    ).toBeGreaterThanOrEqual(before);
+    expect((byId.get(modifiedBy) as any).value).toEqual({
+      id: actorId,
+      name: 'Synthetic actor',
+    });
+    expect((byId.get(modified) as any).revision).toBe(0);
+    expect(
+      await db
+        .selectFrom('databaseCells')
+        .select('id')
+        .where('propertyId', 'in', [created, modified, modifiedBy])
+        .execute(),
+    ).toEqual([]);
+  });
+
+  it('commits file retention history atomically and rolls back the cell when history fails', async () => {
+    const file = await service.createProperty(
+      databaseId,
+      { name: 'Atomic files', type: 'file', contractVersion: 4 },
+      actor,
+      workspaceId,
+    );
+    const attachmentId = randomUUID();
+    await db
+      .insertInto('attachments')
+      .values({
+        id: attachmentId,
+        workspaceId,
+        pageId: ids[997],
+        fileName: 'Retained.txt',
+      })
+      .execute();
+    const mutate = (value: unknown) =>
+      service.batchUpdateRowCells(
+        databaseId,
+        ids[997],
+        { contractVersion: 4, cells: [{ propertyId: file.id, value }] },
+        actor,
+        workspaceId,
+      );
+    try {
+      await mutate([{ attachmentId }]);
+      recordPageEvents.mockImplementationOnce(async (input) => {
+        await input.trx
+          .insertInto('historyReceipts')
+          .values({
+            pageId: ids[997],
+            changeData: { rejected: true },
+          })
+          .execute();
+        throw new Error('Synthetic history storage failure');
+      });
+      await expect(mutate([])).rejects.toThrow(
+        'Synthetic history storage failure',
+      );
+      expect(
+        (await cells.findByDatabaseAndPage(databaseId, ids[997])).find(
+          (cell) => cell.propertyId === file.id,
+        )?.value,
+      ).toEqual([{ attachmentId }]);
+      const receiptsBefore = await db
+        .selectFrom('historyReceipts')
+        .select('changeData')
+        .where('pageId', '=', ids[997])
+        .execute();
+      expect(
+        receiptsBefore.some((receipt) => receipt.changeData.rejected),
+      ).toBe(false);
+      await mutate([]);
+      const receipts = await db
+        .selectFrom('historyReceipts')
+        .select('changeData')
+        .where('pageId', '=', ids[997])
+        .execute();
+      expect(
+        receipts.some((receipt) =>
+          receipt.changeData.changes?.some(
+            (change) =>
+              change.propertyId === file.id &&
+              change.oldValue?.[0]?.attachmentId === attachmentId &&
+              Array.isArray(change.newValue) &&
+              change.newValue.length === 0,
+          ),
+        ),
+      ).toBe(true);
+    } finally {
+      await service.deleteProperty(databaseId, file.id, actor, workspaceId);
+    }
+  });
 });

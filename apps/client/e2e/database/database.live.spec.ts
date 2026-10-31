@@ -1,9 +1,20 @@
 import {
   expect,
-  test,
+  test as base,
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
+
+const test = base.extend({
+  serviceWorkers: async ({ browserName: _browserName }, provide, info) => {
+    // Network interception cannot see requests controlled by a Service Worker.
+    const injectsNetworkFault =
+      /^live (network failure|delayed response|TSV|empty database)/.test(
+        info.title,
+      );
+    await provide(injectsNetworkFault ? "block" : "allow");
+  },
+});
 
 async function editViewName(page: Page, name: string) {
   await page.getByRole("button", { name: /^View settings \(/ }).click();
@@ -79,30 +90,70 @@ test.afterEach(async ({ page, request }, info) => {
       });
     if (!page.isClosed())
       await info.attach("page-readiness", {
-        body: Buffer.from(JSON.stringify(await page.evaluate(() => ({
-          loadingIndicators: document.querySelectorAll('[aria-label="Loading..."]').length,
-          dialogs: Array.from(document.querySelectorAll('[role="dialog"]'), (element) => ({
-            title: element.querySelector("h2")?.textContent,
-            labelledBy: element.getAttribute("aria-labelledby"),
-            labelledText: element.getAttribute("aria-labelledby")?.split(/\s+/).map((id) => document.getElementById(id)?.textContent),
-            display: getComputedStyle(element).display,
-            visibility: getComputedStyle(element).visibility,
-            hidden: element.getAttribute("aria-hidden"),
-            ancestors: (() => {
-              const result = [];
-              let parent = element.parentElement;
-              while (parent && result.length < 5) {
-                result.push({ tag: parent.tagName, hidden: parent.getAttribute("aria-hidden"), inert: parent.hasAttribute("inert"), display: getComputedStyle(parent).display, visibility: getComputedStyle(parent).visibility });
-                parent = parent.parentElement;
-              }
-              return result;
-            })(),
-          })),
-          assets: performance.getEntriesByType("resource")
-            .filter((entry) => /\/assets\/.*\.js$/.test(entry.name))
-            .slice(-25)
-            .map((entry) => ({ path: new URL(entry.name).pathname, start: entry.startTime, duration: entry.duration })),
-        })))),
+        body: Buffer.from(
+          JSON.stringify(
+            await page.evaluate(() => ({
+              loadingIndicators: document.querySelectorAll(
+                '[aria-label="Loading..."]',
+              ).length,
+              dialogs: Array.from(
+                document.querySelectorAll('[role="dialog"]'),
+                (element) => ({
+                  title: element.querySelector("h2")?.textContent,
+                  labelledBy: element.getAttribute("aria-labelledby"),
+                  labelledText: element
+                    .getAttribute("aria-labelledby")
+                    ?.split(/\s+/)
+                    .map((id) => document.getElementById(id)?.textContent),
+                  display: getComputedStyle(element).display,
+                  visibility: getComputedStyle(element).visibility,
+                  hidden: element.getAttribute("aria-hidden"),
+                  ancestors: (() => {
+                    const result = [];
+                    let parent = element.parentElement;
+                    while (parent && result.length < 5) {
+                      result.push({
+                        tag: parent.tagName,
+                        hidden: parent.getAttribute("aria-hidden"),
+                        inert: parent.hasAttribute("inert"),
+                        display: getComputedStyle(parent).display,
+                        visibility: getComputedStyle(parent).visibility,
+                      });
+                      parent = parent.parentElement;
+                    }
+                    return result;
+                  })(),
+                }),
+              ),
+              assets: performance
+                .getEntriesByType("resource")
+                .filter((entry) => /\/assets\/.*\.js$/.test(entry.name))
+                .slice(-25)
+                .map((entry) => ({
+                  path: new URL(entry.name).pathname,
+                  start: entry.startTime,
+                  duration: entry.duration,
+                })),
+              api: performance
+                .getEntriesByType("resource")
+                .filter((entry) =>
+                  new URL(entry.name).pathname.startsWith("/api/"),
+                )
+                .slice(-30)
+                .map((entry) => ({
+                  path: new URL(entry.name).pathname,
+                  start: entry.startTime,
+                  duration: entry.duration,
+                })),
+              navigation: performance
+                .getEntriesByType("navigation")
+                .map((entry) => ({
+                  start: entry.startTime,
+                  duration: entry.duration,
+                })),
+            })),
+          ),
+        ),
         contentType: "application/json",
       });
     await Promise.race([
@@ -150,6 +201,7 @@ async function api(
     response.ok(),
     `${method} ${endpoint.split("?")[0]}: ${response.status()}`,
   ).toBe(true);
+  if (response.status() === 204) return;
   const value = await response.json();
   return value.data ?? value;
 }
@@ -161,7 +213,12 @@ async function row(page: Page, index: number) {
   return result.items.find((item: any) => item.pageId === fixture.ids[index]);
 }
 async function open(page: Page) {
+  const initialPage = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/pages/info" && response.ok(),
+  );
   await page.goto(fixture.route);
+  await initialPage;
   await expect(page.getByText("Rows: 900", { exact: true })).toBeVisible();
   await expect(cell(page, 101)).toBeVisible();
 }
@@ -389,16 +446,52 @@ test("live footnotes create, edit, search, conflict and survive reload", async (
     footer.getByRole("button", { name: "Edit", exact: true }).first(),
   ).toBeVisible();
   const body = page.getByRole("textbox", { name: "Editor", exact: true });
-  await body.locator(":scope > p").last().click();
-  await page.keyboard.press("End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("/Footnote");
-  await page
-    .locator("#slash-command")
-    .getByRole("button", { name: /^Footnote/ })
-    .click();
   const note = footer.getByRole("textbox", { name: "Footnote 3", exact: true });
-  await expect(note).toBeVisible();
+  const selectionTrace: unknown[] = [];
+  const recordSelection = async (stage: string) => {
+    selectionTrace.push(
+      await body.evaluate((element, label) => {
+        const editor = (element as any).editor;
+        const selection = window.getSelection();
+        return {
+          stage: label,
+          dom: {
+            anchor: selection?.anchorNode?.textContent?.slice(0, 200),
+            offset: selection?.anchorOffset,
+          },
+          model: editor?.state.selection.toJSON(),
+          parent: editor?.state.selection.$from.parent.type.name,
+          path: editor?.state.selection.$from.path
+            .filter((value: any) => value?.type?.name)
+            .map((value: any) => value.type.name),
+          paragraphs: [...element.querySelectorAll(":scope > p")].map(
+            (paragraph) => paragraph.textContent,
+          ),
+        };
+      }, stage),
+    );
+  };
+  try {
+    await body.locator(":scope > p").last().click();
+    await recordSelection("click");
+    await page.keyboard.press("End");
+    await recordSelection("End");
+    await page.keyboard.press("Enter");
+    await recordSelection("Enter");
+    await page.keyboard.type("/Footnote");
+    await recordSelection("slash");
+    await page
+      .locator("#slash-command")
+      .getByRole("button", { name: /^Footnote/ })
+      .click();
+    await recordSelection("created");
+    await expect(note).toBeVisible();
+  } finally {
+    await info.attach("footnote-selection", {
+      body: Buffer.from(JSON.stringify(selectionTrace)),
+      contentType: "application/json",
+    });
+  }
   await note.fill("Browser-created footnote");
   await footer.getByRole("button", { name: "Save", exact: true }).click();
   await body.click({ position: { x: 4, y: 4 } });
@@ -1082,6 +1175,9 @@ test("live decimals, date ranges and time zones persist canonically", async ({
       end: "2026-10-13T21:00:00.000Z",
       timeZone: "Europe/Moscow",
     });
+  await expect(
+    date.getByRole("button", { name: "Save", exact: true }),
+  ).toHaveCount(0);
   await date.press("F2");
   await date.getByRole("switch", { name: "Include time" }).uncheck();
   await date.getByRole("button", { name: "Save", exact: true }).click();
@@ -1126,26 +1222,43 @@ test("live select keyboard saves once and safe links expose device handlers", as
 
 test("live network failure preserves the draft and retry persists to PostgreSQL", async ({
   page,
-}) => {
+}, info) => {
   await open(page);
   const target = cell(page, 101);
   await target.press("F2");
   const editor = target.getByRole("textbox");
   await editor.fill("Preserved after network failure");
+  let injectedFailures = 0;
   await page.route(
     "**/cells",
-    (route) =>
-      route.fulfill({
+    (route) => {
+      injectedFailures++;
+      return route.fulfill({
         status: 503,
         contentType: "application/json",
         body: "{}",
-      }),
+      });
+    },
     { times: 1 },
   );
   await editor.press("Tab");
-  await expect(
-    page.getByRole("status").filter({ hasText: "Failed to update data" }),
-  ).toBeVisible();
+  try {
+    await expect(
+      page.getByRole("status").filter({ hasText: "Failed to update data" }),
+    ).toBeVisible();
+  } finally {
+    await info.attach("network-failure-fixture", {
+      contentType: "application/json",
+      body: Buffer.from(
+        JSON.stringify({
+          injectedFailures,
+          worker: await page.evaluate(() =>
+            Boolean(navigator.serviceWorker?.controller),
+          ),
+        }),
+      ),
+    });
+  }
   await expect(editor).toHaveValue("Preserved after network failure");
   await editor.press("Tab");
   await expect
@@ -1220,13 +1333,16 @@ test("live TSV preserves blank rows and retries only the failed row", async ({
               : `Pasted ${index}`,
       ).join("\n"),
     );
-    element.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: transfer,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+    const event = new ClipboardEvent("paste", {
+      clipboardData: transfer,
+      bubbles: true,
+      cancelable: true,
+    });
+    // Firefox strips constructor-supplied data from an untrusted paste event.
+    Object.defineProperty(event, "clipboardData", { value: transfer });
+    if (event.clipboardData?.getData("text") !== transfer.getData("text"))
+      throw new Error("The synthetic clipboard fixture lost its payload");
+    element.dispatchEvent(event);
   });
   await expect(
     page.getByText("1 rows failed. Successful rows were saved."),
@@ -1338,29 +1454,66 @@ test("live empty database, no filter results and failed queries are distinct", a
 for (const undo of [true, false])
   test(`live deletion retains six seconds after navigation and ${undo ? "undo" : "original database"}`, async ({
     page,
-  }) => {
+  }, info) => {
     await open(page);
     await cell(page, 104)
       .locator("xpath=..")
       .getByRole("checkbox", { name: "Select row", exact: true })
       .check();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
+    const renderedCellsBefore = await page
+      .locator("[data-database-cell-key]")
+      .count();
     const started = Date.now();
+    const actionTimes: Array<{ action: string; elapsedMs: number }> = [];
     await page
       .getByRole("dialog", { name: "Delete", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
+    actionTimes.push({ action: "confirm", elapsedMs: Date.now() - started });
+    const renderedCellsAfter = await page
+      .locator("[data-database-cell-key]")
+      .count();
+    await info.attach("delete-render-bound", {
+      contentType: "application/json",
+      body: Buffer.from(
+        JSON.stringify({
+          renderedCellsBefore,
+          renderedCellsAfter,
+          confirmationMs: Date.now() - started,
+        }),
+      ),
+    });
+    expect(renderedCellsAfter).toBeLessThanOrEqual(renderedCellsBefore);
     await expect(
       page.getByRole("button", { name: "Undo", exact: true }),
     ).toBeVisible();
+    actionTimes.push({
+      action: "undo-visible",
+      elapsedMs: Date.now() - started,
+    });
     await page
       .getByRole("treeitem", { name: "Second database", exact: true })
       .getByRole("link")
       .click();
-    await expect(
-      page.getByText("This database is empty", { exact: true }),
-    ).toBeVisible();
-    expect(Date.now() - started).toBeLessThan(5000);
+    actionTimes.push({ action: "navigate", elapsedMs: Date.now() - started });
+    let navigationMs = 0;
+    try {
+      await expect(
+        page.getByText("This database is empty", { exact: true }),
+      ).toBeVisible();
+    } finally {
+      navigationMs = Date.now() - started;
+      actionTimes.push({
+        action: "destination-visible",
+        elapsedMs: navigationMs,
+      });
+      await info.attach("delete-action-timing", {
+        contentType: "application/json",
+        body: Buffer.from(JSON.stringify(actionTimes)),
+      });
+    }
+    expect(navigationMs).toBeLessThan(5000);
     await page.waitForTimeout(Math.max(0, 4500 - (Date.now() - started)));
     expect(await row(page, 104)).toBeTruthy();
     if (undo)
@@ -1374,4 +1527,205 @@ for (const undo of [true, false])
       `/databases/${fixture.otherDatabaseId}/rows?limit=100`,
     );
     expect(otherRows.items).toHaveLength(0);
+  });
+
+for (const mobileWidth of [0, 320, 390])
+  test(`live advanced database formula, participants and file controls (${mobileWidth ? `mobile ${mobileWidth}` : "desktop"})`, async ({
+    page,
+    browser,
+    request,
+  }, info) => {
+    test.setTimeout(90000);
+    const mobile = mobileWidth > 0;
+    const advanced = fixture.advanced;
+    const formulaName = `Triple ${info.project.name} ${mobile ? "mobile" : "desktop"}`;
+    let createdId: string | undefined;
+    if (mobile) {
+      await page.setViewportSize({ width: mobileWidth, height: 844 });
+      await page.addInitScript(() =>
+        localStorage.setItem("mantine-color-scheme-value", "dark"),
+      );
+    }
+    const advancedCell = (name: string) =>
+      page.locator(
+        `[data-database-cell-key="${advanced.rowId}:${advanced.properties[name].id}"]`,
+      );
+    try {
+      await page.goto(advanced.route);
+      await expect(page.getByText("Rows: 305", { exact: true })).toBeVisible();
+      await page.getByRole("textbox", { name: "View", exact: true }).click();
+      await page
+        .getByRole("option", { name: "Advanced view", exact: true })
+        .click();
+      await expect(
+        page.getByRole("textbox", { name: "View", exact: true }),
+      ).toHaveValue("Advanced view");
+      await expect(advancedCell("Double")).toHaveText("2");
+      await advancedCell("Double").click({ timeout: 5000 });
+      await info.attach("computed-cell-geometry", {
+        contentType: "application/json",
+        body: Buffer.from(
+          JSON.stringify(
+            await advancedCell("Double").evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              const viewport = element.closest(
+                ".mantine-ScrollArea-viewport",
+              ) as HTMLElement;
+              const center = document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2,
+              );
+              return {
+                cell: rect.toJSON(),
+                viewport: viewport.getBoundingClientRect().toJSON(),
+                scrollLeft: viewport.scrollLeft,
+                hit: element === center || element.contains(center),
+                centerElement: center?.tagName,
+                centerClass: center?.className,
+                rowCells: Array.from(element.parentElement!.children)
+                  .slice(0, 2)
+                  .map((cell) => cell.getBoundingClientRect().toJSON()),
+              };
+            }),
+          ),
+        ),
+      });
+      await expect(
+        advancedCell("Double").locator(
+          'input,textarea,[contenteditable="true"]',
+        ),
+      ).toHaveCount(0);
+      const participants = advancedCell("Participants");
+      await expect(participants).toContainText("QA Editor");
+      await expect(participants).toContainText("QA Reader");
+      const files = advancedCell("Files");
+      await expect(
+        files.getByRole("link", { name: "record-property.txt" }),
+      ).toBeVisible();
+      await files
+        .getByRole("button", { name: "Edit", exact: true })
+        .click({ timeout: 5000 });
+      await files.locator('input[type="file"]').setInputFiles({
+        name: `uploaded-${info.project.name}.txt`,
+        mimeType: "text/plain",
+        buffer: Buffer.from("Browser upload to a file property"),
+      });
+      await expect
+        .poll(async () => {
+          const context = await api(
+            page.request,
+            `/databases/rows/${advanced.rowId}/context`,
+          );
+          return context.cells.find(
+            (cell: any) => cell.propertyId === advanced.properties.Files.id,
+          ).value.length;
+        })
+        .toBe(2);
+      await page
+        .getByRole("button", { name: "Add property", exact: true })
+        .click();
+      await page
+        .getByRole("textbox", { name: "New column name", exact: true })
+        .fill(formulaName);
+      await page
+        .getByRole("textbox", { name: "Property type", exact: true })
+        .click();
+      await page.getByRole("option", { name: "Formula", exact: true }).click();
+      await page.getByRole("button", { name: "Property", exact: true }).click();
+      const modal = page.getByRole("dialog", {
+        name: formulaName,
+        exact: true,
+      });
+      await modal
+        .getByRole("textbox", { name: "Expression", exact: true })
+        .fill('add(1, "invalid")');
+      await expect(
+        modal.getByRole("textbox", { name: "Expression", exact: true }),
+      ).toHaveValue('add(1, "invalid")');
+      await expect(
+        modal.getByRole("button", { name: "Save", exact: true }),
+      ).toBeDisabled();
+      await modal
+        .getByRole("textbox", { name: "Expression", exact: true })
+        .fill(`multiply(prop("${advanced.properties.Budget.id}"), 3)`);
+      await modal.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(modal).toHaveCount(0);
+      const properties = await api(
+        page.request,
+        `/databases/${advanced.databaseId}/properties`,
+      );
+      createdId = properties.find(
+        (property: any) => property.name === formulaName,
+      )?.id;
+      expect(createdId).toBeTruthy();
+      const computed = page.locator(
+        `[data-database-cell-key="${advanced.rowId}:${createdId}"]`,
+      );
+      await computed.click({ timeout: 5000 });
+      await expect(computed).toHaveText("3");
+      await page.reload();
+      await expect(computed).toHaveText("3");
+      await computed.click({ timeout: 5000 });
+      await page.screenshot({
+        path: info.outputPath(
+          `advanced-${mobile ? "mobile-dark" : "desktop-light"}.png`,
+        ),
+        fullPage: true,
+      });
+      const readerContext = await browser.newContext({
+        storageState: sessions.reader,
+        viewport: page.viewportSize() ?? undefined,
+      });
+      try {
+        const reader = await readerContext.newPage();
+        await reader.goto(advanced.route);
+        const readerFile = reader.locator(
+          `[data-database-cell-key="${advanced.rowId}:${advanced.properties.Files.id}"]`,
+        );
+        await expect(
+          readerFile.getByRole("link", {
+            name: `uploaded-${info.project.name}.txt`,
+          }),
+        ).toBeVisible();
+        const downloadPromise = reader.waitForEvent("download");
+        await readerFile
+          .getByRole("link", {
+            name: `uploaded-${info.project.name}.txt`,
+          })
+          .click({ timeout: 5000 });
+        expect((await downloadPromise).suggestedFilename()).toBe(
+          `uploaded-${info.project.name}.txt`,
+        );
+        await expect(
+          readerFile.getByRole("button", { name: "Edit", exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          reader.getByRole("button", { name: "Add property", exact: true }),
+        ).toHaveCount(0);
+      } finally {
+        await readerContext.close();
+      }
+    } finally {
+      await page.close();
+      if (createdId)
+        await api(
+          request,
+          `/databases/${advanced.databaseId}/properties/${createdId}`,
+          "DELETE",
+        );
+      await api(
+        request,
+        `/databases/${advanced.databaseId}/rows/${advanced.rowId}/cells`,
+        "PATCH",
+        {
+          contractVersion: 4,
+          cells: [
+            {
+              propertyId: advanced.properties.Files.id,
+              value: [{ attachmentId: advanced.fileId }],
+            },
+          ],
+        },
+      );
+    }
   });

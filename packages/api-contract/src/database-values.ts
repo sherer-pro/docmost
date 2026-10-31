@@ -1,5 +1,82 @@
 import type { DatabaseDateValue, DatabasePropertySettings } from "./database";
 import type { DatabasePropertyType } from "./database-property-type";
+import {
+  isDatabaseComputedProperty,
+  parseDatabaseFormula,
+} from "./database-formula";
+
+const databaseReferenceId =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function databaseUserIds(input: unknown): string[] {
+  let value = unwrapDatabaseValue(input);
+  for (let i = 0; i < 6 && typeof value === "string"; i++) {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      break;
+    }
+  }
+  const values = Array.isArray(value) ? value : value == null ? [] : [value];
+  return [
+    ...new Set(
+      values
+        .map((item) => (typeof item === "string" ? item : item?.id))
+        .filter(
+          (id): id is string =>
+            typeof id === "string" && databaseReferenceId.test(id),
+        )
+        .map((id) => id.toLowerCase()),
+    ),
+  ];
+}
+
+export function databaseFileIds(input: unknown): string[] {
+  const ids = new Set<string>();
+  const pending = [input];
+  let visited = 0;
+  while (pending.length) {
+    if (++visited > 2048) throw new Error("File references are too complex");
+    const value = pending.pop();
+    if (!value || typeof value !== "object") continue;
+    if (
+      "attachmentId" in value &&
+      typeof value.attachmentId === "string" &&
+      databaseReferenceId.test(value.attachmentId)
+    )
+      ids.add(value.attachmentId.toLowerCase());
+    pending.push(...Object.values(value));
+  }
+  return [...ids];
+}
+
+export function remapDatabaseAttachmentReferences(
+  input: unknown,
+  ids: ReadonlyMap<string, string>,
+  omitMissing = false,
+): unknown {
+  let visited = 0;
+  const remap = (value: unknown): unknown => {
+    if (++visited > 2048) throw new Error("File references are too complex");
+    if (!value || typeof value !== "object") return value;
+    if (Array.isArray(value))
+      return value.map(remap).filter((item) => item !== undefined);
+    if ("attachmentId" in value && typeof value.attachmentId === "string") {
+      const id = ids.get(value.attachmentId.toLowerCase());
+      if (!id) {
+        if (omitMissing) return undefined;
+        throw new Error("File reference has no attachment mapping");
+      }
+      return { attachmentId: id };
+    }
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, child]) => [key, remap(child)])
+        .filter(([, child]) => child !== undefined),
+    );
+  };
+  return remap(input) ?? null;
+}
 
 export function unwrapDatabaseValue(value: unknown): unknown {
   if (
@@ -31,6 +108,8 @@ export function normalizeDatabaseValue(
   input: unknown,
   settings?: DatabasePropertySettings | null,
 ): unknown {
+  if (isDatabaseComputedProperty(type))
+    throw new Error("Computed properties are read-only");
   const value = unwrapDatabaseValue(input);
   if (value === null || value === undefined || value === "") return null;
   if (type === "number") {
@@ -99,6 +178,35 @@ export function normalizeDatabaseValue(
     }
     throw new Error("Invalid checkbox");
   }
+  if (type === "user" && Array.isArray(value)) {
+    if (value.length > 20)
+      throw new Error("At most 20 participants are supported");
+    const users = value.map(
+      (item) => normalizeDatabaseValue("user", item) as { id: string },
+    );
+    if (users.some((item) => !item)) throw new Error("Invalid participant");
+    return [...new Map(users.map((item) => [item.id, item])).values()].sort(
+      (a, b) => a.id.localeCompare(b.id),
+    );
+  }
+  if (type === "file") {
+    if (!Array.isArray(value) || value.length > 20)
+      throw new Error("Invalid file list");
+    const ids = new Set<string>();
+    return value.map((item) => {
+      if (
+        !item ||
+        typeof item !== "object" ||
+        Object.keys(item).length !== 1 ||
+        typeof item.attachmentId !== "string" ||
+        !databaseReferenceId.test(item.attachmentId) ||
+        ids.has(item.attachmentId.toLowerCase())
+      )
+        throw new Error("Invalid file reference");
+      ids.add(item.attachmentId.toLowerCase());
+      return { attachmentId: item.attachmentId.toLowerCase() };
+    });
+  }
   if (type === "user" || type === "page_reference") {
     const id =
       typeof value === "string"
@@ -113,7 +221,7 @@ export function normalizeDatabaseValue(
       )
     )
       throw new Error("Invalid reference");
-    return type === "user" ? { id } : id;
+    return type === "user" ? { id: id.toLowerCase() } : id.toLowerCase();
   }
   if (type === "select" || type === "multi_select") {
     const values =
@@ -155,6 +263,35 @@ export function formatDatabaseValue(
 ): string {
   const value = unwrapDatabaseValue(input);
   if (value === null || value === undefined) return "";
+  if (typeof value === "object" && "error" in value)
+    return `#${String(value.error)}`;
+  if (type === "user" || type === "updated_by") {
+    const users = Array.isArray(value) ? value : [value];
+    return users
+      .map((user) =>
+        typeof user === "string" ? user : (user?.name ?? user?.id ?? ""),
+      )
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (type === "file")
+    return Array.isArray(value)
+      ? value
+          .map((file) => file?.name ?? file?.attachmentId ?? "")
+          .filter(Boolean)
+          .join(", ")
+      : "";
+  if (type === "formula") {
+    const resultType = (settings as { resultType?: string })?.resultType;
+    return formatDatabaseValue(
+      resultType === "text"
+        ? "multiline_text"
+        : (resultType ?? "multiline_text"),
+      value,
+      undefined,
+      locale,
+    );
+  }
   const options =
     settings &&
     typeof settings === "object" &&
@@ -206,7 +343,7 @@ export function formatDatabaseValue(
     }).format(value);
   }
   if (
-    type === "date" &&
+    ["date", "created_at", "updated_at"].includes(type) &&
     typeof value === "object" &&
     "start" in value &&
     typeof value.start === "string"
@@ -234,6 +371,22 @@ export function validateDatabaseSettings(
   type: DatabasePropertyType,
   input: unknown,
 ): void {
+  if (type === "formula") {
+    const settings = input as Record<string, unknown>;
+    if (
+      !settings ||
+      settings.languageVersion !== 1 ||
+      !["number", "text", "date", "checkbox"].includes(
+        String(settings.resultType),
+      ) ||
+      Object.keys(settings).some(
+        (key) => !["expression", "resultType", "languageVersion"].includes(key),
+      )
+    )
+      throw new Error("Invalid formula settings");
+    parseDatabaseFormula(settings.expression as string);
+    return;
+  }
   if (input === null || input === undefined) return;
   if (typeof input !== "object" || Array.isArray(input))
     throw new Error("Invalid property settings");

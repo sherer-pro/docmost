@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 32 -->
+<!-- ai-admin-guide-contract-version: 33 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -324,6 +324,22 @@ steps whose receipt already says `applied: true`, including when the same run
 later awaits a different approval, so successful writes cannot be replayed. Failed rows require a new preview. Search refresh happens
 after commit. Pending approval keeps the existing provider admission behavior.
 Both inbound and outbound MCP remain read-only.
+
+Database reads also resolve system fields, formula results, multiple participants
+and row-owned file metadata through the database value compiler. Formula settings
+use `languageVersion: 1`; computed fields and file properties are always
+read-only for `proposeDatabaseCells`, including attempts to clear them. Participant
+proposals contain at most 20 existing assignable user IDs. New client mutations
+send `contractVersion: 4`; a legacy client cannot clear file or array-valued user
+cells. The MCP write prohibition is unchanged.
+
+Formula failures are typed `{error}` values. Summaries count them in `errors`
+separately from valid values and return `complete: false` with `formula_errors`.
+A partial sum must be described as partial. File reads expose only authoritative
+metadata for active attachments owned by the accessible row page; they do not
+fetch file content. RAG row projections use current computed values and include
+property revisions in their projection timestamp. View filters still do not
+restrict the independently authorized RAG source set.
 
 Workspace and space tool policies additionally support `readOnly` and
 `knowledgeOnly`, defaulting to false for compatibility. Effective restrictions
@@ -1095,12 +1111,15 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 
 | [`20260919T180000-space-owned-template-policy.ts`](../apps/server/src/database/migrations/20260919T180000-space-owned-template-policy.ts) | Removes the workspace template gate from AI tools and editor decisions. Folds each old workspace flag into its local space flag, treats missing workspace policies as disabled, and saves policy snapshots. The server switch is excluded from migration. | Restores exact original local policies only while all policy snapshots remain unchanged; refuses after any later policy edit, insertion, or removal. Template contents and linked pages are preserved. |
 
+| [`20260929T120000-rag-evidence-quality.ts`](../apps/server/src/database/migrations/20260929T120000-rag-evidence-quality.ts) | Adds per-space quality and expansion switches, private evidence snapshots and retrieval diagnostics. Defaults preserve the previous profile; correctness fixes apply to both profiles. | Drops the new settings, snapshots and diagnostics. Prefer switching to legacy-v1 over destructive schema rollback. |
+| [`20261013T120000-database-revisions.ts`](../apps/server/src/database/migrations/20261013T120000-database-revisions.ts) | Adds cell/view revisions and the read-only legacy JSON value adapter used by view and AI queries. | Drops revisions and the adapter; cell values are retained. An older application is not a compatible downgrade after new property types are used. |
+| [`20261030T180000-ai-database-context.ts`](../apps/server/src/database/migrations/20261030T180000-ai-database-context.ts) | Adds frozen database context to runs and backward-compatible read-only/knowledge-only tool-policy flags. | Drain active runs first. Removes context and policy flags; approved cell values and their revisions remain. |
+| [`20261031T130000-database-computed-and-file-properties.ts`](../apps/server/src/database/migrations/20261031T130000-database-computed-and-file-properties.ts) | Extends the legacy adapter for participant/file arrays and backfills row mutation metadata from the latest cell mutation without rewriting values. | Refuses while computed/file properties or participant arrays exist, including retained data. The compatible adapter and corrected metadata remain; disable creation instead of removing saved data. |
+
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
 is not an operational feature rollback unless the applicable row above states
 that its data loss is acceptable.
-
-| [`20260929T120000-rag-evidence-quality.ts`](../apps/server/src/database/migrations/20260929T120000-rag-evidence-quality.ts) | Adds per-space quality and expansion switches, private evidence snapshots and retrieval diagnostics. Defaults preserve the previous profile; correctness fixes apply to both profiles. | Drops the new settings, snapshots and diagnostics. Prefer switching to legacy-v1 over destructive schema rollback. |
 
 ## 5. Built-in synchronization with Open WebUI
 

@@ -11,7 +11,10 @@ import type { IDictionaryTerm } from "@/features/dictionary/types/dictionary.typ
 
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: "en-US" },
+  }),
 }));
 
 vi.mock("@/features/dictionary/components/dictionary-text-highlighter", () => ({
@@ -107,6 +110,69 @@ describe("DatabaseCellRenderer dictionary exclusions", () => {
     expect(container.querySelector(".dictionary-highlight")).toBeNull();
   });
 
+  it("never opens a computed value editor and preserves zero and visible formula errors", () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const start = vi.fn(),
+      save = vi.fn();
+    const render = (
+      value: unknown,
+      resultType: "number" | "checkbox" = "number",
+    ) =>
+      act(() =>
+        root!.render(
+          <MantineProvider>
+            <DatabaseCellRenderer
+              property={{
+                ...property,
+                type: "formula",
+                settings: {
+                  languageVersion: 1,
+                  resultType,
+                  expression: "0",
+                },
+              }}
+              value={value}
+              isEditable
+              isEditing
+              editingValue="overwrite"
+              spaceId="space-1"
+              onStartEdit={start}
+              onChange={vi.fn()}
+              onSave={save}
+            />
+          </MantineProvider>,
+        ),
+      );
+    render(0);
+    expect(container.querySelector(".mantine-Text-root")?.textContent).toBe(
+      "0",
+    );
+    act(() =>
+      (
+        container!.querySelector(".mantine-Text-root")!
+          .parentElement as HTMLElement
+      ).click(),
+    );
+    expect(container.querySelector("input,textarea")).toBeNull();
+    expect(start).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    render({ error: "division_by_zero" });
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "dbTable.formulaErrors.division_by_zero",
+    );
+    render(false, "checkbox");
+    const checkbox = container.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    expect(checkbox.disabled).toBe(true);
+    act(() => checkbox.click());
+    expect(start).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("shows a saved former member identity in a user cell", async () => {
     const formerId = "11111111-1111-4111-8111-111111111111";
     const queryClient = new QueryClient({
@@ -125,7 +191,11 @@ describe("DatabaseCellRenderer dictionary exclusions", () => {
           <MantineProvider>
             <DatabaseCellRenderer
               property={{ ...property, type: "user" }}
-              value={{ id: formerId, name: "Former User", avatarUrl: "/former" }}
+              value={{
+                id: formerId,
+                name: "Former User",
+                avatarUrl: "/former",
+              }}
               isEditable={false}
               isEditing={false}
               editingValue={null}

@@ -44,6 +44,11 @@ import { StorageService } from '../../storage/storage.service';
 import * as JSZip from 'jszip';
 import { Readable } from 'node:stream';
 import {
+  DATABASE_PROPERTY_TYPES,
+  databaseFileIds,
+  isDatabaseComputedProperty,
+  validateDatabaseSettings,
+  validateDatabaseFormulaSchema,
   type DocmostArchiveData,
   type DocmostArchiveManifest,
   type DocmostImportOptions,
@@ -1090,7 +1095,38 @@ export class ImportService {
           `Database property "${property.name}" references an unknown database`,
         );
       }
+      const type = property.type === 'text' ? 'multiline_text' : property.type;
+      if (!(DATABASE_PROPERTY_TYPES as readonly string[]).includes(type))
+        throw new BadRequestException('Unsupported database property type');
+      try {
+        validateDatabaseSettings(type as any, property.settings);
+      } catch {
+        throw new BadRequestException('Invalid database property settings');
+      }
     }
+    for (const database of data.databases) {
+      try {
+        validateDatabaseFormulaSchema(
+          data.databaseProperties
+            .filter((property) => property.databaseId === database.id)
+            .map((property) => ({
+              ...property,
+              type: property.type === 'text' ? 'multiline_text' : property.type,
+            })),
+        );
+      } catch {
+        throw new BadRequestException('Invalid database formula dependencies');
+      }
+    }
+    const propertiesById = new Map(
+      data.databaseProperties.map((property) => [property.id, property]),
+    );
+    const attachmentsById = new Map(
+      data.attachments.map((attachment) => [attachment.id, attachment]),
+    );
+    const cellRowKeys = new Set(
+      data.databaseRows.map((row) => `${row.databaseId}:${row.pageId}`),
+    );
     for (const row of data.databaseRows) {
       if (!databaseIds.has(row.databaseId) || !pageIds.has(row.pageId)) {
         throw new BadRequestException(
@@ -1103,12 +1139,25 @@ export class ImportService {
         !databaseIds.has(cell.databaseId) ||
         !pageIds.has(cell.pageId) ||
         !propertyIds.has(cell.propertyId) ||
+        propertiesById.get(cell.propertyId)?.databaseId !== cell.databaseId ||
+        !cellRowKeys.has(`${cell.databaseId}:${cell.pageId}`) ||
+        isDatabaseComputedProperty(propertiesById.get(cell.propertyId)?.type) ||
         (cell.attachmentId && !attachmentIds.has(cell.attachmentId))
       ) {
         throw new BadRequestException(
           'A database cell references an unknown database, page or property',
         );
       }
+      if (
+        databaseFileIds(cell.value).some(
+          (id) =>
+            !attachmentsById.has(id) ||
+            attachmentsById.get(id).pageId !== cell.pageId,
+        )
+      )
+        throw new BadRequestException(
+          'A database file must belong to its row page',
+        );
     }
     for (const label of data.labels) {
       if (label.pageIds.some((pageId) => !pageIds.has(pageId))) {

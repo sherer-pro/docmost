@@ -78,7 +78,9 @@ describe('PageService referenced user identities', () => {
   });
 
   it('resolves only saved user cells and excludes deleted or foreign users', async () => {
-    databaseRowRepo.findActiveByPageId.mockResolvedValue({ databaseId: 'db-1' });
+    databaseRowRepo.findActiveByPageId.mockResolvedValue({
+      databaseId: 'db-1',
+    });
     databasePropertyRepo.findByDatabaseId.mockResolvedValue([
       { id: 'user-prop', type: 'user' },
       { id: 'text-prop', type: 'text' },
@@ -128,16 +130,48 @@ describe('PageService referenced user identities', () => {
   });
 
   it('does not expose row cell users when the database is outside the page space', async () => {
-    databaseRowRepo.findActiveByPageId.mockResolvedValue({ databaseId: 'db-1' });
+    databaseRowRepo.findActiveByPageId.mockResolvedValue({
+      databaseId: 'db-1',
+    });
     databaseRepo.findById.mockResolvedValue({ spaceId: 'space-2' });
 
-    const result = await service.resolveReferencedUsers(
-      page,
-      [CELL_USER_ID],
-    );
+    const result = await service.resolveReferencedUsers(page, [CELL_USER_ID]);
 
     expect(result).toEqual([]);
     expect(databaseCellRepo.findByDatabaseAndPage).not.toHaveBeenCalled();
+  });
+
+  it('resolves every stored participant and only the current system field actor', async () => {
+    databaseRowRepo.findActiveByPageId.mockResolvedValue({
+      databaseId: 'db-1',
+      updatedAt: '2026-10-31T10:00:00Z',
+      updatedById: OTHER_USER_ID,
+    });
+    databasePropertyRepo.findByDatabaseId.mockResolvedValue([
+      { id: 'participants', type: 'user' },
+      { id: 'actor', type: 'updated_by' },
+    ]);
+    databaseCellRepo.findByDatabaseAndPage.mockResolvedValue([
+      {
+        propertyId: 'participants',
+        value: [{ id: CELL_USER_ID }, { id: STAKEHOLDER_ID }],
+      },
+    ]);
+    const result = await service.resolveReferencedUsers(
+      {
+        ...page,
+        settings: {},
+        updatedAt: '2026-10-31T09:00:00Z',
+        lastUpdatedById: ASSIGNEE_ID,
+      },
+      [CELL_USER_ID, STAKEHOLDER_ID, OTHER_USER_ID, ASSIGNEE_ID],
+    );
+    expect(result.map((user) => user.id)).toEqual([
+      CELL_USER_ID,
+      STAKEHOLDER_ID,
+      OTHER_USER_ID,
+    ]);
+    expect(JSON.stringify(result)).not.toContain('email');
   });
 
   it('preserves old assignments but rejects new assignments outside the space', async () => {

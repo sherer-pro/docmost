@@ -4,6 +4,7 @@ import { RawBuilder, sql } from 'kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
 import { DatabaseRowRepo } from '@docmost/db/repos/database/database-row.repo';
+import { databasePropertyValue } from '@docmost/db/utils/database-computed-value';
 import {
   executeWithCursorPagination,
   defaultEncodeCursor,
@@ -12,6 +13,9 @@ import {
   getDatabaseViewPropertyIds,
   normalizeDatabaseViewState,
   normalizeDatabaseValue,
+  databaseComparableType,
+  isDatabaseComputedProperty,
+  validateDatabaseFormulaSchema,
   type DatabaseCalculation,
   type DatabaseFilterGroup,
   type DatabaseFilterRule,
@@ -34,6 +38,7 @@ export interface DatabaseViewQueryInput {
   state: DatabaseViewState;
   groupKey?: string;
   viewId?: string;
+  positionDirection?: 'asc' | 'desc';
   trx?: KyselyTransaction;
 }
 
@@ -48,6 +53,7 @@ export class DatabaseViewQueryService {
     let state: DatabaseViewState;
     try {
       state = normalizeDatabaseViewState(input);
+      validateDatabaseFormulaSchema(properties);
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Invalid database input',
@@ -59,12 +65,15 @@ export class DatabaseViewQueryService {
     if (
       state.groupBy &&
       !['select', 'multi_select', 'checkbox', 'user'].includes(
-        byId.get(state.groupBy)?.type,
+        databaseComparableType(byId.get(state.groupBy)),
       )
     )
       throw new BadRequestException('Invalid grouping property');
     for (const [id, calculation] of Object.entries(state.calculations)) {
-      const type = byId.get(id)?.type;
+      const type =
+        id === 'title'
+          ? 'multiline_text'
+          : databaseComparableType(byId.get(id));
       if (
         (['sum', 'average', 'min', 'max'].includes(calculation) &&
           type !== 'number') ||
@@ -87,16 +96,19 @@ export class DatabaseViewQueryService {
     if (id === 'title')
       return sql`lower(coalesce(${sql.ref('pages.title')}, '')) collate "C"`;
     const property = input.properties.find((property) => property.id === id);
+    const type = databaseComparableType(property);
     const raw = this.rawValue(id);
     const text = sql`case when jsonb_typeof(${raw}) = 'string' then ${raw} #>> '{}' when jsonb_typeof(${raw}) = 'object' then coalesce(${raw}->>'id', ${raw}->>'value', ${raw}->>'name') else ${raw}::text end`;
-    if (property?.type === 'number')
+    if (type === 'number')
       return sql`case when jsonb_typeof(${raw}) = 'number' then (${raw} #>> '{}')::numeric else null end`;
-    if (property?.type === 'date')
+    if (type === 'date')
       return sql`coalesce(${raw}->>'start', case when jsonb_typeof(${raw}) = 'string' then ${raw} #>> '{}' end)`;
-    if (property?.type === 'user')
-      return sql`coalesce((select lower(u.name) from users u where u.id::text = (${text}) and u.workspace_id = ${input.workspaceId}), lower(${text})) collate "C"`;
-    if (property?.type === 'page_reference')
-      return sql`coalesce((select lower(p.title) from pages p where p.id::text = (${text}) and p.id = any(${input.referenceReadablePageIds ?? input.readablePageIds}::uuid[]) and p.workspace_id = ${input.workspaceId} and p.deleted_at is null), lower(${text})) collate "C"`;
+    if (type === 'user')
+      return sql`(select string_agg(lower(coalesce(u.name, item.value #>> '{}')), ', ' order by lower(coalesce(u.name, item.value #>> '{}'))) from jsonb_array_elements(${this.userIds(raw)}) item(value) left join users u on u.id::text = item.value #>> '{}' and u.workspace_id = ${input.workspaceId} and u.deleted_at is null) collate "C"`;
+    if (type === 'page_reference')
+      return sql`(select lower(coalesce(p.title, '')) from pages p where p.id::text = (${text}) and p.id = any(${input.referenceReadablePageIds ?? input.readablePageIds}::uuid[]) and p.workspace_id = ${input.workspaceId} and p.deleted_at is null) collate "C"`;
+    if (type === 'file')
+      return sql`(select string_agg(item.value->>'name', ', ' order by item.ordinality) from jsonb_array_elements(${raw}) with ordinality item(value, ordinality)) collate "C"`;
     if (property?.type === 'select') {
       const options = property.settings?.options ?? [];
       let label: RawBuilder<any> = text;
@@ -112,13 +124,20 @@ export class DatabaseViewQueryService {
     return sql`(${raw} is null or ${raw} = 'null'::jsonb or ${raw} = '""'::jsonb or ${raw} = '[]'::jsonb)`;
   }
 
+  private userIds(raw: RawBuilder<any>): RawBuilder<any> {
+    return sql`coalesce((select jsonb_agg(distinct coalesce(item.value->'id', item.value)) from jsonb_array_elements(case when jsonb_typeof(${raw}) = 'array' then ${raw} when ${raw} is not null and ${raw} != 'null'::jsonb then jsonb_build_array(${raw}) else '[]'::jsonb end) item(value) where coalesce(item.value->>'id', item.value #>> '{}') ~* '^[0-9a-f-]{36}$'), '[]'::jsonb)`;
+  }
+
   private condition(
     rule: DatabaseFilterRule,
     input: DatabaseViewQueryInput,
   ): RawBuilder<boolean> {
-    const property = input.properties.find(
+    const sourceProperty = input.properties.find(
       (property) => property.id === rule.propertyId,
     );
+    const property = sourceProperty
+      ? { ...sourceProperty, type: databaseComparableType(sourceProperty) }
+      : undefined;
     const raw = this.rawValue(rule.propertyId);
     let value = this.value(rule.propertyId, input);
     if (property?.type === 'date') {
@@ -142,6 +161,20 @@ export class DatabaseViewQueryService {
       return rule.propertyId === 'title'
         ? sql`${value} != ''`
         : sql`not ${this.empty(rule.propertyId)}`;
+    if (
+      property?.type === 'user' &&
+      ['equals', 'not_equals'].includes(rule.operator)
+    ) {
+      const ids = Array.isArray(rule.value) ? rule.value : [rule.value];
+      if (
+        !ids.length ||
+        ids.length > 20 ||
+        ids.some((id) => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))
+      )
+        throw new BadRequestException('Invalid participant filter');
+      const match = sql<boolean>`${this.userIds(raw)} ?| ${ids}::text[]`;
+      return rule.operator === 'not_equals' ? sql`not (${match})` : match;
+    }
     if (property?.type === 'multi_select') {
       if (
         !['contains', 'not_contains', 'equals', 'not_equals'].includes(
@@ -247,7 +280,12 @@ export class DatabaseViewQueryService {
     );
     for (const id of getDatabaseViewPropertyIds(input.state)) {
       const property = input.properties.find((property) => property.id === id);
-      const cell = sql<any>`(select normalize_database_cell_value(c.value, ${property?.type ?? 'multiline_text'}) as current_value from database_cells c where c.database_id = ${sql.ref('databaseRows.databaseId')} and c.page_id = ${sql.ref('databaseRows.pageId')} and c.property_id = ${id} and c.deleted_at is null limit 1)`;
+      let value = databasePropertyValue(id, input.properties);
+      if (property?.type === 'page_reference') {
+        const raw = value;
+        value = sql`case when coalesce(${raw}->>'id', ${raw} #>> '{}') = any(${input.referenceReadablePageIds ?? input.readablePageIds}::text[]) then ${raw} else null::jsonb end`;
+      }
+      const cell = sql<any>`(select ${value} as current_value)`;
       query = query.leftJoinLateral(cell.as(this.cellAlias(id)), (join) =>
         join.onTrue(),
       );
@@ -268,9 +306,12 @@ export class DatabaseViewQueryService {
       );
       const raw = this.rawValue(input.state.groupBy);
       if (key === null) query = query.where(this.empty(input.state.groupBy));
-      else if (property.type === 'multi_select')
+      else if (
+        property.type === 'multi_select' ||
+        databaseComparableType(property) === 'user'
+      )
         query = query.where(
-          sql<boolean>`${raw} @> ${JSON.stringify([key])}::text::jsonb`,
+          sql<boolean>`${databaseComparableType(property) === 'user' ? this.userIds(raw) : raw} @> ${JSON.stringify([key])}::text::jsonb`,
         );
       else
         query = query.where(
@@ -290,6 +331,39 @@ export class DatabaseViewQueryService {
     },
   ) {
     let query: any = this.query(input);
+    const resolved = input.properties.filter(
+      (property) =>
+        isDatabaseComputedProperty(property.type) ||
+        property.type === 'file' ||
+        property.type === 'page_reference' ||
+        property.type === 'user',
+    );
+    if (resolved.length) {
+      query = query.select(
+        sql`(select jsonb_agg(resolved_cell.value) from (values ${sql.join(
+          resolved.map((property) => {
+            let value = databasePropertyValue(property.id, input.properties);
+            if (property.type === 'page_reference') {
+              const raw = value;
+              value = sql`case when coalesce(${raw}->>'id', ${raw} #>> '{}') = any(${input.referenceReadablePageIds ?? input.readablePageIds}::text[]) then ${raw} else null::jsonb end`;
+            }
+            const stored = sql`(select c.revision from database_cells c where c.database_id = ${input.databaseId}::uuid and c.page_id = ${sql.ref('databaseRows.pageId')} and c.property_id = ${property.id}::uuid and c.deleted_at is null)`;
+            return sql`(jsonb_build_object('id', ${property.id}::text, 'databaseId', ${input.databaseId}::text, 'workspaceId', ${input.workspaceId}::text, 'pageId', ${sql.ref('databaseRows.pageId')}, 'propertyId', ${property.id}::text, 'value', ${value}, 'revision', ${isDatabaseComputedProperty(property.type) ? sql`0` : sql`coalesce(${stored}, 0)`}, 'attachmentId', null))`;
+          }),
+        )}) resolved_cell(value))`.as('resolvedCells'),
+      );
+    }
+    const project = (items: any[]) =>
+      items.map(({ resolvedCells, ...row }) => ({
+        ...row,
+        cells: [
+          ...(row.cells ?? []).filter(
+            (cell) =>
+              !resolved.some((property) => property.id === cell.propertyId),
+          ),
+          ...(resolvedCells ?? []),
+        ],
+      }));
     const fields: any[] = [];
     if (input.viewId && input.state.sorts.length === 0) {
       const position = sql`coalesce((select p.position from database_view_row_positions p where p.view_id = ${input.viewId}::uuid and p.page_id = ${sql.ref('databaseRows.pageId')}), ${sql.ref('pages.position')}, '') collate "C"`;
@@ -303,8 +377,11 @@ export class DatabaseViewQueryService {
     for (const [index, sort] of input.state.sorts.entries()) {
       const value = this.value(sort.propertyId, input);
       const isNumber =
-        input.properties.find((p) => p.id === sort.propertyId)?.type ===
-        'number';
+        databaseComparableType(
+          input.properties.find((p) => p.id === sort.propertyId) ?? {
+            type: null,
+          },
+        ) === 'number';
       const empty = sql`case when ${value} is null then 1 else 0 end`;
       const comparable = isNumber
         ? sql`coalesce(${value}, 0)`
@@ -325,7 +402,7 @@ export class DatabaseViewQueryService {
     fields.push(
       {
         expression: sql`coalesce(${sql.ref('pages.position')}, '') collate "C"`,
-        direction: 'asc',
+        direction: input.positionDirection ?? 'asc',
         key: 'pagePosition',
       },
       {
@@ -359,12 +436,14 @@ export class DatabaseViewQueryService {
     }
     if (!options.limit)
       return {
-        items: await fields
-          .reduce(
-            (q, field) => q.orderBy(field.expression, field.direction),
-            query,
-          )
-          .execute(),
+        items: project(
+          await fields
+            .reduce(
+              (q, field) => q.orderBy(field.expression, field.direction),
+              query,
+            )
+            .execute(),
+        ),
         nextCursor: null,
         hasMore: false,
       };
@@ -379,7 +458,7 @@ export class DatabaseViewQueryService {
         ),
     });
     return {
-      items: page.items,
+      items: project(page.items),
       nextCursor: page.meta.nextCursor,
       hasMore: page.meta.hasNextPage,
     };
@@ -427,11 +506,28 @@ export class DatabaseViewQueryService {
       ...calculations.map(([id, operation], index) =>
         this.aggregate(id, operation, input).as(`value${index}`),
       ),
+      ...calculations.map(([id], index) =>
+        (id === 'title'
+          ? sql`0::int`
+          : sql`count(*) filter (where ${this.rawValue(id)} ? 'error')::int`
+        ).as(`error${index}`),
+      ),
     ];
     const result: any = await base.select(select).executeTakeFirst();
     const values = (row: any) =>
       Object.fromEntries(
         calculations.map(([id], index) => [id, row[`value${index}`] ?? null]),
+      );
+    const errors = (row: any) =>
+      Object.fromEntries(
+        calculations
+          .filter((_, index) => Number(row[`error${index}`]) > 0)
+          .map(([id]) => [
+            id,
+            Number(
+              row[`error${calculations.findIndex(([key]) => key === id)}`],
+            ),
+          ]),
       );
     const groups: DatabaseSummary['groups'] = [];
     if (input.state.groupBy) {
@@ -440,8 +536,9 @@ export class DatabaseViewQueryService {
       );
       const raw = this.rawValue(property.id);
       const groupValue =
-        property.type === 'multi_select'
-          ? sql`coalesce((select jsonb_agg(distinct item) from jsonb_array_elements(case when jsonb_typeof(${raw}) = 'array' then case when jsonb_array_length(${raw}) > 0 then ${raw} else '[null]'::jsonb end else '[null]'::jsonb end) item), '[null]'::jsonb)`
+        property.type === 'multi_select' ||
+        databaseComparableType(property) === 'user'
+          ? sql`coalesce((select jsonb_agg(distinct item) from jsonb_array_elements(case when jsonb_array_length(${databaseComparableType(property) === 'user' ? this.userIds(raw) : sql`case when jsonb_typeof(${raw}) = 'array' then ${raw} else '[]'::jsonb end`}) > 0 then ${databaseComparableType(property) === 'user' ? this.userIds(raw) : raw} else '[null]'::jsonb end) item), '[null]'::jsonb)`
           : sql`jsonb_build_array(case when ${this.empty(property.id)} then null else coalesce(${raw}->'id', ${raw}->'value', ${raw}) end)`;
       const grouped: any = await base
         .crossJoinLateral(
@@ -452,13 +549,14 @@ export class DatabaseViewQueryService {
         .orderBy(sql`group_item.value`)
         .execute();
       const userNames =
-        property.type === 'user'
+        databaseComparableType(property) === 'user'
           ? new Map(
               (
                 await dbOrTx(this.db, input.trx)
                   .selectFrom('users')
                   .select(['id', 'name'])
                   .where('workspaceId', '=', input.workspaceId)
+                  .where('deletedAt', 'is', null)
                   .where(
                     sql<boolean>`id::text = any(${grouped.map((row) => String(row.groupValue))}::text[])`,
                   )
@@ -473,16 +571,24 @@ export class DatabaseViewQueryService {
           label =
             property.settings?.options?.find((option) => option.value === key)
               ?.label ?? label;
-        if (property.type === 'user' && key)
+        if (databaseComparableType(property) === 'user' && key)
           label = userNames.get(String(key)) ?? label;
         groups.push({
           key: JSON.stringify(key),
           label,
           count: row.count,
           values: values(row),
+          ...(Object.keys(errors(row)).length ? { errors: errors(row) } : {}),
         });
       }
     }
-    return { count: result?.count ?? 0, values: values(result ?? {}), groups };
+    return {
+      count: result?.count ?? 0,
+      values: values(result ?? {}),
+      groups,
+      ...(Object.keys(errors(result ?? {})).length
+        ? { errors: errors(result ?? {}) }
+        : {}),
+    };
   }
 }

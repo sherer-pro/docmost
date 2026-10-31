@@ -1,4 +1,4 @@
-import { DatabasePropertyType } from '@docmost/api-contract';
+import { DatabasePropertyType } from "@docmost/api-contract";
 
 /**
  * Translation keys for user-facing database property type labels.
@@ -10,16 +10,21 @@ export const DATABASE_PROPERTY_TYPE_LABEL_KEYS: Record<
   DatabasePropertyType,
   string
 > = {
-  multiline_text: 'Text',
-  checkbox: 'Checkbox',
-  code: 'Code',
-  select: 'Select',
-  user: 'User',
-  page_reference: 'Page',
-  number: 'dbTable.number',
-  date: 'dbTable.date',
-  multi_select: 'dbTable.multiSelect',
-  url: 'dbTable.url',
-  email: 'dbTable.email',
-  phone: 'dbTable.phone',
+  multiline_text: "Text",
+  checkbox: "Checkbox",
+  code: "Code",
+  select: "Select",
+  user: "User",
+  page_reference: "Page",
+  number: "dbTable.number",
+  date: "dbTable.date",
+  multi_select: "dbTable.multiSelect",
+  url: "dbTable.url",
+  email: "dbTable.email",
+  phone: "dbTable.phone",
+  created_at: "dbTable.createdAt",
+  updated_at: "dbTable.updatedAt",
+  updated_by: "dbTable.updatedBy",
+  file: "dbTable.file",
+  formula: "dbTable.formula",
 };

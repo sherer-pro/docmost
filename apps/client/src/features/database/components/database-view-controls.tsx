@@ -18,6 +18,7 @@ import type {
   DatabaseFilterRule,
   DatabaseViewState,
 } from "@docmost/api-contract";
+import { databaseComparableType } from "@docmost/api-contract";
 import type { IDatabaseProperty } from "../types/database.types";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
 import { IconArrowDown, IconArrowUp, IconTrash } from "@tabler/icons-react";
@@ -153,7 +154,7 @@ export function DatabaseViewControls({
         data={properties
           .filter((property) =>
             ["select", "multi_select", "checkbox", "user"].includes(
-              property.type,
+              databaseComparableType(property),
             ),
           )
           .map((property) => ({ value: property.id, label: property.name }))}
@@ -183,10 +184,12 @@ export function DatabaseViewControls({
               "count",
               "filled",
               "empty",
-              ...(property.type === "number"
+              ...(databaseComparableType(property) === "number"
                 ? ["sum", "average", "min", "max"]
                 : []),
-              ...(property.type === "date" ? ["earliest", "latest"] : []),
+              ...(databaseComparableType(property) === "date"
+                ? ["earliest", "latest"]
+                : []),
             ].map((value) => ({ value, label: t(`dbTable.${value}`) }))}
             onChange={(value) => {
               const calculations = { ...state.calculations };
@@ -368,7 +371,8 @@ function FilterRuleEditor({
   const property = properties.find(
     (property) => property.id === rule.propertyId,
   );
-  const typed = property?.type === "number" || property?.type === "date";
+  const type = databaseComparableType(property);
+  const typed = type === "number" || type === "date";
   const operators = [
     "equals",
     "not_equals",
@@ -376,7 +380,7 @@ function FilterRuleEditor({
     "is_not_empty",
     ...(typed
       ? ["gt", "gte", "lt", "lte", "between"]
-      : property?.type === "checkbox"
+      : type === "checkbox"
         ? []
         : ["contains", "not_contains"]),
   ];
@@ -385,7 +389,7 @@ function FilterRuleEditor({
     change: (value: unknown) => void,
     suffix = "",
   ) =>
-    property?.type === "number" ? (
+    type === "number" ? (
       <NumberInput
         aria-label={`${t("Value")}${suffix}`}
         value={
@@ -393,7 +397,7 @@ function FilterRuleEditor({
         }
         onChange={change}
       />
-    ) : property?.type === "checkbox" ? (
+    ) : type === "checkbox" ? (
       <Select
         aria-label={t("Value")}
         data={[
@@ -413,7 +417,7 @@ function FilterRuleEditor({
     ) : (
       <TextInput
         aria-label={`${t("Value")}${suffix}`}
-        type={property?.type === "date" ? "date" : "text"}
+        type={type === "date" ? "date" : "text"}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => change(event.currentTarget.value)}
       />
@@ -437,8 +441,9 @@ function FilterRuleEditor({
               propertyId: id,
               operator: "equals",
               value:
-                properties.find((property) => property.id === id)?.type ===
-                "number"
+                databaseComparableType(
+                  properties.find((property) => property.id === id),
+                ) === "number"
                   ? 0
                   : "",
             })
