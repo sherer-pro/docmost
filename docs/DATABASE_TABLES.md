@@ -229,5 +229,8 @@ enabled. Each browser audit writes into that run's own `release/` directory;
 audit uses its own Compose project and an empty explicit environment file, so
 Compose cannot load the repository `.env`. No existing runtime or user account is
 used. Runtime cleanup follows the same ownership checks as ordinary acceptance.
+Docker build contexts exclude private QA artifacts and machine-local `.codex`
+configuration; a linked verification checkout must not place its local MCP
+configuration into an application image.
 
 The synthetic browser fixture is test-only and is not reachable from the production application entry point. Its API stores synthetic records in memory. The live runner instead exercises the actual local application, its PostgreSQL transactions, and Redis workers.

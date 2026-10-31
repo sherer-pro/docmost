@@ -24,6 +24,9 @@
 .idea
 .vscode
 
+# Machine-local agent configuration is not part of the application image.
+/.codex
+
 # Claude Code local tooling (settings + git worktrees).
 # Worktrees contain full repo copies; without this, nested apps/* and
 # packages/* get copied into the image and Nx fails the project graph with
