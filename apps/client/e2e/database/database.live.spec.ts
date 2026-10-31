@@ -1,6 +1,7 @@
 import {
   expect,
   test as base,
+  request as playwrightRequest,
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
@@ -1797,12 +1798,21 @@ for (const mobileWidth of [0, 320, 390])
   test(`live advanced database formula, participants and file controls (${mobileWidth ? `mobile ${mobileWidth}` : "desktop"})`, async ({
     page,
     browser,
-    request,
   }, info) => {
     test.setTimeout(90000);
     const mobile = mobileWidth > 0;
     const advanced = fixture.advanced;
-    const formulaName = `Triple ${info.project.name} ${mobile ? "mobile" : "desktop"}`;
+    const caseSuffix = mobile ? `mobile-${mobileWidth}` : "desktop";
+    const formulaName = `Triple ${info.project.name} ${caseSuffix}`;
+    const uploadedName = `uploaded-${info.project.name}-${caseSuffix}.txt`;
+    const cleanupApi = await playwrightRequest.newContext({
+      baseURL: process.env.DATABASE_LIVE_URL,
+      storageState: sessions.editor,
+    });
+    const actionStart = Date.now();
+    const actions: Array<{ action: string; elapsedMs: number }> = [];
+    const mark = (action: string) =>
+      actions.push({ action, elapsedMs: Date.now() - actionStart });
     let createdId: string | undefined;
     if (mobile) {
       await page.setViewportSize({ width: mobileWidth, height: 844 });
@@ -1815,8 +1825,24 @@ for (const mobileWidth of [0, 320, 390])
         `[data-database-cell-key="${advanced.rowId}:${advanced.properties[name].id}"]`,
       );
     try {
+      await api(
+        cleanupApi,
+        `/databases/${advanced.databaseId}/rows/${advanced.rowId}/cells`,
+        "PATCH",
+        {
+          contractVersion: 4,
+          cells: [
+            {
+              propertyId: advanced.properties.Files.id,
+              value: [{ attachmentId: advanced.fileId }],
+            },
+          ],
+        },
+      );
+      mark("baseline-restored");
       await page.goto(advanced.route);
       await expect(page.getByText("Rows: 305", { exact: true })).toBeVisible();
+      mark("table-ready");
       await page.getByRole("textbox", { name: "View", exact: true }).click();
       await page
         .getByRole("option", { name: "Advanced view", exact: true })
@@ -1870,7 +1896,7 @@ for (const mobileWidth of [0, 320, 390])
         .getByRole("button", { name: "Edit", exact: true })
         .click({ timeout: 5000 });
       await files.locator('input[type="file"]').setInputFiles({
-        name: `uploaded-${info.project.name}.txt`,
+        name: uploadedName,
         mimeType: "text/plain",
         buffer: Buffer.from("Browser upload to a file property"),
       });
@@ -1885,9 +1911,14 @@ for (const mobileWidth of [0, 320, 390])
           ).value.length;
         })
         .toBe(2);
+      await expect(
+        files.getByRole("link", { name: uploadedName, exact: true }),
+      ).toBeVisible();
+      mark("file-uploaded");
       await page
         .getByRole("button", { name: "Add property", exact: true })
         .click();
+      mark("property-creator-open");
       await page
         .getByRole("textbox", { name: "New column name", exact: true })
         .fill(formulaName);
@@ -1895,11 +1926,21 @@ for (const mobileWidth of [0, 320, 390])
         .getByRole("textbox", { name: "Property type", exact: true })
         .click();
       await page.getByRole("option", { name: "Formula", exact: true }).click();
+      await expect(
+        page.getByRole("textbox", { name: "Property type", exact: true }),
+      ).toHaveValue("Formula");
+      await expect(
+        page.getByRole("button", { name: "Add property", exact: true }),
+      ).toHaveAttribute("aria-expanded", "true");
+      mark("formula-type-selected");
       await page.getByRole("button", { name: "Property", exact: true }).click();
+      mark("formula-dialog-requested");
       const modal = page.getByRole("dialog", {
         name: formulaName,
         exact: true,
       });
+      await expect(modal).toBeVisible();
+      mark("formula-dialog-ready");
       await modal
         .getByRole("textbox", { name: "Expression", exact: true })
         .fill('add(1, "invalid")');
@@ -1914,6 +1955,7 @@ for (const mobileWidth of [0, 320, 390])
         .fill(`multiply(prop("${advanced.properties.Budget.id}"), 3)`);
       await modal.getByRole("button", { name: "Save", exact: true }).click();
       await expect(modal).toHaveCount(0);
+      mark("formula-saved");
       const properties = await api(
         page.request,
         `/databases/${advanced.databaseId}/properties`,
@@ -1927,15 +1969,19 @@ for (const mobileWidth of [0, 320, 390])
       );
       await computed.click({ timeout: 5000 });
       await expect(computed).toHaveText("3");
+      mark("reload-start");
       await page.reload();
       await expect(computed).toHaveText("3");
+      mark("reload-ready");
       await computed.click({ timeout: 5000 });
+      mark("screenshot-start");
       await page.screenshot({
         path: info.outputPath(
           `advanced-${mobile ? "mobile-dark" : "desktop-light"}.png`,
         ),
         fullPage: true,
       });
+      mark("screenshot-ready");
       const readerContext = await browser.newContext({
         storageState: sessions.reader,
         viewport: page.viewportSize() ?? undefined,
@@ -1943,23 +1989,25 @@ for (const mobileWidth of [0, 320, 390])
       try {
         const reader = await readerContext.newPage();
         await reader.goto(advanced.route);
+        mark("reader-open");
         const readerFile = reader.locator(
           `[data-database-cell-key="${advanced.rowId}:${advanced.properties.Files.id}"]`,
         );
         await expect(
           readerFile.getByRole("link", {
-            name: `uploaded-${info.project.name}.txt`,
+            name: uploadedName,
           }),
         ).toBeVisible();
+        mark("reader-file-ready");
         const downloadPromise = reader.waitForEvent("download");
         await readerFile
           .getByRole("link", {
-            name: `uploaded-${info.project.name}.txt`,
+            name: uploadedName,
           })
           .click({ timeout: 5000 });
-        expect((await downloadPromise).suggestedFilename()).toBe(
-          `uploaded-${info.project.name}.txt`,
-        );
+        mark("download-clicked");
+        expect((await downloadPromise).suggestedFilename()).toBe(uploadedName);
+        mark("download-ready");
         await expect(
           readerFile.getByRole("button", { name: "Edit", exact: true }),
         ).toHaveCount(0);
@@ -1970,26 +2018,40 @@ for (const mobileWidth of [0, 320, 390])
         await readerContext.close();
       }
     } finally {
-      await page.close();
-      if (createdId)
-        await api(
-          request,
-          `/databases/${advanced.databaseId}/properties/${createdId}`,
-          "DELETE",
-        );
-      await api(
-        request,
-        `/databases/${advanced.databaseId}/rows/${advanced.rowId}/cells`,
-        "PATCH",
-        {
-          contractVersion: 4,
-          cells: [
-            {
-              propertyId: advanced.properties.Files.id,
-              value: [{ attachmentId: advanced.fileId }],
-            },
-          ],
-        },
-      );
+      try {
+        await info.attach("advanced-action-timing", {
+          body: Buffer.from(JSON.stringify(actions)),
+          contentType: "application/json",
+        });
+        if (!page.isClosed()) await page.close();
+      } finally {
+        try {
+          try {
+            if (createdId)
+              await api(
+                cleanupApi,
+                `/databases/${advanced.databaseId}/properties/${createdId}`,
+                "DELETE",
+              );
+          } finally {
+            await api(
+              cleanupApi,
+              `/databases/${advanced.databaseId}/rows/${advanced.rowId}/cells`,
+              "PATCH",
+              {
+                contractVersion: 4,
+                cells: [
+                  {
+                    propertyId: advanced.properties.Files.id,
+                    value: [{ attachmentId: advanced.fileId }],
+                  },
+                ],
+              },
+            );
+          }
+        } finally {
+          await cleanupApi.dispose();
+        }
+      }
     }
   });

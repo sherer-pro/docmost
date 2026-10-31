@@ -2540,6 +2540,7 @@ export function DatabaseTableView({
                   />
                   <Select
                     aria-label={t("Property type")}
+                    comboboxProps={{ withinPortal: false }}
                     value={newPropertyType}
                     data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
                       value: propertyType,
