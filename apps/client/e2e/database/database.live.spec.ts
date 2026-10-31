@@ -5,6 +5,8 @@ import {
   type Page,
   type APIRequestContext,
 } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { editorClipboard } from "./editor-clipboard";
 
 const test = base.extend({
   serviceWorkers: async ({ browserName: _browserName }, provide, info) => {
@@ -1792,6 +1794,326 @@ for (const undo of [true, false])
       `/databases/${fixture.otherDatabaseId}/rows?limit=100`,
     );
     expect(otherRows.items).toHaveLength(0);
+  });
+
+for (const [theme, width] of [
+  ["light", 1440],
+  ["dark", 390],
+] as const)
+  test(`live collaborative document blocks persist, copy and undo ${theme} ${width}`, async ({
+    page,
+    browser,
+  }, info) => {
+    test.setTimeout(90000);
+    const editorApi = await playwrightRequest.newContext({
+      baseURL: process.env.DATABASE_LIVE_URL,
+      storageState: sessions.editor,
+    });
+    const adminApi = await playwrightRequest.newContext({
+      baseURL: process.env.DATABASE_LIVE_URL,
+      storageState: sessions.admin,
+    });
+    const ownedPages: string[] = [];
+    const primaryBefore =
+      (await api(editorApi, "/users/me")).user.settings?.preferences
+        ?.pageEditModeByPageId ?? {};
+    const peerBefore =
+      (await api(adminApi, "/users/me")).user.settings?.preferences
+        ?.pageEditModeByPageId ?? {};
+    let peerContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+    const updatedNote = "Live footnote edited by the first user";
+    const remoteNote = "Remote footnote must survive the stale draft";
+    const peerText = "Hidden tab original — peer edit";
+    const editorOf = (target: Page) =>
+      target.getByRole("textbox", { name: "Editor", exact: true });
+    const pageRoute = (slugId: string) =>
+      `/s/${fixture.emptyTemplates.spaceSlug}/p/${slugId}`;
+    try {
+      const text = (value: string) => ({
+        type: "paragraph",
+        content: [{ type: "text", text: value }],
+      });
+      const content = {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "Live footnote source " },
+              {
+                type: "footnote",
+                attrs: { id: randomUUID() },
+                content: [{ type: "text", text: "Initial live footnote" }],
+              },
+            ],
+          },
+          {
+            type: "tabs",
+            attrs: { id: randomUUID() },
+            content: [
+              {
+                type: "tabItem",
+                attrs: { id: randomUUID(), title: "Overview" },
+                content: [text("Primary tab original")],
+              },
+              {
+                type: "tabItem",
+                attrs: { id: randomUUID(), title: "Details" },
+                content: [text("Hidden tab original")],
+              },
+            ],
+          },
+          text("Русский English العربية"),
+          text("مرحبا English русский"),
+          text("שלום English русский"),
+        ],
+      };
+      const source = await api(editorApi, "/pages", "POST", {
+        spaceId: fixture.spaceId,
+        parentPageId: fixture.emptyTemplates.parentId,
+        title: `Collaborative blocks ${info.project.name} ${theme}`,
+      });
+      ownedPages.push(source.id);
+      await api(editorApi, "/pages/actions/update", "POST", {
+        pageId: source.id,
+        content,
+        format: "json",
+        operation: "replace",
+      });
+      const target = await api(editorApi, "/pages", "POST", {
+        spaceId: fixture.spaceId,
+        parentPageId: fixture.emptyTemplates.parentId,
+        title: `Copied blocks ${info.project.name} ${theme}`,
+      });
+      ownedPages.push(target.id);
+      await api(editorApi, "/pages/actions/update", "POST", {
+        pageId: target.id,
+        content: { type: "doc", content: [text("Copy target seed")] },
+        format: "json",
+        operation: "replace",
+      });
+      const modes = Object.fromEntries(ownedPages.map((id) => [id, "edit"]));
+      await api(editorApi, "/users/update", "POST", {
+        pageEditModeByPageId: { ...primaryBefore, ...modes },
+      });
+      await api(adminApi, "/users/update", "POST", {
+        pageEditModeByPageId: { ...peerBefore, ...modes },
+      });
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(
+        (value) => localStorage.setItem("mantine-color-scheme-value", value),
+        theme,
+      );
+      peerContext = await browser.newContext({
+        baseURL: process.env.DATABASE_LIVE_URL,
+        storageState: sessions.admin,
+        viewport: { width, height: 900 },
+      });
+      await peerContext.addInitScript(
+        (value) => localStorage.setItem("mantine-color-scheme-value", value),
+        theme,
+      );
+      const peer = await peerContext.newPage();
+      await Promise.all([
+        page.goto(pageRoute(source.slugId)),
+        peer.goto(pageRoute(source.slugId)),
+      ]);
+      const primaryEditor = editorOf(page);
+      const peerEditor = editorOf(peer);
+      await expect(primaryEditor).toHaveAttribute("contenteditable", "true");
+      await expect(peerEditor).toHaveAttribute("contenteditable", "true");
+      const primaryNotes = page.locator('[role="doc-endnotes"]');
+      const peerNotes = peer.locator('[role="doc-endnotes"]');
+      await expect(primaryNotes).toContainText("Initial live footnote");
+      await expect(peerNotes).toContainText("Initial live footnote");
+      const primaryTabs = primaryEditor.locator("[data-docmost-tabs-scope]");
+      const peerTabs = peerEditor.locator("[data-docmost-tabs-scope]");
+      await peerTabs.getByRole("tab", { name: "Details", exact: true }).click();
+      await Promise.all([
+        (async () => {
+          await primaryNotes
+            .getByRole("button", { name: "Edit", exact: true })
+            .click();
+          await primaryNotes.getByRole("textbox").fill(updatedNote);
+          await primaryNotes
+            .getByRole("button", { name: "Save", exact: true })
+            .click();
+        })(),
+        (async () => {
+          const paragraph = peerTabs.getByText("Hidden tab original", {
+            exact: true,
+          });
+          await paragraph.click();
+          await paragraph.evaluate((element) => {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            range.collapse(false);
+            const selection = window.getSelection()!;
+            selection.removeAllRanges();
+            selection.addRange(range);
+          });
+          await peer.keyboard.insertText(" — peer edit");
+        })(),
+      ]);
+      await expect(primaryNotes).toContainText(updatedNote);
+      await expect(peerNotes).toContainText(updatedNote);
+      await expect(
+        primaryTabs.getByRole("tab", { name: "Overview", exact: true }),
+      ).toHaveAttribute("aria-selected", "true");
+      await expect(
+        peerTabs.getByRole("tab", { name: "Details", exact: true }),
+      ).toHaveAttribute("aria-selected", "true");
+      await expect(peerTabs).toContainText(peerText);
+      await expect(primaryTabs).toContainText(peerText);
+      await primaryTabs
+        .getByRole("button", { name: "Tab actions", exact: true })
+        .click();
+      await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+      const rename = page.getByRole("dialog", { name: "Rename", exact: true });
+      await rename
+        .getByRole("textbox", { name: "Name", exact: true })
+        .fill("Overview renamed");
+      await rename.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(
+        peerTabs.getByRole("tab", { name: "Overview renamed", exact: true }),
+      ).toBeVisible();
+      await expect(peerTabs).toContainText(peerText);
+      await expect(
+        peerTabs.getByRole("tab", { name: "Details", exact: true }),
+      ).toHaveAttribute("aria-selected", "true");
+      for (const [value, direction] of [
+        ["Русский English العربية", "ltr"],
+        ["مرحبا English русский", "rtl"],
+        ["שלום English русский", "rtl"],
+      ])
+        await expect(primaryEditor.getByText(value, { exact: true })).toHaveCSS(
+          "direction",
+          direction,
+        );
+      await peerNotes
+        .getByRole("button", { name: "Edit", exact: true })
+        .click();
+      await peerNotes
+        .getByRole("textbox")
+        .fill("This stale draft must not overwrite a peer");
+      await primaryNotes
+        .getByRole("button", { name: "Edit", exact: true })
+        .click();
+      await primaryNotes.getByRole("textbox").fill(remoteNote);
+      await primaryNotes
+        .getByRole("button", { name: "Save", exact: true })
+        .click();
+      await expect(peerEditor.locator('[role="doc-noteref"]')).toHaveAttribute(
+        "title",
+        remoteNote,
+      );
+      await expect(peerNotes.getByRole("textbox")).toHaveValue(
+        "This stale draft must not overwrite a peer",
+      );
+      await peerNotes
+        .getByRole("button", { name: "Save", exact: true })
+        .click();
+      await expect(peerNotes.getByRole("alert")).toBeVisible();
+      await peerNotes
+        .getByRole("button", { name: "Cancel", exact: true })
+        .click();
+      await expect(peerNotes).toContainText(remoteNote);
+      await primaryEditor.focus();
+      await primaryEditor.press("ControlOrMeta+a");
+      const clipboard = await editorClipboard(primaryEditor, "copy");
+      expect(clipboard["text/html"]).toContain('data-type="tabs"');
+      expect(clipboard["text/html"]).toContain(remoteNote);
+      expect(clipboard["text/html"]).toContain(peerText);
+      await page.goto(pageRoute(target.slugId));
+      const targetEditor = editorOf(page);
+      await expect(targetEditor).toContainText("Copy target seed");
+      await expect(targetEditor).toHaveAttribute("contenteditable", "true");
+      await targetEditor.focus();
+      await targetEditor.press("ControlOrMeta+a");
+      await editorClipboard(targetEditor, "paste", clipboard);
+      await expect(
+        targetEditor.getByRole("tab", {
+          name: "Overview renamed",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(page.locator('[role="doc-endnotes"]')).toContainText(
+        remoteNote,
+      );
+      await targetEditor.press("ControlOrMeta+z");
+      await expect(targetEditor).toContainText("Copy target seed");
+      await expect(targetEditor.getByRole("tab")).toHaveCount(0);
+      await targetEditor.press("ControlOrMeta+Shift+z");
+      await expect(
+        targetEditor.getByRole("tab", { name: "Details", exact: true }),
+      ).toBeVisible();
+      await expect(page.locator('[role="doc-endnotes"]')).toContainText(
+        remoteNote,
+      );
+      await page.screenshot({
+        path: info.outputPath(`collaborative-blocks-${theme}-${width}.png`),
+        fullPage: true,
+      });
+      await peerContext.close();
+      peerContext = undefined;
+      await page.goto("/home");
+      for (const pageId of ownedPages)
+        await expect
+          .poll(
+            async () => {
+              const saved = JSON.stringify(
+                (await api(editorApi, `/pages/info?pageId=${pageId}`)).content,
+              );
+              return [remoteNote, peerText, "Overview renamed"].every((value) =>
+                saved.includes(value),
+              );
+            },
+            { timeout: 20000 },
+          )
+          .toBe(true);
+      await page.goto(pageRoute(source.slugId));
+      await expect(page.locator('[role="doc-endnotes"]')).toContainText(
+        remoteNote,
+      );
+      await editorOf(page)
+        .getByRole("tab", { name: "Details", exact: true })
+        .click();
+      await expect(editorOf(page)).toContainText(peerText);
+    } finally {
+      const cleanupErrors: string[] = [];
+      const cleanup = async (label: string, action: () => Promise<unknown>) => {
+        try {
+          await action();
+        } catch {
+          cleanupErrors.push(label);
+        }
+      };
+      await cleanup("close-primary", async () => {
+        if (!page.isClosed()) await page.close();
+      });
+      await cleanup("close-peer", async () => {
+        await peerContext?.close();
+      });
+      for (const pageId of ownedPages)
+        await cleanup("remove-owned-page", () =>
+          api(adminApi, "/pages/actions/delete", "POST", {
+            pageId,
+            permanentlyDelete: true,
+          }),
+        );
+      await cleanup("restore-editor-preferences", () =>
+        api(editorApi, "/users/update", "POST", {
+          pageEditModeByPageId: primaryBefore,
+        }),
+      );
+      await cleanup("restore-peer-preferences", () =>
+        api(adminApi, "/users/update", "POST", {
+          pageEditModeByPageId: peerBefore,
+        }),
+      );
+      await Promise.all([editorApi.dispose(), adminApi.dispose()]);
+      expect.soft(cleanupErrors).toEqual([]);
+    }
   });
 
 for (const mobileWidth of [0, 320, 390])

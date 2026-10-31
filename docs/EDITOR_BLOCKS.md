@@ -1,5 +1,22 @@
 # Shared document blocks
 
+## Live collaboration acceptance
+
+The database live browser runner includes two-user document-block scenarios for
+desktop/light and mobile/dark in Chromium, Firefox and WebKit. It checks concurrent
+footnote and hidden-tab edits, a shared tab rename with independent active tabs,
+and rejection of a stale footnote draft. Browser clipboard events exercise copying
+the complete document to another authenticated page and undo/redo. After both
+collaboration clients leave the source, the test reads persisted content through
+the API and reopens it. Mixed Russian/English, Arabic and Hebrew paragraphs retain
+their expected directions. Synthetic actors and pages belong to the isolated
+runtime; permanent page cleanup uses its space administrator.
+
+Run the focused scenarios after building with
+`node apps/client/e2e/database/run-live.mjs --browser=all --grep="live collaborative document blocks"`.
+The full database matrix also includes these cases. Diagnostic runs with
+`--skip-postgres` do not replace the required final PostgreSQL acceptance.
+
 ## Markdown tables and expandable blocks
 
 The pinned GFM adapter has a root pnpm patch for semantic table headers after

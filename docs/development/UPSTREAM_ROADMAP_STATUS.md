@@ -6,6 +6,23 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The new live document-block scenarios exercise two authenticated users in
+desktop/light and mobile/dark. Chromium, Firefox and WebKit completed the body
+checks for concurrent edits, independent active tabs, a shared rename, stale
+footnote rejection, copying to another page, undo/redo, mixed text direction,
+persisted API content and reopening. The initial diagnostic failed only during
+cleanup because an editor cannot permanently delete pages. Cleanup now uses
+the isolated space administrator; both focused Chromium cases then passed,
+including all 34 HTTP/export/import checks and complete runtime cleanup.
+The final full three-browser matrix must still pass on the final candidate.
+
+The complete database tuning capture contains 120 records: 118 correct traces
+and the two date-question failures described below. Preparation p95 was 209 ms.
+After the v40 tool-schema clarification, a separate six-case tuning diagnostic
+passed both failures and four controls, with the model and request settings
+unchanged. This does not establish holdout or human-reviewed answer quality.
+The complete RAG tuning capture has started; holdout remains unopened.
+
 `ee369cf2` fixes the property-type selector inside the creation popover. Its
 portaled options were treated as outside clicks, closing the parent before the
 formula action could run. The corrected nested dropdown passed all three Firefox
