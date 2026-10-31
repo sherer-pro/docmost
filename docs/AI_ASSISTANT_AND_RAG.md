@@ -1,6 +1,12 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 38 -->
+<!-- ai-admin-guide-contract-version: 39 -->
+
+Markdown projections preserve semantic table headers even when editor column
+metadata precedes the body, retain every pipe character in cell values, and
+render rich expandable summaries as Markdown with explicit block boundaries.
+Headerless tables still receive an empty Markdown header; no data row is promoted
+to a heading. See [document block export behavior](EDITOR_BLOCKS.md).
 
 AI workers and admission use the same `REDIS_URL` contract as the API,
 collaboration and search maintenance queues. Both `redis://` and `rediss://`

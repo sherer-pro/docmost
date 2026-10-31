@@ -1665,7 +1665,8 @@
             "step2": "Recupero Test dalle impostazioni dello spazio",
             "step3": "Ricerca esterna Enable",
             "step4": "Le fonti database_row includono number, date, multi_select, url, email e phone. I filtri della vista non limitano RAG; valgono i permessi della pagina e la politica dei contenuti IA.",
-            "step5": "Ponga una domanda con un nome tra virgolette e controlli la sezione citata. Distingua i dati mancanti da un errore di ricerca."
+            "step5": "Ponga una domanda con un nome tra virgolette e controlli la sezione citata. Distingua i dati mancanti da un errore di ricerca.",
+            "step6": "Confrontate i riepiloghi espandibili e le intestazioni delle tabelle con la fonte citata. Markdown conserva enfasi, note e ogni | nelle celle; le tabelle senza celle di intestazione mantengono un’intestazione vuota."
           },
           "success": "Il test restituisce i candidati e nella risposta vengono conservate solo fonti leggibili e non escluse",
           "rollback": "Disabilita la ricerca esterna; Chat continua senza recupero",

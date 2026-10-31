@@ -1,5 +1,21 @@
 # Shared document blocks
 
+## Markdown tables and expandable blocks
+
+The pinned GFM adapter has a root pnpm patch for semantic table headers after
+`colgroup` and lossless escaping of repeated pipes. Its version remains 1.0.56.
+Both Node and browser builds consume that patched entrypoint. Tables containing
+only `td` cells still export an empty header and retain every data row.
+
+Expandable summaries are surrounded by Markdown block boundaries so emphasis,
+links and footnotes render inside the summary instead of becoming literal syntax.
+Sibling body blocks are separated by blank lines. The shared converter continues
+to process the summary as Markdown rather than copying raw HTML attributes.
+The summary reader unwraps a single Markdown paragraph only when no meaningful
+text sits beside it. Footnote HTML rules take precedence over a generic
+superscript mark; ordinary superscripts retain their existing semantics.
+HTML/PDF/DOCX/Docmost persistence and document schemas are unchanged.
+
 ## Integration links
 
 `integrationPreview` and `integrationMention` retain only a canonical URL across

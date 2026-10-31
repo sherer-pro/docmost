@@ -1,0 +1,35 @@
+diff --git a/lib/turndown-plugin-gfm.cjs.js b/lib/turndown-plugin-gfm.cjs.js
+index 2eef4018c536113df360ecb9c3ddf41837f9ac90..5ef4eac51d5a2ec40837fd1c106e235597e43e83 100644
+--- a/lib/turndown-plugin-gfm.cjs.js
++++ b/lib/turndown-plugin-gfm.cjs.js
+@@ -171,15 +171,18 @@ function isHeadingRow (tr) {
+   return (
+     parentNode.nodeName === 'THEAD' ||
+     (
+-      parentNode.firstChild === tr &&
++      parentNode.firstElementChild === tr &&
+       (parentNode.nodeName === 'TABLE' || isFirstTbody(parentNode)) &&
+-      every.call(tr.childNodes, function (n) { return n.nodeName === 'TH' })
++      every.call(tr.children, function (n) { return n.nodeName === 'TH' })
+     )
+   )
+ }
+ 
+ function isFirstTbody (element) {
+-  var previousSibling = element.previousSibling;
++  var previousSibling = element.previousElementSibling;
++  while (previousSibling && previousSibling.nodeName === 'COLGROUP') {
++    previousSibling = previousSibling.previousElementSibling;
++  }
+   return (
+     element.nodeName === 'TBODY' && (
+       !previousSibling ||
+@@ -196,7 +199,7 @@ function cell (content, node = null, index = null) {
+   var prefix = ' ';
+   if (index === 0) prefix = '| ';
+   let filteredContent = content.trim().replace(/\n\r/g, '<br>').replace(/\n/g, "<br>");
+-  filteredContent = filteredContent.replace(/\|+/g, '\\|');
++  filteredContent = filteredContent.replace(/\|/g, '\\|');
+   while (filteredContent.length < 3) filteredContent += ' ';
+   if (node) filteredContent = handleColSpan(filteredContent, node, ' ');
+   return prefix + filteredContent + ' |'

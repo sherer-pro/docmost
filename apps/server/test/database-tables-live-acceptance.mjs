@@ -11,6 +11,7 @@ import { runDocxAcceptance } from './docx-live-acceptance.mjs';
 import { runMcpOAuthAcceptance } from './mcp-oauth-live-acceptance.mjs';
 import { runIntegrationPreviewAcceptance } from './integration-preview-live-acceptance.mjs';
 import { runUpstreamRepairsAcceptance } from './upstream-repairs-live-acceptance.mjs';
+import { runMarkdownExportAcceptance } from './markdown-export-live-acceptance.mjs';
 import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
 import { runAdvancedDatabaseAcceptance } from './database-advanced-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -689,6 +690,8 @@ export async function runLiveAcceptance({
     await runIntegrationPreviewAcceptance({ api, fetchApi, actors, parent, space, sql, test, exactSecrets, output, fixture });
 
     await runUpstreamRepairsAcceptance({ api, fetchApi, actors, parent, space, sql, test });
+
+    await runMarkdownExportAcceptance({ api, fetchApi, actors, parent, space, test, output });
 
     fixture.aiApproval = await runAiDatabaseAcceptance({
       api,

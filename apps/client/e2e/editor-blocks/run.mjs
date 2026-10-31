@@ -25,6 +25,7 @@ try {
     for (const theme of ["light", "dark"]) {
       const context = await browser.newContext({
         viewport: { width, height: 850 },
+        locale: 'en-US',
       });
       page = await context.newPage();
       page.on("pageerror", (error) =>
@@ -217,6 +218,14 @@ try {
       await page.screenshot({
         path: path.join(output, `footnotes-${width}-${theme}.png`),
       });
+      await page.getByRole('button', { name: 'Import expandable Markdown', exact: true }).click();
+      await expect(page.locator('.ProseMirror summary strong')).toHaveText('Imported summary');
+      await expect(page.locator('[role="doc-endnotes"]')).toContainText('Imported canonical note');
+      await page.getByRole('button', { name: 'Toggle title', exact: true }).click();
+      await expect(page.locator('.ProseMirror th')).toContainText('Owner');
+      await expect(page.locator('.ProseMirror td')).toContainText('A ||| B');
+      await expect(page.locator('.ProseMirror p').filter({ hasText: 'Imported body' })).toBeVisible();
+      await page.screenshot({ path: path.join(output, `markdown-import-${width}-${theme}.png`) });
       results.push({
         width,
         theme,
@@ -224,6 +233,7 @@ try {
         mixedDirection: "passed",
         tabs: "passed",
         presentation: "passed",
+        markdownImport: 'passed',
         fullscreen: fullscreenSupported ? "passed" : "unavailable",
       });
       await context.close();

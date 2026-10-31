@@ -63,10 +63,16 @@ complete; final release acceptance and CI remain pending.
   AI/RAG retain only URLs. Private metadata revalidates provider authorization;
   current page access and connection revision are checked before returning it.
   Public documents never enrich links. See [integration previews](../INTEGRATION_PREVIEWS.md).
+- Correct Redis URL/TLS/ACL propagation and transactional page-label copying,
+  including target-space name mapping and rollback on relation insertion failure.
+- Markdown export preserves table headers after column metadata and repeated
+  pipe characters. Expandable summaries retain formatting and footnotes through
+  rendering/import; shared readers preserve summary text and distinguish
+  structured footnotes from generic superscripts.
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 `f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
-The advanced-property package is under final local acceptance. These packages have not been pushed or
+The advanced-property package has its recorded local acceptance. These packages have not been pushed or
 deployed as part of this task.
 
 `ae6bc660` and `d77f0909` commit the advanced-property implementation and its
@@ -83,7 +89,8 @@ pending as listed below.
   holdout and human evidence review remain required. Tool traces alone are insufficient.
 - Check the applicability of the listed upstream fixes before changing the
   corresponding fork paths. Redis URL/TLS and copied labels are confirmed and
-  corrected; final export/draw.io/WebSocket/search receipts remain required.
+  corrected; Markdown export/reader fixes also have recorded acceptance.
+  Final draw.io/WebSocket/search receipts remain required.
   See [the applicability checklist](../UPSTREAM_FIX_APPLICABILITY.md). Keep stack
   upgrades separate.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
@@ -108,6 +115,24 @@ No production configuration, permission or container was changed. Address this
 in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
+
+- `markdown-export-final-verify-full.log`: the final Markdown package passed the
+  complete gate (291 server suites / 2522 tests, 195 client files / 942 tests,
+  86 server-security suites / 1037 tests and 82 client-security tests).
+- `markdown-export-complete-reader-tests.log`: 35 editor-extension files / 157
+  tests passed, including seven export cases, summary import with preserved
+  surrounding text and footnote/superscript priority. The initial exporter run
+  retains five failing cases in `markdown-export-before-tests.log`.
+- `markdown-export-final-editor-browser.log`: all four desktop/mobile and
+  light/dark cases passed, including Markdown import with summary footnote,
+  semantic header and repeated pipes. Both import screenshots were inspected.
+  `markdown-server-reader-final.json` records the real compiled server
+  JSON/HTML/Markdown/JSON round-trip.
+- `markdown-export-node22-live.log`: the same build passed all 27 PostgreSQL
+  cases, 35 live checks, complete HTTP/export/import and both Chromium integration
+  cases on Node 22.23.4. Processes, containers and runtime were removed. The
+  separate portable Node binary has its official SHA256 receipt under
+  `artifacts/runtime-node22`; the system Node installation was not changed.
 
 - `upstream-repairs-verify-full.log`: full verification passed with 291 server
   suites / 2522 tests, 195 frontend files / 942 tests, 86 server-security suites /

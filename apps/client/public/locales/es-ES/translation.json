@@ -1665,7 +1665,8 @@
             "step2": "Recuperación de Test desde la configuración del espacio.",
             "step3": "Búsqueda externa Enable",
             "step4": "Las fuentes database_row incluyen number, date, multi_select, url, email y phone. Los filtros de vista no limitan RAG; se aplican los permisos de página y la política de contenido de IA.",
-            "step5": "Formule una pregunta con un nombre entre comillas y revise la sección citada. Distinga la falta de datos de un error de búsqueda."
+            "step5": "Formule una pregunta con un nombre entre comillas y revise la sección citada. Distinga la falta de datos de un error de búsqueda.",
+            "step6": "Compare los resúmenes desplegables y encabezados de tablas con la fuente citada. Markdown conserva el énfasis, las notas al pie y cada | en las celdas; las tablas sin celdas de encabezado mantienen un encabezado vacío."
           },
           "success": "La prueba arroja candidatos y la respuesta conserva solo fuentes legibles y no excluidas.",
           "rollback": "Deshabilitar la búsqueda externa; Chat continúa sin recuperación",

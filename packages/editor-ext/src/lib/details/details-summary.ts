@@ -6,9 +6,9 @@ export interface DetailsSummaryOptions {
 }
 
 export const DetailsSummary = Node.create<DetailsSummaryOptions>({
-  name: "detailsSummary",
-  group: "block",
-  content: "inline*",
+  name: 'detailsSummary',
+  group: 'block',
+  content: 'inline*',
   defining: true,
   isolating: true,
   selectable: false,
@@ -20,15 +20,29 @@ export const DetailsSummary = Node.create<DetailsSummaryOptions>({
   parseHTML() {
     return [
       {
-        tag: "summary",
+        tag: 'summary',
+        contentElement: (element) => {
+          const child = element.firstElementChild;
+          const wrapperOnly = Array.from(element.childNodes).every(
+            (node) =>
+              node === child ||
+              node.nodeType === 8 ||
+              (node.nodeType === 3 && !(node.textContent ?? '').trim()),
+          );
+          return element.children.length === 1 &&
+            child?.tagName === 'P' &&
+            wrapperOnly
+            ? (child as HTMLElement)
+            : element;
+        },
       },
     ];
   },
   renderHTML({ HTMLAttributes }) {
     return [
-      "summary",
+      'summary',
       mergeAttributes(
-        { "data-type": this.name },
+        { 'data-type': this.name },
         this.options.HTMLAttributes,
         HTMLAttributes,
       ),

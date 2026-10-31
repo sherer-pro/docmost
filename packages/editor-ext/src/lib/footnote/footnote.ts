@@ -91,6 +91,8 @@ export const Footnote = Node.create<{ view: any }>({
     return [
       {
         tag: 'sup[data-type="footnote"]',
+        // Structured footnotes must precede a generic superscript mark.
+        priority: 60,
         getContent: (element, schema) => {
           const text = footnoteText(
             (element as HTMLElement).getAttribute('data-footnote-text'),

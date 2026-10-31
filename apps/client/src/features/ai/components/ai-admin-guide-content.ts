@@ -119,7 +119,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
   },
   {
     anchor: "retrieval",
-    stepKeys: ["step1", "step2", "step3", "step4", "step5"],
+    stepKeys: ["step1", "step2", "step3", "step4", "step5", "step6"],
     titleKey: "ai.settings.retrievalSection",
     contentKey: "ai.adminGuide.scenario.retrieval",
     settingsPath: "/settings/ai/spaces",

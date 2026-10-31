@@ -1665,7 +1665,8 @@
             "step2": "Recuperação Test das configurações de espaço",
             "step3": "Pesquisa externa Enable",
             "step4": "As fontes database_row incluem number, date, multi_select, url, email e phone. Os filtros da visualização não limitam RAG; os direitos da página e a política de conteúdo de IA continuam válidos.",
-            "step5": "Faça uma pergunta com um nome entre aspas e confira a seção citada. Diferencie dados ausentes de uma falha de pesquisa."
+            "step5": "Faça uma pergunta com um nome entre aspas e confira a seção citada. Diferencie dados ausentes de uma falha de pesquisa.",
+            "step6": "Compare os resumos expansíveis e cabeçalhos com a fonte citada. Markdown preserva ênfase, notas e cada | nas células; tabelas sem células de cabeçalho mantêm um cabeçalho vazio."
           },
           "success": "O teste retorna candidatos e a resposta mantém apenas fontes legíveis e não excluídas",
           "rollback": "Desative a pesquisa externa; Chat continua sem recuperação",

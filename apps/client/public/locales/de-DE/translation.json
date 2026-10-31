@@ -1665,7 +1665,8 @@
             "step2": "Test-Abruf aus den Space-Einstellungen",
             "step3": "Enable externe Suche",
             "step4": "database_row-Quellen enthalten number, date, multi_select, url, email und phone. Ansichtsfilter begrenzen RAG nicht; Seitenzugriff und die KI-Inhaltsrichtlinie bleiben maßgeblich.",
-            "step5": "Stellen Sie eine Frage mit einem Namen in Anführungszeichen und prüfen Sie den zitierten Abschnitt. Unterscheiden Sie fehlende Daten von einem Suchfehler."
+            "step5": "Stellen Sie eine Frage mit einem Namen in Anführungszeichen und prüfen Sie den zitierten Abschnitt. Unterscheiden Sie fehlende Daten von einem Suchfehler.",
+            "step6": "Vergleichen Sie aufklappbare Zusammenfassungen und Tabellenüberschriften mit der zitierten Quelle. Markdown bewahrt Hervorhebungen, Fußnoten und jedes | in Zellen; Tabellen ohne Kopfzellen behalten eine leere Überschrift."
           },
           "success": "Der Test gibt Kandidaten zurück und die Antwort enthält nur lesbare, nicht ausgeschlossene Quellen",
           "rollback": "Externe Suche deaktivieren; Chat wird ohne Abruf fortgesetzt",

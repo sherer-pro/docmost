@@ -1665,7 +1665,8 @@
             "step2": "Test retrieval from the space settings",
             "step3": "Enable external search",
             "step4": "Database row sources include number, date, multi_select, url, email, and phone properties. View filters do not restrict RAG; page access and the AI content policy remain authoritative.",
-            "step5": "Ask with a quoted name, then inspect the cited section. Distinguish missing data from unavailable search."
+            "step5": "Ask with a quoted name, then inspect the cited section. Distinguish missing data from unavailable search.",
+            "step6": "Compare expandable summaries and table headers with the cited source. Markdown export preserves emphasis, footnotes and every pipe character in cell values; a table without header cells keeps an empty heading."
           },
           "success": "The test returns candidates and the answer keeps only readable, non-excluded sources",
           "rollback": "Disable external search; Chat continues without retrieval",

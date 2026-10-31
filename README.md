@@ -526,6 +526,8 @@ The export system for pages, spaces, and databases has been redesigned:
 - Word (DOCX) page export with editable tables, embedded raster images, links,
   native footnotes and permitted database snapshots; all tab content is included;
 
+- Markdown export preserving real table headers, repeated pipes, rich expandable summaries and block boundaries;
+
 - export of the current database view with its filters, sorting, and visible columns;
 
 - export of child pages;

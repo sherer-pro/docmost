@@ -13,6 +13,7 @@ import { UndoRedo } from "@tiptap/extensions";
 import { mainExtensions } from "@/features/editor/extensions/extensions";
 import { Footnotes } from "@/features/editor/components/footnote/footnotes";
 import PresentationModal from "@/features/editor/components/presentation/presentation-modal";
+import { htmlToMarkdown, markdownToHtml } from '@docmost/editor-ext';
 
 const i18n = createInstance();
 await i18n.init({
@@ -32,6 +33,12 @@ function Controls() {
   return (
     <Group>
       <Button onClick={() => setPresenting(true)}>Present fixture</Button>
+      <Button onClick={async () => {
+        setTerm('');
+        editor?.commands.setSearchTerm('');
+        const html = '<details><summary><strong>Imported summary</strong><sup data-type="footnote" data-footnote-id="imported-summary-note" data-footnote-text="Imported canonical note">1</sup></summary><div data-type="detailsContent"><p>Imported body</p><table><colgroup><col></colgroup><tbody><tr><th>Owner</th></tr><tr><td>A ||| B</td></tr></tbody></table></div></details>';
+        editor?.commands.setContent(await markdownToHtml(htmlToMarkdown(html)));
+      }}>Import expandable Markdown</Button>
       {presenting && (
         <PresentationModal
           title="Presentation fixture"

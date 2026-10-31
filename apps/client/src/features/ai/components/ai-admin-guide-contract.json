@@ -1,5 +1,5 @@
 {
-  "version": 38,
+  "version": 39,
   "anchors": [
     "assistant",
     "retrieval",
@@ -406,6 +406,7 @@
     "scenario.inboundMcp.steps.step4",
     "security.owners.workspaceAdminAndUser",
     "diagram.mcp.nodes.userAuthorization",
-    "scenario.assistant.steps.step12"
+    "scenario.assistant.steps.step12",
+    "scenario.retrieval.steps.step6"
   ]
 }

@@ -1665,7 +1665,8 @@
             "step2": "Test ophalen uit de ruimte-instellingen",
             "step3": "Enable extern zoeken",
             "step4": "database_row-bronnen bevatten number, date, multi_select, url, email en phone. Weergavefilters beperken RAG niet; paginatoegang en het AI-inhoudsbeleid blijven bepalend.",
-            "step5": "Stel een vraag met een naam tussen aanhalingstekens en controleer de geciteerde sectie. Onderscheid ontbrekende gegevens van een zoekfout."
+            "step5": "Stel een vraag met een naam tussen aanhalingstekens en controleer de geciteerde sectie. Onderscheid ontbrekende gegevens van een zoekfout.",
+            "step6": "Vergelijk uitklapbare samenvattingen en tabelkoppen met de geciteerde bron. Markdown behoudt nadruk, voetnoten en elk | in cellen; tabellen zonder kopcellen houden een lege kop."
           },
           "success": "De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen",
           "rollback": "Schakel extern zoeken uit; Chat gaat verder zonder ophalen",

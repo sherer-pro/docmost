@@ -188,7 +188,7 @@ function preserveDetail(turndownService: _TurndownService) {
       let detailSummary = '';
 
       if (summary) {
-        detailSummary = `<summary>${turndownService.turndown(summary.innerHTML)}</summary>`;
+        detailSummary = `<summary>\n\n${turndownService.turndown(summary.innerHTML)}\n\n</summary>`;
       }
 
       const detailsContent = Array.from(node.childNodes)
@@ -198,7 +198,7 @@ function preserveDetail(turndownService: _TurndownService) {
             ? turndownService.turndown((child as HTMLElement).outerHTML)
             : child.textContent,
         )
-        .join('');
+        .join('\n\n');
 
       return `\n<details>\n${detailSummary}\n\n${detailsContent}\n\n</details>\n`;
     },

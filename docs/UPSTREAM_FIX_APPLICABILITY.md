@@ -53,12 +53,12 @@ target labels together. The explicit diagnostic command is
 `node apps/client/e2e/database/run-live.mjs --upstream-repairs-only --api-only`;
 the same checks also run in the full database live acceptance.
 
-## Paths with existing fork behavior
+## Export and compatibility checks
 
 | Area | Source-backed finding | Acceptance still required |
 | --- | --- | --- |
-| Markdown tables | `upstream-markdown-before.json` now reproduces an empty header from actual editor HTML containing semantic `th` cells after `colgroup`. The installed GFM adapter fails to recognize that header. | Apply and verify a targeted adapter fix, including complete cell values and alignment. A separate headerless `td` fixture still legitimately needs a blank Markdown header. |
-| Markdown `details` | Actual rich summary text becomes literal Markdown inside an HTML `summary` element. Body paragraphs remain distinct in the editor-generated content wrapper. | Preserve summary formatting and verify nested lists, tables and multiple blocks through export and import. |
+| Markdown tables | `upstream-markdown-before.json` reproduces an empty header from actual editor HTML containing semantic `th` cells after `colgroup`. A pinned patch fixes header detection and loss of repeated pipes; the dependency stays at 1.0.56. | Seven export regressions pass, including a genuinely headerless table. The Node 22 live suite verifies downloaded Markdown/HTML headers and complete pipe values. |
+| Markdown `details` | Rich summary Markdown has explicit block boundaries; adjacent body blocks remain separate. Readers preserve an isolated paragraph wrapper and prioritize structured footnotes over generic superscript marks. | All 157 shared package tests pass. Compiled server round-trip, four theme/size browser cases and Node 22 downloaded files pass. |
 | draw.io copy | `getDiagramAttachmentIdForSave` already detaches repeated attachment references; only the documented ownership/not-found conflicts retry as a new asset. Other upload errors remain errors. | Recheck same-page and cross-page copy with actual attachments and source preservation. |
 | WebSocket | The API and dedicated collaboration process remain separate, with authenticated Redis relay and ownership leases. | Recheck reconnection and current-session/access revocation with the existing browser/live suites. |
 | Search performance | The fork keeps its PostgreSQL/Typesense, structured-value, label and dictionary paths. | Complete the existing final performance/browser gates; no new search driver is added. |

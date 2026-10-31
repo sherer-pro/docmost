@@ -1,10 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import { getSchema, generateText } from '@tiptap/core';
+import { getSchema, generateText, Mark } from '@tiptap/core';
+import { generateJSON } from '@tiptap/html';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Footnote, collectFootnotes, footnoteText } from './footnote';
 import { prepareFootnotesForExport } from './export';
 
 describe('footnote content contract', () => {
+  it('imports footnote metadata before a generic superscript mark without consuming plain superscripts', () => {
+    const Superscript = Mark.create({
+      name: 'superscript',
+      parseHTML: () => [{ tag: 'sup' }],
+      renderHTML: () => ['sup', 0],
+    });
+    const readers = [StarterKit, Superscript, Footnote];
+    const parsed = generateJSON(
+      '<p>Source<sup data-type="footnote" data-footnote-id="note-one" data-footnote-text="Canonical note"><a href="#fn-1">1</a></sup></p>',
+      readers,
+    );
+    expect(
+      parsed.content?.[0].content?.find((node) => node.type === 'footnote')
+        ?.content?.[0].text,
+    ).toBe('Canonical note');
+    const plain = generateJSON('<p>10<sup>2</sup></p>', readers);
+    expect(
+      plain.content?.[0].content?.some((node) => node.type === 'footnote'),
+    ).toBe(false);
+    expect(
+      plain.content?.[0].content
+        ?.find((node) => node.text === '2')
+        ?.marks?.some((mark) => mark.type === 'superscript'),
+    ).toBe(true);
+  });
   const extensions = [StarterKit, Footnote];
   const doc = {
     type: 'doc',

@@ -71,6 +71,9 @@ patchedDependencies:
   '@hocuspocus/server@3.4.4':
     hash: 0e2477de55376c40a251f6370dec23864a44d328e2be7420ba6c3676a880e3f1
     path: patches/@hocuspocus__server@3.4.4.patch
+  '@joplin/turndown-plugin-gfm@1.0.56':
+    hash: c03bf76c7a74013093c84f30a6229cfc8435e1e440a2eb02a7786620a34ed6a4
+    path: patches/@joplin__turndown-plugin-gfm@1.0.56.patch
   '@mantine/core@8.3.14':
     hash: bc74860553a94e78c299d625e276ed5bee6b366d4b6376fdc65c587861e7aafb
     path: patches/@mantine__core@8.3.14.patch
@@ -837,7 +840,7 @@ importers:
         version: 4.0.74
       '@joplin/turndown-plugin-gfm':
         specifier: ^1.0.56
-        version: 1.0.56
+        version: 1.0.56(patch_hash=c03bf76c7a74013093c84f30a6229cfc8435e1e440a2eb02a7786620a34ed6a4)
       '@tiptap/core':
         specifier: 3.30.5
         version: 3.30.5(@tiptap/pm@3.30.5)
@@ -14141,7 +14144,7 @@ snapshots:
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
-  '@joplin/turndown-plugin-gfm@1.0.56': {}
+  '@joplin/turndown-plugin-gfm@1.0.56(patch_hash=c03bf76c7a74013093c84f30a6229cfc8435e1e440a2eb02a7786620a34ed6a4)': {}
 
   '@joplin/turndown@4.0.74':
     dependencies:

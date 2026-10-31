@@ -1665,7 +1665,8 @@
             "step2": "Récupération Test à partir des paramètres de l'espace",
             "step3": "Recherche externe Enable",
             "step4": "Les sources database_row incluent number, date, multi_select, url, email et phone. Les filtres de vue ne limitent pas RAG ; les droits de page et la politique de contenu IA restent prioritaires.",
-            "step5": "Posez une question avec un nom entre guillemets et vérifiez la section citée. Distinguez les données manquantes d’une recherche indisponible."
+            "step5": "Posez une question avec un nom entre guillemets et vérifiez la section citée. Distinguez les données manquantes d’une recherche indisponible.",
+            "step6": "Comparez les résumés dépliables et les en-têtes de tableaux avec la source citée. Markdown conserve l’emphase, les notes et chaque | des cellules ; un tableau sans cellules d’en-tête garde un en-tête vide."
           },
           "success": "Le test renvoie les candidats et la réponse ne conserve que les sources lisibles et non exclues",
           "rollback": "Désactivez la recherche externe ; Chat continue sans récupération",
