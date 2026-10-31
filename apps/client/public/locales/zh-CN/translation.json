@@ -1649,7 +1649,8 @@
             "step9": "Agent 测试使用 tool_choice: required 提供一个函数。仍须返回一次有效的 capabilityProbe 调用，在不扩大工具权限的情况下支持 LM Studio。",
             "step10": "Agent 只能读取系统字段、公式和文件属性。使用汇总值前请检查计算错误。参与者提案最多可包含 20 个现有且可分配的成员。",
             "step11": "请检查服务器结果卡片、计算时间和已保存的条件。匹配记录会根据当前访问权限和AI策略重新读取。结构更改后需要重新查询；读取单条记录还需要查询权限。",
-            "step12": "集成卡片和提及在共享文档、导出及 AI/RAG 内容中仅保存 URL。私有元数据通过每位读者自己的连接获取，不作为 AI 知识来源。INTEGRATION_PREVIEW_ALLOWED_ORIGINS 独立于 AI 提供商、检索和 MCP 的允许列表。"
+            "step12": "集成卡片和提及在共享文档、导出及 AI/RAG 内容中仅保存 URL。私有元数据通过每位读者自己的连接获取，不作为 AI 知识来源。INTEGRATION_PREVIEW_ALLOWED_ORIGINS 独立于 AI 提供商、检索和 MCP 的允许列表。",
+            "step13": "数据库工具支持通过 viewState.filter 中的 conjunction 和 conditions [{propertyId, operator, value}] 显式更改筛选条件。日期使用 YYYY-MM-DD，空值通过 is_empty / is_not_empty 判断。省略 viewState 会保留已固定的视图。summarizeDatabaseView.count 返回匹配行数；不完整的行预览不能确定整个筛选结果的总计。"
           },
           "success": "测试答案完成； Agent 仅列出允许的工具并在写入之前询问",
           "rollback": "禁用 Agent 或空间模型，然后恢复最后一次已知的良好设置",

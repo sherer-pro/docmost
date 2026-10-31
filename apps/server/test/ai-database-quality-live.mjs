@@ -6,6 +6,10 @@ import path from 'node:path';
 import { request } from '../../client/e2e/database/api-context.mjs';
 import { evaluateDatabaseTrace } from '../../../scripts/ai-database-quality.mjs';
 import {
+  parseQualityQuestionIds,
+  selectQualityQuestions,
+} from './ai-quality-selection.mjs';
+import {
   providerTextSegments,
   sourceWasTransmitted,
 } from './ai-quality-transmission.mjs';
@@ -59,6 +63,7 @@ export function databaseQualityConfiguration() {
     scope,
     split,
     limit,
+    questionIds: parseQualityQuestionIds(option('ids', ''), split, limit),
     temperature: 0,
     maxOutputTokens: 4096,
     contextWindow: 65536,
@@ -79,10 +84,7 @@ export async function runDatabaseQuality({
     new URL('../../../tests/rag-quality/corpus.json', import.meta.url),
   );
   const corpus = JSON.parse(corpusBytes);
-  let questions = corpus.databaseQuestions.filter(
-    (question) => question.split === config.split,
-  );
-  if (config.limit) questions = questions.slice(0, config.limit);
+  const questions = selectQualityQuestions(corpus.databaseQuestions, config);
   const databaseIds = new Set(
     questions.map((question) => question.databaseContext.databaseId),
   );

@@ -1,5 +1,5 @@
 {
-  "version": 39,
+  "version": 40,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,15 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "database-view-filter-grammar",
+      "key": "scenario.assistant.steps.step13",
+      "needles": [
+        "viewState.filter",
+        "YYYY-MM-DD",
+        "summarizeDatabaseView.count"
+      ]
+    },
     {
       "id": "inbound-mcp-user-oauth",
       "key": "scenario.inboundMcp.technical",
@@ -407,6 +416,7 @@
     "security.owners.workspaceAdminAndUser",
     "diagram.mcp.nodes.userAuthorization",
     "scenario.assistant.steps.step12",
+    "scenario.assistant.steps.step13",
     "scenario.retrieval.steps.step6"
   ]
 }

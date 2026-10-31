@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { selectQualityQuestions } from './ai-quality-selection.mjs';
 import { createServer } from 'node:http';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
@@ -69,10 +70,7 @@ export async function runRagQuality({
     new URL('../../../tests/rag-quality/corpus.json', import.meta.url),
   );
   const corpus = JSON.parse(corpusBytes);
-  let questions = corpus.questions.filter(
-    (question) => question.split === config.split,
-  );
-  if (config.limit) questions = questions.slice(0, config.limit);
+  const questions = selectQualityQuestions(corpus.questions, config);
   const contexts = [];
   const actor = async () => {
     const api = await request.newContext({

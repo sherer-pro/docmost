@@ -6,6 +6,27 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+`ee369cf2` fixes the property-type selector inside the creation popover. Its
+portaled options were treated as outside clicks, closing the parent before the
+formula action could run. The corrected nested dropdown passed all three Firefox
+advanced-property scenarios at desktop, 320px and 390px with unchanged timeouts.
+The same diagnostic runtime passed all 34 HTTP/export/import checks and removed
+its owned processes, containers and temporary runtime. PostgreSQL was explicitly
+skipped in this focused diagnostic; the complete final matrix remains required.
+File scenarios now restore their owned attachment baseline through an independent
+API context and use separate file names for each viewport, preventing failed
+cleanup from contaminating later cases.
+
+The ongoing complete database tuning capture exposed date-question failures:
+one unsupported refusal and one answer obtained without the expected server
+aggregate. Tool definitions previously advertised `viewState` as an unspecified
+object. They now publish the bounded filter grammar and instruct counts through
+`summarizeDatabaseView.count`. Both MCP and internal Agent receive that schema;
+the compiler and permissions remain authoritative. Guide contract v40 and all
+12 locales describe it. The schema/service suite passed 42 tests; model quality
+after this clarification is still unmeasured. Explicit tuning-only question IDs
+support focused diagnostics without opening holdout or weakening its full gate.
+
 The final acceptance work now includes a dedicated `--release` mode for the
 owned database runtime. It requires Node 22, freezes shared package artifacts,
 provisions synthetic authentication and invokes the unchanged complete

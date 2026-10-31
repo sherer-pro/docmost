@@ -1649,7 +1649,8 @@
             "step9": "Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다.",
             "step10": "Agent는 시스템 필드, 수식 및 파일 속성을 읽기만 할 수 있습니다. 합계를 사용하기 전에 계산 오류를 확인하세요. 참가자 제안에는 할당 가능한 기존 멤버를 최대 20명 포함할 수 있습니다.",
             "step11": "서버 결과 카드, 계산 시각 및 저장된 조건을 확인하세요. 일치하는 레코드는 현재 접근 권한과 AI 정책에 따라 다시 읽습니다. 스키마가 바뀌면 새 조회가 필요하며, 개별 레코드를 읽으려면 조회 권한도 필요합니다.",
-            "step12": "연동 카드와 멘션은 공유 문서, 내보내기 및 AI/RAG 콘텐츠에 URL만 저장합니다. 비공개 메타데이터는 각 독자의 개인 연결로 불러오며 AI 지식 소스로 사용하지 않습니다. INTEGRATION_PREVIEW_ALLOWED_ORIGINS는 AI 공급자, 검색 및 MCP 허용 목록과 별개입니다."
+            "step12": "연동 카드와 멘션은 공유 문서, 내보내기 및 AI/RAG 콘텐츠에 URL만 저장합니다. 비공개 메타데이터는 각 독자의 개인 연결로 불러오며 AI 지식 소스로 사용하지 않습니다. INTEGRATION_PREVIEW_ALLOWED_ORIGINS는 AI 공급자, 검색 및 MCP 허용 목록과 별개입니다.",
+            "step13": "데이터베이스 도구는 viewState.filter의 conjunction과 conditions [{propertyId, operator, value}]로 선택 조건을 명시적으로 변경할 수 있습니다. 날짜는 YYYY-MM-DD를, 빈 값 확인은 is_empty / is_not_empty를 사용합니다. viewState를 생략하면 고정된 보기가 유지됩니다. summarizeDatabaseView.count는 일치하는 행 수를 반환합니다. 불완전한 행 미리보기로 전체 선택의 합계를 확정할 수는 없습니다."
           },
           "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
           "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",

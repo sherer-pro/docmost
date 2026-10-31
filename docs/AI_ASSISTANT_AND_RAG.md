@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 39 -->
+<!-- ai-admin-guide-contract-version: 40 -->
 
 Markdown projections preserve semantic table headers even when editor column
 metadata precedes the body, retain every pipe character in cell values, and
@@ -931,6 +931,19 @@ filters, sorting and selected rows. An empty array clears calculations. Legacy
 exact opaque UUIDs; quoted IDs, duplicate entries and unsupported operations are
 rejected rather than repaired. The existing schema/type validation and the
 read-only MCP policy still apply.
+
+The database tool definitions publish the `viewState.filter` grammar: a group
+with `conjunction: and | or` and `conditions: [{propertyId, operator, value}]`.
+One nested group level and at most ten rules in total are supported. Date
+comparisons use ISO `YYYY-MM-DD` strings; `is_empty` and `is_not_empty` do not
+require a value. Property IDs and select values come from `getDatabaseContext`.
+An explicit `viewState` replaces the current view rather than merging its filter;
+omitting it preserves the frozen view. Explicitly selected rows still constrain
+the result. For questions about how many records match, Agent is instructed to
+call `summarizeDatabaseView` and use its server-owned `count`, including when the
+user requests different date or status conditions. Reading a context snapshot or
+one page of rows is not a substitute. The existing compiler remains responsible
+for live ACL/AI policy, property types, identifiers and the combined rule budget.
 
 Open WebUI receives explicit `k=40` and `k_reranker=40` candidate limits; Docmost
 then selects eight final readable fragments by default. Keeping reranked

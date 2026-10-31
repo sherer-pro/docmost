@@ -90,6 +90,13 @@ endpoint and forwards inference only to the fixed selected model.
 Transport capture alone does not provide retrieval-candidate instrumentation,
 human claim review or combined RAG quality acceptance.
 `--quality-limit=6` is a connectivity/tuning diagnostic, not corpus acceptance.
+After a complete tuning capture, `--quality-ids=id1,id2` can isolate observed
+tuning failures without opening holdout. IDs must belong to the selected scope
+and tuning split; duplicate, unknown and holdout IDs are rejected. This option
+cannot be combined with `--quality-limit`. Configuration receipts retain the
+explicit IDs and the actual question list. A targeted diagnostic does not replace
+the complete corpus capture or the full holdout gate. Selection helpers are
+checked by `node --test apps/server/test/ai-quality-selection.test.mjs`.
 Fix settings before the separate `--quality-split=holdout` run. Configuration,
 corpus hash, run IDs, tool traces and timings stay in the isolated run's ignored
 artifact directory. Missing preparation timing stays null. The runner always

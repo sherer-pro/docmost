@@ -14,7 +14,9 @@ import {
 import {
   AI_BUILTIN_TOOL_CAPABILITIES,
   AI_LEGACY_AGENT_CAPABILITIES,
+  normalizeDatabaseViewState,
 } from '@docmost/api-contract';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
 
 function buildRegistry(): AiToolRegistryService {
   // The constructor only assembles definitions and validates their names, so
@@ -35,6 +37,62 @@ function buildRegistry(): AiToolRegistryService {
 }
 
 describe('built-in AI tool names', () => {
+  it.each(['queryDatabaseView', 'summarizeDatabaseView'])(
+    '%s advertises executable date filters and rejects malformed criteria',
+    (name) => {
+      const registry = buildRegistry();
+      const tool = registry.get(name, 'agent')!;
+      expect(registry.get(name, 'mcp')?.inputSchema).toEqual(tool.inputSchema);
+      const validate = new AjvJsonSchemaValidator().getValidator(
+        tool.inputSchema as any,
+      );
+      const databaseId = '11111111-1111-4111-8111-111111111111';
+      const dateId = '22222222-2222-4222-8222-222222222222';
+      const condition = {
+        propertyId: dateId,
+        operator: 'equals',
+        value: '2026-10-01',
+      };
+      const viewState = {
+        filter: { conjunction: 'and', conditions: [condition] },
+        sorts: [{ propertyId: dateId, direction: 'asc' }],
+        groupBy: null,
+        columnOrder: [dateId],
+      };
+      expect(validate({ databaseId }).valid).toBe(true);
+      expect(validate({ databaseId, viewState }).valid).toBe(true);
+      expect(normalizeDatabaseViewState(viewState).filter).toEqual(
+        viewState.filter,
+      );
+      expect(
+        validate({
+          databaseId,
+          viewState: { filter: { conjunction: 'and', conditions: [] } },
+        }).valid,
+      ).toBe(true);
+      for (const filter of [
+        { conjunction: 'and', conditions: 'SELECT * FROM pages' },
+        {
+          conjunction: 'and',
+          conditions: [{ ...condition, operator: 'sql' }],
+        },
+        { conjunction: 'and', conditions: Array(11).fill(condition) },
+        {
+          conjunction: 'and',
+          conditions: [
+            {
+              conjunction: 'or',
+              conditions: [{ conjunction: 'and', conditions: [condition] }],
+            },
+          ],
+        },
+      ])
+        expect(validate({ databaseId, viewState: { filter } }).valid).toBe(
+          false,
+        );
+    },
+  );
+
   it('publishes the exact capability catalog with complete policy metadata', () => {
     const tools = buildRegistry().list('agent');
 
