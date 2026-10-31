@@ -20,6 +20,7 @@ import {
   databaseUserIds,
   isDatabaseComputedProperty,
   DatabaseViewState,
+  DatabaseCalculation,
   formatDatabaseValue,
   getDatabaseViewPropertyIds,
 } from '@docmost/api-contract';
@@ -34,6 +35,45 @@ import {
 import { DatabaseService } from '../../database/services/database.service';
 import { databaseSchemaFingerprint } from '../../../common/helpers/database-schema.util';
 export { databaseSchemaFingerprint } from '../../../common/helpers/database-schema.util';
+
+export const AI_DATABASE_CALCULATIONS: readonly DatabaseCalculation[] = [
+  'count',
+  'filled',
+  'empty',
+  'sum',
+  'average',
+  'min',
+  'max',
+  'earliest',
+  'latest',
+];
+
+function calculationOverrides(
+  value: unknown,
+): Record<string, DatabaseCalculation> | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 20)
+    throw new BadRequestException('Expected at most 20 database calculations');
+  const result: Record<string, DatabaseCalculation> = {};
+  for (const item of value) {
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      Array.isArray(item) ||
+      Object.keys(item).some(
+        (key) => !['propertyId', 'operation'].includes(key),
+      ) ||
+      !isUuid(item.propertyId ?? '') ||
+      !AI_DATABASE_CALCULATIONS.includes(item.operation) ||
+      Object.prototype.hasOwnProperty.call(result, item.propertyId)
+    )
+      throw new BadRequestException(
+        'Invalid database calculation; use exact property IDs and supported operations',
+      );
+    result[item.propertyId] = item.operation;
+  }
+  return result;
+}
 
 export function normalizeAiDatabaseContext(value: unknown): AiDatabaseContext {
   const input = value as AiDatabaseContext;
@@ -98,6 +138,7 @@ export class AiDatabaseService {
     context: ExecutionContext,
     state?: unknown,
     expectedSchemaFingerprint?: string,
+    calculations?: Record<string, DatabaseCalculation>,
   ) {
     if (!isUuid(databaseId ?? ''))
       throw new BadRequestException('Invalid database ID');
@@ -132,6 +173,15 @@ export class AiDatabaseService {
       context.databaseContext?.databaseId === databaseId
         ? context.databaseContext
         : undefined;
+    const baseState = state ?? saved?.viewState ?? {};
+    if (
+      calculations &&
+      (!baseState || typeof baseState !== 'object' || Array.isArray(baseState))
+    )
+      throw new BadRequestException('Invalid database view state');
+    const effectiveState = calculations
+      ? { ...(baseState as object), calculations }
+      : baseState;
     let readablePageIds = [...snapshot.readablePageIds].filter(
       (id) => !excluded.has(id),
     );
@@ -170,10 +220,7 @@ export class AiDatabaseService {
         referenceReadablePageIds,
         groupKey: saved?.groupKey,
         properties: normalized,
-        state: this.query.validateState(
-          state ?? saved?.viewState ?? {},
-          normalized,
-        ),
+        state: this.query.validateState(effectiveState, normalized),
       },
     };
   }
@@ -189,6 +236,7 @@ export class AiDatabaseService {
       context,
       args.viewState,
       expectedSchemaFingerprint,
+      calculationOverrides(args.calculations),
     );
     return this.db
       .transaction()

@@ -65,7 +65,10 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceRole } from '../../../common/helpers/types/permission';
 import { KnowledgeProjectionService } from '../../rag/knowledge-projection.service';
-import { AiDatabaseService } from '../services/ai-database.service';
+import {
+  AiDatabaseService,
+  AI_DATABASE_CALCULATIONS,
+} from '../services/ai-database.service';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
 // rejected, or expired write proposal starts a new segment. The run-level
@@ -1056,14 +1059,32 @@ export class AiToolRegistryService {
     const tools: InternalAiToolDefinition[] = [false, true].map((summary) => ({
       name: summary ? 'summarizeDatabaseView' : 'queryDatabaseView',
       description: summary
-        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Omit viewState to use the frozen current filters, calculations and selected rows. Use this tool for totals, never sum a context snapshot or one page of rows.'
-        : 'Query typed database cells. Omit viewState to use the frozen current view and selected rows. Supply a validated viewState only for a requested override. Results are paginated; hasMore means the selection is incomplete.',
+        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Omit viewState to use the frozen current filters and selected rows. For calculation overrides prefer calculations: [{propertyId, operation}], using exact property IDs as values. This array replaces only calculations, preserving filters and sorting. Never sum a context snapshot or one page of rows.'
+        : 'Query typed database cells. Omit viewState to use the frozen current view and selected rows. Supply a validated viewState only for a requested override. For calculation overrides prefer calculations: [{propertyId, operation}] with exact IDs as values. Results are paginated; hasMore means the selection is incomplete.',
       inputSchema: {
         type: 'object',
         additionalProperties: false,
         required: ['databaseId'],
         properties: {
           databaseId,
+          calculations: {
+            type: 'array',
+            maxItems: 20,
+            description:
+              'Optional calculation overrides. Replaces viewState.calculations. Empty array clears calculations. Preserve exact IDs without embedded quotes.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['propertyId', 'operation'],
+              properties: {
+                propertyId: { type: 'string', format: 'uuid' },
+                operation: {
+                  type: 'string',
+                  enum: [...AI_DATABASE_CALCULATIONS],
+                },
+              },
+            },
+          },
           viewState: { type: 'object' },
           ...(summary
             ? {}

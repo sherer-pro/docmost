@@ -164,6 +164,21 @@ export function resolveCurrentEvidence(
   hit: { text: string; sectionId?: string; local?: boolean; partKey?: string },
   headings: KnowledgeHeading[] = [],
 ) {
+  if (
+    hit.local &&
+    !hit.sectionId &&
+    markdown.trim() &&
+    evidenceTokenUpperBound(markdown) <= 1200
+  ) {
+    return {
+      excerpt: markdown,
+      sectionId: undefined,
+      headingPath: [] as string[],
+      refreshed: !normalizeEvidence(markdown).includes(
+        normalizeEvidence(hit.text),
+      ),
+    };
+  }
   const sections = knowledgeSections(markdown, headings);
   const exact = normalizeEvidence(hit.text.replace(/^Section: [^\n]+\n\n/, ''));
   const matching = hit.sectionId

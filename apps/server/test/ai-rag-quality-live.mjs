@@ -6,6 +6,10 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { request } from '../../client/e2e/database/api-context.mjs';
 import { artifactHash } from './ai-database-quality-live.mjs';
+import {
+  providerTextSegments,
+  sourceWasTransmitted,
+} from './ai-quality-transmission.mjs';
 
 // This adversarial adapter supplies only the case's deliberately stale hit.
 // Ordinary ranking is the application's actual local search, without an oracle.
@@ -268,21 +272,48 @@ export async function runRagQuality({
       ),
     );
     const searchReadiness = [];
-    for (const document of corpus.documents.filter((item) => item.sourceType === 'page' && item.readable)) {
+    for (const document of corpus.documents.filter(
+      (item) => item.sourceType === 'page' && item.readable,
+    )) {
       const query = document.title.split(':')[0];
       const source = mapping.get(document.id);
       const deadline = Date.now() + 15000;
       let items = [];
       do {
-        items = (await api(reader, '/search', 'POST', { query, spaceId: space.id })).items;
+        items = (
+          await api(reader, '/search', 'POST', { query, spaceId: space.id })
+        ).items;
         if (items.some((item) => item.id === source.pageId)) break;
         await new Promise((resolve) => setTimeout(resolve, 250));
       } while (Date.now() < deadline);
-      assert(items.some((item) => item.id === source.pageId), `Guide did not become searchable: ${document.id}`);
-      searchReadiness.push({ query, sourceId: source.pageId, pageIds: items.map((item) => item.id) });
+      assert(
+        items.some((item) => item.id === source.pageId),
+        `Guide did not become searchable: ${document.id}`,
+      );
+      searchReadiness.push({
+        query,
+        sourceId: source.pageId,
+        pageIds: items.map((item) => item.id),
+      });
     }
-    const firstNaturalQuery = (await api(reader, '/search', 'POST', { query: questions[0].question, spaceId: space.id })).items;
-    await writeFile(path.join(output, 'quality-search-readiness.json'), JSON.stringify({ indexedGuides: searchReadiness, firstNaturalQuery: questions[0].question, naturalQueryPageIds: firstNaturalQuery.map((item) => item.id) }, null, 2));
+    const firstNaturalQuery = (
+      await api(reader, '/search', 'POST', {
+        query: questions[0].question,
+        spaceId: space.id,
+      })
+    ).items;
+    await writeFile(
+      path.join(output, 'quality-search-readiness.json'),
+      JSON.stringify(
+        {
+          indexedGuides: searchReadiness,
+          firstNaturalQuery: questions[0].question,
+          naturalQueryPageIds: firstNaturalQuery.map((item) => item.id),
+        },
+        null,
+        2,
+      ),
+    );
     const policy = await api(admin, `/spaces/${space.id}/ai/exclusions`);
     await api(admin, `/spaces/${space.id}/ai/exclusions`, 'PUT', {
       expectedRevision: policy.revision,
@@ -447,9 +478,15 @@ export async function runRagQuality({
         attachmentIds: [],
       });
       console.log(`RAG quality ${question.id}: started`);
+      if (question.history?.length)
+        providerCapture.setCase(`${question.id}-history`);
       for (const message of question.history ?? []) {
         assert(message.role === 'user', 'Unsupported fixture history role');
         await send(conversation, message.content);
+      }
+      if (question.history?.length) {
+        await providerCapture.takeCase(`${question.id}-history`);
+        providerCapture.setCase(question.id);
       }
       const run = await send(conversation, question.question);
       const [persisted] =
@@ -482,18 +519,7 @@ export async function runRagQuality({
           ]),
       );
       const providerRequests = await providerCapture.takeCase(question.id);
-      const transmitted = providerRequests
-        .filter((item) => item.transmitted && !item.transportError)
-        .map((item) =>
-          item.messages
-            .map((message) =>
-              typeof message.content === 'string'
-                ? message.content
-                : JSON.stringify(message.content),
-            )
-            .join('\n'),
-        )
-        .join('\n');
+      const transmitted = providerTextSegments(providerRequests);
       const evidence = (persisted.evidence_snapshot?.sources ?? []).map(
         (source) => {
           const document = documents.get(
@@ -509,9 +535,11 @@ export async function runRagQuality({
             current: Boolean(
               document && source.sourceVersion === document.version,
             ),
-            transmitted:
-              transmitted.includes(`[${source.marker}]`) &&
-              (!source.excerpt || transmitted.includes(source.excerpt)),
+            transmitted: sourceWasTransmitted(
+              transmitted,
+              source.marker,
+              source.excerpt,
+            ),
             root: source.root,
           };
         },

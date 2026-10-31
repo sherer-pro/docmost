@@ -30,6 +30,7 @@ import { SearchService } from '../../search/search.service';
 import { DictionarySearchService } from '../../dictionary/dictionary-search.service';
 import { evidenceHash, normalizeEvidence } from '../../rag/rag-evidence.util';
 import { resolveCurrentEvidence } from '../../rag/structured-knowledge.util';
+import { localRetrievalQueries } from './ai-local-query.util';
 
 export type AiRetrievalOutcome = {
   status: 'not_requested' | 'disabled' | 'used' | 'empty' | 'failed';
@@ -315,7 +316,10 @@ export class AiRetrievalService {
         const local = await this.withTimeout(
           this.localCandidates(params.request, params.user),
           Math.max(1, deadlineAtMs - Date.now()),
-        ).catch(() => []);
+        ).catch((error) => {
+          degradation ??= this.toErrorCode(error);
+          return [];
+        });
         if (local.length && !signal.aborted) {
           const externalHits = hits;
           const externalCounts = { ...counts };
@@ -400,36 +404,54 @@ export class AiRetrievalService {
     request: AiRetrievalRequest,
     user: User,
   ): Promise<AiRetrievalHit[]> {
-    const [pages, dictionary] = await Promise.all([
-      this.localSearch!.searchPage(
-        { query: request.query, spaceId: request.spaceId, limit: 40 } as any,
-        { userId: user.id, workspaceId: request.workspaceId },
+    const rankings = await Promise.all(
+      localRetrievalQueries(request.query, request.additionalQueries).map(
+        async (query) => {
+          const params = { query, spaceId: request.spaceId, limit: 40 };
+          const actor = { userId: user.id, workspaceId: request.workspaceId };
+          const [pages, dictionary, files] = await Promise.all([
+            this.localSearch!.searchPage(params as any, actor),
+            this.dictionarySearch?.search(
+              { ...params, limit: 8 } as any,
+              actor,
+            ) ?? { items: [] },
+            request.sourceTypes?.includes('attachment')
+              ? this.localSearch!.searchAttachments(params as any, actor)
+              : { items: [] },
+          ]);
+          return [
+            ...dictionary.items.map((item) => ({
+              sourceType: 'dictionary_term' as const,
+              sourceId: item.id,
+              pageId: null,
+              text: request.query,
+              local: true,
+              retrievalMode: 'local' as const,
+              scoreKind: 'local_rank' as const,
+            })),
+            ...pages.items.map((item) => ({
+              sourceType: 'page' as const,
+              sourceId: item.id,
+              pageId: item.id,
+              text: request.query,
+              local: true,
+              retrievalMode: 'local' as const,
+              scoreKind: 'local_rank' as const,
+            })),
+            ...files.items.map((item) => ({
+              sourceType: 'attachment' as const,
+              sourceId: item.id,
+              pageId: item.pageId,
+              text: request.query,
+              local: true,
+              retrievalMode: 'local' as const,
+              scoreKind: 'local_rank' as const,
+            })),
+          ];
+        },
       ),
-      this.dictionarySearch?.search(
-        { query: request.query, spaceId: request.spaceId, limit: 8 } as any,
-        { userId: user.id, workspaceId: request.workspaceId },
-      ) ?? { items: [] },
-    ]);
-    return [
-      ...dictionary.items.map((item) => ({
-        sourceType: 'dictionary_term' as const,
-        sourceId: item.id,
-        pageId: null,
-        text: request.query,
-        local: true,
-        retrievalMode: 'local' as const,
-        scoreKind: 'local_rank' as const,
-      })),
-      ...pages.items.map((item) => ({
-        sourceType: 'page' as const,
-        sourceId: item.id,
-        pageId: item.id,
-        text: request.query,
-        local: true,
-        retrievalMode: 'local' as const,
-        scoreKind: 'local_rank' as const,
-      })),
-    ];
+    );
+    return this.fuseRanks(rankings);
   }
 
   private async withTimeout<T>(

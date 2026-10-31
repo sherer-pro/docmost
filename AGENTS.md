@@ -177,6 +177,7 @@
 - AI Agent browser acceptance matrix: `pnpm test:ai-agent:e2e`
 - Outbound external-MCP live audit: `pnpm test:ai-external-mcp:e2e`; this mutation-heavy Docker audit is intentionally separate from `verify:release`. It accepts runtime auth cookies or `DOCMOST_ADMIN_EMAIL`/`DOCMOST_ADMIN_PASSWORD`, temporarily recreates the application container and mutates MCP settings, then restores settings/environment and removes its synthetic containers and records. See `apps/client/e2e/ai-external-mcp/README.md`.
 - AI context, citations, retrieval, and editor-selection acceptance: `pnpm test:ai-context:e2e`
+- Real-model quality captures use `apps/client/e2e/database/run-live.mjs --ai-quality`; see `tests/rag-quality/README.md`. The test-only observer decodes the complete `UNTRUSTED_REFERENCE_DATA_JSON` envelope before checking exact source transmission. Captures alone do not establish human-reviewed answer quality.
 - Cross-platform line-ending contract tests for generated docs and route inventory: `pnpm test:text-contracts`
 - Frontend security subset (Mermaid + link/embed sanitize/sandbox): `pnpm --filter ./apps/client test:security`
 - Backend coverage: `pnpm --filter ./apps/server test:cov`

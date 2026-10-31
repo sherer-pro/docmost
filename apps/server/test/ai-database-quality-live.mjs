@@ -5,6 +5,10 @@ import { cpus, totalmem } from 'node:os';
 import path from 'node:path';
 import { request } from '../../client/e2e/database/api-context.mjs';
 import { evaluateDatabaseTrace } from '../../../scripts/ai-database-quality.mjs';
+import {
+  providerTextSegments,
+  sourceWasTransmitted,
+} from './ai-quality-transmission.mjs';
 
 const option = (name, fallback) =>
   process.argv
@@ -445,10 +449,7 @@ export async function runDatabaseQuality({
         ? await providerCapture.takeCase(question.id)
         : [];
       const answer = persisted.response_snapshot ?? '';
-      const transmittedText = providerRequests
-        .filter((item) => item.transmitted && !item.transportError)
-        .map((item) => JSON.stringify(item.messages))
-        .join('\n');
+      const transmittedSegments = providerTextSegments(providerRequests);
       const evidence = (persisted.evidence_snapshot?.sources ?? []).map(
         (source) => ({
           sourceId: source.sourceId,
@@ -462,9 +463,11 @@ export async function runDatabaseQuality({
             source.sourceId === databaseId,
           current:
             source.sourceId === databaseId && source.excerpt === snapshot,
-          transmitted:
-            transmittedText.includes(`[${source.marker}]`) &&
-            Boolean(source.excerpt && transmittedText.includes(source.excerpt)),
+          transmitted: sourceWasTransmitted(
+            transmittedSegments,
+            source.marker,
+            source.excerpt,
+          ),
         }),
       );
       const record = {

@@ -10,6 +10,7 @@ import {
 } from '../services/openai-compatible-provider.service';
 import { AiSourceAccessService } from '../services/ai-source-access.service';
 import { withDeadline } from '../../../common/security/untrusted-document.util';
+import { followUpQuotedName } from './ai-local-query.util';
 
 const REWRITE_TIMEOUT_MS = 2_000;
 const REWRITE_MAX_OUTPUT_TOKENS = 128;
@@ -18,6 +19,7 @@ const REWRITE_MAX_QUERY_CHARS = 1_000;
 
 export interface AiQueryRewriteResult {
   query: string;
+  fallbackQuery?: string;
   outcome: AiRetrievalRewriteOutcome;
   errorCode: string | null;
   latencyMs: number | null;
@@ -56,6 +58,7 @@ export class AiQueryRewriteService {
     if (!params.enabled) return unchanged('disabled');
 
     const startedAt = Date.now();
+    let fallbackQuery: string | undefined;
     try {
       const deadline = Math.min(
         params.deadlineAtMs ?? Infinity,
@@ -69,6 +72,10 @@ export class AiQueryRewriteService {
       if (context.priorUserMessages.length === 0) {
         return unchanged('unchanged');
       }
+      fallbackQuery = followUpQuotedName(
+        params.currentQuery,
+        context.priorUserMessages[context.priorUserMessages.length - 1],
+      );
       const response = await withDeadline(
         this.provider.complete(
           {
@@ -105,6 +112,7 @@ export class AiQueryRewriteService {
       const query = this.validateRewrite(response.content);
       return {
         query,
+        ...(fallbackQuery ? { fallbackQuery } : {}),
         outcome:
           query === params.currentQuery.trim() ? 'unchanged' : 'rewritten',
         errorCode: null,
@@ -113,6 +121,7 @@ export class AiQueryRewriteService {
       };
     } catch (error) {
       return unchanged('failed', {
+        ...(fallbackQuery ? { fallbackQuery } : {}),
         errorCode: this.errorCode(error),
         latencyMs: Date.now() - startedAt,
       });

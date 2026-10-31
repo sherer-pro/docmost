@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 34 -->
+<!-- ai-admin-guide-contract-version: 35 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -883,6 +883,34 @@ subqueries, including any contextual rewrite. RRF uses rank constant 60 without
 mixing incomparable scores. Local search and dictionary supply pilot results and
 fallback evidence when external evidence cannot be resolved. Every result passes
 the same current RAG policy. Cancellation aborts outbound retrieval requests.
+
+`localRetrievalQueries` prepares at most 3 local query variants: the bounded
+original question, a contextual rewrite when present, and literal quoted names.
+This avoids requiring every word in a natural-language question to occur in a
+lexical document match. Queries use the existing page, dictionary and
+`searchAttachments` services under the initiating user's space/workspace scope.
+The canonical source resolver still checks supported attachment types, current
+ACL, DONE policy and exclusions. Local search errors are recorded as retrieval
+degradation; they cannot silently become a successful empty search. These query
+variants add neither a vector index nor a retrieval driver.
+
+When a complete canonical local document fits the existing 1200-byte conservative
+parent budget, its sections are kept together instead of selecting a title-only
+fragment. Larger documents retain section reconstruction. A short unqualified
+RU/EN follow-up may append one literal quoted topic from the latest prior user
+message (`followUpQuotedName`), including after the unchanged 2000 ms rewrite
+deadline. A newly quoted or capitalized name prevents that conservative fallback.
+The original query, current source checks and the two-additional-query limit stay
+in force.
+
+Both `queryDatabaseView` and `summarizeDatabaseView` accept an optional
+`calculations: [{propertyId, operation}]` array with at most 20 unique properties.
+It replaces only the calculation map, preserving the effective frozen or explicit
+filters, sorting and selected rows. An empty array clears calculations. Legacy
+`viewState.calculations` remains readable when the array is omitted. IDs remain
+exact opaque UUIDs; quoted IDs, duplicate entries and unsupported operations are
+rejected rather than repaired. The existing schema/type validation and the
+read-only MCP policy still apply.
 
 Open WebUI receives explicit `k=40` and `k_reranker=40` candidate limits; Docmost
 then selects eight final readable fragments by default. Keeping reranked

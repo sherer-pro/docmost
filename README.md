@@ -79,6 +79,12 @@ The fork includes its own AI assistant, configured separately for each space:
 
 - a unified, responsive Markdown composer with visible context, space-search, and Chat/Agent controls, Enter-to-send keyboard behavior, and an auto-saving context manager that groups the current document, space sources, private files, and attachments in one flow.
 
+Local retrieval searches pages, dictionary terms and supported attachments using
+bounded variants of the original question, quoted names and follow-up context.
+Every source keeps current access checks. Small canonical documents retain all
+sections within the existing budget; search errors are distinguished from empty
+results. Database totals accept typed calculation parameters with exact property IDs.
+
 The previous legacy editor text-generation workflow has been removed and replaced with a unified assistant integrated into the core version of the fork.
 
 ![AI assistant with document context and Markdown composer](./docs/images/fork-specific-enhancements/en/ai-assistant-context.png)

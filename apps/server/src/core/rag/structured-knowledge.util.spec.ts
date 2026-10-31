@@ -95,6 +95,26 @@ describe('Canonical structured evidence', () => {
       })?.excerpt,
     ).not.toContain('100');
   });
+  it('retains every section of a small canonical local document within the existing parent budget', () => {
+    const current =
+      '# Guide\n\n## Logs\n\nLogs stay 30 days.\n\n## Backups\n\nBackups stay 90 days.';
+    const result = resolveCurrentEvidence(current, {
+      text: 'Compare retention periods in Guide',
+      local: true,
+    });
+    expect(result?.excerpt).toBe(current);
+    expect(result?.sectionId).toBeUndefined();
+    expect(
+      resolveCurrentEvidence(current, {
+        text: 'Old value 100',
+        sectionId: 'missing',
+        local: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveCurrentEvidence(current, { text: 'Old value 100' }),
+    ).toBeNull();
+  });
 
   it('preserves headers, units and conditions for every table row', () => {
     const markdown =

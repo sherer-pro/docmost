@@ -12,6 +12,113 @@ function queryReturning(rows: unknown[]) {
 }
 
 describe('AiRetrievalService', () => {
+  it('searches quoted names, rewritten queries and attachments using the same user scope', async () => {
+    const localSearch = {
+      searchPage: jest.fn(async ({ query }: any, _actor: any) => ({
+        items: query === 'Project Atlas' ? [{ id: 'page' }] : [],
+      })),
+      searchAttachments: jest.fn(async ({ query }: any, _actor: any) => ({
+        items:
+          query === 'Project Atlas' ? [{ id: 'file', pageId: 'page' }] : [],
+      })),
+    };
+    const dictionary = {
+      search: jest.fn(async ({ query }) => ({
+        items: query === 'Project Atlas' ? [{ id: 'term' }] : [],
+      })),
+    };
+    const service = new AiRetrievalService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      localSearch as any,
+      dictionary as any,
+    );
+    const query = 'What is the price of "Project Atlas"?';
+    const result = await (service as any).localCandidates(
+      {
+        query,
+        additionalQueries: ['Project Atlas price'],
+        sourceTypes: ['page', 'attachment'],
+        spaceId: 'space',
+        workspaceId: 'workspace',
+      },
+      { id: 'reader' },
+    );
+    expect(
+      localSearch.searchPage.mock.calls.map(([params]) => params.query),
+    ).toEqual([query, 'Project Atlas price', 'Project Atlas']);
+    expect(localSearch.searchAttachments).toHaveBeenCalledTimes(3);
+    expect(localSearch.searchAttachments.mock.calls[0][1]).toEqual({
+      userId: 'reader',
+      workspaceId: 'workspace',
+    });
+    expect(result.map((hit: any) => hit.sourceType)).toEqual([
+      'dictionary_term',
+      'page',
+      'attachment',
+    ]);
+    expect(result.every((hit: any) => hit.local && hit.text === query)).toBe(
+      true,
+    );
+  });
+
+  it('reports failed local search separately from a successful empty retrieval', async () => {
+    const service = new AiRetrievalService(
+      {} as any,
+      {} as any,
+      {
+        kind: 'http-json-v1',
+        isConfigured: () => true,
+        retrieve: async () => [],
+      } as any,
+      {} as any,
+      { observeRetrieval: jest.fn(), observeRetrievalQuery: jest.fn() } as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        searchPage: jest.fn(async () => {
+          throw new Error('Local search unavailable');
+        }),
+      } as any,
+    );
+    jest
+      .spyOn(service as any, 'currentAllowedPageIds')
+      .mockResolvedValue(new Set());
+    jest
+      .spyOn(service as any, 'withDictionarySourceType')
+      .mockImplementation(async (request) => request);
+    jest.spyOn(service as any, 'resolveSafeSources').mockResolvedValue([]);
+    const result = await service.retrieveSafe({
+      config: {
+        adapter: 'http-json-v1',
+        qualityProfile: 'evidence-v1',
+        maxResults: 8,
+      } as any,
+      user: { id: 'reader' } as any,
+      requested: true,
+      request: {
+        query: 'Question',
+        workspaceId: 'workspace',
+        spaceId: 'space',
+        sourceTypes: ['page'],
+      } as any,
+    });
+    expect(result.status).toBe('failed');
+    expect(result.errorCode).toBeDefined();
+  });
   it('keeps external evidence when optional local search exhausts the shared deadline', async () => {
     const hit = {
       sourceType: 'page',

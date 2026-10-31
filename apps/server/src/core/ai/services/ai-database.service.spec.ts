@@ -101,6 +101,66 @@ function setup() {
 }
 
 describe('AI database view and cell boundaries', () => {
+  it('uses typed calculation pairs without changing the frozen filter or mutating its map', async () => {
+    const { service, query } = setup();
+    const scoped = {
+      ...context,
+      databaseContext: {
+        ...context.databaseContext,
+        viewState: {
+          ...viewState,
+          sorts: [],
+          calculations: { [propertyId]: 'count' },
+          filter: {
+            conjunction: 'and',
+            conditions: [{ propertyId, operator: 'gte', value: 3 }],
+          },
+        },
+      },
+    } as any;
+    await service.read(
+      { databaseId, calculations: [{ propertyId, operation: 'sum' }] },
+      scoped,
+      true,
+    );
+    expect(query.validateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: scoped.databaseContext.viewState.filter,
+        calculations: { [propertyId]: 'sum' },
+      }),
+      expect.any(Array),
+    );
+    expect(scoped.databaseContext.viewState.calculations).toEqual({
+      [propertyId]: 'count',
+    });
+    await service.read({ databaseId, calculations: [] }, scoped, true);
+    expect(query.validateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: scoped.databaseContext.viewState.filter,
+        calculations: {},
+      }),
+      expect.any(Array),
+    );
+  });
+  it('rejects malformed, duplicate, oversized and unsupported calculation overrides', async () => {
+    const { service } = setup();
+    for (const calculations of [
+      null,
+      {},
+      [{ propertyId: `'${propertyId}'`, operation: 'sum' }],
+      [{ propertyId, operation: 'sql' }],
+      [{ propertyId, operation: 'sum', sql: 'select 1' }],
+      [
+        { propertyId, operation: 'sum' },
+        { propertyId, operation: 'count' },
+      ],
+      Array.from({ length: 21 }, () => ({ propertyId, operation: 'sum' })),
+    ]) {
+      await expect(
+        service.read({ databaseId, calculations }, context, true),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
   it('records server time, schema and labels with the executed database query', async () => {
     const { service, tables } = setup();
     const result = await service.read({ databaseId }, context, true);

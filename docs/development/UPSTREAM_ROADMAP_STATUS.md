@@ -48,6 +48,12 @@ complete; final release acceptance and CI remain pending.
   snapshots, raster images, links, all tabs and Word footnotes. Source pages are
   revalidated in a batch before bytes are returned. See [DOCX export](../DOCX_EXPORT.md)
   for supported image formats and resource limits.
+- Bounded local retrieval over the original question, supplied rewrites and
+  literal quoted names, including searchable attachments. Canonical local
+  documents that fit the existing 1200-byte parent budget retain all sections.
+  Conservative RU/EN dialogue fallback preserves a single previously quoted
+  name without extending the two-second model rewrite deadline. Database tools
+  accept typed calculation arrays instead of requiring dynamic property-ID keys.
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 `f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
@@ -93,6 +99,18 @@ in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
 
+- `ai-local-query-final-verify-full.log`: complete verification passed with
+  285 server suites (2464 tests), 194 frontend files (940 tests), 79 server
+  security suites (975 tests) and 78 frontend security tests. The existing lint
+  warnings remain; no rule, assertion budget or maintenance baseline was weakened.
+- `ai-local-query-final-calibration.log`: all ten RAG tuning questions completed
+  with three evidence sources each, including a cross-section question and
+  dialogue continuation. Preparation ranged from 179 to 2292 ms. This diagnostic
+  does not establish full-corpus or human-reviewed acceptance. The original
+  capture incorrectly treated the reference envelope as undecoded text;
+  `quality-transmission-recheck.json` independently decodes the immutable actual
+  requests and confirms all 30 source excerpts were transmitted. Original
+  records remain intact. Future runs use the corrected envelope decoder.
 - `docx-verify-full-accepted.log`: full verification passed on the DOCX package:
   284 server suites (2455 tests), 194 client files (940 tests), 79 server-security
   suites (975 tests) and 78 client-security tests. Lint retained 42 warnings and

@@ -1652,7 +1652,7 @@
           },
           "success": "테스트 답변이 완료됩니다. Agent는 허용된 도구만 ​​나열하고 쓰기 전에 묻습니다.",
           "rollback": "Agent 또는 공간 모델을 비활성화한 다음 마지막으로 알려진 양호한 설정을 복원합니다.",
-          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다.\n\n데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. 접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.\n\n관리자가 데이터베이스 기능을 명시적으로 활성화해야 합니다. 원본 접근 권한이 취소되면 결과와 미리보기가 숨겨집니다. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\n각주 텍스트(footnote)는 문서 근거에 포함됩니다. 외부 참조를 자동으로 가져오거나 검증하지 않으며 접근 권한도 확대하지 않습니다.\n\n모든 tabs/tabItem의 내용과 제목은 문서 근거에 포함됩니다. 활성 탭은 로컬 표시 상태이며, 선택해도 AI/RAG 근거가 줄어들거나 소스 접근 권한이 부여되지 않습니다. Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다. 현재 데이터베이스 쿼리는 고정된 viewState와 선택한 행을 상속합니다. 도구 오류는 합계 0을 뜻하지 않습니다. Agent는 생성 전 preparationMs를 저장하며, 승인 대기와 공급자 실패 시에도 유지합니다. 기본 도구가 반환한 문서 텍스트와 셀 값은 신뢰할 수 없는 출처 데이터입니다. 포함된 명령은 관련 없는 변경을 허용하거나 사용자 승인을 대신할 수 없습니다.\n\nAgent는 시스템 필드, 수식 및 파일 속성을 읽기만 할 수 있습니다. 합계를 사용하기 전에 계산 오류를 확인하세요. 참가자 제안에는 할당 가능한 기존 멤버를 최대 20명 포함할 수 있습니다. languageVersion: 1; contractVersion: 4; formula_errors.\n\n서버 결과 카드, 계산 시각 및 저장된 조건을 확인하세요. 일치하는 레코드는 현재 접근 권한과 AI 정책에 따라 다시 읽습니다. 스키마가 바뀌면 새 조회가 필요하며, 개별 레코드를 읽으려면 조회 권한도 필요합니다. database-results; receipt v1; schemaFingerprint; queryDatabaseView."
+          "technical": "내장 도우미는 스페이스에 구성된 공급자를 통해 페이지에 연결된 비공개 채팅을 관리합니다. 스페이스 설정에는 오늘 및 최근 7일의 요청 수와 토큰 사용량이 표시됩니다. 에이전트 모드는 허용된 Docmost 도구를 호출할 수 있지만, 페이지 변경은 작업을 시작한 사용자가 확인한 후에만 적용합니다. 변경을 적용하기 직전에 서버는 현재 페이지의 쓰기 권한과 deployment, workspace, space, profile, group 수준의 도구 정책을 다시 확인합니다. 공간 프로필 편집기는 현지화된 도구 이름을 표시하고 공간 범위 프로필 목록에서 유효한 모델 재정의 정책을 받습니다. 마스터 스위치는 워크스페이스 관리자만 변경할 수 있습니다. 공유 지식 프로젝션은 활성화된 문서 및 사용자 지정 필드, 이름이 있는 데이터베이스 속성과 셀, 활성 사전 용어(`dictionary_term`)를 AI 검색과 도구 컨텍스트에 추가합니다. 엄선된 `AI_ASSISTANT_PROFILE_ICONS` 계약은 프로필 편집기와 채팅 패널에서 일관되게 표시되는 {{profileIconCount}}개의 현지화된 아이콘 옵션을 제공합니다. 추가 메뉴를 닫은 후에도 채팅 파일 선택은 유지됩니다. 선택한 파일이 업로드되거나 유효성 검사 오류가 표시됩니다. Agent 승인 해시는 변경 적용 전에 편집기 기본 속성과 Yjs 정규화를 반영합니다. 텍스트가 아닌 노드의 text 필드는 승인 전에 거부됩니다. 문단 텍스트는 자식 텍스트 노드에 있어야 합니다.\n\n데이터베이스 보기와 필요한 행을 선택한 뒤 Agent로 조회하거나 합계를 계산하세요. 승인 전에 모든 셀 변경을 확인하세요. 제안은 최대 20행, 100셀, 32 KiB이며 셀 버전이 충돌하면 해당 행은 거부됩니다. queryDatabaseView / summarizeDatabaseView / proposeDatabaseCells; database_cell_revisions; databaseContext; 20 / 100 / 32 KiB. 접근 가능한 페이지, 파일 또는 도구 결과의 근거를 요구합니다. 스페이스와 프로필은 워크스페이스 제한을 완화할 수 없습니다.\n\n관리자가 데이터베이스 기능을 명시적으로 활성화해야 합니다. 원본 접근 권한이 취소되면 결과와 미리보기가 숨겨집니다. AI_BUILTIN_TOOL_EXTENSIONS_ENABLED; ai_run_steps.result; source_access_changed; REPEATABLE READ; viewState v2/v3.\n\n각주 텍스트(footnote)는 문서 근거에 포함됩니다. 외부 참조를 자동으로 가져오거나 검증하지 않으며 접근 권한도 확대하지 않습니다.\n\n모든 tabs/tabItem의 내용과 제목은 문서 근거에 포함됩니다. 활성 탭은 로컬 표시 상태이며, 선택해도 AI/RAG 근거가 줄어들거나 소스 접근 권한이 부여되지 않습니다. Agent 테스트는 tool_choice: required로 함수 하나를 제공합니다. 유효한 capabilityProbe 호출 한 번이 필수이며, 도구 권한을 확대하지 않고 LM Studio를 지원합니다. 현재 데이터베이스 쿼리는 고정된 viewState와 선택한 행을 상속합니다. 도구 오류는 합계 0을 뜻하지 않습니다. Agent는 생성 전 preparationMs를 저장하며, 승인 대기와 공급자 실패 시에도 유지합니다. 기본 도구가 반환한 문서 텍스트와 셀 값은 신뢰할 수 없는 출처 데이터입니다. 포함된 명령은 관련 없는 변경을 허용하거나 사용자 승인을 대신할 수 없습니다.\n\nAgent는 시스템 필드, 수식 및 파일 속성을 읽기만 할 수 있습니다. 합계를 사용하기 전에 계산 오류를 확인하세요. 참가자 제안에는 할당 가능한 기존 멤버를 최대 20명 포함할 수 있습니다. languageVersion: 1; contractVersion: 4; formula_errors.\n\n서버 결과 카드, 계산 시각 및 저장된 조건을 확인하세요. 일치하는 레코드는 현재 접근 권한과 AI 정책에 따라 다시 읽습니다. 스키마가 바뀌면 새 조회가 필요하며, 개별 레코드를 읽으려면 조회 권한도 필요합니다. database-results; receipt v1; schemaFingerprint; queryDatabaseView.\n\nqueryDatabaseView / summarizeDatabaseView: calculations: [{propertyId, operation}] (max 20); viewState.calculations."
         },
         "retrieval": {
           "description": "스페이스 검색은 답변을 생성하는 동안 수행됩니다.",
@@ -1663,11 +1663,12 @@
             "step1": "Save 엔드포인트, 어댑터 및 쿼리 자격 증명",
             "step2": "공간 설정에서 Test 검색",
             "step3": "Enable 외부 검색",
-            "step4": "database_row 소스에는 number, date, multi_select, url, email, phone이 포함됩니다. 보기 필터는 RAG를 제한하지 않으며 페이지 접근 권한과 AI 콘텐츠 정책이 적용됩니다."
+            "step4": "database_row 소스에는 number, date, multi_select, url, email, phone이 포함됩니다. 보기 필터는 RAG를 제한하지 않으며 페이지 접근 권한과 AI 콘텐츠 정책이 적용됩니다.",
+            "step5": "이름을 따옴표로 묶어 질문하고 인용된 절을 확인하세요. 데이터가 없는 경우와 검색 오류를 구분하세요."
           },
           "success": "테스트는 후보를 반환하고 답변은 읽을 수 있고 제외되지 않은 소스만 유지합니다.",
           "rollback": "외부 검색을 비활성화합니다. Chat가 검색 없이 계속됩니다.",
-          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다. Open WebUI는 `vector`와 `hybrid_with_vector_fallback`을 지원합니다. `retrievalFollowUpRewriteEnabled`가 켜지면 안전한 사용자 기록과 현재 읽을 수 있는 인용 제목만으로 검색 쿼리를 다시 작성하며, 어시스턴트 본문이나 페이지·파일 내용은 포함하지 않습니다. rewrite 제한은 2000 ms이고 실패하면 원래 쿼리로 돌아가 생성은 계속됩니다. 근거는 현재 Docmost 콘텐츠에서 가져오며 전달된 조각만 인용할 수 있습니다. 시험 프로필 evidence-v1은 structured-knowledge-v3, 로컬 대체 검색, 10000 ms 준비 시간 제한을 사용합니다. 근거가 없으면 정보 부족과 검색 불가를 구분합니다."
+          "technical": "Docmost는 생성 전과 생성 중, 채팅 기록을 재사용할 때, 선택 영역 결과를 반환하기 전에 소스의 현재 상태, 제외 정책 및 ACL을 다시 확인합니다. 페이지 첨부 파일과 비공개 채팅 파일도 보호하며 선택한 텍스트는 신뢰할 수 없는 입력으로 취급합니다. 접근 권한이 바뀌면 부분 텍스트, 추론 및 인용을 지우고 메시지를 제한합니다. Open WebUI는 `vector`와 `hybrid_with_vector_fallback`을 지원합니다. `retrievalFollowUpRewriteEnabled`가 켜지면 안전한 사용자 기록과 현재 읽을 수 있는 인용 제목만으로 검색 쿼리를 다시 작성하며, 어시스턴트 본문이나 페이지·파일 내용은 포함하지 않습니다. rewrite 제한은 2000 ms이고 실패하면 원래 쿼리로 돌아가 생성은 계속됩니다. 근거는 현재 Docmost 콘텐츠에서 가져오며 전달된 조각만 인용할 수 있습니다. 시험 프로필 evidence-v1은 structured-knowledge-v3, 로컬 대체 검색, 10000 ms 준비 시간 제한을 사용합니다. 근거가 없으면 정보 부족과 검색 불가를 구분합니다.\n\n로컬 검색은 따옴표로 묶은 이름과 대화 문맥에 따른 재작성 등 최대 3개의 검색어 변형을 사용합니다. 페이지, 용어 및 지원되는 첨부 파일에 동일한 접근 검사가 적용됩니다. 검색 실패는 데이터 없음과 구분됩니다. localRetrievalQueries; searchAttachments; 3.\n\nfollowUpQuotedName (RU/EN); 1200 UTF-8 bytes; 2000 ms."
         },
         "ragApi": {
           "description": "읽기 전용 /api/rag/* API는 전체 및 증분 피드를 외부 인덱서로 내보내고 인증 후 보호된 첨부 파일 스트림을 반환할 수 있습니다.",
@@ -1743,7 +1744,7 @@
           "label": "RAG API 및 내장 RAG 동기화 아키텍처",
           "caption": "쿼리, 공개 내보내기 및 작성자 자격 증명은 별개입니다. 내장 동기화는 /api/rag/*를 통해 반복되지 않습니다.",
           "textAlternative": {
-            "step1": "Chat 검색은 쿼리 자격 증명을 사용하여 외부 인덱스를 요청합니다.",
+            "step1": "Chat 검색은 쿼리 자격 증명을 사용하여 외부 인덱스를 요청합니다.. 로컬 검색은 따옴표로 묶은 이름과 대화 문맥에 따른 재작성 등 최대 3개의 검색어 변형을 사용합니다. 페이지, 용어 및 지원되는 첨부 파일에 동일한 접근 검사가 적용됩니다. 검색 실패는 데이터 없음과 구분됩니다.",
             "step2": "외부 인덱서는 /api/rag/*를 통해 승인된 콘텐츠를 읽습니다.",
             "step3": "내장된 RAG 동기화는 Docmost 상태를 내부적으로 읽고 공간당 기록기 키로 씁니다.",
             "step4": "내보냈거나 동기화된 콘텐츠 앞에 실시간 ACL 및 콘텐츠 정책 검사가 유지됩니다."
@@ -1752,7 +1753,8 @@
             "question": "Chat 쿼리",
             "externalIndex": "외부 인덱스",
             "externalIndexer": "외부 인덱서",
-            "liveChecks": "라이브 ACL 및 콘텐츠 정책"
+            "liveChecks": "라이브 ACL 및 콘텐츠 정책",
+            "localSearch": "로컬 검색"
           }
         },
         "mcp": {

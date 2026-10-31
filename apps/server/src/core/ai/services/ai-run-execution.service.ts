@@ -357,6 +357,7 @@ export class AiRunExecutionService {
           additionalQueries: [
             ...new Set([
               ...(rewrite.outcome === 'rewritten' ? [rewrite.query] : []),
+              ...(rewrite.fallbackQuery ? [rewrite.fallbackQuery] : []),
               ...(retrievalConfig.queryExpansionEnabled &&
               /[?;]|\b(?:compare|versus)\b|сравни/iu.test(userMessage.content)
                 ? userMessage.content

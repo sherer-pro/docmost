@@ -115,7 +115,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
   },
   {
     anchor: "retrieval",
-    stepKeys: ["step1", "step2", "step3", "step4"],
+    stepKeys: ["step1", "step2", "step3", "step4", "step5"],
     titleKey: "ai.settings.retrievalSection",
     contentKey: "ai.adminGuide.scenario.retrieval",
     settingsPath: "/settings/ai/spaces",
@@ -311,6 +311,8 @@ export function buildAiAdminGuideDiagrams(
   Question["${label("ai.adminGuide.diagram.rag.nodes.question")}"] --> Retrieval["${label("ai.settings.retrievalSection")}"]
   Retrieval --> Index["${label("ai.adminGuide.diagram.rag.nodes.externalIndex")}"]
   Index --> Checks["${label("ai.adminGuide.diagram.rag.nodes.liveChecks")}"]
+  Retrieval --> Local["${label("ai.adminGuide.diagram.rag.nodes.localSearch")}"]
+  Local --> Checks
   Indexer["${label("ai.adminGuide.diagram.rag.nodes.externalIndexer")}"] --> RagApi["/api/rag/*"]
   RagApi --> ExportChecks["${label("ai.adminGuide.diagram.rag.nodes.liveChecks")}"]
   Docmost["Docmost"] --> RagSync["${label("ai.ragSync.title")}"]

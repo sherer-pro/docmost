@@ -213,4 +213,27 @@ describe('AiQueryRewriteService', () => {
       errorCode: 'rewrite_timeout',
     });
   });
+  it('retains the original question and a literal prior topic when follow-up rewriting times out', async () => {
+    const { service, provider } = setup({
+      userMessages: [
+        { id: 'previous', content: 'Расскажи о сервисе «Атлас».' },
+      ],
+    });
+    provider.complete.mockRejectedValue(new GatewayTimeoutException());
+    await expect(
+      service.rewrite({
+        run,
+        user,
+        currentQuery: 'А сколько стоят оба тарифа?',
+        requested: true,
+        enabled: true,
+        providerConfig,
+      }),
+    ).resolves.toMatchObject({
+      query: 'А сколько стоят оба тарифа?',
+      fallbackQuery: 'Атлас',
+      outcome: 'failed',
+      errorCode: 'rewrite_timeout',
+    });
+  });
 });

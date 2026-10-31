@@ -113,6 +113,17 @@ boundary. Candidate text is never filled from the oracle: an unhydrated local
 candidate without an observed canonical document retains empty text. These
 captures are local-search/pipeline measurements, not a measurement of a remote
 vector index. Provider captures establish actual transmission independently.
+`ai-quality-transmission.mjs` decodes actual JSON reference frames and multimodal
+text arrays before checking source markers and multiline excerpts. It neither
+combines unrelated string leaves nor fills evidence from model self-report.
+History setup requests have their own capture IDs, so they cannot prove that
+evidence was transmitted for the final question. Its standalone tests run with
+`node --test apps/server/test/ai-quality-transmission.test.mjs`.
+
+The decoder recognizes both reference-envelope delimiters and the following
+user request; JSON string escapes must not be mistaken for missing multiline
+evidence. Preserve original captures when auditing an observer correction and
+write a separate derived receipt identifying its inputs.
 
 The initial RAG canary returned zero local candidates for its full natural-language
 question and completed without inference in grounded mode. This is a measured

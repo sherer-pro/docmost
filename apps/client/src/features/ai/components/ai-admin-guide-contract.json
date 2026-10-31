@@ -1,5 +1,5 @@
 {
-  "version": 34,
+  "version": 35,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,23 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "typed-database-calculation-overrides",
+      "key": "scenario.assistant.technical",
+      "needles": [
+        "calculations: [{propertyId, operation}]",
+        "20"
+      ]
+    },
+    {
+      "id": "bounded-local-query-search",
+      "key": "scenario.retrieval.technical",
+      "needles": [
+        "localRetrievalQueries",
+        "searchAttachments",
+        "3"
+      ]
+    },
     {
       "id": "inbound-mcp-batch-bound",
       "key": "scenario.inboundMcp.technical",
@@ -374,6 +391,8 @@
     "scenario.assistant.steps.step7",
     "scenario.assistant.steps.step8",
     "scenario.assistant.steps.step9",
-    "scenario.assistant.steps.step11"
+    "scenario.assistant.steps.step11",
+    "scenario.retrieval.steps.step5",
+    "diagram.rag.nodes.localSearch"
   ]
 }
