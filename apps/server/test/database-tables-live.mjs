@@ -342,6 +342,7 @@ try {
     COLLAB_URL: collabURL,
     COLLAB_INTERNAL_URL: collabURL,
     COLLAB_INTERNAL_SECRET: collabSecret,
+    COLLAB_SHOW_STATS: release ? 'true' : 'false',
     AUTH_RATE_LIMIT_STORAGE: 'redis',
     DATABASE_MIGRATION_MODE: 'auto',
     MAIL_DRIVER: 'log',

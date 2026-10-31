@@ -6,6 +6,15 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The added Draw.io browser scenario copies actual attachment-backed nodes within
+and between pages, edits each copy, compares the original file bytes, and checks
+that source and destination attachment identities survive reload. It uses the
+existing local iframe fixture and editor clipboard handlers without replacing
+the host clipboard. Browser execution is pending. The owned release runtime now
+enables its existing collaboration statistics endpoint and passes its exact URL
+to the lifecycle suite. The next complete release run must pass its actual
+duplicate-connection assertions rather than the unconfigured capability branch.
+
 The real RAG tuning baseline exposed two related defects: local content search
 did not index Markdown/plain-text attachments, and the prompt advertised a marker
 for an empty attachment-hosting page that the evidence ledger correctly rejected.
@@ -18,7 +27,10 @@ attachment-content search readiness. Contract v41, all 12 locales and both
 approved overviews are aligned. The targeted backend run passed 47 tests, and
 the final prompt/citation subset passed 21 tests with exact excerpt checks.
 The guide passed 21 client tests; lint and documentation contracts passed.
-Real PostgreSQL/HTTP acceptance and post-fix model captures remain pending.
+The built Node 22 candidate passed all HTTP/export/import checks, including the
+real text indexing worker and search ACL, in `attachment-text-postgres-http.log`.
+That diagnostic explicitly used `--api-only`; it did not run the PostgreSQL
+suite. The new migration suite and post-fix model captures remain pending.
 
 The isolated AI browser diagnostic passed all 28 cases across Russian and English
 desktop, Firefox streaming, Pixel 7, mobile WebKit and a narrow AI panel. Its

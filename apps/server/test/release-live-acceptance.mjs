@@ -104,6 +104,7 @@ export async function runReleaseAcceptance({
     DOCMOST_AI_CONTEXT_MODEL_PROVIDER_URL: 'http://127.0.0.1:1080/v1',
     DOCMOST_AI_CONTEXT_RETRIEVAL_URL: 'http://127.0.0.1:1080/retrieval',
     DOCMOST_AI_CONTEXT_COLLAB_URL: collabURL,
+    DOCMOST_COLLAB_STATS_URL: new URL('/api/collab/stats', collabURL).href,
     DOCMOST_DRAWIO_AUDIT_URL: 'https://embed.diagrams.net',
     DOCMOST_AI_AUDIT_ROOT: path.join(auditRoot, 'ai'),
     DOCMOST_AI_AGENT_AUDIT_ROOT: path.join(auditRoot, 'agent'),
