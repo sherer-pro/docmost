@@ -276,6 +276,96 @@ test("live AI cell preview, explicit approval and durable row receipt", async ({
     .toBe(false);
 });
 
+for (const [width, theme] of [
+  [1440, "light"],
+  [390, "dark"],
+] as const) {
+  test(`live AI database results keep the frozen selection and private access ${theme} ${width}`, async ({
+    page,
+    browser,
+  }, info) => {
+    const results = fixture.aiApproval.results;
+    await page.setViewportSize({ width, height: 1000 });
+    await page.addInitScript(
+      (scheme) => localStorage.setItem("mantine-color-scheme-value", scheme),
+      theme,
+    );
+    if (width === 1440) {
+      await open(page);
+      await api(
+        page.request,
+        `/ai/conversations/${results.conversationId}/actions/open`,
+        "POST",
+        {},
+      );
+      await page.getByRole("button", { name: /Open AI assistant/i }).click();
+      const card = page.locator(
+        `[data-ai-database-result="${results.stepId}"]`,
+      );
+      await expect(
+        card.getByText("Records included: 3", { exact: true }),
+      ).toBeVisible();
+      await card
+        .getByRole("link", { name: "View matching records", exact: true })
+        .click();
+    } else {
+      await page.goto(results.resultUrl);
+    }
+    await expect(page).toHaveURL(new RegExp(results.resultUrl));
+    const resultPage = page.getByTestId("ai-database-results-page");
+    await expect(
+      resultPage.getByRole("heading", {
+        name: "AI database results",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      resultPage.getByText("Selected records: 3", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      resultPage.getByText(results.displayTotal, { exact: true }),
+    ).toBeVisible();
+    await expect(resultPage.locator("tbody tr")).toHaveCount(3);
+    for (const id of results.selectedPageIds)
+      await expect(
+        resultPage.locator(`[data-ai-database-result-row="${id}"]`),
+      ).toBeAttached();
+    await expect(resultPage.getByRole("textbox")).toHaveCount(0);
+    await expect(
+      resultPage.getByRole("button", { name: "Edit", exact: true }),
+    ).toHaveCount(0);
+    await resultPage.getByText("Selection conditions", { exact: true }).click();
+    await expect(resultPage.getByText(/Sort:.*Descending/)).toBeVisible();
+    await expect(
+      resultPage.getByText(
+        `Columns: Title, ${fixture.properties[1].name}, ${fixture.properties[0].name}`,
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.screenshot({
+      path: info.outputPath(`ai-database-results-${theme}-${width}.png`),
+      fullPage: true,
+    });
+    await page.reload();
+    await expect(resultPage.locator("tbody tr")).toHaveCount(3);
+    const context = await browser.newContext({
+      storageState: sessions.reader,
+      viewport: { width, height: 1000 },
+    });
+    try {
+      const other = await context.newPage();
+      await other.goto(results.resultUrl);
+      const denied = other.getByTestId("ai-database-results-page");
+      await expect(
+        denied.getByText("Database results are unavailable.", { exact: true }),
+      ).toBeVisible();
+      await expect(denied.locator("tbody tr")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
 test("live result links highlight matches and navigate without enabling page writes", async ({
   page,
 }) => {
@@ -474,8 +564,19 @@ test("live footnotes create, edit, search, conflict and survive reload", async (
   try {
     await body.locator(":scope > p").last().click();
     await recordSelection("click");
-    await page.keyboard.press("End");
-    await recordSelection("End");
+    await page.keyboard.press("Control+End");
+    await expect
+      .poll(() =>
+        body.evaluate((element) => {
+          const selected = window.getSelection()?.anchorNode;
+          const selectedParagraph = selected?.parentElement?.closest("p");
+          return (
+            selectedParagraph === element.querySelector(":scope > p:last-child")
+          );
+        }),
+      )
+      .toBe(true);
+    await recordSelection("Control+End");
     await page.keyboard.press("Enter");
     await recordSelection("Enter");
     await page.keyboard.type("/Footnote");
@@ -1075,31 +1176,65 @@ for (const theme of ["light", "dark"])
 
 test("live editing preserves loaded pages, scroll and one save", async ({
   page,
-}) => {
+}, info) => {
   await open(page);
   await page.getByRole("button", { name: "Load more", exact: true }).click();
   const viewport = gridViewport(page);
   await viewport.evaluate((element) => {
     element.scrollTop = 2400;
   });
-  const target = page
-    .locator(`[data-database-cell-key$=":${notesId}"]`)
-    .first();
+  const targets = page.locator(`[data-database-cell-key$=":${notesId}"]`);
   await expect
-    .poll(() => target.getAttribute("data-database-cell-key"))
+    .poll(() => targets.first().getAttribute("data-database-cell-key"))
     .not.toBe(`${fixture.ids[100]}:${notesId}`);
-  const key = await target.getAttribute("data-database-cell-key");
+  // The first virtual row is overscan above the viewport and is not a user target.
+  const key = await targets.evaluateAll((cells) => {
+    const viewport = cells[0]
+      ?.closest(".mantine-ScrollArea-viewport")
+      ?.getBoundingClientRect();
+    if (!viewport) return null;
+    return (
+      cells
+        .find((element) => {
+          const box = element.getBoundingClientRect();
+          return (
+            box.top >= viewport.top + 80 && box.bottom <= viewport.bottom - 40
+          );
+        })
+        ?.getAttribute("data-database-cell-key") ?? null
+    );
+  });
+  expect(key).toBeTruthy();
   const stable = page.locator(`[data-database-cell-key="${key}"]`);
+  const initialGeometry = {
+    cell: await stable.boundingBox(),
+    viewport: await viewport.boundingBox(),
+    scrollTop: await viewport.evaluate((element) => element.scrollTop),
+  };
   let writes = 0;
   page.on("request", (request) => {
     if (request.method() === "PATCH" && request.url().endsWith("/cells"))
       writes++;
   });
+  await stable.click();
   await stable.press("F2");
   await stable.getByRole("textbox").fill("Saved without jumping");
   const before = await viewport.evaluate((element) => element.scrollTop);
+  expect(Math.abs(before - initialGeometry.scrollTop)).toBeLessThanOrEqual(100);
   await stable.getByRole("textbox").press("Tab");
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await info.attach("grid-edit-focus", {
+    body: Buffer.from(
+      JSON.stringify({
+        key,
+        initialGeometry,
+        before,
+        after: await viewport.evaluate((element) => element.scrollTop),
+        cell: await stable.boundingBox(),
+      }),
+    ),
+    contentType: "application/json",
+  });
   expect(writes).toBe(1);
   expect(
     await viewport.evaluate((element) => element.scrollTop),

@@ -1,5 +1,5 @@
 {
-  "version": 33,
+  "version": 34,
   "anchors": [
     "assistant",
     "retrieval",
@@ -165,12 +165,29 @@
     {
       "id": "database-agent-preparation-and-frozen-view",
       "key": "scenario.assistant.technical",
-      "needles": ["viewState", "preparationMs"]
+      "needles": [
+        "viewState",
+        "preparationMs"
+      ]
     },
     {
       "id": "database-computed-cell-boundaries",
       "key": "scenario.assistant.technical",
-      "needles": ["languageVersion: 1", "contractVersion: 4", "formula_errors"]
+      "needles": [
+        "languageVersion: 1",
+        "contractVersion: 4",
+        "formula_errors"
+      ]
+    },
+    {
+      "id": "database-result-receipts",
+      "key": "scenario.assistant.technical",
+      "needles": [
+        "database-results",
+        "receipt v1",
+        "schemaFingerprint",
+        "queryDatabaseView"
+      ]
     }
   ],
   "requiredKeys": [
@@ -356,6 +373,7 @@
     "scenario.assistant.steps.step6",
     "scenario.assistant.steps.step7",
     "scenario.assistant.steps.step8",
-    "scenario.assistant.steps.step9"
+    "scenario.assistant.steps.step9",
+    "scenario.assistant.steps.step11"
   ]
 }

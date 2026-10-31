@@ -13,6 +13,7 @@ import {
   AiDatabaseContext,
   AiDatabaseCellOperation,
   AiDatabaseApprovalPreview,
+  AiDatabaseReadReceipt,
   normalizeDatabaseViewState,
   normalizeDatabaseValue,
   unwrapDatabaseValue,
@@ -92,7 +93,12 @@ export class AiDatabaseService {
     private readonly databases: DatabaseService,
   ) {}
 
-  async scope(databaseId: string, context: ExecutionContext, state?: unknown) {
+  async scope(
+    databaseId: string,
+    context: ExecutionContext,
+    state?: unknown,
+    expectedSchemaFingerprint?: string,
+  ) {
     if (!isUuid(databaseId ?? ''))
       throw new BadRequestException('Invalid database ID');
     const database = await this.db
@@ -142,6 +148,15 @@ export class AiDatabaseService {
       ...p,
       type: p.type === 'text' ? 'multiline_text' : p.type,
     }));
+    if (
+      expectedSchemaFingerprint &&
+      databaseSchemaFingerprint(normalized) !== expectedSchemaFingerprint
+    ) {
+      throw new ConflictException({
+        code: 'database_result_schema_changed',
+        message: 'The database schema changed; run the query again',
+      });
+    }
     return {
       database,
       properties: normalized,
@@ -167,16 +182,27 @@ export class AiDatabaseService {
     args: Record<string, unknown>,
     context: ExecutionContext,
     summary: boolean,
+    expectedSchemaFingerprint?: string,
   ) {
     const scoped = await this.scope(
       String(args.databaseId ?? ''),
       context,
       args.viewState,
+      expectedSchemaFingerprint,
     );
     return this.db
       .transaction()
       .setIsolationLevel('repeatable read')
-      .execute((trx) => this.readSnapshot(args, context, summary, trx, scoped));
+      .execute((trx) =>
+        this.readSnapshot(
+          args,
+          context,
+          summary,
+          trx,
+          scoped,
+          expectedSchemaFingerprint,
+        ),
+      );
   }
 
   private async referenceDependencies(
@@ -224,6 +250,7 @@ export class AiDatabaseService {
     summary: boolean,
     trx: KyselyTransaction,
     scoped: Awaited<ReturnType<AiDatabaseService['scope']>>,
+    expectedSchemaFingerprint?: string,
   ) {
     const database = await trx
       .selectFrom('databases')
@@ -247,6 +274,31 @@ export class AiDatabaseService {
       ...p,
       type: p.type === 'text' ? 'multiline_text' : p.type,
     }));
+    const schemaFingerprint = databaseSchemaFingerprint(properties);
+    if (
+      expectedSchemaFingerprint &&
+      schemaFingerprint !== expectedSchemaFingerprint
+    ) {
+      throw new ConflictException({
+        code: 'database_result_schema_changed',
+        message: 'The database schema changed; run the query again',
+      });
+    }
+    const receipt: AiDatabaseReadReceipt = {
+      version: 1,
+      mode: summary ? 'summary' : 'query',
+      asOf: new Date().toISOString(),
+      schemaFingerprint,
+      databasePageId: database.pageId,
+      databaseTitle: database.name,
+      selectedRowCount:
+        context.databaseContext?.databaseId === database.id
+          ? context.databaseContext.selectedPageIds.length
+          : 0,
+      propertyLabels: Object.fromEntries(
+        properties.map((property) => [property.id, property.name]),
+      ),
+    };
     scoped.database = database;
     scoped.properties = properties;
     scoped.input.properties = properties;
@@ -265,6 +317,22 @@ export class AiDatabaseService {
     const filterReferences = await this.referenceDependencies(input, trx);
     if (summary) {
       const totals = await this.query.summary(input);
+      receipt.calculationDisplays = Object.fromEntries(
+        Object.entries(totals.values).map(([id, value]) => {
+          const calculation = input.state.calculations[id];
+          const property = properties.find((item) => item.id === id);
+          const count = ['count', 'filled', 'empty'].includes(calculation);
+          return [
+            id,
+            formatDatabaseValue(
+              count || !property ? 'number' : property.type,
+              value,
+              count ? undefined : property?.settings,
+              context.user.locale ?? 'en',
+            ),
+          ];
+        }),
+      );
       return {
         dependencyPageIds: [
           ...new Set([
@@ -273,6 +341,7 @@ export class AiDatabaseService {
           ]),
         ],
         databaseId: scoped.database.id,
+        receipt,
         viewState: scoped.input.state,
         groupKey: scoped.input.state.groupBy
           ? scoped.input.groupKey
@@ -324,6 +393,7 @@ export class AiDatabaseService {
         ...new Set([...ids, ...references, ...filterReferences]),
       ],
       databaseId: scoped.database.id,
+      receipt,
       viewState: scoped.input.state,
       groupKey: scoped.input.state.groupBy ? scoped.input.groupKey : undefined,
       properties: scoped.properties.filter((p) => visible[p.id] !== false),

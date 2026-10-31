@@ -36,6 +36,7 @@
 - `apps/server/src/app.module.ts` — backend module wiring, global CSRF guard, static/client serving, Redis, queue, import/export, and security.
 - `apps/server/src/core/api-key` — workspace API key management used by RAG integrations.
 - `apps/server/src/core/ai` — per-space AI configuration, persistent private chat, async generation, chat files, and optional external retrieval.
+- `apps/server/src/core/ai/services/ai-database-result.service.ts` — JWT-only private database-result receipts and current row reads with frozen conditions, schema checks, live capability/ACL/AI policy and final source revalidation. The client readers are `features/ai/components/ai-database-results.tsx` and `features/ai/pages/ai-database-results-page.tsx`; they use a separate read-only query cache.
 - `apps/server/src/core/database` — Notion-like database API, rows/properties/views, conversion, markdown/export support.
 - `apps/server/src/core/dictionary` — space-scoped dictionary API and services.
 - `apps/server/src/core/favorite` — page/space favorites API.

@@ -10,6 +10,12 @@ complete; final release acceptance and CI remain pending.
   with revision checks and transactional receipts, administrative restrictions,
   and a deterministic database benchmark corpus. Real-model holdout quality has
   not been measured.
+- Server-owned database result receipts and chat cards, with calculation time,
+  typed totals, field formatting, scope and conditions. A private read-only
+  results page reuses frozen conditions and explicit selected rows, rechecks
+  current ACL/AI policy and tool capabilities, and distinguishes recorded totals
+  from current row values. Schema changes require a new query; summary-only
+  permission cannot read individual rows.
 - Kanban, view-specific row order, personal view drafts, column layout, linked
   database embeds, complete-view CSV and URL-addressable record previews. Record
   body/title editing and restorable history now use isolated editor state in the
@@ -44,11 +50,16 @@ The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 The advanced-property package is under final local acceptance. These packages have not been pushed or
 deployed as part of this task.
 
+`ae6bc660` and `d77f0909` commit the advanced-property implementation and its
+SQL compiler tests locally. The AI query result package adds server-owned query
+receipts, result cards and a private read-only results page. Full verification
+and final HTTP/browser checks passed, including the last schema guard and
+column-order adjustment. The final complete roadmap and release gates remain
+pending as listed below.
+
 ## Remaining required work
 
-- Finish the trusted database query result summary and a link that restores the
-  exact frozen selection while retaining the AI content-policy intersection.
-  Add natural-language filter challenges that start from a different current
+- Add natural-language filter challenges that start from a different current
   view. Record actual transmitted RAG evidence and complete human-reviewed
   quality acceptance; database tool-trace correctness alone is insufficient.
 - Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
@@ -148,10 +159,42 @@ Local, ignored receipts are under `artifacts/`:
 - `database-advanced-edit-session-webkit.log` and
   `database-advanced-webkit-fault-routing-fixed.log`: date reopening, delayed
   saves and all three fault-injection cases passed with the original assertions.
-- `database-advanced-final-accepted-full-matrix.log`: final full acceptance is
-  still incomplete. Chromium passed 38 cases. Firefox has exposed footnote
-  cursor placement and record-opening failures that are under investigation;
-  the final result must not be inferred from focused checks.
+- `database-advanced-final-accepted-full-matrix.log`: the complete matrix was
+  not accepted. Chromium passed 38 cases; Firefox had seven failures while
+  competing with heavy user workloads. WebKit passed 37 of 38 cases; its scroll
+  check selected a virtual overscan cell above the viewport. No user processes
+  were stopped and no assertion timeout was increased.
+- `database-advanced-firefox-unloaded-diagnostics.log`: all seven previously
+  failing Firefox cases passed in the operator-confirmed acceptance window.
+  `database-advanced-firefox-final-native-matrix.log` then passed 36 of 38 cases;
+  the two deletion/navigation cases still exceeded their original total
+  five-second budget (5.234 and 5.091 seconds). This remains unresolved.
+- `database-advanced-webkit-scroll-diagnostics.log`: the selected overscan cell
+  was measured at y=3 while its scroll viewport started at y=328. The fixture
+  now selects an actually visible cell and additionally checks that beginning
+  editing preserves scroll. Footnote creation explicitly positions the native
+  caret at the document end rather than assuming a browser-specific End key.
+- `ai-database-result-live-matrix.log`: all 12 focused cases passed across the
+  three engines, including desktop/light and mobile/dark result cards, private
+  link reloads, denial for another reader, footnotes and the corrected visible
+  edit target. Every fresh runtime also passed 27 PostgreSQL cases and the full
+  HTTP/export/import checks. New HTTP checks cover totals over 200 rows, exact
+  explicit row selection, schema conflicts, query-parameter injection and ACL
+  revocation before either result endpoint returns a stored value. Both
+  Chromium result-page screenshots were inspected.
+- `ai-database-result-server-tests-accepted.log` and
+  `ai-database-result-client-tests-accepted.log`: 39 server and six client tests
+  passed before the final schema-order guard adjustment. Complete current
+  verification passed in `ai-database-result-verify-full.log`: 283 server suites
+  (2447 tests), 194 frontend files (940 tests), 79 server-security suites (972
+  tests) and 78 frontend-security tests. Lint reported 42 warnings and no errors.
+- `ai-database-result-final-live.log`: the final build passed all 27 PostgreSQL
+  cases, full HTTP/export/import contracts and both Chromium result-page cases,
+  including the explicit visible-column order assertion. These focused checks
+  do not replace the still-pending final complete database/release matrix.
+- `ai-database-result-graph.log`: the local AST graph now has 17319 nodes,
+  50173 edges and 730 communities. Unsupported JSON inputs and the absent optional
+  SQL parser retain their existing warnings; no model extraction was invoked.
 - `database-advanced-final-graph.log` and
   `database-advanced-final-graph-import.log`: AST graph updated to 17269 nodes and
   49993 edges. The operator-approved AgentMemory import passed its repeated

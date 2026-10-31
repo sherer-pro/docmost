@@ -80,6 +80,10 @@ describe('AiConversationService message serialization', () => {
         return this;
       }
 
+      distinct() {
+        return this;
+      }
+
       where(column: unknown, operator?: unknown, value?: unknown) {
         this.filters.push([column, operator, value]);
         return this;

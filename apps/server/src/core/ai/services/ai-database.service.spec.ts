@@ -101,6 +101,27 @@ function setup() {
 }
 
 describe('AI database view and cell boundaries', () => {
+  it('records server time, schema and labels with the executed database query', async () => {
+    const { service, tables } = setup();
+    const result = await service.read({ databaseId }, context, true);
+    expect(result.receipt).toMatchObject({
+      version: 1,
+      mode: 'summary',
+      schemaFingerprint: databaseSchemaFingerprint(tables.databaseProperties),
+      databasePageId: pageId,
+      databaseTitle: 'Tasks',
+      propertyLabels: { [propertyId]: 'Budget' },
+      selectedRowCount: 0,
+    });
+    expect(Number.isFinite(Date.parse(result.receipt.asOf))).toBe(true);
+  });
+  it('rejects a result link after a schema change before reading current rows', async () => {
+    const { service, query } = setup();
+    await expect(
+      service.read({ databaseId }, context, false, 'b'.repeat(64)),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(query.list).not.toHaveBeenCalled();
+  });
   it('reports a partial calculation when formula cells contain errors', async () => {
     const { service, query } = setup();
     query.summary.mockResolvedValue({

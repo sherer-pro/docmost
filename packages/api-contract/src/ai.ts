@@ -495,6 +495,7 @@ export interface AiMessage {
   errorCode: string | null;
   errorMessage: string | null;
   accessRestricted?: boolean;
+  hasDatabaseResults?: boolean;
   currentRunId?: string | null;
   runId?: string;
   runStatus?: AiRunStatus;

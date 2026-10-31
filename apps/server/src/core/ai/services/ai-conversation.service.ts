@@ -426,6 +426,23 @@ export class AiConversationService {
     const runByMessageId = new Map(
       runs.map((run) => [run.assistantMessageId, run]),
     );
+    const resultRuns = currentRunIds.length
+      ? await this.db
+          .selectFrom('aiRunSteps')
+          .select('runId')
+          .distinct()
+          .where('runId', 'in', currentRunIds)
+          .where('toolName', 'in', [
+            'queryDatabaseView',
+            'summarizeDatabaseView',
+          ])
+          .where('toolSource', '=', 'builtin')
+          .where('writeClass', '=', 'read_only')
+          .where('status', '=', 'completed')
+          .where(sql<boolean>`result->'receipt'->>'version' = '1'`)
+          .execute()
+      : [];
+    const databaseResultRunIds = new Set(resultRuns.map((row) => row.runId));
     const sourceReferences = [
       ...sources
         .filter((source) => source.sourceType !== 'chat_file')
@@ -521,6 +538,9 @@ export class AiConversationService {
           sourcesByMessage.get(row.id) ?? [],
           restrictedMessages.has(row.id),
           runByMessageId.get(row.id),
+          Boolean(
+            row.currentRunId && databaseResultRunIds.has(row.currentRunId),
+          ),
         ),
       ),
       hasMore,
@@ -701,6 +721,7 @@ export class AiConversationService {
     sources: AiCitation[],
     accessRestricted: boolean,
     run?: any,
+    hasDatabaseResults = false,
   ): AiMessage {
     return {
       id: row.id,
@@ -717,6 +738,9 @@ export class AiConversationService {
       errorCode: row.errorCode,
       errorMessage: row.errorMessage,
       accessRestricted,
+      ...(!accessRestricted && hasDatabaseResults
+        ? { hasDatabaseResults: true }
+        : {}),
       ...(run
         ? {
             runId: run.id,

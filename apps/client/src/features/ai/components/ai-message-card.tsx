@@ -33,6 +33,7 @@ import {
 } from "@/features/ai/utils/ai-policies.ts";
 import { AiMessageContent } from "./ai-message-content.tsx";
 import { AiReasoningDisclosure } from "./ai-reasoning-disclosure.tsx";
+import { AiDatabaseResults } from "./ai-database-results";
 import { getAiSpaceStatus } from "@/features/ai/services/ai-service.ts";
 import classes from "./ai-panel.module.css";
 import {
@@ -216,6 +217,13 @@ export const AiMessageCard = memo(function AiMessageCard({
             sources={message.sources}
           />
         )}
+        {isAssistant &&
+          message.hasDatabaseResults &&
+          (message.runId || message.currentRunId) && (
+            <AiDatabaseResults
+              runId={(message.runId || message.currentRunId)!}
+            />
+          )}
         {message.status === "streaming" && (
           <Group
             gap={7}

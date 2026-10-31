@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 33 -->
+<!-- ai-admin-guide-contract-version: 34 -->
 
 This document describes the current core AI architecture in Docmost: page-bound
 chat, conversation context, background runs, space retrieval, and integration
@@ -340,6 +340,37 @@ metadata for active attachments owned by the accessible row page; they do not
 fetch file content. RAG row projections use current computed values and include
 property revisions in their projection timestamp. View filters still do not
 restrict the independently authorized RAG source set.
+
+Successful database reads additionally persist a server-produced `receipt v1`
+inside their durable tool result. It records the read time, schema fingerprint,
+database source, selected-row count, property labels and formatted calculation
+values. Raw totals remain typed numbers or date strings; formatted values
+preserve the field's units. The result's validated
+`viewState` and focused group record the actual conditions, including an explicit
+model override. The immutable run context retains any explicit row selection.
+No result card is reconstructed from the assistant's prose or an external MCP
+result; older steps without a receipt retain their ordinary chat text.
+
+`GET /api/ai/runs/:runId/database-results` returns the initiating user's result
+cards after checking private conversation ownership, all recorded source
+dependencies, current AI availability, profile and built-in tool policy, database
+ACL and AI exclusions. Cards label recorded totals and incomplete results, show
+their conditions and time, and link to a separate authenticated read-only page.
+`GET /api/ai/runs/:runId/steps/:stepId/database-result` accepts only a bounded
+cursor. It queries 25 current rows with the stored conditions and frozen row
+selection through the same ACL/AI-policy compiler. The caller cannot supply a
+database ID or replacement filters. Both the recorded tool and
+`queryDatabaseView` must remain allowed; summary-only capability cannot read
+individual rows. A changed `schemaFingerprint` returns 409
+`database_result_schema_changed` and requires a new query.
+
+The result page distinguishes the earlier calculation from current row values.
+Refreshing never silently changes its conditions to a saved or personal view.
+Opening the full source database is a separate explicit navigation. The results
+page has no cell mutation controls and does not use the ordinary table's broader
+row-query cache. Disabling AI or losing source access hides the results without
+deleting their durable receipts. These JWT-only UI endpoints add no MCP tools or
+write exposure.
 
 Workspace and space tool policies additionally support `readOnly` and
 `knowledgeOnly`, defaulting to false for compatibility. Effective restrictions

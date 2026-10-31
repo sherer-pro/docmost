@@ -36,6 +36,8 @@ import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.servic
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 import { AiToolRegistryService } from './tools/ai-tool-registry.service';
 import { AiDatabaseService } from './services/ai-database.service';
+import { AiDatabaseResultService } from './services/ai-database-result.service';
+import { AiDatabaseResultController } from './controllers/ai-database-result.controller';
 import { DatabaseFeatureModule } from '../database/database.module';
 import { AiBuiltinToolPolicyService } from './tools/ai-builtin-tool-policy.service';
 import { AI_BUILTIN_TOOL_POLICY_RESOLVER } from './tools/ai-builtin-tool-policy.token';
@@ -93,6 +95,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
     AiFileController,
     AiPageAttachmentController,
     AiRunController,
+    AiDatabaseResultController,
     AiEditorActionController,
     AiMcpSettingsController,
     AiMcpServersController,
@@ -125,6 +128,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
     AiAuxRunEventService,
     AiToolRegistryService,
     AiDatabaseService,
+    AiDatabaseResultService,
     AiBuiltinToolPolicyService,
     {
       provide: AI_BUILTIN_TOOL_POLICY_RESOLVER,

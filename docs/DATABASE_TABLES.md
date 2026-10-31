@@ -195,6 +195,10 @@ for limits, policy controls, transaction recovery and MCP boundaries.
   cannot be mistaken for product recovery. Synthetic paste explicitly supplies
   its clipboard payload because Firefox strips constructor-provided data from
   untrusted `ClipboardEvent` instances.
+- Keyboard-editing acceptance selects a cell fully inside the scroll viewport;
+  the first rendered virtual row can be overscan above it. Both starting the
+  edit and saving it must preserve scroll. Footnote creation explicitly moves
+  the native caret to the document end before opening the slash command.
 - Browser: `node apps/client/e2e/database/run.mjs` owns Vite on localhost port 5195. It mounts the production table component with a synthetic API; this confirms browser behavior, while the separate PostgreSQL suite verifies backend transactions and query semantics.
 - Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>/`. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
 

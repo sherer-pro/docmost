@@ -41,8 +41,10 @@
 | GET | `/ai/runs/:id` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/cancel` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:id/actions/retry` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
+| GET | `/ai/runs/:runId/database-results` | `apps/server/src/core/ai/controllers/ai-database-result.controller.ts` |
 | POST | `/ai/runs/:runId/steps/:stepId/actions/approve` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
 | POST | `/ai/runs/:runId/steps/:stepId/actions/reject` | `apps/server/src/core/ai/controllers/ai-run.controller.ts` |
+| GET | `/ai/runs/:runId/steps/:stepId/database-result` | `apps/server/src/core/ai/controllers/ai-database-result.controller.ts` |
 | GET | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | PATCH | `/ai/tool-policy` | `apps/server/src/core/ai/controllers/ai-builtin-tool-policy.controller.ts` |
 | POST | `/api-keys` | `apps/server/src/core/api-key/api-key.controller.ts` |

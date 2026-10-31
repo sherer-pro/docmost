@@ -73,6 +73,9 @@ const SpaceDictionary = lazy(
 );
 const SpaceTemplates = lazy(() => import("@/pages/space/space-templates.tsx"));
 const DatabasePage = lazy(() => import("@/pages/database/database-page.tsx"));
+const AiDatabaseResultsPage = lazy(
+  () => import("@/features/ai/pages/ai-database-results-page"),
+);
 const WorkspaceApiKeysSettings = lazy(
   () => import("@/features/api-key/pages/workspace-api-keys-settings"),
 );
@@ -149,6 +152,10 @@ export const appRoutes = createRoutesFromElements(
         element={<DatabasePage />}
       />
       <Route path={"/s/:spaceSlug/p/:pageSlug"} element={<Page />} />
+      <Route
+        path={"/s/:spaceSlug/ai/database-results/:runId/:stepId"}
+        element={<AiDatabaseResultsPage />}
+      />
 
       <Route path={"/settings"}>
         <Route path={"account/profile"} element={<AccountSettings />} />

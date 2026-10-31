@@ -308,6 +308,12 @@ a transactional receipt. Both MCP directions remain read-only. Administrators
 can require read-only tools and answers grounded in permitted sources; the
 workspace restriction cannot be weakened by a space or assistant profile.
 
+Server result cards show the calculation time, conditions, accessible record
+count and incomplete-result warnings. Their read-only result page is visible
+only to the initiating user, reuses the frozen selection, rechecks current access
+and AI policy, and keeps
+recorded totals separate from current row values. Schema changes require a new query.
+
 The fork includes structured databases:
 
 - database rows are full pages;

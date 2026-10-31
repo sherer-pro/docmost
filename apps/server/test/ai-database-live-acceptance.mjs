@@ -145,6 +145,32 @@ export async function runAiDatabaseAcceptance({
     assert.equal(result.count, expected.count);
     assert.equal(result.values[amount], expected.values[amount]);
     assert(result.count > 200);
+    const cards = await api(
+      actors.reader,
+      `/ai/runs/${started.run.id}/database-results`,
+    );
+    const card = cards.find((item) => item.stepId === summaryStep.id);
+    assert.equal(card.summary.count, expected.count);
+    assert.equal(card.summary.values[amount], expected.values[amount]);
+    assert.equal(card.receipt.version, 1);
+    assert.equal(card.incomplete, false);
+    const rows = await api(
+      actors.reader,
+      `/ai/runs/${started.run.id}/steps/${summaryStep.id}/database-result`,
+    );
+    assert.equal(rows.items.length, 25);
+    assert.equal(rows.hasMore, true);
+    assert(rows.items.every((row) => !ids.slice(0, 100).includes(row.pageId)));
+    const otherOwner = await fetchApi(
+      admin,
+      `/ai/runs/${started.run.id}/database-results`,
+    );
+    assert.equal(otherOwner.status(), 404);
+    const injected = await fetchApi(
+      actors.reader,
+      `/ai/runs/${started.run.id}/steps/${summaryStep.id}/database-result?databaseId=${database.id}`,
+    );
+    assert.equal(injected.status(), 400);
     await api(admin, `/pages/${ids[152]}/actions/access/close-user`, 'POST', {
       userId: actors.reader.id,
     });
@@ -156,6 +182,16 @@ export async function runAiDatabaseAcceptance({
       assert.equal(denied.status(), 403);
       const content = await denied.text();
       assert(!content.includes(String(expected.values[amount])));
+      for (const endpoint of [
+        `/ai/runs/${started.run.id}/database-results`,
+        `/ai/runs/${started.run.id}/steps/${summaryStep.id}/database-result`,
+      ]) {
+        const response = await fetchApi(actors.reader, endpoint);
+        assert.equal(response.status(), 403);
+        assert(
+          !(await response.text()).includes(String(expected.values[amount])),
+        );
+      }
     } finally {
       await api(admin, `/pages/${ids[152]}/actions/access/grant-user`, 'POST', {
         userId: actors.reader.id,
@@ -318,9 +354,88 @@ export async function runAiDatabaseAcceptance({
   const pending = await waitRun(actors.editor, ui.run.id, [
     'awaiting_approval',
   ]);
+  const resultsSelection = ids.slice(160, 163);
+  const resultsState = {
+    ...state,
+    sorts: [{ propertyId: amount, direction: 'desc' }],
+    calculations: { [amount]: 'sum' },
+    visibleColumns: Object.fromEntries(
+      properties.map((property) => [
+        property.id,
+        [amount, properties[0].id].includes(property.id),
+      ]),
+    ),
+    columnOrder: [amount, properties[0].id],
+  };
+  const uiResults = await start(
+    actors.editor,
+    'database-summary',
+    amount,
+    resultsSelection,
+    resultsState,
+  );
+  const finishedResults = await waitRun(actors.editor, uiResults.run.id, [
+    'completed',
+  ]);
+  const resultStep = finishedResults.steps.find(
+    (step) => step.toolName === 'summarizeDatabaseView',
+  );
+  const resultCards = await api(
+    actors.editor,
+    `/ai/runs/${uiResults.run.id}/database-results`,
+  );
+  const resultCard = resultCards.find((card) => card.stepId === resultStep.id);
+  assert.equal(resultCard.summary.count, 3);
+  assert.equal(resultCard.receipt.selectedRowCount, 3);
+  const selectedRows = await api(
+    actors.editor,
+    `/ai/runs/${uiResults.run.id}/steps/${resultStep.id}/database-result`,
+  );
+  assert.deepEqual(
+    selectedRows.items.map((row) => row.pageId).sort(),
+    [...resultsSelection].sort(),
+  );
+  const messages = await api(
+    actors.editor,
+    `/ai/conversations/${uiResults.conversation.id}/messages`,
+  );
+  assert(messages.items.some((message) => message.hasDatabaseResults === true));
+  await test('AI result links require a matching schema and preserve their frozen selection', async () => {
+    await api(
+      admin,
+      `/databases/${database.id}/properties/${amount}`,
+      'PATCH',
+      { name: 'Renamed amount', contractVersion: 4 },
+    );
+    try {
+      const changed = await fetchApi(
+        actors.editor,
+        `/ai/runs/${uiResults.run.id}/steps/${resultStep.id}/database-result`,
+      );
+      assert.equal(changed.status(), 409);
+      const error = await changed.json();
+      assert.equal(error.code, 'database_result_schema_changed');
+    } finally {
+      await api(
+        admin,
+        `/databases/${database.id}/properties/${amount}`,
+        'PATCH',
+        { name: properties[1].name, contractVersion: 4 },
+      );
+    }
+  });
   return {
     runId: ui.run.id,
     conversationId: ui.conversation.id,
     stepId: pending.steps.find((s) => s.status === 'pending_approval').id,
+    results: {
+      runId: uiResults.run.id,
+      stepId: resultStep.id,
+      conversationId: uiResults.conversation.id,
+      resultUrl: resultCard.resultUrl,
+      selectedPageIds: resultsSelection,
+      total: resultCard.summary.values[amount],
+      displayTotal: resultCard.receipt.calculationDisplays[amount],
+    },
   };
 }
