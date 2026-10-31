@@ -30,6 +30,19 @@ changed underneath the active real-model capture. Frozen-install and final
 release acceptance are still required. No Axios, Node, pnpm or UI stack major
 upgrade is part of this repair.
 
+An independent frozen installation in `artifacts/roadmap-release-checkout`
+completed on Node 22 and passed the redirect protocol through its installed
+Postmark/Axios dependency. The main checkout's installed 1.16.1 entry hash is
+unchanged, preserving the active tuning capture. Its QA server and production
+client with diagnostic sourcemaps also build successfully. Final release
+acceptance remains pending.
+
+The Agent preflight found that Docker's automatic address pools are exhausted.
+Its runner now accepts two explicit private test subnets and passes its exact
+empty env-file and Compose file list to worker-restart/SQL checks. This keeps
+nested operations on the same owned network configuration. Daemon pools, user
+networks and production services are not changed.
+
 - AI view queries and full-selection aggregates, internal Agent cell proposals
   with revision checks and transactional receipts, administrative restrictions,
   and a deterministic database benchmark corpus. Real-model holdout quality has

@@ -110,6 +110,12 @@ export async function runReleaseAcceptance({
     DOCMOST_EDITOR_AUDIT_ROOT: path.join(auditRoot, 'editor'),
     DOCMOST_AI_CONTEXT_AUDIT_ROOT: path.join(auditRoot, 'context'),
   });
+  for (const name of [
+    'DOCMOST_AI_AGENT_DEFAULT_SUBNET',
+    'DOCMOST_AI_AGENT_EDGE_SUBNET',
+  ]) {
+    if (process.env[name]?.trim()) env[name] = process.env[name].trim();
+  }
   const sourceRevision = (
     await exec('git', ['rev-parse', 'HEAD'], { cwd: repo, windowsHide: true })
   ).stdout.trim();

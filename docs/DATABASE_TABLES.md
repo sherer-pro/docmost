@@ -232,5 +232,13 @@ used. Runtime cleanup follows the same ownership checks as ordinary acceptance.
 Docker build contexts exclude private QA artifacts and machine-local `.codex`
 configuration; a linked verification checkout must not place its local MCP
 configuration into an application image.
+If Docker's automatic address pools are exhausted, the nested Agent audit also
+accepts `DOCMOST_AI_AGENT_DEFAULT_SUBNET` and `DOCMOST_AI_AGENT_EDGE_SUBNET`.
+Supply both as distinct, verified-unused canonical private `10.x.x.0/28` ranges;
+the release helper forwards only these two test settings. The Agent runner
+validates them before starting processes and writes an owned Compose network
+override. Its ordinary project cleanup removes these test networks. Empty
+settings retain Docker's normal automatic allocation; daemon pools and existing
+networks are never modified.
 
 The synthetic browser fixture is test-only and is not reachable from the production application entry point. Its API stores synthetic records in memory. The live runner instead exercises the actual local application, its PostgreSQL transactions, and Redis workers.

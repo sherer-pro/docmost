@@ -154,6 +154,18 @@ async function scanArtifacts(root, exactSecrets) {
 
 await fs.mkdir(auditRoot, { recursive: true });
 await fs.writeFile(composeEnvironmentFile, "", { flag: "wx" });
+const agentDefaultSubnet = process.env.DOCMOST_AI_AGENT_DEFAULT_SUBNET?.trim();
+const agentEdgeSubnet = process.env.DOCMOST_AI_AGENT_EDGE_SUBNET?.trim();
+if (agentDefaultSubnet || agentEdgeSubnet) {
+  const subnetPattern = /^10\.(?:\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.(?:\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.0\/28$/;
+  assert(agentDefaultSubnet && agentEdgeSubnet && subnetPattern.test(agentDefaultSubnet) && subnetPattern.test(agentEdgeSubnet) && agentDefaultSubnet !== agentEdgeSubnet,
+    "Agent test networks require two distinct canonical private 10.x.x.0/28 subnets");
+  const networkOverride = path.join(auditRoot, "compose.networks.yml");
+  await fs.writeFile(networkOverride,
+    `networks:\n  default:\n    ipam:\n      config:\n        - subnet: ${JSON.stringify(agentDefaultSubnet)}\n  edge:\n    ipam:\n      config:\n        - subnet: ${JSON.stringify(agentEdgeSubnet)}\n`,
+    { flag: "wx" });
+  composeFiles.push(networkOverride);
+}
 const appPort = Number(process.env.DOCMOST_AI_AGENT_APP_PORT ?? await reservePort(0));
 const collabPort = Number(process.env.DOCMOST_AI_AGENT_COLLAB_PORT ?? await reservePort(0));
 const modelPort = Number(process.env.DOCMOST_AI_AGENT_MODEL_PORT ?? await reservePort(0));
@@ -259,6 +271,8 @@ try {
     DOCMOST_AI_AGENT_MODEL_PROVIDER_URL: modelProviderUrl,
     DOCMOST_AI_AGENT_TOXIPROXY_URL: toxiproxyUrl,
     DOCMOST_AI_AGENT_COMPOSE_PROJECT: composeProject,
+    DOCMOST_AI_AGENT_COMPOSE_ENV_FILE: composeEnvironmentFile,
+    DOCMOST_AI_AGENT_COMPOSE_FILES: JSON.stringify(composeFiles),
     DOCMOST_AI_AGENT_CANARY: canary,
   };
   const testRun = run(process.execPath, [

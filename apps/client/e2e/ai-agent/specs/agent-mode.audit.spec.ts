@@ -13,10 +13,16 @@ const modelControlUrl = process.env.DOCMOST_AI_AGENT_MODEL_CONTROL_URL ?? "http:
 const toxiproxyUrl = process.env.DOCMOST_AI_AGENT_TOXIPROXY_URL ?? "http://127.0.0.1:18474";
 const composeProject = process.env.DOCMOST_AI_AGENT_COMPOSE_PROJECT ?? "";
 const repoRoot = path.resolve(process.cwd(), "../..");
-const composeFiles = [
+const defaultComposeFiles = [
   path.join(repoRoot, "docker-compose.yml"),
   path.join(repoRoot, "apps/client/e2e/ai-agent/docker-compose.audit.yml"),
 ];
+const composeFiles: string[] = process.env.DOCMOST_AI_AGENT_COMPOSE_FILES
+  ? JSON.parse(process.env.DOCMOST_AI_AGENT_COMPOSE_FILES)
+  : defaultComposeFiles;
+if (!Array.isArray(composeFiles) || composeFiles.length < 2 || composeFiles.length > 3 || composeFiles.some((file) => typeof file !== "string" || !path.isAbsolute(file))) {
+  throw new Error("Invalid owned Agent audit Compose file list");
+}
 const transitionJournal: JsonRecord[] = [];
 
 function required(name: string): string {
@@ -295,6 +301,8 @@ function compose(...args: string[]) {
   if (!composeProject) throw new Error("DOCMOST_AI_AGENT_COMPOSE_PROJECT is required");
   const command = [
     "compose",
+    "--env-file",
+    required("DOCMOST_AI_AGENT_COMPOSE_ENV_FILE"),
     "-p",
     composeProject,
     ...composeFiles.flatMap((file) => ["-f", file]),
