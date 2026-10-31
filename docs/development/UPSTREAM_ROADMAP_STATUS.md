@@ -1,10 +1,19 @@
 # Upstream roadmap implementation checkpoint
 
-Date: 2026-10-31. The user resumed implementation of all remaining work in
+Date: 2026-11-01. The user resumed implementation of all remaining work in
 stages 1–4. Push and deployment are explicitly on hold. Stages 1–4 are not
 complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
+
+The isolated AI browser diagnostic passed all 28 cases across Russian and English
+desktop, Firefox streaming, Pixel 7, mobile WebKit and a narrow AI panel. Its
+processes, containers and temporary runtime were removed. The temporary
+AI-only release-helper change was reversed; this receipt is not a complete
+`verify:release` result. The coupled release-contract fixture and CI profile mock
+now accept the same single-tool `required` request. A real child-process HTTP
+test also retains named-choice compatibility and rejects ambiguous required
+tool sets. All 105 release-gate contract tests passed.
 
 The first isolated `verify:release` attempt on `a1ce3276` passed all 27 PostgreSQL
 cases and the complete `verify:full`: 291 backend suites / 2524 tests, 195 frontend

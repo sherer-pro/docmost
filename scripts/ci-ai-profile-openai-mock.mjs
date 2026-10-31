@@ -68,7 +68,12 @@ function streamCompletion(response, proof) {
 }
 
 function forcedToolCompletion(body, proof) {
-  const toolName = body.tool_choice?.function?.name;
+  const toolName =
+    body.tool_choice === "required" &&
+    Array.isArray(body.tools) &&
+    body.tools.length === 1
+      ? body.tools[0]?.function?.name
+      : body.tool_choice?.function?.name;
   if (!toolName) return null;
   return {
     choices: [

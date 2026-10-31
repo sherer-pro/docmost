@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { validateReleaseGateContract } from "./check-release-gates.mjs";
 
@@ -355,7 +359,7 @@ test("AI provider acceptance follows the configured mock origin", () => {
 test("AI provider mock completes the required tool-call capability probe", () => {
   const probe = aiMockExpectations.find(
     (expectation) =>
-      expectation.httpRequest?.body?.json?.tool_choice?.function?.name ===
+      expectation.httpRequest?.body?.json?.tools?.[0]?.function?.name ===
       "capabilityProbe",
   );
   const genericNonStreaming = aiMockExpectations.find((expectation) =>
@@ -369,6 +373,8 @@ test("AI provider mock completes the required tool-call capability probe", () =>
   assert.equal(probe.httpRequest.body.type, "JSON");
   assert.equal(probe.httpRequest.body.matchType, "ONLY_MATCHING_FIELDS");
   assert.equal(probe.httpRequest.body.json.stream, false);
+  assert.equal(probe.httpRequest.body.json.tool_choice, "required");
+  assert.equal(probe.httpRequest.body.json.tools.length, 1);
   assert.equal(
     probe.httpRequest.body.json.tools?.[0]?.function?.name,
     "capabilityProbe",
@@ -379,11 +385,113 @@ test("AI provider mock completes the required tool-call capability probe", () =>
   );
 
   const response = JSON.parse(probe.httpResponse.body);
+  assert.equal(response.choices?.[0]?.message?.tool_calls?.length, 1);
   const call = response.choices?.[0]?.message?.tool_calls?.[0];
   assert.equal(response.choices?.[0]?.finish_reason, "tool_calls");
   assert.equal(call?.function?.name, "capabilityProbe");
   assert.deepEqual(JSON.parse(call.function.arguments), { value: "ok" });
 });
+
+test(
+  "AI profile mock supports one required tool and preserves named choice",
+  { timeout: 10000 },
+  async (t) => {
+    const reservation = createServer();
+    await new Promise((resolve, reject) => {
+      reservation.once("error", reject);
+      reservation.listen(0, "127.0.0.1", resolve);
+    });
+    const port = reservation.address().port;
+    await new Promise((resolve) => reservation.close(resolve));
+    const env = Object.fromEntries(
+      ["SystemRoot", "WINDIR", "PATH", "Path", "TEMP", "TMP", "USERPROFILE"]
+        .filter((key) => process.env[key])
+        .map((key) => [key, process.env[key]]),
+    );
+    const child = spawn(
+      process.execPath,
+      [
+        fileURLToPath(
+          new URL("./ci-ai-profile-openai-mock.mjs", import.meta.url),
+        ),
+      ],
+      {
+        env: {
+          ...env,
+          AI_PROFILE_MOCK_HOST: "127.0.0.1",
+          AI_PROFILE_MOCK_PORT: String(port),
+        },
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    const closed = once(child, "exit");
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output = (output + chunk).slice(-2000);
+    });
+    child.stderr.on("data", (chunk) => {
+      output = (output + chunk).slice(-2000);
+    });
+    t.after(async () => {
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      await closed;
+    });
+    const deadline = Date.now() + 5000;
+    while (
+      !output.includes(`listening on 127.0.0.1:${port}`) &&
+      Date.now() < deadline &&
+      child.exitCode === null
+    )
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(output.includes(`listening on 127.0.0.1:${port}`), output);
+    const tool = {
+      type: "function",
+      function: {
+        name: "capabilityProbe",
+        parameters: {
+          type: "object",
+          properties: { value: { type: "string", enum: ["ok"] } },
+        },
+      },
+    };
+    const invoke = async (tool_choice, tools = [tool]) => {
+      const response = await fetch(
+        `http://127.0.0.1:${port}/v1/chat/completions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: "fixture-model",
+            stream: false,
+            messages: [],
+            tool_choice,
+            tools,
+          }),
+        },
+      );
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    for (const choice of [
+      "required",
+      { type: "function", function: { name: "capabilityProbe" } },
+    ]) {
+      const response = await invoke(choice);
+      const calls = response.choices[0].message.tool_calls;
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].function.name, "capabilityProbe");
+      assert.deepEqual(JSON.parse(calls[0].function.arguments), {
+        value: "ok",
+      });
+    }
+    for (const response of [
+      await invoke("none"),
+      await invoke("required", [tool, tool]),
+    ])
+      assert.equal(response.choices[0].message.tool_calls?.length ?? 0, 0);
+  },
+);
 
 test("AI context acceptance finds its member beyond the first page", () => {
   assert.match(
