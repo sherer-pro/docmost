@@ -32,10 +32,17 @@ export function getDiagramAttachmentIdForSave(
 
 export function shouldCreateNewDiagramAttachment(error: unknown): boolean {
   const response = (
-    error as { response?: { status?: number; data?: { message?: string } } }
+    error as {
+      response?: {
+        status?: number;
+        data?: { message?: string; code?: string };
+      };
+    }
   )?.response;
 
   return (
+    (response?.status === 409 &&
+      response.data?.code === "attachment_target_conflict") ||
     (response?.status === 403 &&
       response.data?.message === "File attachment does not match") ||
     (response?.status === 404 &&

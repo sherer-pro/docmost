@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -137,6 +139,18 @@ export class AttachmentFileAccessService {
         throw new BadRequestException(errMessage);
       }
 
+      if (
+        (err instanceof ForbiddenException &&
+          err.message === 'File attachment does not match') ||
+        (err instanceof NotFoundException &&
+          err.message === 'Existing attachment to overwrite not found')
+      ) {
+        // Missing and out-of-scope targets have the same public response.
+        throw new ConflictException({
+          code: 'attachment_target_conflict',
+          message: 'File attachment does not match',
+        });
+      }
       this.logger.error({ event: 'attachment_upload_processing_failed' });
       throw new BadRequestException('Error processing file upload.');
     }

@@ -55,12 +55,27 @@ the same checks also run in the full database live acceptance.
 
 ## Export and compatibility checks
 
+### Draw.io copies across pages
+
+The real cross-page browser test reproduced a missing copy-on-write fallback.
+The attachment service rejected the foreign overwrite target, but the HTTP
+wrapper replaced that expected scope failure with a generic 400. The diagram
+client therefore could not allocate an independent attachment.
+
+The wrapper now returns `409 attachment_target_conflict` with the same response
+for absent targets and workspace/page/extension mismatches. It reveals no target
+metadata. Diagram clients retry creation only for this explicit code or the
+existing narrow legacy responses; unrelated validation, authorization and storage
+errors remain errors. Page write access is checked before the upload service.
+Targeted tests cover the wire contract and rejected fallback conditions. The live
+HTTP and browser rerun must still verify source bytes and independent copies.
+
 | Area | Source-backed finding | Acceptance still required |
 | --- | --- | --- |
 | Markdown tables | `upstream-markdown-before.json` reproduces an empty header from actual editor HTML containing semantic `th` cells after `colgroup`. A pinned patch fixes header detection and loss of repeated pipes; the dependency stays at 1.0.56. | Seven export regressions pass, including a genuinely headerless table. The Node 22 live suite verifies downloaded Markdown/HTML headers and complete pipe values. |
 | Markdown `details` | Rich summary Markdown has explicit block boundaries; adjacent body blocks remain separate. Readers preserve an isolated paragraph wrapper and prioritize structured footnotes over generic superscript marks. | All 157 shared package tests pass. Compiled server round-trip, four theme/size browser cases and Node 22 downloaded files pass. |
-| draw.io copy | `getDiagramAttachmentIdForSave` already detaches repeated attachment references; only the documented ownership/not-found conflicts retry as a new asset. Other upload errors remain errors. | Recheck same-page and cross-page copy with actual attachments and source preservation. |
-| WebSocket | The API and dedicated collaboration process remain separate, with authenticated Redis relay and ownership leases. | Recheck reconnection and current-session/access revocation with the existing browser/live suites. |
+| draw.io copy | Repeated references detach; the confirmed cross-page HTTP wrapper defect now has a uniform explicit conflict code. Other upload failures cannot trigger creation. | Rerun actual same-page/cross-page copies, original-byte checks and uniform conflict responses. |
+| WebSocket | The API and dedicated collaboration process remain separate, with authenticated Redis relay and ownership leases. | Both desktop engines passed the real lifecycle/authentication-refresh test with server connection-count assertions enabled in the v41 diagnostic release attempt. Final complete release acceptance remains pending. |
 | Search performance | The fork keeps its PostgreSQL/Typesense, structured-value, label and dictionary paths. | Complete the existing final performance/browser gates; no new search driver is added. |
 
 The last column remains a work list until its concrete receipts are recorded.

@@ -80,6 +80,28 @@ describe("diagram attachment helpers", () => {
       }),
     ).toBe(false);
     expect(shouldCreateNewDiagramAttachment(new Error("network"))).toBe(false);
+    for (const response of [
+      { status: 409, data: { message: "Unrelated conflict" } },
+      { status: 409, data: { code: "other_conflict" } },
+      { status: 500, data: { code: "attachment_target_conflict" } },
+      { status: 400, data: { message: "Error processing file upload." } },
+    ]) {
+      expect(shouldCreateNewDiagramAttachment({ response })).toBe(false);
+    }
+  });
+
+  it("detaches only for the explicit upload-target conflict contract", () => {
+    expect(
+      shouldCreateNewDiagramAttachment({
+        response: {
+          status: 409,
+          data: {
+            code: "attachment_target_conflict",
+            message: "File attachment does not match",
+          },
+        },
+      }),
+    ).toBe(true);
   });
 
   it("prefers server upload errors when available", () => {

@@ -6,6 +6,23 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The focused Draw.io rerun passed the saved-image identity check and reached an
+actual cross-page defect: the upload HTTP wrapper converted the service's scope
+rejection into a generic 400, preventing the documented client fallback. The
+wrapper now maps absent and mismatched overwrite targets to the same explicit
+`409 attachment_target_conflict` response. Page write denial still occurs before
+processing; unrelated failures cannot authorize creation. Targeted server tests
+passed 33 cases and the diagram helper passed 10 client cases. Real HTTP and
+cross-page browser confirmation remain pending on the rebuilt candidate.
+
+The complete pre-v41 RAG baseline recorded all 120 completed answers, recall
+0.95, citation validity 0.953846 and preparation p95 2423 ms. It is not accepted.
+The v41 eight-case tuning diagnostic covers all six missing-attachment questions
+and two controls: recall and citation validity are both 1, forbidden evidence
+and answers are zero, preparation p95 is 301 ms, and every resource was cleaned
+up. Neither capture has human annotations. These are separate datasets, not
+a replacement for the required complete fixed-settings holdout.
+
 The added Draw.io browser scenario copies actual attachment-backed nodes within
 and between pages, edits each copy, compares the original file bytes, and checks
 that source and destination attachment identities survive reload. It uses the

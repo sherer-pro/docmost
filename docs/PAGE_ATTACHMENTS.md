@@ -7,6 +7,13 @@ Existing page ACL checks apply before returning results. Extraction retains the
 binary text. Existing eligible text files are queued by the plain-text backfill;
 active claims and unrelated terminal failures are retained.
 
+An overwrite whose target is absent or mismatches the workspace, page or
+extension returns the same `409 attachment_target_conflict` response without
+target metadata. Diagram editors use that explicit conflict to create a separate
+attachment when saving a pasted copy. They never generally retry creation for a
+400, unrelated conflict, permission denial or storage error. The destination
+page write check runs before the upload service and remains authoritative.
+
 The authenticated page details dialog has an Attachments tab. It lists files
 owned by the page and files referenced in its saved editor content whose source
 page the user can currently read. Pagination and filename search follow those

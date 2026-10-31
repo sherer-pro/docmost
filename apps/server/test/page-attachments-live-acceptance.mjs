@@ -66,6 +66,29 @@ export async function runPageAttachmentsAcceptance({
     });
     assert.deepEqual(found.items.map((item) => item.id), [unused.id]);
     assert(!JSON.stringify(found).includes(privateFile.fileName));
+    const overwrite = (actor, attachmentId, name = 'replacement.txt', buffer = Buffer.from('Must not replace source'), mimeType = 'text/plain') =>
+      fetchApi(actor, `/attachments/actions/upload-file?pageId=${owner.id}`, 'POST', undefined, {
+        multipart: { pageId: owner.id, attachmentId, file: { name, buffer, mimeType } },
+      });
+    const conflicts = [];
+    for (const [attachmentId, name, buffer, mimeType] of [
+      [privateFile.id, 'replacement.txt', Buffer.from('Must not replace source'), 'text/plain'],
+      [randomUUID(), 'replacement.txt', Buffer.from('Must not replace source'), 'text/plain'],
+      [unused.id, 'replacement.png', png, 'image/png'],
+    ]) {
+      const response = await overwrite(actors.admin, attachmentId, name, buffer, mimeType);
+      assert.equal(response.status(), 409);
+      conflicts.push(await response.json());
+    }
+    assert.equal(conflicts[0].code, 'attachment_target_conflict');
+    assert.deepEqual(conflicts[1], conflicts[0]);
+    assert.deepEqual(conflicts[2], conflicts[0]);
+    const deniedOverwrite = await overwrite(actors.reader, unused.id);
+    assert.equal(deniedOverwrite.status(), 403);
+    assert.notEqual((await deniedOverwrite.json()).code, 'attachment_target_conflict');
+    const originalText = await fetchApi(actors.admin, `/attachments/files/${unused.id}/${unused.fileName}`);
+    assert.equal(originalText.status(), 200);
+    assert.equal(await originalText.text(), `Synthetic unused attachment ${searchToken}`);
     const content = {
       type: 'doc',
       content: [

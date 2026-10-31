@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AttachmentFileAccessService } from './attachment-file-access.service';
 import { JwtType } from '../../auth/dto/jwt-payload';
 
@@ -100,6 +101,85 @@ describe('AttachmentFileAccessService', () => {
       tokenService,
     };
   }
+
+  function uploadFixture(error: Error, denied = false) {
+    const upload = jest.fn().mockRejectedValue(error);
+    const assertCanWritePage = denied
+      ? jest.fn().mockRejectedValue(error)
+      : jest.fn().mockResolvedValue(undefined);
+    const service = new AttachmentFileAccessService(
+      { uploadFile: upload } as any,
+      { assertCanWritePage } as any,
+      {
+        findById: jest
+          .fn()
+          .mockResolvedValue({ id: pageId, spaceId: 'space-1' }),
+      } as any,
+      {} as any,
+      { getFileUploadSizeLimit: () => '10mb' } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const req = {
+      file: jest.fn().mockResolvedValue({
+        fields: {
+          pageId: { value: pageId },
+          attachmentId: { value: fileId },
+        },
+      }),
+    };
+    return {
+      upload,
+      invoke: () =>
+        service.uploadFile(
+          req,
+          createReply() as any,
+          { id: 'writer' } as any,
+          workspace,
+        ),
+    };
+  }
+
+  it.each([
+    new ForbiddenException('File attachment does not match'),
+    new NotFoundException('Existing attachment to overwrite not found'),
+  ])(
+    'returns the same conflict for absent and out-of-scope overwrite targets',
+    async (error) => {
+      const { invoke } = uploadFixture(error);
+      await expect(invoke()).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'attachment_target_conflict',
+          message: 'File attachment does not match',
+        },
+      });
+    },
+  );
+
+  it.each([
+    new ForbiddenException('Private authorization failure'),
+    new NotFoundException('Unrelated private resource'),
+    new Error('Private storage path'),
+  ])(
+    'does not turn unrelated processing failures into copy permission',
+    async (error) => {
+      const { invoke } = uploadFixture(error);
+      await expect(invoke()).rejects.toMatchObject({
+        status: 400,
+        response: { message: 'Error processing file upload.' },
+      });
+    },
+  );
+
+  it('retains page write denial before the overwrite service is called', async () => {
+    const error = new ForbiddenException();
+    const { invoke, upload } = uploadFixture(error, true);
+    await expect(invoke()).rejects.toBe(error);
+    expect(upload).not.toHaveBeenCalled();
+  });
 
   it('adds deprecation headers when public access uses legacy jwt query token', async () => {
     const { service, tokenService } = createService();
