@@ -38,11 +38,7 @@ export class QueueModule {
             const redisConfig = parseRedisUrl(environmentService.getRedisUrl());
             return {
               connection: {
-                host: redisConfig.host,
-                port: redisConfig.port,
-                password: redisConfig.password,
-                db: redisConfig.db,
-                family: redisConfig.family,
+                ...redisConfig,
                 retryStrategy: createRetryStrategy(),
               },
               defaultJobOptions: {

@@ -22,6 +22,7 @@
     "test:performance": "node --test scripts/performance-audit.test.mjs && node scripts/performance-audit.mjs",
     "test:security": "corepack pnpm run test:security:dependencies && node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs && corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",
     "test:security:dependencies": "node --import tsx --test --test-timeout=15000 scripts/security-dependencies.test.mjs",
+    "test:redis-tls": "node apps/server/test/redis-url-live.mjs",
     "test": "corepack pnpm run test:server && corepack pnpm run test:client:smoke",
     "test:all": "corepack pnpm run test && corepack pnpm run test:client",
     "test:rag-sync:contract": "node --test scripts/ci-open-webui-mock.contract.test.mjs && corepack pnpm --filter ./apps/server exec jest --config jest.config.cjs --runInBand src/core/rag-sync src/core/rag/rag.service.updates.spec.ts src/core/ai/retrieval src/core/ai/services/ai-source-access.service.spec.ts src/core/ai/services/ai-run-execution.service.spec.ts src/core/ai/services/ai-conversation.service.spec.ts",

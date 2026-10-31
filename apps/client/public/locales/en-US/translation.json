@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "503 Service Unavailable",
-            "action": "Restore Redis, the provider, or the external target first. Admission fails closed when Redis cannot protect limits."
+            "action": "Restore Redis, the provider, or the external target first. Admission fails closed when Redis cannot protect limits. For rediss://, verify the ACL user, percent-encoded credentials and trusted certificate hostname; keep TLS verification enabled."
           },
           "leaseLost": {
             "signal": "Redis lease lost",

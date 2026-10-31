@@ -1,6 +1,13 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 37 -->
+<!-- ai-admin-guide-contract-version: 38 -->
+
+AI workers and admission use the same `REDIS_URL` contract as the API,
+collaboration and search maintenance queues. Both `redis://` and `rediss://`
+preserve ACL usernames, percent-encoded credentials, database and address family.
+TLS keeps normal chain/hostname verification and SNI for DNS hosts. Malformed
+database/family/port options fail startup without including credentials in the
+error. See [the Redis and upstream repair contract](UPSTREAM_FIX_APPLICABILITY.md).
 
 Integration cards and mentions expose only their canonical URL to document text,
 search, AI and RAG. Provider metadata is loaded for each viewer with their own

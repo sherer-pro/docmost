@@ -3,6 +3,8 @@ import * as bcrypt from 'bcrypt';
 import { sanitize } from 'sanitize-filename-ts';
 import { FastifyRequest } from 'fastify';
 import { Readable, Transform } from 'stream';
+import { isIP } from 'node:net';
+import type { ConnectionOptions } from 'node:tls';
 
 export const envPath = path.resolve(process.cwd(), '..', '..', '.env');
 
@@ -28,33 +30,61 @@ export type RedisConfig = {
   host: string;
   port: number;
   db: number;
+  username?: string;
   password?: string;
-  family?: number;
+  family?: 4 | 6;
+  tls?: ConnectionOptions;
 };
 
 export function parseRedisUrl(redisUrl: string): RedisConfig {
-  // format - redis[s]://[[username][:password]@][host][:port][/db-number][?family=4|6]
-  const url = new URL(redisUrl);
-  const { hostname, port, password, pathname, searchParams } = url;
-  const portInt = parseInt(port, 10);
-
-  let db: number = 0;
-  // extract db value if present
-  if (pathname.length > 1) {
-    const value = pathname.slice(1);
-    if (!isNaN(parseInt(value))) {
-      db = parseInt(value, 10);
-    }
+  let url: URL;
+  try {
+    url = new URL(redisUrl);
+  } catch {
+    throw new Error('Invalid Redis URL');
   }
-
-  // extract family from query parameters
-  let family: number | undefined;
-  const familyParam = searchParams.get('family');
-  if (familyParam && !isNaN(parseInt(familyParam))) {
-    family = parseInt(familyParam, 10);
+  if (
+    !['redis:', 'rediss:'].includes(url.protocol) ||
+    !url.hostname ||
+    url.hash
+  )
+    throw new Error('Invalid Redis URL protocol, host or fragment');
+  const host =
+    url.hostname.startsWith('[') && url.hostname.endsWith(']')
+      ? url.hostname.slice(1, -1)
+      : url.hostname;
+  const port = url.port ? Number(url.port) : 6379;
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Invalid Redis port');
+  const database =
+    url.pathname === '' || url.pathname === '/' ? '0' : url.pathname.slice(1);
+  if (!/^\d+$/.test(database) || !Number.isSafeInteger(Number(database)))
+    throw new Error('Invalid Redis database index');
+  const families = url.searchParams.getAll('family');
+  if (
+    families.length > 1 ||
+    (families.length === 1 && !['4', '6'].includes(families[0]))
+  )
+    throw new Error('Invalid Redis address family');
+  let username: string;
+  let password: string;
+  try {
+    username = decodeURIComponent(url.username);
+    password = decodeURIComponent(url.password);
+  } catch {
+    throw new Error('Invalid Redis credential encoding');
   }
-
-  return { host: hostname, port: portInt, password, db, family };
+  return {
+    host,
+    port,
+    db: Number(database),
+    username: username || undefined,
+    password: password || undefined,
+    ...(families.length ? { family: Number(families[0]) as 4 | 6 } : {}),
+    ...(url.protocol === 'rediss:'
+      ? { tls: isIP(host) ? {} : { servername: host } }
+      : {}),
+  };
 }
 
 export function createRetryStrategy() {

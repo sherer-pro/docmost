@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "503 Serviço indisponível",
-            "action": "Restaure Redis, o provedor ou o destino externo primeiro. A admissão falha quando o Redis não consegue proteger os limites."
+            "action": "Restaure Redis, o provedor ou o destino externo primeiro. A admissão falha quando o Redis não consegue proteger os limites. Para rediss://, verifique o usuário ACL, as credenciais codificadas em porcentagem e o nome do certificado confiável; mantenha a verificação TLS ativa."
           },
           "leaseLost": {
             "signal": "Locação Redis perdida",

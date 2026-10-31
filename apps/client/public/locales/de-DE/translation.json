@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "503 Dienst nicht verfügbar",
-            "action": "Stellen Sie zuerst Redis, den Anbieter oder das externe Ziel wieder her. Die Zulassung schlägt fehl, wenn Redis die Grenzen nicht schützen kann."
+            "action": "Stellen Sie zuerst Redis, den Anbieter oder das externe Ziel wieder her. Die Zulassung schlägt fehl, wenn Redis die Grenzen nicht schützen kann. Prüfen Sie bei rediss:// den ACL-Benutzer, prozentkodierte Zugangsdaten und den vertrauenswürdigen Zertifikatshostnamen; die TLS-Prüfung bleibt aktiviert."
           },
           "leaseLost": {
             "signal": "Redis-Leasing verloren",

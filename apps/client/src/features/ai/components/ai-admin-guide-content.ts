@@ -97,7 +97,10 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
     contentKey: "ai.adminGuide.scenario.assistant",
     settingsPath: "/settings/ai/spaces",
     diagram: null,
-    controls: [{ kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" }],
+    controls: [
+      { kind: "environment", value: "AI_PROVIDER_ALLOWED_ORIGINS" },
+      { kind: "environment", value: "REDIS_URL" },
+    ],
     stepKeys: [
       "step1",
       "step2",

@@ -63,11 +63,7 @@ export class CollaborationGateway {
       // @ts-ignore
       this.redisSync = new RedisSyncExtension({
         redis: new RedisClient({
-          host: this.redisConfig.host,
-          port: this.redisConfig.port,
-          password: this.redisConfig.password,
-          db: this.redisConfig.db,
-          family: this.redisConfig.family,
+          ...this.redisConfig,
           retryStrategy: createRetryStrategy(),
         }),
         serverId: `collab-${os?.hostname()}-${nanoid(10)}`,

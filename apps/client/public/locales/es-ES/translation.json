@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "Servicio 503 no disponible",
-            "action": "Restaure primero Redis, el proveedor o el objetivo externo. La admisión falla cerrada cuando Redis no puede proteger los límites."
+            "action": "Restaure primero Redis, el proveedor o el objetivo externo. La admisión falla cerrada cuando Redis no puede proteger los límites. Para rediss://, compruebe el usuario ACL, las credenciales codificadas con porcentajes y el nombre del certificado de confianza; mantenga activa la verificación TLS."
           },
           "leaseLost": {
             "signal": "Arrendamiento Redis perdido",

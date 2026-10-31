@@ -401,6 +401,7 @@ Changes to significant properties are recorded in the document history.
 The fork provides more advanced terminology management:
 
 - page labels scoped to a space, with descriptions shown on hover;
+- page-tree copies preserve labels; cross-space copies map names into the target space in the same transaction;
 
 - six built-in inline tags: TBD, TODO, DONE, Core, Future, and Pilot;
 
@@ -796,6 +797,7 @@ The fork includes its own maintenance and development infrastructure:
 - a permanent contract that prevents external product telemetry from being reintroduced;
 
 - OCI image version and source-revision labels for release provenance;
+- Redis URL support that preserves TLS, ACL credentials, IPv6 and database/family options across API, queues, collaboration and maintenance, with a real TLS/pub-sub/BullMQ acceptance fixture;
 
 - architecture documentation;
 

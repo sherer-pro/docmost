@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "503 Servizio non disponibile",
-            "action": "Ripristinare prima Redis, il provider o la destinazione esterna. L'ammissione non viene chiusa quando Redis non è in grado di proteggere i limiti."
+            "action": "Ripristinare prima Redis, il provider o la destinazione esterna. L'ammissione non viene chiusa quando Redis non è in grado di proteggere i limiti. Per rediss://, verificate l’utente ACL, le credenziali con codifica percentuale e il nome del certificato attendibile; mantenete attiva la verifica TLS."
           },
           "leaseLost": {
             "signal": "Contratto di locazione Redis perso",

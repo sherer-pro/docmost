@@ -52,7 +52,9 @@ type TableName =
   | 'databaseRows'
   | 'databaseCells'
   | 'databaseViews'
-  | 'databaseViewRowPositions';
+  | 'databaseViewRowPositions'
+  | 'labels'
+  | 'pageLabels';
 
 function linkedInstanceDb(result?: unknown) {
   const query: any = {};
@@ -129,6 +131,8 @@ function createMemoryTransaction(
         value: unknown;
       }> = [];
       const builder = {
+        innerJoin: jest.fn(() => builder),
+        select: jest.fn(() => builder),
         selectAll: jest.fn(() => builder),
         where: jest.fn((column: string, operator: string, value: unknown) => {
           conditions.push({ column, operator, value });
@@ -416,6 +420,7 @@ describe('PageService duplicatePage properties', () => {
         ),
       };
       const fakeTrx = {
+        selectFrom: createMemoryTransaction({}).trx.selectFrom,
         insertInto: jest.fn(() => ({
           values: jest.fn((values: Array<Record<string, any>>) => ({
             execute: jest.fn(async () => insertedPages.push(...values)),
@@ -832,6 +837,7 @@ describe('PageService duplicatePage properties', () => {
       settings: {},
     };
     const fakeTrx = {
+      selectFrom: createMemoryTransaction({}).trx.selectFrom,
       insertInto: jest.fn(() => ({
         values: jest.fn(() => ({ execute: jest.fn() })),
       })),

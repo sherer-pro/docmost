@@ -14,11 +14,7 @@ export class RedisConfigService implements RedisOptionsFactory {
     return {
       readyLog: true,
       config: {
-        host: redisConfig.host,
-        port: redisConfig.port,
-        password: redisConfig.password,
-        db: redisConfig.db,
-        family: redisConfig.family,
+        ...redisConfig,
         retryStrategy: createRetryStrategy(),
       },
     };

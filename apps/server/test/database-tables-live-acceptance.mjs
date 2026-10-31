@@ -10,6 +10,7 @@ import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
 import { runDocxAcceptance } from './docx-live-acceptance.mjs';
 import { runMcpOAuthAcceptance } from './mcp-oauth-live-acceptance.mjs';
 import { runIntegrationPreviewAcceptance } from './integration-preview-live-acceptance.mjs';
+import { runUpstreamRepairsAcceptance } from './upstream-repairs-live-acceptance.mjs';
 import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
 import { runAdvancedDatabaseAcceptance } from './database-advanced-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -153,6 +154,11 @@ export async function runLiveAcceptance({
     }
     if (process.argv.includes('--integration-previews-only')) {
       await runIntegrationPreviewAcceptance({ api, fetchApi, actors, parent, space, sql, test, exactSecrets, output });
+      await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
+      return;
+    }
+    if (process.argv.includes('--upstream-repairs-only')) {
+      await runUpstreamRepairsAcceptance({ api, fetchApi, actors, parent, space, sql, test });
       await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
       return;
     }
@@ -681,6 +687,8 @@ export async function runLiveAcceptance({
     await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture, test, baseURL, sql, exactSecrets });
 
     await runIntegrationPreviewAcceptance({ api, fetchApi, actors, parent, space, sql, test, exactSecrets, output, fixture });
+
+    await runUpstreamRepairsAcceptance({ api, fetchApi, actors, parent, space, sql, test });
 
     fixture.aiApproval = await runAiDatabaseAcceptance({
       api,

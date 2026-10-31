@@ -82,7 +82,10 @@ pending as listed below.
   acceptance. The corpus and observation harness are implemented; full tuning,
   holdout and human evidence review remain required. Tool traces alone are insufficient.
 - Check the applicability of the listed upstream fixes before changing the
-  corresponding fork paths. Keep stack upgrades separate.
+  corresponding fork paths. Redis URL/TLS and copied labels are confirmed and
+  corrected; final export/draw.io/WebSocket/search receipts remain required.
+  See [the applicability checklist](../UPSTREAM_FIX_APPLICABILITY.md). Keep stack
+  upgrades separate.
 - Measure the real-model benchmark on fixed tuning/holdout settings and run the
   remaining editor, Agent and AI-context browser matrices and release gates on
   the final isolated production-like runtime.
@@ -105,6 +108,22 @@ No production configuration, permission or container was changed. Address this
 in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
+
+- `upstream-repairs-verify-full.log`: full verification passed with 291 server
+  suites / 2522 tests, 195 frontend files / 942 tests, 86 server-security suites /
+  1037 tests and 82 frontend-security tests. The Redis and label-copy targeted
+  suites separately passed 28 tests. Both fork overviews and comment-language
+  contracts passed.
+- `upstream-repairs-final-live.log`: all 27 PostgreSQL tests, complete
+  HTTP/export/import checks, the three new label-copy/rollback groups and both
+  Chromium integration cases passed. `upstream-labels-before.log` retains the
+  failing pre-fix reproduction. `upstream-redis-tls-final.log` verifies the
+  compiled parser with real ACL/TLS, pub/sub, BullMQ and hostname rejection; its
+  result records successful owned-container cleanup and no persisted private key.
+- `integration-previews-graph-import.log`: the post-commit graph contains 17665
+  nodes and 50637 edges. The approved AgentMemory import admitted 5000 nodes and
+  10784 edges under the shared cap; a repeated import added zero nodes/edges.
+  The complete graph remains local; the imported cache is intentionally bounded.
 
 - `integration-previews-server-tests.log`: 19 tests passed, including real
   loopback HTTP redirect/header/decompression boundaries and authorization/cache

@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "503 Dienst niet beschikbaar",
-            "action": "Herstel eerst Redis, de provider of het externe doel. Toegang mislukt gesloten wanneer Redis de grenzen niet kan beschermen."
+            "action": "Herstel eerst Redis, de provider of het externe doel. Toegang mislukt gesloten wanneer Redis de grenzen niet kan beschermen. Controleer bij rediss:// de ACL-gebruiker, procentgecodeerde inloggegevens en de vertrouwde certificaathostnaam; laat TLS-verificatie ingeschakeld."
           },
           "leaseLost": {
             "signal": "Redis huurcontract verloren",

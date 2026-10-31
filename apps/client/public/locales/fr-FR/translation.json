@@ -1850,7 +1850,7 @@
           },
           "503": {
             "signal": "Service 503 indisponible",
-            "action": "Restaurez d'abord Redis, le fournisseur ou la cible externe. L'admission échoue lorsque le Redis ne peut pas protéger les limites."
+            "action": "Restaurez d'abord Redis, le fournisseur ou la cible externe. L'admission échoue lorsque le Redis ne peut pas protéger les limites. Pour rediss://, vérifiez l’utilisateur ACL, les identifiants encodés en pourcentage et le nom du certificat approuvé ; conservez la vérification TLS."
           },
           "leaseLost": {
             "signal": "Bail Redis perdu",

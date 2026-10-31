@@ -1789,6 +1789,78 @@ export class PageService {
     }
   }
 
+  private async duplicatePageLabels({
+    pageMap,
+    sourceSpaceId,
+    targetSpaceId,
+    workspaceId,
+    trx,
+  }: {
+    pageMap: Map<string, CopyPageMapEntry>;
+    sourceSpaceId: string;
+    targetSpaceId: string;
+    workspaceId: string;
+    trx: KyselyTransaction;
+  }) {
+    const links = await trx
+      .selectFrom('pageLabels')
+      .innerJoin('labels', 'labels.id', 'pageLabels.labelId')
+      .select(['pageLabels.pageId', 'pageLabels.labelId', 'labels.name'])
+      .where('pageLabels.pageId', 'in', [...pageMap.keys()])
+      .where('labels.workspaceId', '=', workspaceId)
+      .where('labels.spaceId', '=', sourceSpaceId)
+      .where('labels.type', '=', 'page')
+      .execute();
+    if (!links.length) return;
+    const targetIds = new Map(links.map((link) => [link.name, link.labelId]));
+    if (sourceSpaceId !== targetSpaceId) {
+      const names = [...targetIds.keys()];
+      targetIds.clear();
+      for (let offset = 0; offset < names.length; offset += 500) {
+        const batch = names.slice(offset, offset + 500);
+        await trx
+          .insertInto('labels')
+          .values(
+            batch.map((name) => ({
+              name,
+              type: 'page',
+              workspaceId,
+              spaceId: targetSpaceId,
+            })),
+          )
+          .onConflict((conflict) =>
+            conflict
+              .columns(['workspaceId', 'spaceId', 'type', 'name'])
+              .doNothing(),
+          )
+          .execute();
+        const labels = await trx
+          .selectFrom('labels')
+          .select(['id', 'name'])
+          .where('workspaceId', '=', workspaceId)
+          .where('spaceId', '=', targetSpaceId)
+          .where('type', '=', 'page')
+          .where('name', 'in', batch)
+          .forKeyShare()
+          .execute();
+        for (const label of labels) targetIds.set(label.name, label.id);
+      }
+    }
+    const copied = links.map((link) => {
+      const labelId = targetIds.get(link.name);
+      if (!labelId)
+        throw new ConflictException(
+          'Labels changed during page copy; retry the operation',
+        );
+      return { pageId: pageMap.get(link.pageId)!.newPageId, labelId };
+    });
+    for (let offset = 0; offset < copied.length; offset += 500)
+      await trx
+        .insertInto('pageLabels')
+        .values(copied.slice(offset, offset + 500))
+        .execute();
+  }
+
   async duplicatePage(
     rootPage: Page,
     targetSpaceId: string | undefined,
@@ -2051,6 +2123,13 @@ export class PageService {
 
     await executeTx(this.db, async (trx) => {
       await trx.insertInto('pages').values(insertablePages).execute();
+      await this.duplicatePageLabels({
+        pageMap,
+        sourceSpaceId: rootPage.spaceId,
+        targetSpaceId: spaceId,
+        workspaceId: authUser.workspaceId,
+        trx,
+      });
       await this.duplicateLinkedDatabases({
         attachmentIds: new Map(
           attachmentMappings.map((mapping) => [

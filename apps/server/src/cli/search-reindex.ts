@@ -67,11 +67,7 @@ async function main(): Promise<void> {
 
   const redisConfig = parseRedisUrl(requireEnv('REDIS_URL'));
   const connection = {
-    host: redisConfig.host,
-    port: redisConfig.port,
-    password: redisConfig.password,
-    db: redisConfig.db,
-    family: redisConfig.family,
+    ...redisConfig,
     retryStrategy: createRetryStrategy(),
   };
   const searchQueue = new Queue(QueueName.SEARCH_QUEUE, { connection });
