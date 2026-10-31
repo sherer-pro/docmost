@@ -816,7 +816,34 @@ test("live tabs persist edits, reveal hidden matches and present databases read-
     type: "databaseEmbed",
     attrs: { databaseId: fixture.databaseId },
   });
+  const currentUser = (await api(page.request, "/users/me")).user;
+  await info.attach("tabs-initial-mode", {
+    contentType: "application/json",
+    body: Buffer.from(
+      JSON.stringify({
+        previous:
+          currentUser.settings?.preferences?.pageEditModeByPageId?.[
+            fixture.editorBlocks.pageId
+          ] ?? null,
+        requested: "read",
+      }),
+    ),
+  });
+  await api(page.request, "/users/update", "POST", {
+    pageEditModeByPageId: {
+      ...currentUser.settings?.preferences?.pageEditModeByPageId,
+      [fixture.editorBlocks.pageId]: "read",
+    },
+  });
   await resetEditorBlocks(page, content);
+  await expect(
+    page
+      .getByTestId("page-state-segmented-control")
+      .getByRole("radio", { name: "Read", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("textbox", { name: "Editor", exact: true }).first(),
+  ).toHaveAttribute("contenteditable", "false");
   const tabs = page.locator("[data-docmost-tabs-scope]").first();
   await expect(
     tabs.getByText("Visible tab evidence", { exact: true }),
@@ -1722,6 +1749,48 @@ for (const undo of [true, false])
   test(`live deletion retains six seconds after navigation and ${undo ? "undo" : "original database"}`, async ({
     page,
   }, info) => {
+    const requestTimes: Array<{
+      method: string;
+      path: string;
+      startedAt: number;
+      endedAt?: number;
+      status?: number;
+      failed?: boolean;
+    }> = [];
+    const requests = new WeakMap<object, (typeof requestTimes)[number]>();
+    // Keep only endpoint paths and timing metadata, never headers or bodies.
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (
+        !/^\/api\/(?:pages|databases|spaces|auth\/collab-token)(?:\/|$)/.test(
+          url.pathname,
+        )
+      )
+        return;
+      const pageId = url.searchParams.get("pageId");
+      const entry = {
+        method: request.method(),
+        path: url.pathname + (pageId ? `?pageId=${pageId}` : ""),
+        startedAt: Date.now(),
+      };
+      requests.set(request, entry);
+      requestTimes.push(entry);
+    });
+    page.on("response", (response) => {
+      const entry = requests.get(response.request());
+      if (entry) entry.status = response.status();
+    });
+    page.on("requestfinished", (request) => {
+      const entry = requests.get(request);
+      if (entry) entry.endedAt = Date.now();
+    });
+    page.on("requestfailed", (request) => {
+      const entry = requests.get(request);
+      if (entry) {
+        entry.endedAt = Date.now();
+        entry.failed = true;
+      }
+    });
     await open(page);
     await cell(page, 104)
       .locator("xpath=..")
@@ -1778,6 +1847,22 @@ for (const undo of [true, false])
       await info.attach("delete-action-timing", {
         contentType: "application/json",
         body: Buffer.from(JSON.stringify(actionTimes)),
+      });
+      await info.attach("delete-request-timing", {
+        contentType: "application/json",
+        body: Buffer.from(
+          JSON.stringify(
+            requestTimes.map((entry) => ({
+              method: entry.method,
+              path: entry.path,
+              status: entry.status,
+              startMs: entry.startedAt - started,
+              endMs:
+                entry.endedAt === undefined ? null : entry.endedAt - started,
+              failed: entry.failed ?? false,
+            })),
+          ),
+        ),
       });
     }
     expect(navigationMs).toBeLessThan(5000);
