@@ -196,3 +196,28 @@ Watch application logs for:
 
 Recurring events usually indicate hostile payload attempts or malformed imports.
 Escalate repeated patterns to security review.
+
+## Redirect dependency credential isolation
+
+The final release audit found GHSA-mrwp-f3q8-3g9p in the pinned
+`follow-redirects` 1.16.1 dependency. The maintainer identifies 1.16.0-1.16.1 as
+affected and 1.16.2 as patched. See the
+[maintainer advisory](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p).
+This is a dependency-level finding; it does not establish an exploitable Axios,
+Postmark or Typesense path in this application.
+
+The root override and lockfile pin 1.16.2. After a frozen install, run
+`corepack pnpm test:security:dependencies`. Its real redirect acceptance resolves
+the dependency through Postmark/Axios and uses two owned HTTP loopback servers
+with synthetic values. It checks object/array headers and ordinary/cross-realm
+custom-sensitive-header lists, removal of authorization/cookies/custom credentials
+across origins, preservation of unrelated headers and same-origin credentials.
+The standalone diagnostic is `node scripts/follow-redirects-acceptance.mjs`.
+It never contacts an external redirect recipient and never loads `.env`.
+
+The old installed artifact failed the cross-realm assertion in
+`artifacts/follow-redirects-vulnerable-repro.log`; the independently downloaded
+1.16.2 artifact passed the same protocol in
+`artifacts/follow-redirects-patched-protocol.log`, after npm SHA512 verification.
+Lockfile-only preparation does not update an installed application. The final
+frozen installation and complete release gate remain separate required checks.

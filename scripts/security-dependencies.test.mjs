@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { once } from "node:events";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
+import { verifyRedirectCredentialIsolation } from "./follow-redirects-acceptance.mjs";
 import StarterKit from "@tiptap/starter-kit";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -34,6 +35,12 @@ const multipartRequire = createRequire(
   serverRequire.resolve("@fastify/multipart"),
 );
 const Busboy = multipartRequire("@fastify/busboy");
+
+test("real redirects isolate cross-realm custom credentials and preserve same-origin headers", async () => {
+  const postmarkRequire = createRequire(serverRequire.resolve("postmark"));
+  const axiosRequire = createRequire(postmarkRequire.resolve("axios"));
+  await verifyRedirectCredentialIsolation(axiosRequire("follow-redirects"));
+});
 
 async function listen(server) {
   server.listen(0, "127.0.0.1");
