@@ -253,7 +253,9 @@ export class AttachmentContentService
       const extracted =
         extension === '.pdf'
           ? await this.extractPdfText(buffer, deadline)
-          : await this.extractDocxText(buffer, deadline);
+          : extension === '.docx'
+            ? await this.extractDocxText(buffer, deadline)
+            : this.extractPlainText(buffer);
 
       await this.saveExtractedText(
         attachment,
@@ -543,6 +545,18 @@ export class AttachmentContentService
       this.logger.warn({
         event: 'attachment_search_enqueue_failed_after_extraction',
       });
+    }
+  }
+
+  private extractPlainText(buffer: Buffer): string {
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      if (text.includes('\0')) {
+        throw new Error('Binary content');
+      }
+      return text;
+    } catch {
+      throw new UnextractableAttachmentError('invalid_utf8_text');
     }
   }
 

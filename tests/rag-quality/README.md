@@ -112,6 +112,11 @@ application's real local search. Only adversarial cases inject the explicitly
 stale hit. A separate readable probe tests each policy mutation while the
 original private source remains closed throughout.
 
+The importer waits for readable Markdown attachment contents to become searchable
+through `/search/attachments`, retaining opaque fixture filenames. It records
+those readiness results separately. Earlier captures without plain-text content
+indexing remain an immutable baseline; they are not relabeled as fixed results.
+
 An explicit test-only Node preload records actual ranked candidates, canonical
 documents loaded by retrieval and its outcome in `quality-retrieval-trace.jsonl`.
 It preserves the original return values and separates concurrent request IDs;

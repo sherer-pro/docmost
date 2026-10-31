@@ -1,5 +1,12 @@
 # Page attachment gallery
 
+Ordinary attachment search indexes UTF-8 Markdown and plain-text contents in
+addition to PDF and DOCX. Opaque file names do not prevent content matches.
+Existing page ACL checks apply before returning results. Extraction retains the
+50 MiB file and 1000000-character text limits and rejects malformed UTF-8 or
+binary text. Existing eligible text files are queued by the plain-text backfill;
+active claims and unrelated terminal failures are retained.
+
 The authenticated page details dialog has an Attachments tab. It lists files
 owned by the page and files referenced in its saved editor content whose source
 page the user can currently read. Pagination and filename search follow those

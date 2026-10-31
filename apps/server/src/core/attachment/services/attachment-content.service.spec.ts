@@ -77,9 +77,9 @@ describe('AttachmentContentService', () => {
     const { service, updates } = createService(
       {
         id: 'attachment-1',
-        filePath: 'files/data.txt',
-        fileName: 'data.txt',
-        fileExt: '.txt',
+        filePath: 'files/data.bin',
+        fileName: 'data.bin',
+        fileExt: '.bin',
         fileSize: 100,
         updatedAt: new Date(),
       },
@@ -96,6 +96,69 @@ describe('AttachmentContentService', () => {
       }),
     );
   });
+
+  it.each(['.md', '.txt'])(
+    'indexes UTF-8 content from %s attachments',
+    async (fileExt) => {
+      const storage = {
+        read: jest
+          .fn()
+          .mockResolvedValue(
+            Buffer.from('\ufeff# Terms\n\nMinimum term: 6 months.'),
+          ),
+      };
+      const { service } = createService(
+        {
+          id: 'attachment-1',
+          filePath: `files/document${fileExt}`,
+          fileName: `document${fileExt}`,
+          fileExt,
+          fileSize: 80,
+          contentIndexStatus: 'pending',
+        },
+        storage,
+      );
+      const save = jest
+        .spyOn(service as any, 'saveExtractedText')
+        .mockResolvedValue(undefined);
+
+      await service.indexAttachment('attachment-1');
+
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'attachment-1' }),
+        '# Terms\n\nMinimum term: 6 months.',
+        expect.any(Date),
+      );
+    },
+  );
+
+  it.each([Buffer.from([0xff, 0xfe]), Buffer.from('binary\0data')])(
+    'rejects invalid or binary text without indexing replacement characters',
+    async (buffer) => {
+      const { service, updates } = createService(
+        {
+          id: 'attachment-1',
+          filePath: 'files/data.txt',
+          fileName: 'data.txt',
+          fileExt: '.txt',
+          fileSize: buffer.length,
+          contentIndexStatus: 'pending',
+        },
+        { read: jest.fn().mockResolvedValue(buffer) },
+      );
+      const save = jest.spyOn(service as any, 'saveExtractedText');
+
+      await service.indexAttachment('attachment-1');
+
+      expect(save).not.toHaveBeenCalled();
+      expect(updates).toContainEqual(
+        expect.objectContaining({
+          contentIndexStatus: 'skipped',
+          contentIndexError: 'invalid_utf8_text',
+        }),
+      );
+    },
+  );
 
   it('marks oversized supported files as skipped without reading them', async () => {
     const storage = { read: jest.fn() };

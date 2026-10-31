@@ -1667,7 +1667,8 @@
             "step3": "Enable extern zoeken",
             "step4": "database_row-bronnen bevatten number, date, multi_select, url, email en phone. Weergavefilters beperken RAG niet; paginatoegang en het AI-inhoudsbeleid blijven bepalend.",
             "step5": "Stel een vraag met een naam tussen aanhalingstekens en controleer de geciteerde sectie. Onderscheid ontbrekende gegevens van een zoekfout.",
-            "step6": "Vergelijk uitklapbare samenvattingen en tabelkoppen met de geciteerde bron. Markdown behoudt nadruk, voetnoten en elk | in cellen; tabellen zonder kopcellen houden een lege kop."
+            "step6": "Vergelijk uitklapbare samenvattingen en tabelkoppen met de geciteerde bron. Markdown behoudt nadruk, voetnoten en elk | in cellen; tabellen zonder kopcellen houden een lege kop.",
+            "step7": "Controleer of de inhoud van .md- en .txt-bestanden doorzoekbaar is, ook als de bestandsnaam niet overeenkomt met de zoekopdracht. Voor UTF-8 gelden de bestaande limieten: 50 MiB per bestand en 1000000 geëxtraheerde tekens. Een kop zonder tekst krijgt geen bronmarkering."
           },
           "success": "De test levert kandidaten op en het antwoord bevat alleen leesbare, niet-uitgesloten bronnen",
           "rollback": "Schakel extern zoeken uit; Chat gaat verder zonder ophalen",

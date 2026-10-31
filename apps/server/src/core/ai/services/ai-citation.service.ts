@@ -8,6 +8,15 @@ type CitationState = 'cited' | 'context';
 
 @Injectable()
 export class AiCitationService {
+  hasSubstantiveEvidence(text: string): boolean {
+    return Boolean(
+      text
+        .replace(/^#{1,6}\s+.*$/gm, '')
+        .replace(/\[Evidence truncated at a block boundary\]/g, '')
+        .trim(),
+    );
+  }
+
   transmittedCandidates(
     candidates: AiCitationCandidate[],
     content: string,
@@ -22,11 +31,7 @@ export class AiCitationService {
       // alone on its line, so its following line is retained.
       if (!fragment.includes('\n')) continue;
       const body = fragment.slice(fragment.indexOf('\n') + 1).trim();
-      const substantive = body
-        .replace(/^#{1,6}\s+.*$/gm, '')
-        .replace(/\[Evidence truncated at a block boundary\]/g, '')
-        .trim();
-      if (substantive)
+      if (this.hasSubstantiveEvidence(body))
         transmitted.set(
           match[1],
           [transmitted.get(match[1]), body].filter(Boolean).join('\n\n'),

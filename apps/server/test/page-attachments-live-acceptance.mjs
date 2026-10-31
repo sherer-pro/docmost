@@ -40,18 +40,32 @@ export async function runPageAttachmentsAcceptance({
       Buffer.from('Synthetic history attachment'),
       'text/plain',
     );
+    const searchToken = `attachmentcontent${randomUUID().replaceAll('-', '')}`;
     const unused = await upload(
       owner.id,
       '03-unused.txt',
-      Buffer.from('Synthetic unused attachment'),
+      Buffer.from(`Synthetic unused attachment ${searchToken}`),
       'text/plain',
     );
     const privateFile = await upload(
       hiddenParent.id,
       'private-filename-must-not-leak.txt',
-      Buffer.from('Synthetic restricted attachment'),
+      Buffer.from(`Synthetic restricted attachment ${searchToken}`),
       'text/plain',
     );
+    const indexDeadline = Date.now() + 15000;
+    let indexed = [];
+    do {
+      indexed = await sql`select id from attachments where id in (${unused.id}, ${privateFile.id}) and content_index_status = 'ready'`;
+      if (indexed.length === 2) break;
+      await delay(250);
+    } while (Date.now() < indexDeadline);
+    assert.equal(indexed.length, 2, 'Both text attachments must be indexed before ACL search');
+    const found = await api(actors.reader, '/search/attachments', 'POST', {
+      query: searchToken, spaceId: space.id,
+    });
+    assert.deepEqual(found.items.map((item) => item.id), [unused.id]);
+    assert(!JSON.stringify(found).includes(privateFile.fileName));
     const content = {
       type: 'doc',
       content: [

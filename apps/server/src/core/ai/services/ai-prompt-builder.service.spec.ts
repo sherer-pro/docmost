@@ -106,6 +106,45 @@ describe('AiPromptBuilderService', () => {
     ).toBe('Unseen ');
   });
 
+  it('does not offer markers for title-only references in an untruncated prompt', async () => {
+    const result = await createService().build({
+      run: { ...run, selectionText: null, documentSnapshot: null },
+      user,
+      instructions: null,
+      currentUserContent: 'Compare',
+      fileText: '',
+      fileSources: [],
+      contextSources: [],
+      images: [],
+      retrievalSources: [
+        '# Empty source',
+        '# Terms\n\nMinimum term: 6 months.',
+      ].map((excerpt, index) => ({
+        sourceType: 'page' as const,
+        sourceId: `page-${index}`,
+        pageId: `page-${index}`,
+        sourceTitle: `Source ${index}`,
+        sourceUrl: null,
+        excerpt,
+        relevanceScore: null,
+      })),
+      contextWindow: 32_768,
+      maxOutputTokens: 2_048,
+    });
+    const prompt = String(result.messages.at(-1)?.content);
+    expect(prompt).not.toContain('Empty source');
+    expect(prompt).not.toContain('Source 0');
+    expect(prompt).toContain('[S1]');
+    expect(prompt).not.toContain('[S2]');
+    expect(prompt).toContain('Minimum term: 6 months.');
+    expect(
+      result.citationCandidates.map((candidate) => candidate.marker),
+    ).toEqual(['S1']);
+    expect(result.citationCandidates[0].excerpt).toBe(
+      '# Terms\n\nMinimum term: 6 months.',
+    );
+  });
+
   it('keeps two different fragments of one source citable', async () => {
     const result = await createService().build({
       run: { ...run, selectionText: null, documentSnapshot: null },

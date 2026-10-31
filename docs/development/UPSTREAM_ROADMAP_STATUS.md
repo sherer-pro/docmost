@@ -6,6 +6,20 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The real RAG tuning baseline exposed two related defects: local content search
+did not index Markdown/plain-text attachments, and the prompt advertised a marker
+for an empty attachment-hosting page that the evidence ledger correctly rejected.
+UTF-8 `.md`/`.txt` files now use the existing fenced indexing worker and limits;
+invalid UTF-8 and NUL-bearing binary content are terminally skipped. A migration
+queues only eligible old text attachments without disturbing claims or other
+terminal failures. Prompt packing drops title-only search results before marker
+registration. The quality importer keeps opaque filenames and waits for actual
+attachment-content search readiness. Contract v41, all 12 locales and both
+approved overviews are aligned. The targeted backend run passed 47 tests, and
+the final prompt/citation subset passed 21 tests with exact excerpt checks.
+The guide passed 21 client tests; lint and documentation contracts passed.
+Real PostgreSQL/HTTP acceptance and post-fix model captures remain pending.
+
 The isolated AI browser diagnostic passed all 28 cases across Russian and English
 desktop, Firefox streaming, Pixel 7, mobile WebKit and a narrow AI panel. Its
 processes, containers and temporary runtime were removed. The temporary

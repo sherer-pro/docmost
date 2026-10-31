@@ -1,5 +1,5 @@
 {
-  "version": 40,
+  "version": 41,
   "anchors": [
     "assistant",
     "retrieval",
@@ -223,6 +223,17 @@
         "schemaFingerprint",
         "queryDatabaseView"
       ]
+    },
+    {
+      "id": "plain-text-attachment-search",
+      "key": "scenario.retrieval.steps.step7",
+      "needles": [
+        ".md",
+        ".txt",
+        "UTF-8",
+        "50 MiB",
+        "1000000"
+      ]
     }
   ],
   "requiredKeys": [
@@ -417,6 +428,7 @@
     "diagram.mcp.nodes.userAuthorization",
     "scenario.assistant.steps.step12",
     "scenario.assistant.steps.step13",
-    "scenario.retrieval.steps.step6"
+    "scenario.retrieval.steps.step6",
+    "scenario.retrieval.steps.step7"
   ]
 }

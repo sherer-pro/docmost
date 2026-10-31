@@ -294,6 +294,32 @@ export async function runRagQuality({
         pageIds: items.map((item) => item.id),
       });
     }
+    const attachmentReadiness = [];
+    for (const document of corpus.documents.filter(
+      (item) => item.sourceType === 'attachment' && item.readable,
+    )) {
+      const query = document.title.split(':')[0];
+      const source = mapping.get(document.id);
+      const deadline = Date.now() + 15000;
+      let items = [];
+      do {
+        items = (
+          await api(reader, '/search/attachments', 'POST', {
+            query, spaceId: space.id,
+          })
+        ).items;
+        if (items.some((item) => item.id === source.sourceId)) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      } while (Date.now() < deadline);
+      assert(
+        items.some((item) => item.id === source.sourceId),
+        `Attachment content did not become searchable: ${document.id}`,
+      );
+      attachmentReadiness.push({
+        query, sourceId: source.sourceId,
+        attachmentIds: items.map((item) => item.id),
+      });
+    }
     const firstNaturalQuery = (
       await api(reader, '/search', 'POST', {
         query: questions[0].question,
@@ -305,6 +331,7 @@ export async function runRagQuality({
       JSON.stringify(
         {
           indexedGuides: searchReadiness,
+          indexedAttachments: attachmentReadiness,
           firstNaturalQuery: questions[0].question,
           naturalQueryPageIds: firstNaturalQuery.map((item) => item.id),
         },

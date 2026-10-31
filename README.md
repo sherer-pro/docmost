@@ -429,7 +429,7 @@ Search works across pages, databases, rows, attachments, and enabled dictionary 
 
 - Typesense can be selected as a scalable candidate index;
 
-- PDF and DOCX names and extracted text are searchable;
+- PDF, DOCX, UTF-8 Markdown and plain-text names and extracted text are searchable;
 
 - Spotlight `All` mode separates document, attachment, and dictionary results, while database rows include matched-property context;
 

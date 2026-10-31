@@ -162,7 +162,10 @@ export class AiPromptBuilderService {
         root: true,
       });
     }
-    for (const source of retrievalSources) {
+    const substantiveRetrievalSources = retrievalSources.filter((source) =>
+      citationService.hasSubstantiveEvidence(source.excerpt),
+    );
+    for (const source of substantiveRetrievalSources) {
       if (source.sectionId) {
         register({
           candidateKey: `${source.sourceType}:${source.sourceId}:root`,
@@ -239,8 +242,8 @@ export class AiPromptBuilderService {
           .filter(Boolean)
           .join('\n')}`
       : '';
-    const retrievalContext = retrievalSources.length
-      ? `Space search sources:\n${retrievalSources
+    const retrievalContext = substantiveRetrievalSources.length
+      ? `Space search sources:\n${substantiveRetrievalSources
           .map((source) => {
             if (source.sectionId) {
               register({

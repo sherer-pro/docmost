@@ -1667,7 +1667,8 @@
             "step3": "Enable externe Suche",
             "step4": "database_row-Quellen enthalten number, date, multi_select, url, email und phone. Ansichtsfilter begrenzen RAG nicht; Seitenzugriff und die KI-Inhaltsrichtlinie bleiben maßgeblich.",
             "step5": "Stellen Sie eine Frage mit einem Namen in Anführungszeichen und prüfen Sie den zitierten Abschnitt. Unterscheiden Sie fehlende Daten von einem Suchfehler.",
-            "step6": "Vergleichen Sie aufklappbare Zusammenfassungen und Tabellenüberschriften mit der zitierten Quelle. Markdown bewahrt Hervorhebungen, Fußnoten und jedes | in Zellen; Tabellen ohne Kopfzellen behalten eine leere Überschrift."
+            "step6": "Vergleichen Sie aufklappbare Zusammenfassungen und Tabellenüberschriften mit der zitierten Quelle. Markdown bewahrt Hervorhebungen, Fußnoten und jedes | in Zellen; Tabellen ohne Kopfzellen behalten eine leere Überschrift.",
+            "step7": "Prüfen Sie die Suche im Inhalt von .md- und .txt-Dateien, auch wenn der Dateiname nicht zur Suchanfrage passt. Für UTF-8 gelten die bisherigen Grenzen: 50 MiB pro Datei und 1000000 extrahierte Zeichen. Überschriften ohne Text erhalten keine Quellenmarkierung."
           },
           "success": "Der Test gibt Kandidaten zurück und die Antwort enthält nur lesbare, nicht ausgeschlossene Quellen",
           "rollback": "Externe Suche deaktivieren; Chat wird ohne Abruf fortgesetzt",

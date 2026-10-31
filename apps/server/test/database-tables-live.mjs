@@ -446,6 +446,7 @@ try {
         'test/jest-e2e.json',
         '--runInBand',
         'test/database-tables.e2e-spec.ts',
+        'test/attachment-text-search.e2e-spec.ts',
       ],
       {
         cwd: path.join(repo, 'apps/server'),
@@ -457,7 +458,7 @@ try {
     const [code] = await once(check, 'exit');
     if (code !== 0) throw new Error('PostgreSQL database acceptance failed');
     report.tests.push({
-      name: 'PostgreSQL transactions, concurrency, query bounds and legacy archive acceptance',
+      name: 'PostgreSQL transactions, concurrency, query bounds, legacy archive and plain-text attachment acceptance',
       passed: true,
     });
   }

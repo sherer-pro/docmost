@@ -1,6 +1,16 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 40 -->
+<!-- ai-admin-guide-contract-version: 41 -->
+
+Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
+existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
+text limits apply; malformed UTF-8 and binary text with NUL bytes are skipped.
+The plain-text backfill queues live files previously unindexed or skipped only
+as unsupported. It preserves active worker claims and other terminal failures.
+Prompt packing omits title-only search results before assigning citation markers.
+Evidence still includes only substantive fragments that were actually sent.
+The immutable pre-fix benchmark remains a separate baseline. New captures wait
+for attachment content search readiness without renaming fixture files.
 
 Markdown projections preserve semantic table headers even when editor column
 metadata precedes the body, retain every pipe character in cell values, and
@@ -1209,6 +1219,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20261031T130000-database-computed-and-file-properties.ts`](../apps/server/src/database/migrations/20261031T130000-database-computed-and-file-properties.ts) | Extends the legacy adapter for participant/file arrays and backfills row mutation metadata from the latest cell mutation without rewriting values. | Refuses while computed/file properties or participant arrays exist, including retained data. The compatible adapter and corrected metadata remain; disable creation instead of removing saved data. |
 | [`20261031T140000-mcp-user-oauth.ts`](../apps/server/src/database/migrations/20261031T140000-mcp-user-oauth.ts) | Adds disabled-by-default workspace OAuth settings, registered clients, pending authorization codes, user/session/space grants and hashed access/refresh tokens. No API key or existing configuration is changed. | Refuses while any grant remains. Disable OAuth to revoke access while retaining records. |
 | [`20261031T150000-integration-link-previews.ts`](../apps/server/src/database/migrations/20261031T150000-integration-link-previews.ts) | Adds disabled-by-default preview settings and personal encrypted connections. Preview nodes supply only URLs to AI/RAG. | Refuses while any connection remains. Disable previews to preserve credentials and existing nodes. |
+| [`20261101T000000-plain-text-attachment-search.ts`](../apps/server/src/database/migrations/20261101T000000-plain-text-attachment-search.ts) | Queues live `.md`/`.txt` attachments that have no indexing state or were skipped as unsupported. Existing claims and other terminal failures remain unchanged. | No-op preserving extracted text and active claims. The previous worker skips these formats; already indexed text remains searchable. |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
