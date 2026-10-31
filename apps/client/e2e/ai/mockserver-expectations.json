@@ -36,10 +36,7 @@
               "function": { "name": "capabilityProbe" }
             }
           ],
-          "tool_choice": {
-            "type": "function",
-            "function": { "name": "capabilityProbe" }
-          }
+          "tool_choice": "required"
         },
         "matchType": "ONLY_MATCHING_FIELDS"
       }

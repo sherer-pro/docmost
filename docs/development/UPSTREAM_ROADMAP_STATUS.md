@@ -6,6 +6,18 @@ complete; final release acceptance and CI remain pending.
 
 ## Implemented packages
 
+The first isolated `verify:release` attempt on `a1ce3276` passed all 27 PostgreSQL
+cases and the complete `verify:full`: 291 backend suites / 2524 tests, 195 frontend
+files / 942 tests, 86 backend-security suites / 1037 tests and the frontend security
+suite. The extended route, RAG, fork-documentation, comment, text, editor-package,
+RAG Sync, inbound-MCP and production dependency-audit checks also passed. It then
+stopped before AI browser acceptance: the MockServer fixture expected the retired
+named-function choice instead of the current single-tool `required` choice.
+The fixture now matches the production probe. A real HTTP negative/positive check
+reproduced the missing old tool call, verified the exact new call and arguments,
+rejected an unrelated tool and removed its owned mock container. Production probe
+validation and timeouts are unchanged. Complete release acceptance remains pending.
+
 The new live document-block scenarios exercise two authenticated users in
 desktop/light and mobile/dark. Chromium, Firefox and WebKit completed the body
 checks for concurrent edits, independent active tabs, a shared rename, stale
