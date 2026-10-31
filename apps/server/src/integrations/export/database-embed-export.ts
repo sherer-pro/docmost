@@ -22,6 +22,7 @@ export async function materializeDatabaseEmbeds(
   access: PageAccessService,
   user?: User,
   preserveDatabaseIds = new Set<string>(),
+  materializedPageIds?: Set<string>,
 ): Promise<any> {
   const query = new DatabaseViewQueryService(db, new DatabaseRowRepo(db));
   const cache = new Map<string, any>();
@@ -48,6 +49,7 @@ export async function materializeDatabaseEmbeds(
       database.spaceId,
     );
     if (!snapshot.readablePageIds.has(database.pageId)) return unavailable();
+    materializedPageIds?.add(database.pageId);
     const properties = await db
       .selectFrom('databaseProperties')
       .selectAll()
@@ -116,7 +118,8 @@ export async function materializeDatabaseEmbeds(
             throw new BadRequestException(
               'Embedded view export exceeds 10000 rows; narrow its filter',
             );
-          for (const row of page.items as any[])
+          for (const row of page.items as any[]) {
+            materializedPageIds?.add(row.pageId);
             rows.push({
               type: 'tableRow',
               content: [
@@ -142,6 +145,7 @@ export async function materializeDatabaseEmbeds(
                 }),
               ],
             });
+          }
           cursor = page.hasMore ? (page.nextCursor ?? undefined) : undefined;
         } while (cursor);
       });

@@ -60,7 +60,9 @@ export default function ExportModal({
             ? t("export.format.markdown")
             : value === ExportFormat.HTML
               ? t("export.format.html")
-              : t("Print PDF"),
+              : value === ExportFormat.DOCX
+                ? t("export.format.docx")
+                : t("Print PDF"),
   }));
 
   const modalTitle =

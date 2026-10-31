@@ -757,6 +757,7 @@
   "accountLanguage.locale.zhCN": "中文 (简体)",
   "export.format.markdown": "Markdown",
   "export.format.html": "HTML",
+  "export.format.docx": "Word (DOCX)",
   "export.format.docmost": "Docmost archive",
   "Export database": "Export database",
   "Docmost archive exports the full database and all saved views.": "Docmost archive exports the full database and all saved views.",

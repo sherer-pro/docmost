@@ -20,6 +20,7 @@ export function getExportFormatValues(type: ExportTargetType): string[] {
       ExportFormat.Markdown,
       ExportFormat.HTML,
       ExportFormat.PDF,
+      ExportFormat.DOCX,
     ];
   }
 

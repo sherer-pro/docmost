@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance.mjs';
 import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
+import { runDocxAcceptance } from './docx-live-acceptance.mjs';
 import { runEmptyTemplateAcceptance } from './empty-template-live-acceptance.mjs';
 import { runAdvancedDatabaseAcceptance } from './database-advanced-live-acceptance.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -691,6 +692,8 @@ export async function runLiveAcceptance({
       output,
       sql,
     });
+
+    await runDocxAcceptance({ api, fetchApi, actors, space, parent, fixture, test, output });
 
     await test('CSV exports the complete filtered accessible view in its visible column order', async () => {
       const amount = properties[1].id;

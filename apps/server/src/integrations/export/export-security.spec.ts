@@ -40,6 +40,114 @@ import {
   assertSafeExportPath,
   replaceInternalLinks,
 } from './utils';
+import { ExportFormat } from './dto/export-dto';
+
+describe('DOCX export source revalidation', () => {
+  const root = {
+    id: 'root',
+    workspaceId: 'workspace',
+    spaceId: 'space',
+  } as any;
+  const actor = { id: 'actor', workspaceId: 'workspace' } as any;
+  const create = () => {
+    const sourceIds = [
+      'root',
+      'synced-source',
+      'database-source',
+      'row-source',
+    ];
+    const currentPages = sourceIds.map((id) => ({ ...root, id }));
+    const query: any = { execute: jest.fn(async () => currentPages) };
+    query.select = jest.fn(() => query);
+    query.where = jest.fn(() => query);
+    const acl = {
+      getEffectiveAccessForPages: jest.fn(
+        async (_pages: any[], _actor: any) =>
+          new Map(
+            currentPages.map((page) => [
+              page.id,
+              { capabilities: { canRead: true } },
+            ]),
+          ),
+      ),
+    };
+    const service = new ExportService(
+      {} as any,
+      { selectFrom: () => query } as any,
+      {} as any,
+      { getAppUrl: () => 'https://docmost.example.test' } as any,
+      {} as any,
+      {} as any,
+      acl as any,
+      {} as any,
+    );
+    const html = jest
+      .spyOn(service as any, 'buildPageExportHtml')
+      .mockResolvedValue({
+        title: 'Document',
+        pageHtml: '<h1>Document</h1><p>Permitted snapshot</p>',
+        attachmentPageIds: sourceIds,
+        attachmentIds: [],
+      });
+    jest.spyOn(service, 'buildPagePdfBody').mockResolvedValue({
+      title: 'Document',
+      bodyHtml: '<h1>Document</h1><p>Permitted snapshot</p>',
+      attachmentTokens: {},
+    });
+    return { service, query, acl, html };
+  };
+  it('rechecks the container and materialized source before returning the DOCX bytes', async () => {
+    const { service, acl } = create();
+    const result = await service.exportPage(
+      ExportFormat.DOCX,
+      root,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      actor,
+    );
+    expect(Buffer.isBuffer(result)).toBe(true);
+    expect(
+      acl.getEffectiveAccessForPages.mock.calls[0][0].map((page) => page.id),
+    ).toEqual(['root', 'synced-source', 'database-source', 'row-source']);
+  });
+  it('returns no document after a source permission is revoked or the source is deleted', async () => {
+    const revoked = create();
+    revoked.acl.getEffectiveAccessForPages.mockResolvedValueOnce(new Map());
+    await expect(
+      revoked.service.exportPage(
+        ExportFormat.DOCX,
+        root,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        actor,
+      ),
+    ).rejects.toThrow('access changed');
+    const deleted = create();
+    deleted.query.execute.mockResolvedValueOnce([root]);
+    await expect(
+      deleted.service.exportPage(
+        ExportFormat.DOCX,
+        root,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        actor,
+      ),
+    ).rejects.toThrow('unavailable');
+  });
+  it('requires the authenticated actor before preparing any source', async () => {
+    const { service, html } = create();
+    await expect(service.exportPage(ExportFormat.DOCX, root)).rejects.toThrow(
+      'Authorized user',
+    );
+    expect(html).not.toHaveBeenCalled();
+  });
+});
 
 describe('Export security boundaries', () => {
   const user = { id: 'reader', workspaceId: 'workspace' } as any;

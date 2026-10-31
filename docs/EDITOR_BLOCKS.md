@@ -37,7 +37,8 @@ not automatically validate external references; see the canonical
 
 Verification uses `corepack pnpm test:editor-ext`, server collaboration/export
 tests, the structured-evidence regression, and the isolated editor browser/export
-acceptance. DOCX coverage belongs to the separate DOCX exporter package.
+acceptance. DOCX uses the same access-checked materialization and native Word
+footnotes; see [DOCX export](DOCX_EXPORT.md).
 
 ## Initial editing preference
 

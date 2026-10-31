@@ -3,4 +3,5 @@ export enum ExportFormat {
   HTML = "html",
   Markdown = "markdown",
   PDF = "pdf",
+  DOCX = "docx",
 }

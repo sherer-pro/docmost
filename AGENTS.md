@@ -78,6 +78,7 @@
 - `apps/client/src/features/space/components/custom-links` — admin-managed space sidebar custom links: curated Tabler icon registry, URL safety helper, and the settings UI.
 - `apps/client/src/features/space/components/settings` — routed space administration, section forms, and the shared unsaved-change blocker. `/settings/spaces/:spaceSlug/:section?` defaults to `general`; the router uses `createBrowserRouter`/`RouterProvider`.
 - `docs/SPACE_ADMINISTRATION.md` — administrative-list projection, atomic section updates, space-owned template policies, compatibility endpoints, and migration rollback boundaries.
+- `docs/DOCX_EXPORT.md` — native Word page export, permitted snapshots, source revalidation, image/input limits and visual acceptance. Generate its synthetic fixture with `node apps/server/test/docx-export-fixture.mjs`; downloaded DOCX acceptance is included in the database live runner.
 - `apps/client/public/locales/*` — JSON translations.
 - `apps/client/public/{manifest.json,sw.js,offline.html}` — PWA manifest, Service Worker, and static offline page; these user-facing strings are outside the i18next locale JSON pipeline.
 - `apps/server/src/database` — migrations and DB tooling. The canonical [AI and RAG migration ledger](docs/AI_ASSISTANT_AND_RAG.md#ai-and-rag-migration-ledger) records the ordered AI/RAG schema changes, backfills, destructive `down` operations, and operational rollback switches.

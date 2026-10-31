@@ -11,6 +11,7 @@ export enum ExportFormat {
   HTML = 'html',
   Markdown = 'markdown',
   PDF = 'pdf',
+  DOCX = 'docx',
 }
 
 export class ExportPageDto {
@@ -19,7 +20,7 @@ export class ExportPageDto {
   pageId: string;
 
   @IsString()
-  @IsIn(['docmost', 'html', 'markdown', 'pdf'])
+  @IsIn(['docmost', 'html', 'markdown', 'pdf', 'docx'])
   format: ExportFormat;
 
   @IsOptional()

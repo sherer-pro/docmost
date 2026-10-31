@@ -19,7 +19,7 @@ export async function runEditorBlocksAcceptance({
   output,
   sql,
 }) {
-  await test('Footnotes and all tab content survive page reads and downloaded Markdown, HTML, PDF and Docmost exports', async () => {
+  await test('Footnotes and all tab content survive page reads and downloaded Markdown, HTML, PDF, DOCX and Docmost exports', async () => {
     const content = {
       type: 'doc',
       content: [
@@ -79,14 +79,27 @@ export async function runEditorBlocksAcceptance({
     const read = await api(actors.reader, `/pages/info?pageId=${page.id}`);
     assert(JSON.stringify(read.content).includes('First canonical note'));
     const nested = structuredClone(content);
-    nested.content[0].content[0].content.push(structuredClone(content.content[0]));
-    const invalid = await fetchApi(actors.admin, '/pages/actions/update', 'POST', {
-      pageId: page.id, format: 'json', operation: 'replace', content: nested,
-    });
+    nested.content[0].content[0].content.push(
+      structuredClone(content.content[0]),
+    );
+    const invalid = await fetchApi(
+      actors.admin,
+      '/pages/actions/update',
+      'POST',
+      {
+        pageId: page.id,
+        format: 'json',
+        operation: 'replace',
+        content: nested,
+      },
+    );
     assert.equal(invalid.status(), 400);
-    assert.deepEqual((await api(actors.reader, `/pages/info?pageId=${page.id}`)).content, read.content);
+    assert.deepEqual(
+      (await api(actors.reader, `/pages/info?pageId=${page.id}`)).content,
+      read.content,
+    );
     let archive;
-    for (const format of ['markdown', 'html', 'pdf', 'docmost']) {
+    for (const format of ['markdown', 'html', 'pdf', 'docx', 'docmost']) {
       const response = await fetchApi(
         actors.admin,
         '/pages/actions/export',
@@ -121,7 +134,27 @@ export async function runEditorBlocksAcceptance({
           (item) => !item.dir && item.name.endsWith(`.${ext}`),
         );
         assert(file);
-        if (format === 'pdf') {
+        if (format === 'docx') {
+          const documentBytes = await file.async('nodebuffer');
+          await writeFile(path.join(output, 'footnotes.docx'), documentBytes);
+          const document = await JSZip.loadAsync(documentBytes);
+          const body = await document.file('word/document.xml').async('string');
+          const notes = await document
+            .file('word/footnotes.xml')
+            .async('string');
+          assert(body.includes('Visible tab evidence'));
+          assert(body.includes('Hidden tab evidence'));
+          assert(body.includes('<w:footnoteReference w:id="1"/>'));
+          assert(body.includes('<w:footnoteReference w:id="2"/>'));
+          assert(notes.includes('First canonical note'));
+          assert(notes.includes('Second canonical note'));
+          const reader = require('mammoth');
+          const roundtrip = await reader.convertToHtml({
+            buffer: documentBytes,
+          });
+          assert(roundtrip.value.includes('Hidden tab evidence'));
+          assert(roundtrip.value.includes('Second canonical note'));
+        } else if (format === 'pdf') {
           const pdf = await file.async('nodebuffer');
           assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
           const target = path.join(output, 'footnotes.pdf');

@@ -44,6 +44,10 @@ complete; final release acceptance and CI remain pending.
   duplication remap property/file references. File-cell history commits with
   its mutation and prevents premature attachment cleanup. Mutation contract 4
   protects advanced values from older clients. See [database values](../DATABASE_TABLES.md).
+- Native DOCX page export with child-page ZIPs, editable tables, permitted database
+  snapshots, raster images, links, all tabs and Word footnotes. Source pages are
+  revalidated in a batch before bytes are returned. See [DOCX export](../DOCX_EXPORT.md)
+  for supported image formats and resource limits.
 
 The implementation commits include `33a86bf2`, `26d7cf6b`, `1c8bb87c`,
 `f4b250be`, `85a71162` and `1af396a3` (record/template editing) on local `main`.
@@ -59,10 +63,10 @@ pending as listed below.
 
 ## Remaining required work
 
-- Add natural-language filter challenges that start from a different current
-  view. Record actual transmitted RAG evidence and complete human-reviewed
-  quality acceptance; database tool-trace correctness alone is insufficient.
-- Public GitHub previews, authorized GitHub/GitLab/Figma connections, DOCX export,
+- Complete measured natural-language filter and actual-transmission RAG quality
+  acceptance. The corpus and observation harness are implemented; full tuning,
+  holdout and human evidence review remain required. Tool traces alone are insufficient.
+- Public GitHub previews, authorized GitHub/GitLab/Figma connections,
   read-only user OAuth for inbound MCP.
 - Check the applicability of the listed upstream fixes before changing the
   corresponding fork paths. Keep stack upgrades separate.
@@ -88,6 +92,31 @@ No production configuration, permission or container was changed. Address this
 in the final deployment procedure and verify read access from both images.
 
 ## Local acceptance evidence
+
+- `docx-verify-full-accepted.log`: full verification passed on the DOCX package:
+  284 server suites (2455 tests), 194 client files (940 tests), 79 server-security
+  suites (975 tests) and 78 client-security tests. Lint retained 42 warnings and
+  no errors. The first run stopped on a control-character-regex lint violation;
+  explicit XML code-point filtering and a supplementary-Unicode regression fixed
+  it without disabling that rule.
+- `docx-final-live-matrix.log`: all six DOCX download cases passed in Chromium,
+  Firefox and WebKit, each at desktop/light and mobile/dark sizes. Every engine
+  also passed 27 PostgreSQL cases and the complete HTTP/export/import contracts.
+  Actual DOCX downloads retain inactive tabs, both native footnotes, permitted
+  database rows and an owned PNG; denied rows and a revoked source do not leak.
+- `docx-export/visual-receipt.json`: native Word 16.0 opened the synthetic DOCX
+  with two pages, one table, one image and one footnote. Both PDF pages were
+  inspected with no clipping or overlap. All nine uncompressed OOXML parts in
+  the final fixture match those visually checked by Word, including after the
+  XML-filter correction.
+- Local `5c583f02` adds actual provider/retrieval observation and corpus v5:
+  200 RAG questions plus 200 database cases, split 240 tuning / 160 holdout.
+  Ten capture/scoring tests passed. The database tuning diagnostic completed
+  nine of ten correct traces; one model supplied quoted property IDs and received
+  validation errors. The RAG reproduction confirms all 20 guides are indexed:
+  a product-name query returns its readable pages, while the full question
+  returns no local candidates. No holdout or human-reviewed quality acceptance
+  is claimed.
 
 Local, ignored receipts are under `artifacts/`:
 

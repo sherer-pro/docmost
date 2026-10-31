@@ -25,6 +25,65 @@ async function editViewName(page: Page, name: string) {
   await settings.getByRole("textbox", { name: "Name", exact: true }).fill(name);
   await settings.getByRole("button", { name: "Close", exact: true }).click();
 }
+
+for (const [theme, width] of [
+  ["light", 1440],
+  ["dark", 390],
+] as const)
+  test(`live DOCX page export downloads native document ${theme} ${width}`, async ({
+    page,
+  }, info) => {
+    await page.addInitScript(
+      (value) => localStorage.setItem("mantine-color-scheme-value", value),
+      theme,
+    );
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(fixture.docx.route);
+    await page.getByRole("button", { name: "Open menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Export", exact: true }).click();
+    const modal = page.getByRole("dialog", {
+      name: "Export page",
+      exact: true,
+    });
+    await modal
+      .getByRole("textbox", { name: "Select export format", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: "Word (DOCX)", exact: true })
+      .click();
+    const downloading = page.waitForEvent("download");
+    await modal.getByRole("button", { name: "Export", exact: true }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const target = info.outputPath("page-docx.zip");
+    await download.saveAs(target);
+    const { readFile } = await import("node:fs/promises");
+    const { createRequire } = await import("node:module");
+    const { resolve } = await import("node:path");
+    const require = createRequire(
+      resolve(process.cwd(), "../server/package.json"),
+    );
+    const JSZip = require("jszip");
+    const archive = await JSZip.loadAsync(await readFile(target));
+    const document = Object.values(archive.files).find((entry: any) =>
+      entry.name.endsWith(".docx"),
+    ) as any;
+    expect(document).toBeTruthy();
+    const bytes = await document.async("nodebuffer");
+    const content = await JSZip.loadAsync(bytes);
+    expect(await content.file("word/document.xml").async("string")).toContain(
+      "DOCX_BODY_EVIDENCE",
+    );
+    expect(
+      Object.keys(content.files).some((name) =>
+        /word\/media\/.*\.png$/.test(name),
+      ),
+    ).toBe(true);
+    await expect(modal).toBeHidden();
+    await page.screenshot({
+      path: info.outputPath(`docx-export-${theme}-${width}.png`),
+    });
+  });
 async function expectViewName(page: Page, name: string) {
   await page.getByRole("button", { name: /^View settings \(/ }).click();
   const settings = page.getByRole("dialog", {

@@ -17,6 +17,7 @@ describe("export modal utils", () => {
       ExportFormat.Markdown,
       ExportFormat.HTML,
       ExportFormat.PDF,
+      ExportFormat.DOCX,
     ]);
   });
 

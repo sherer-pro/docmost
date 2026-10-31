@@ -4,6 +4,7 @@ import {
 } from '@docmost/api-contract';
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -63,6 +64,7 @@ import {
   normalizePageSettings,
 } from '../../core/page/utils/page-settings.utils';
 import { HtmlPdfRendererService } from './html-pdf-renderer.service';
+import { renderDocx } from './docx-renderer';
 import * as cheerio from 'cheerio';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -658,6 +660,11 @@ export class ExportService {
     authorizedUser?: User,
     preMaterializedAttachmentPageIds?: ReadonlySet<string>,
   ) {
+    if (format === ExportFormat.DOCX && !authorizedUser) {
+      throw new BadRequestException(
+        'Authorized user is required for DOCX export',
+      );
+    }
     const {
       title: pageTitle,
       pageHtml,
@@ -694,7 +701,7 @@ export class ExportService {
       });
     }
 
-    if (format === ExportFormat.PDF) {
+    if (format === ExportFormat.PDF || format === ExportFormat.DOCX) {
       const pagePdfBody = await this.buildPagePdfBody({
         page,
         locale,
@@ -704,7 +711,38 @@ export class ExportService {
         attachmentIds,
         spaceAiRoleEnabled,
         authorizedUser,
+        rasterImageByteLimit:
+          format === ExportFormat.DOCX ? 64 * 1024 * 1024 : undefined,
       });
+
+      if (format === ExportFormat.DOCX) {
+        const buffer = await renderDocx({
+          html: pagePdfBody.bodyHtml,
+          title: pagePdfBody.title,
+          appUrl: this.environmentService.getAppUrl(),
+        });
+        const currentPages = await this.db
+          .selectFrom('pages')
+          .select(['id', 'spaceId', 'workspaceId'])
+          .where('id', 'in', attachmentPageIds)
+          .where('workspaceId', '=', page.workspaceId)
+          .where('deletedAt', 'is', null)
+          .execute();
+        if (currentPages.length !== new Set(attachmentPageIds).size)
+          throw new NotFoundException('Export source is unavailable');
+        const currentAccess =
+          await this.pageAccessService.getEffectiveAccessForPages(
+            currentPages,
+            authorizedUser,
+          );
+        if (
+          currentPages.some(
+            (source) => !currentAccess.get(source.id)?.capabilities.canRead,
+          )
+        )
+          throw new ForbiddenException('Export source access changed');
+        return buffer;
+      }
 
       return this.renderPdfFromHtmlDocument({
         title: pagePdfBody.title,
@@ -725,6 +763,7 @@ export class ExportService {
     authorizedUser?: User;
     attachmentPageIds?: string[];
     attachmentIds?: string[];
+    rasterImageByteLimit?: number;
   }): Promise<{
     title: string;
     bodyHtml: string;
@@ -774,6 +813,7 @@ export class ExportService {
       bodyHtml,
       new Set(Object.keys(attachmentTokens)),
       params.page.workspaceId,
+      params.rasterImageByteLimit,
     );
 
     return {
@@ -915,6 +955,8 @@ export class ExportService {
         this.db,
         this.pageAccessService,
         authorizedUser,
+        undefined,
+        attachmentPageIds,
       ),
       attachmentPageIds,
     };
@@ -1107,6 +1149,7 @@ export class ExportService {
     html: string,
     authorizedAttachmentIds: Set<string>,
     workspaceId: string,
+    maximumBytes?: number,
   ): Promise<string> {
     if (authorizedAttachmentIds.size === 0) return html;
 
@@ -1144,34 +1187,54 @@ export class ExportService {
       'image/webp',
     ]);
 
-    await Promise.all(
-      attachments.map(async (attachment) => {
-        const mimeType = attachment.mimeType?.trim().toLowerCase();
-        if (
-          !attachment.filePath ||
-          !mimeType ||
-          !allowedMimeTypes.has(mimeType)
-        ) {
-          return;
-        }
+    let consumedBytes = 0;
+    const inline = async (attachment: (typeof attachments)[number]) => {
+      const mimeType = attachment.mimeType?.trim().toLowerCase();
+      if (
+        !attachment.filePath ||
+        !mimeType ||
+        !allowedMimeTypes.has(mimeType)
+      ) {
+        return;
+      }
 
-        try {
-          const fileBuffer = await this.storageService.read(
+      try {
+        let fileBuffer: Buffer;
+        if (maximumBytes) {
+          const stream = await this.storageService.readStream(
             attachment.filePath,
           );
-          const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
-          for (const image of imageNodesByAttachmentId.get(attachment.id) ??
-            []) {
-            image.attr('src', dataUrl);
+          const chunks: Buffer[] = [];
+          try {
+            for await (const value of stream) {
+              const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+              consumedBytes += chunk.length;
+              if (consumedBytes > maximumBytes)
+                throw new BadRequestException(
+                  'DOCX images exceed the export limit',
+                );
+              chunks.push(chunk);
+            }
+            fileBuffer = Buffer.concat(chunks);
+          } finally {
+            stream.destroy();
           }
-        } catch (err) {
-          this.logger.debug(
-            `Failed to inline raster attachment ${attachment.id} for PDF export`,
-            err,
-          );
+        } else fileBuffer = await this.storageService.read(attachment.filePath);
+        const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+        for (const image of imageNodesByAttachmentId.get(attachment.id) ?? []) {
+          image.attr('src', dataUrl);
         }
-      }),
-    );
+      } catch (err) {
+        if (maximumBytes && err instanceof BadRequestException) throw err;
+        this.logger.debug(
+          `Failed to inline raster attachment ${attachment.id} for PDF export`,
+          err,
+        );
+      }
+    };
+    if (maximumBytes)
+      for (const attachment of attachments) await inline(attachment);
+    else await Promise.all(attachments.map(inline));
 
     return root.html() || '';
   }
@@ -3225,11 +3288,14 @@ export class ExportService {
 
         const currentPagePath = slugIdToPath[page.slugId];
 
-        let updatedJsonContent = replaceInternalLinks(
-          prosemirrorJson,
-          slugIdToPath,
-          currentPagePath,
-        );
+        let updatedJsonContent =
+          format === ExportFormat.DOCX
+            ? prosemirrorJson
+            : replaceInternalLinks(
+                prosemirrorJson,
+                slugIdToPath,
+                currentPagePath,
+              );
 
         if (includeAttachments) {
           await this.zipAttachments(
@@ -3239,7 +3305,7 @@ export class ExportService {
             folder,
             materialized.attachmentPageIds,
           );
-          if (format !== ExportFormat.PDF) {
+          if (format !== ExportFormat.PDF && format !== ExportFormat.DOCX) {
             updatedJsonContent =
               updateAttachmentUrlsToLocalPaths(updatedJsonContent);
           }
