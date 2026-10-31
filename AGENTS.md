@@ -524,10 +524,25 @@ AgentMemory is a shared machine service: one database, one port set, one `~/.age
 
 ## RAG evidence quality verification
 
+The database quality runner defaults to the operator-selected LM Studio at
+`http://127.0.0.1:1234/v1`. Its test-only `apps/server/test/ai-quality-provider-proxy.mjs`
+records actual synthetic inference requests without authorization headers;
+`node --test apps/server/test/ai-quality-provider-proxy.test.mjs scripts/rag-quality-benchmark.test.mjs`
+checks capture boundaries and oracle scoring. Corpus v5 has 200 database cases,
+including filter-override questions; complete row sets are audited through the
+private result reader after inference. These checks do not mark human review or
+the combined RAG benchmark complete. See `tests/rag-quality/README.md`.
+
+`--quality-scope=rag` provisions the 80 document fixtures in one space and records
+actual local ranking/canonical loads through the explicit isolated preload.
+`node --test apps/server/test/ai-quality-retrieval-capture.test.mjs` checks that
+observation does not change results or mix overlapping requests. Empty local
+retrieval and missing human refusal annotations must remain failed/unmeasured.
+
 - The optional per-space `evidence-v1` profile uses `structured-knowledge-v3`; metadata write version 3 is required for its synchronization. `legacy-v1` retains canonical evidence and citation safety fixes.
 - Validate the 200-question synthetic corpus and evaluator with `node --test scripts/rag-quality-benchmark.test.mjs`. Regenerate fixtures with `node scripts/generate-rag-quality-corpus.mjs`.
 - Score recorded, human-reviewed runs with `node scripts/rag-quality-benchmark.mjs results.jsonl report.json holdout evidence-v1`; read `tests/rag-quality/README.md` before running a quality experiment. Unit tests do not establish production relevance or faithfulness.
-- Run real database Agent traces against an unauthenticated loopback model with `node apps/client/e2e/database/run-live.mjs --ai-quality --quality-split=tuning`; use `--quality-provider=http://127.0.0.1:56254/v1`, `--quality-model=google/gemma-4-12b-qat` and optional `--quality-limit=6`. The isolated PostgreSQL/Redis/application harness never loads `.env`, applies real ACL/content exclusions, writes no approved model changes and stores unreviewed results under `artifacts/database/live`. Holdout is a separate `--quality-split=holdout` run after fixing settings.
+- Run real database Agent traces against an unauthenticated loopback model with `node apps/client/e2e/database/run-live.mjs --ai-quality --quality-split=tuning`; use `--quality-provider=http://127.0.0.1:1234/v1`, `--quality-model=google/gemma-4-12b-qat` and optional `--quality-limit=6`. The isolated PostgreSQL/Redis/application harness never loads `.env`, applies real ACL/content exclusions, writes no approved model changes and stores unreviewed results under `artifacts/database/live`. Holdout is a separate `--quality-split=holdout` run after fixing settings.
 - Isolated Open WebUI first startup may download embeddings; `OPEN_WEBUI_COMPAT_STARTUP_TIMEOUT_MS` accepts 1000-900000 ms. Use a unique `COMPOSE_PROJECT_NAME`; the runner removes only that test stack.
 
 ## Local results and graphs

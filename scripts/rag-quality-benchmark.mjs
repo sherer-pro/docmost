@@ -32,7 +32,8 @@ export function evaluate(
     forbiddenEvidence = 0,
     forbiddenAnswers = 0;
   let reviewed = 0,
-    completed = 0;
+    completed = 0,
+    refusalAnnotated = 0;
   const failures = [],
     latencies = [],
     inputTokens = [],
@@ -46,6 +47,8 @@ export function evaluate(
       continue;
     }
     completed++;
+    if (typeof run.refused === "boolean") refusalAnnotated++;
+    else failures.push({ id: item.id, reason: "missing_refusal_annotation" });
     if (item.databaseExpectation) {
       databaseTotal++;
       if (evaluateDatabaseTrace(item.databaseExpectation, run.toolCalls))
@@ -144,6 +147,7 @@ export function evaluate(
   const measured =
     completed === cases.length &&
     reviewed === cases.length &&
+    refusalAnnotated === cases.length &&
     claims > 0 &&
     latencies.length === cases.length;
   return {

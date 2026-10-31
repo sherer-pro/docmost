@@ -34,6 +34,33 @@ test("incomplete evaluation cannot claim measured quality", () => {
   assert.equal(report.accepted, false);
 });
 
+test("a human-reviewed run still requires an explicit refusal annotation", () => {
+  const corpus = {
+    version: 1,
+    questions: [
+      {
+        id: "q",
+        split: "holdout",
+        allowedSourceIds: ["p"],
+        requiredEvidence: [{ sourceId: "p", contains: ["fact"] }],
+        answerability: "answerable",
+      },
+    ],
+  };
+  const run = {
+    id: "q",
+    profile: "evidence-v1",
+    answer: "fact",
+    candidates: [{ sourceId: "p", text: "fact" }],
+    evidence: [],
+    citations: [],
+    preparationMs: 1,
+    review: { human: true, claims: [{ supported: true }] },
+  };
+  assert.equal(evaluate(corpus, [run]).measured, false);
+  assert.equal(evaluate(corpus, [{ ...run, refused: false }]).measured, true);
+});
+
 test("counts unseen and outdated evidence independently of a correct answer", () => {
   const corpus = {
     version: 1,
@@ -100,7 +127,7 @@ test("records a forbidden injected answer even when a reviewer marked a claim as
   assert.equal(report.accepted, false);
 });
 
-test("corpus has 120 tuning and 80 disjoint holdout questions with evidence annotations", async () => {
+test("corpus keeps disjoint RAG and database tuning and holdout products", async () => {
   const corpus = JSON.parse(
     await readFile(
       new URL("../tests/rag-quality/corpus.json", import.meta.url),
@@ -108,20 +135,47 @@ test("corpus has 120 tuning and 80 disjoint holdout questions with evidence anno
     ),
   );
   assert.equal(corpus.questions.length, 200);
-  assert.equal(corpus.databaseQuestions.length, 160);
+  assert.equal(corpus.databaseQuestions.length, 200);
   assert.equal(
     corpus.databaseQuestions.filter((q) => q.split === "holdout").length,
-    64,
+    80,
   );
   for (const fixture of corpus.databaseFixtures) {
-    assert.equal(fixture.records.filter((row) => row.budget === null).length, 1);
+    assert.equal(
+      fixture.records.filter((row) => row.budget === null).length,
+      1,
+    );
     assert.equal(fixture.records.filter((row) => row.date === null).length, 1);
-    assert.ok(fixture.records.some((row) => row.notes?.includes("OVERRIDE-ACCEPTED")));
-    const cases = corpus.databaseQuestions.filter((q) => q.databaseContext.databaseId === fixture.databaseId);
+    assert.ok(
+      fixture.records.some((row) => row.notes?.includes("OVERRIDE-ACCEPTED")),
+    );
+    const cases = corpus.databaseQuestions.filter(
+      (q) => q.databaseContext.databaseId === fixture.databaseId,
+    );
     for (const name of ["empty_budget", "empty_date"]) {
       const question = cases.find((q) => q.category === `database_${name}`);
       assert.equal(question.databaseExpectation.result.count, 1);
-      assert.equal(question.databaseContext.viewState.filter.conditions[0].operator, "is_empty");
+      assert.equal(
+        question.databaseContext.viewState.filter.conditions[0].operator,
+        "is_empty",
+      );
+    }
+    for (const category of ["nl_done", "nl_dates"]) {
+      const question = cases.find(
+        (item) => item.category === `database_${category}`,
+      );
+      assert.equal(
+        question.databaseContext.viewState.filter.conditions[0].value,
+        "open",
+      );
+      assert(question.databaseExpectation.pageIds.length > 0);
+      assert(
+        question.databaseExpectation.pageIds.some(
+          (pageId) =>
+            fixture.records.find((row) => row.pageId === pageId).status ===
+            "done",
+        ),
+      );
     }
   }
   assert.equal(
@@ -140,6 +194,47 @@ test("corpus has 120 tuning and 80 disjoint holdout questions with evidence anno
   for (const question of corpus.questions)
     for (const evidence of question.requiredEvidence)
       assert.ok(sources.has(evidence.sourceId));
+});
+
+test("database scoring requires the complete observed selection and rejects a coincidental count", () => {
+  const expected = {
+    databaseId: "database",
+    tool: "summarizeDatabaseView",
+    result: { count: 2 },
+    pageIds: ["row-a", "row-b"],
+  };
+  const read = {
+    name: expected.tool,
+    arguments: { databaseId: "database" },
+    result: { count: 2 },
+    observedSelectionComplete: true,
+    observedSelectionPageIds: ["row-b", "row-a"],
+  };
+  assert.equal(evaluateDatabaseTrace(expected, [read]), true);
+  assert.equal(
+    evaluateDatabaseTrace(expected, [
+      { ...read, observedSelectionPageIds: ["row-a", "wrong-row"] },
+    ]),
+    false,
+  );
+  assert.equal(
+    evaluateDatabaseTrace(expected, [
+      { ...read, observedSelectionComplete: false },
+    ]),
+    false,
+  );
+  assert.equal(
+    evaluateDatabaseTrace(expected, [
+      { ...read, observedSelectionPageIds: ["row-a", "row-a"] },
+    ]),
+    false,
+  );
+  assert.equal(
+    evaluateDatabaseTrace(expected, [
+      { ...read, observedSelectionPageIds: undefined },
+    ]),
+    false,
+  );
 });
 
 test("database scoring rejects a correct total with an extra write or a changed proposal target", () => {

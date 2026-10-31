@@ -11,10 +11,12 @@ const option = (name, fallback) =>
     .find((arg) => arg.startsWith(`--quality-${name}=`))
     ?.slice(`--quality-${name}=`.length) ?? fallback;
 
-async function artifactHash(directory) {
+export async function artifactHash(directory) {
   const digest = createHash('sha256');
   const visit = async (current, relative = '') => {
-    for (const entry of (await readdir(current, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of (await readdir(current, { withFileTypes: true })).sort(
+      (a, b) => a.name.localeCompare(b.name),
+    )) {
       const next = path.join(current, entry.name);
       const key = `${relative}/${entry.name}`;
       if (entry.isDirectory()) await visit(next, key);
@@ -27,7 +29,7 @@ async function artifactHash(directory) {
 
 export function databaseQualityConfiguration() {
   if (!process.argv.includes('--ai-quality')) return null;
-  const url = new URL(option('provider', 'http://127.0.0.1:56254/v1'));
+  const url = new URL(option('provider', 'http://127.0.0.1:1234/v1'));
   assert(
     url.protocol === 'http:' &&
       url.hostname === '127.0.0.1' &&
@@ -39,6 +41,8 @@ export function databaseQualityConfiguration() {
   );
   const split = option('split', 'tuning');
   assert(['tuning', 'holdout'].includes(split), 'Invalid quality split');
+  const scope = option('scope', 'database');
+  assert(['database', 'rag'].includes(scope), 'Invalid quality scope');
   const limit = Number(option('limit', '0'));
   assert(
     Number.isInteger(limit) && limit >= 0 && limit <= 120,
@@ -48,6 +52,7 @@ export function databaseQualityConfiguration() {
     baseUrl: url.toString().replace(/\/$/, ''),
     origin: url.origin,
     model: option('model', 'google/gemma-4-12b-qat'),
+    scope,
     split,
     limit,
     temperature: 0,
@@ -64,6 +69,7 @@ export async function runDatabaseQuality({
   exactSecrets,
   report,
   config,
+  providerCapture,
 }) {
   const corpusBytes = await readFile(
     new URL('../../../tests/rag-quality/corpus.json', import.meta.url),
@@ -264,13 +270,13 @@ export async function runDatabaseQuality({
       ragSearchDoneOnly: false,
       exclusions,
     });
-    const providerKey = 'isolated-lm-studio-no-auth';
+    const providerKey = providerCapture?.token ?? 'isolated-lm-studio-no-auth';
     exactSecrets.add(providerKey);
     await api(admin, `/spaces/${space.id}/ai/config`, 'PATCH', {
       enabled: true,
       agentEnabled: false,
       provider: 'openai-compatible',
-      baseUrl: config.baseUrl,
+      baseUrl: providerCapture?.baseUrl ?? config.baseUrl,
       chatModel: config.model,
       apiKey: providerKey,
       temperature: config.temperature,
@@ -310,10 +316,30 @@ export async function runDatabaseQuality({
       JSON.stringify(
         {
           ...config,
-          serverArtifactSha256: await artifactHash(path.join(output, 'runtime/apps/server/dist')),
-          packageLockSha256: createHash('sha256').update(await readFile(new URL('../../../pnpm-lock.yaml', import.meta.url))).digest('hex'),
-          hardware: { cpu: cpus()[0]?.model ?? null, logicalCpus: cpus().length, memoryBytes: totalmem(), arch: process.arch, platform: process.platform },
-          warmup: 'capabilityProbe completed; provider cache state is not controlled',
+          sharedArtifactSha256: report.sharedArtifactSha256 ?? null,
+          providerCaptureOrigin: providerCapture?.origin ?? null,
+          providerCaptureFile: providerCapture
+            ? 'quality-provider-requests.jsonl'
+            : null,
+          serverArtifactSha256: await artifactHash(
+            path.join(output, 'runtime/apps/server/dist'),
+          ),
+          packageLockSha256: createHash('sha256')
+            .update(
+              await readFile(
+                new URL('../../../pnpm-lock.yaml', import.meta.url),
+              ),
+            )
+            .digest('hex'),
+          hardware: {
+            cpu: cpus()[0]?.model ?? null,
+            logicalCpus: cpus().length,
+            memoryBytes: totalmem(),
+            arch: process.arch,
+            platform: process.platform,
+          },
+          warmup:
+            'capabilityProbe completed; provider cache state is not controlled',
           corpusSha256: createHash('sha256').update(corpusBytes).digest('hex'),
           questionIds: questions.map((question) => question.id),
           concurrency: 1,
@@ -329,6 +355,7 @@ export async function runDatabaseQuality({
     const results = [];
     for (const question of questions) {
       const started = performance.now();
+      providerCapture?.setCase(question.id);
       const databaseId = question.databaseContext.databaseId;
       const conversation = await api(writer, '/ai/conversations', 'POST', {
         pageId: databaseId,
@@ -375,21 +402,101 @@ export async function runDatabaseQuality({
       const [persisted] =
         await sql`select response_snapshot,evidence_snapshot,retrieval_diagnostics,input_tokens,output_tokens,error_code from ai_runs where id=${run.id}`;
       const toolCalls =
-        await sql`select tool_name as name,arguments,result,write_class as "writeClass",status from ai_run_steps where run_id=${run.id} order by sequence`;
+        await sql`select id,tool_name as name,arguments,result,write_class as "writeClass",status from ai_run_steps where run_id=${run.id} order by sequence`;
+      const totalMs = Math.round(performance.now() - started);
+      const auditStarted = performance.now();
+      const expectedCall = toolCalls.findLast(
+        (call) => call.name === question.databaseExpectation.tool,
+      );
+      if (
+        question.databaseExpectation.pageIds &&
+        expectedCall?.result?.receipt?.version === 1
+      ) {
+        try {
+          const pageIds = [];
+          const cursors = new Set();
+          let cursor;
+          for (let page = 0; page <= Math.ceil(300 / 25) + 1; page++) {
+            const response = await api(
+              writer,
+              `/ai/runs/${run.id}/steps/${expectedCall.id}/database-result${cursor ? `?${new URLSearchParams({ cursor })}` : ''}`,
+            );
+            pageIds.push(...response.items.map((row) => row.pageId));
+            if (!response.hasMore) {
+              expectedCall.observedSelectionPageIds = pageIds;
+              expectedCall.observedSelectionComplete = true;
+              break;
+            }
+            assert(
+              response.nextCursor && !cursors.has(response.nextCursor),
+              'Selection audit cursor did not progress',
+            );
+            cursors.add(response.nextCursor);
+            cursor = response.nextCursor;
+          }
+        } catch (error) {
+          expectedCall.selectionAuditError = String(error.message).slice(
+            0,
+            1200,
+          );
+        }
+      }
+      const providerRequests = providerCapture
+        ? await providerCapture.takeCase(question.id)
+        : [];
       const answer = persisted.response_snapshot ?? '';
+      const transmittedText = providerRequests
+        .filter((item) => item.transmitted && !item.transportError)
+        .map((item) => JSON.stringify(item.messages))
+        .join('\n');
+      const evidence = (persisted.evidence_snapshot?.sources ?? []).map(
+        (source) => ({
+          sourceId: source.sourceId,
+          marker: source.marker,
+          text: source.excerpt ?? '',
+          version: source.sourceVersion ?? null,
+          verification:
+            'immutable synthetic document snapshot; actual provider transmission',
+          readable:
+            ['completed', 'awaiting_approval'].includes(run.status) &&
+            source.sourceId === databaseId,
+          current:
+            source.sourceId === databaseId && source.excerpt === snapshot,
+          transmitted:
+            transmittedText.includes(`[${source.marker}]`) &&
+            Boolean(source.excerpt && transmittedText.includes(source.excerpt)),
+        }),
+      );
       const record = {
         id: question.id,
         profile: 'evidence-v1',
-        effectiveProfile: persisted.evidence_snapshot?.profile ?? persisted.retrieval_diagnostics?.profile ?? null,
+        effectiveProfile:
+          persisted.evidence_snapshot?.profile ??
+          persisted.retrieval_diagnostics?.profile ??
+          null,
         runId: run.id,
         status: run.status,
         candidates: [],
-        evidence: persisted.evidence_snapshot?.sources ?? [],
-        citations: [],
+        evidence,
+        citations: [
+          ...new Set(
+            [...answer.matchAll(/\[(S\d+)\]/g)].map((match) => match[1]),
+          ),
+        ],
         answer,
-        refused: run.status === 'failed',
+        refused: run.status === 'failed' ? true : null,
         preparationMs: persisted.retrieval_diagnostics?.preparationMs ?? null,
-        totalMs: Math.round(performance.now() - started),
+        totalMs,
+        selectionAuditMs: Math.round(performance.now() - auditStarted),
+        providerRequests: providerRequests.map(
+          ({ sequence, requestHash, transmitted, status, transportError }) => ({
+            sequence,
+            requestHash,
+            transmitted,
+            status,
+            ...(transportError ? { transportError } : {}),
+          }),
+        ),
         inputTokens: Number(persisted.input_tokens),
         outputTokens: Number(persisted.output_tokens),
         toolCalls,

@@ -4,13 +4,26 @@ import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
-import { cp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  writeFile,
+  appendFile,
+  rm,
+  symlink,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
 import {
   databaseQualityConfiguration,
   runDatabaseQuality,
+  artifactHash,
 } from './ai-database-quality-live.mjs';
+import { createQualityProviderProxy } from './ai-quality-provider-proxy.mjs';
+import {
+  createQualityStaleIndex,
+  runRagQuality,
+} from './ai-rag-quality-live.mjs';
 
 const exec = promisify(execFile);
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -29,19 +42,25 @@ const children = [];
 const containers = [];
 let connection;
 let networkCreated = false;
+let providerCapture;
+let staleIndex;
+let qualityPreloadArgs = [];
 const report = {
   runId,
   isolated: true,
   scope: quality
-    ? 'ai-database-quality'
-    : process.argv.includes('--templates-only') ? 'targeted-templates'
-    : process.argv.includes('--postgres-only') ? 'postgres'
-    : process.argv.includes('--advanced-only') ? 'targeted-database-values'
-    : process.argv.includes('--api-only')
-      ? 'api'
-      : process.argv.includes('--startup-only')
-        ? 'startup'
-        : 'full',
+    ? `ai-${quality.scope}-quality`
+    : process.argv.includes('--templates-only')
+      ? 'targeted-templates'
+      : process.argv.includes('--postgres-only')
+        ? 'postgres'
+        : process.argv.includes('--advanced-only')
+          ? 'targeted-database-values'
+          : process.argv.includes('--api-only')
+            ? 'api'
+            : process.argv.includes('--startup-only')
+              ? 'startup'
+              : 'full',
   tests: [],
   cleanup: {},
 };
@@ -64,13 +83,17 @@ const port = async () => {
   await new Promise((resolve) => server.close(resolve));
   return value;
 };
-const start = (role, entry, env) => {
-  const child = spawn(process.execPath, [entry], {
-    cwd,
-    env,
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+const start = (role, entry, env, args = []) => {
+  const child = spawn(
+    process.execPath,
+    args.length ? [...args.slice(0, 2), entry, ...args.slice(2)] : [entry],
+    {
+      cwd,
+      env,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
   let tail = '';
   const capture = (data) => {
     tail = (tail + scrub(data.toString())).slice(-16_000);
@@ -100,6 +123,40 @@ const wait = async (label, check, timeout = 120_000) => {
 
 await mkdir(cwd, { recursive: true });
 try {
+  if (quality) {
+    const capturePath = path.join(output, 'quality-provider-requests.jsonl');
+    await writeFile(capturePath, '');
+    let captureWrites = Promise.resolve();
+    providerCapture = await createQualityProviderProxy({
+      upstream: quality.baseUrl,
+      model: quality.model,
+      isolated: true,
+      onCapture: (record) => {
+        const next = captureWrites.then(() =>
+          appendFile(capturePath, `${JSON.stringify(record)}\n`),
+        );
+        captureWrites = next.catch(() => {});
+        return next;
+      },
+    });
+    exactSecrets.add(providerCapture.token);
+    if (quality.scope === 'rag') {
+      staleIndex = await createQualityStaleIndex();
+      exactSecrets.add(staleIndex.token);
+      const filename = path.join(cwd, 'quality-capture.json');
+      const captureOutput = path.join(output, 'quality-retrieval-trace.jsonl');
+      await writeFile(captureOutput, '');
+      await writeFile(
+        filename,
+        JSON.stringify({ isolated: true, output: captureOutput }),
+      );
+      qualityPreloadArgs = [
+        '--require',
+        path.join(repo, 'apps/server/test/ai-quality-retrieval-capture.cjs'),
+        `--quality-capture-config=${filename}`,
+      ];
+    }
+  }
   // Keep an immutable application snapshot while other checks rebuild the repo.
   const runtimeRoot = path.resolve(cwd, '..', '..');
   await cp(path.join(repo, 'apps/server/dist'), path.join(cwd, 'dist'), {
@@ -115,6 +172,42 @@ try {
     path.join(cwd, 'node_modules'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
+  if (quality) {
+    const aliases = path.join(cwd, 'dist/node_modules/@docmost');
+    await mkdir(aliases, { recursive: true });
+    report.sharedArtifactSha256 = {};
+    for (const name of ['api-contract', 'editor-ext']) {
+      const source = path.join(repo, 'packages', name);
+      const frozen = path.join(runtimeRoot, 'quality-shared', name);
+      await mkdir(frozen, { recursive: true });
+      await cp(
+        path.join(source, 'package.json'),
+        path.join(frozen, 'package.json'),
+      );
+      await cp(path.join(source, 'dist'), path.join(frozen, 'dist'), {
+        recursive: true,
+      });
+      if (name === 'editor-ext')
+        await symlink(
+          path.join(source, 'node_modules'),
+          path.join(frozen, 'node_modules'),
+          process.platform === 'win32' ? 'junction' : 'dir',
+        );
+      await symlink(
+        frozen,
+        path.join(aliases, name),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+      const resolved = createRequire(
+        path.join(cwd, 'dist/apps/server/src/main.js'),
+      ).resolve(`@docmost/${name}${name === 'editor-ext' ? '/server' : ''}`);
+      if (!resolved.startsWith(frozen + path.sep))
+        throw new Error('Quality shared package escaped its frozen snapshot');
+      report.sharedArtifactSha256[name] = await artifactHash(
+        path.join(frozen, 'dist'),
+      );
+    }
+  }
   report.immutableApplicationSnapshot = true;
   const subnet = process.argv
     .find((arg) => arg.startsWith('--subnet='))
@@ -246,9 +339,11 @@ try {
     AI_PROVIDER_ALLOWED_ORIGINS: [
       `http://127.0.0.1:${modelPort}`,
       quality?.origin,
+      providerCapture?.origin,
     ]
       .filter(Boolean)
       .join(','),
+    AI_RETRIEVAL_ALLOWED_ORIGINS: staleIndex?.origin ?? '',
     PAGE_TEMPLATES_ENABLED: 'true',
     CLOUD: 'false',
     LOG_HTTP: 'false',
@@ -279,7 +374,12 @@ try {
     'deterministic AI provider',
     async () => (await fetch(`http://127.0.0.1:${modelPort}/health`)).ok,
   );
-  start('api', path.join(cwd, 'dist/apps/server/src/main.js'), env);
+  start(
+    'api',
+    path.join(cwd, 'dist/apps/server/src/main.js'),
+    env,
+    qualityPreloadArgs,
+  );
   await wait(
     'API and migrations',
     async () => (await fetch(`${baseURL}/api/health`)).ok,
@@ -332,14 +432,21 @@ try {
       passed: true,
     });
   }
-  if (!process.argv.includes('--startup-only') && !process.argv.includes('--postgres-only')) {
+  if (
+    !process.argv.includes('--startup-only') &&
+    !process.argv.includes('--postgres-only')
+  ) {
     connection = postgres(env.DATABASE_URL, { max: 4, onnotice: () => {} });
     const acceptance = quality
-      ? runDatabaseQuality
+      ? quality.scope === 'rag'
+        ? runRagQuality
+        : runDatabaseQuality
       : (await import('./database-tables-live-acceptance.mjs'))
           .runLiveAcceptance;
     await acceptance({
       config: quality,
+      providerCapture,
+      staleIndex,
       providerURL,
       baseURL,
       collabURL,
@@ -361,8 +468,13 @@ try {
     .filter((line) => /ERROR|TypeError|Error:|at .*user/i.test(line));
   if (serverErrors?.length) console.error(serverErrors.slice(-14).join('\n'));
   console.error(report.error);
-  for (const child of children.filter((item) => ['api', 'collaboration'].includes(item.role))) {
-    await writeFile(path.join(output, `${child.role}-failure.log`), scrub(child.tail()));
+  for (const child of children.filter((item) =>
+    ['api', 'collaboration'].includes(item.role),
+  )) {
+    await writeFile(
+      path.join(output, `${child.role}-failure.log`),
+      scrub(child.tail()),
+    );
   }
   process.exitCode = 1;
 } finally {
@@ -378,6 +490,18 @@ try {
     }
   }
   report.cleanup.processesStopped = true;
+  if (providerCapture) {
+    try {
+      await providerCapture.close();
+      report.cleanup.providerCaptureClosed = true;
+    } catch (error) {
+      report.captureComplete = false;
+      report.cleanup.providerCaptureClosed = false;
+      report.error ??= scrub(error.message);
+      process.exitCode = 1;
+    }
+  }
+  if (staleIndex) await staleIndex.close();
   for (const name of containers.reverse()) await docker(['rm', '-f', name]);
   if (networkCreated) await docker(['network', 'rm', prefix]);
   report.cleanup.containersRemoved = true;

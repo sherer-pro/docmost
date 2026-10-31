@@ -16,6 +16,17 @@ export function evaluateDatabaseTrace(expectation, calls) {
   const call = calls.findLast((item) => item.name === expectation.tool);
   if (!call || call.arguments?.databaseId !== expectation.databaseId)
     return false;
+  if (expectation.pageIds) {
+    const actual = call.observedSelectionPageIds;
+    if (
+      call.observedSelectionComplete !== true ||
+      !Array.isArray(actual) ||
+      new Set(actual).size !== actual.length ||
+      JSON.stringify([...actual].sort()) !==
+        JSON.stringify([...expectation.pageIds].sort())
+    )
+      return false;
+  }
   if (expectation.rows) {
     const canonical = (rows) =>
       JSON.stringify(
