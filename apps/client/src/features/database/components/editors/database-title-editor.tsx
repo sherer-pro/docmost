@@ -6,6 +6,7 @@ import { Heading } from "@tiptap/extension-heading";
 import { Text } from "@tiptap/extension-text";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { History } from "@tiptap/extension-history";
+import { Selection } from "@tiptap/pm/state";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { searchSpotlight } from "@/features/search/constants.ts";
@@ -30,7 +31,7 @@ export interface DatabaseTitleEditorProps {
  * - H1-structure and placeholder `Untitled`;
  * - debounce autosave;
  * - force saving when unmounting;
- * - focus to the end of the header after initialization;
+ * - initial focus for an empty header when no other control was chosen;
  * - `mod+s` blocking and `mod+k` support.
  */
 export function DatabaseTitleEditor({
@@ -180,11 +181,21 @@ export function DatabaseTitleEditor({
     didInitFocusRef.current = true;
 
     const focusTimer = setTimeout(() => {
-      if (!titleEditor?.isInitialized || !editable) {
+      if (
+        titleEditor.isDestroyed ||
+        !titleEditor.isInitialized ||
+        !editable ||
+        !titleEditor.isEmpty ||
+        document.activeElement !== document.body
+      ) {
         return;
       }
 
-      titleEditor.commands.focus("end");
+      // Tiptap focus queues a second focus that can override a later user choice.
+      titleEditor.commands.setTextSelection(
+        Selection.atEnd(titleEditor.state.doc).from,
+      );
+      titleEditor.view.focus();
     }, 300);
 
     return () => {

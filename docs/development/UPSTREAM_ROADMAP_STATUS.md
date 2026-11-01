@@ -1,17 +1,97 @@
 # Upstream roadmap implementation checkpoint
 
-Date: 2026-11-01. The user resumed implementation of all remaining work in
-stages 1–4. Push and deployment are explicitly on hold. The complete release
-gate passed on `a0f360fe`; later full WebKit runs exposed two UI races, corrected
-in `bff6ec5b` and `d259a0db`. That candidate passes complete WebKit/release
-acceptance and complete Chromium on identical application source. The following
-Firefox run exposed a separate PWA navigation defect, now corrected and covered
-by focused tests; final application acceptance must use the new correction.
+Date: 2026-11-01. The feature packages for stages 1–4 are implemented locally;
+final acceptance is still in progress. Push and deployment are explicitly on
+hold. The PWA candidate `dbe5d2c6` passes full Firefox, Chromium and release
+acceptance. Its subsequent WebKit run exposed two focus races. Their new
+correction passes deterministic browser regressions, but still requires the
+full application/browser/release gates. Earlier accepted candidates retain
+their actual revision boundaries below.
 Human-reviewed model quality remains pending, and Gemma 12B fails the database
-accuracy target. Stages 1–4 are not yet complete. Remote CI for new
-commits is on hold with push.
+accuracy target. The operator approved testing Gemma 26B. Stages 1–4 are not
+yet complete. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
+
+### Latest database focus correction
+
+`roadmap-final-webkit-dbe5d2c6.log` passed 31 PostgreSQL cases, 33 HTTP groups
+and 46 of 48 browser cases in runtime `2026-11-01T10-37-45-513Z`. Its two
+failures occur before injecting a network fault or changing a date. All owned
+runtime resources were removed. A read-only sample at 10:46 UTC measured
+ffmpeg at zero CPU; no user process was stopped or reconfigured.
+
+Two diagnostic subsets recorded only safe DOM/focus metadata, without cookies
+or headers. `database-focus-live-webkit-global-observation-dbe5d2c6.json` shows
+the header's 300 ms initialization calling Tiptap focus and a later animation
+frame refocusing the header after the notes textarea was already active. The
+numeric case also records a newly mounted next-row input taking focus from the
+date cell. Checking focus only before scheduling React state was insufficient.
+The temporary QA observer was removed and its original source SHA-256 restored.
+
+The header now initializes only an empty, editable title while the body owns
+focus. Selection and ProseMirror view focus execute synchronously, leaving no
+second Tiptap frame queued. The grid disables native autofocus only in its own
+renderer host and applies focus through one frame that rechecks the edit session
+and current focus. Other renderer consumers retain their default autofocus.
+
+The minimal WebKit reproduction in
+`database-deferred-focus-before-webkit-focused.log` fails all four intended
+focus assertions while the empty-title control passes. The corrected version
+passes the same five cases in `database-deferred-focus-after-webkit-focused.log`.
+The public `test:database-focus:e2e` command passes all 27 cases across Chromium,
+Firefox and WebKit in `database-deferred-focus-public-browser-matrix-final.log`:
+the new cases plus late responses, dropdown saves and both Enter paths. There
+are no skips, retries or changed timeout/assertion budgets.
+
+The first public matrix had two fixture failures after the new held-save test
+returned before its write response. The following test's initial row response
+already contained 10.25 instead of the reset value zero. Waiting for that owned
+response before returning fixes the inter-test contamination; the original
+exactly-one-request assertion remains unchanged. Original failed reports and
+traces remain retained. The final matrix is independently recorded.
+
+Targeted ESLint passes with no warnings or errors, and all 16 existing renderer
+and table-helper unit tests pass. All 112 release-contract/log-sanitization
+tests pass, including negative checks against removing the new CI/release
+command, browser matrix or critical scenarios. `AGENTS.md` and the database
+contract document its command and focus behavior. The English-comment check
+passes, and the maintenance baseline remains at 397 Knip findings and 16
+duplicate blocks, with no added findings. Full acceptance of this
+correction is still pending. The server, shared artifacts and AI inference
+pipeline are unchanged, so the approved 26B regression uses the frozen backend
+independently of the remaining client acceptance.
+
+### Previous PWA candidate
+
+The new quiet-window Firefox run, `roadmap-final-firefox-dbe5d2c6.log`, passed
+all 31 PostgreSQL cases, 33 HTTP groups and 48 browser cases in runtime
+`2026-11-01T09-49-21-172Z`, with zero skips, failures or retries. All owned
+runtime resources were removed. The original five-second assertions and
+six-second undo grace are unchanged. This covers all four scenarios that failed
+in the earlier Firefox run; the earlier failure records remain intact.
+
+`roadmap-final-chromium-dbe5d2c6.log` passes all 31 PostgreSQL cases, 33 HTTP
+groups and 48 browser cases in runtime `2026-11-01T10-29-56-673Z`, with no
+skips, failures or retries and all owned runtime resources removed.
+
+`roadmap-verify-release-dbe5d2c6.log` records the then-current complete isolated
+release pass in runtime `2026-11-01T09-59-41-856Z`, with exit code zero and
+all owned runtime resources removed. Its receipt names exact revision
+`dbe5d2c669981e2662b5ddb4fe94122f27841c0d` and Node 22.23.4. It passes all
+2540 backend tests, 945 client tests, 1044 server-security and 82 client-security
+tests, release contracts, 157 editor-extension tests, 227 RAG Sync tests,
+all 18 PWA regressions and all 28 AI browser cases. The dependency audit reports
+zero high/critical, nine low and 24 moderate findings.
+
+Agent audit `20261101100847-cdd4ead6` passes with its isolated volumes removed.
+The editor has 65 passed cases, the two existing explicit Firefox skips and
+zero flaky cases or retries. Downloaded Markdown/HTML/PDF/Docmost content checks
+pass. AI context audit `01a196a6-317a-7c6f-8f12-d3e9f3f8f3f7` passes. No timeout,
+assertion or retry policy was weakened. This pass predates the new database
+focus correction and its additional mandatory regression suite. It is not
+relabeled as acceptance of that correction. No model inference is run
+concurrently with application timing checks.
 
 `roadmap-final-webkit-d259a0db.log` completed with all 48 browser cases passing,
 no skips, no failures and no retries. The fresh runtime
@@ -57,8 +137,9 @@ shows 899 rows. The direct-record screenshot shows the correct row-800 propertie
 and a still-pending title. The initial post-failure host sample observed ffmpeg
 using 87.1% of all CPU, and the later sample at 08:07 UTC observed 74.8%.
 Those later samples do not prove the cause of every earlier failure. The
-operator has been asked for a new quiet window; user processes are unchanged.
-Final full browser and release acceptance remain required after the PWA fix.
+operator supplied a new quiet window for the accepted Firefox run above;
+user processes are unchanged. The remaining full browser and release entries
+still require current-source acceptance.
 
 The PWA package is committed locally as `4d4899b5`. Its clean isolated QA
 checkout contains no `.env`. The Node 22 client build succeeds, and its current
@@ -152,6 +233,39 @@ contracts and the English-comment check pass. The full 160-case projected
 review packet loads and navigates in headless Chromium with zero page errors
 and zero human annotations; its screenshot was inspected. This UI smoke created
 no review annotation or export.
+
+### Model comparison and generalization boundary
+
+The runtime AI/RAG/database paths contain no Gemma-name branch, and
+`openai-compatible-provider.service.ts` is unchanged from baseline `8960cc61`.
+This does not establish model-independent answer quality. The required-tool
+capability probe, bounded filter descriptions, typed calculation arrays, quoted
+name retrieval and RU/EN follow-up fallback were developed using observed
+Gemma 12B failures. The retrieval heuristics in `ai-local-query.util.ts` can
+therefore favor the question patterns seen during development.
+
+The corpus generator separates product names between tuning and holdout, but
+uses the same question templates for both. Repeated diagnostics and the completed
+12B captures have already exposed this holdout. It is now a regression corpus,
+not an independent blind evaluation. A second Gemma model cannot establish
+generalization to another model family or to independently authored questions.
+
+Before the approved 26B comparison,
+`ai-gemma26-regression-freeze-dbe5d2c6.json` fixed the 133 relevant production
+source blobs, exact corpus bytes, inference settings and server/shared/lockfile
+hashes. Production AI/RAG/database source is unchanged since the 12B capture.
+No prompt, ranking, schema, threshold or corpus tuning is planned during this
+comparison. All original captures and failed cases remain retained.
+
+At 10:12 UTC, a read-only LM Studio observation found
+`google/gemma-4-26b-a4b-qat` already loaded and idle, with physical context
+180224 and four available parallel slots. This agent did not load, unload or
+reconfigure it. The harness still requests the frozen logical context of 65536,
+temperature zero, 4096 output tokens and concurrency one. The 12B instance had
+a different physical loaded context; timings must retain that environment
+difference. Neither model's capture substitutes for actual human claim and
+refusal annotations. Cross-family testing, independent questions and heuristic
+ablation remain useful follow-up evidence, without being claimed as completed.
 
 ### Earlier candidate findings
 
@@ -483,8 +597,8 @@ networks and production services are not changed.
 
 - AI view queries and full-selection aggregates, internal Agent cell proposals
   with revision checks and transactional receipts, administrative restrictions,
-  and a deterministic database benchmark corpus. Real-model holdout quality has
-  not been measured.
+  and a deterministic database benchmark corpus. Complete 12B captures are
+  available; the database trace target fails and human-reviewed quality is pending.
 - Server-owned database result receipts and chat cards, with calculation time,
   typed totals, field formatting, scope and conditions. A private read-only
   results page reuses frozen conditions and explicit selected rows, rechecks
@@ -562,12 +676,13 @@ pending as listed below.
 - Resolve the selected model's nine database failures and obtain actual human
   evidence/refusal annotations. Both full 80-case captures and the combined
   automated score are complete; human-reviewed quality is not accepted.
-  The operator has been asked whether to load the available Gemma 26B, provide
-  another endpoint/model, or retain the measured Gemma 12B limitations.
-- Repeat final full browser/release acceptance on
-  its source in a quiet resource window. Earlier Chromium, WebKit and release
-  passes retain their actual candidate boundaries; they are not relabeled as
-  verification of the new PWA correction.
+  The operator approved the available Gemma 26B, which LM Studio already shows
+  loaded. Its fixed-pipeline capture follows application acceptance; no model
+  source tuning or universal portability claim is included.
+- Complete final full application/browser/release acceptance on the new header
+  and cell focus correction. The deterministic 27-case matrix passes. Earlier
+  Chromium, Firefox, WebKit and release passes retain their actual candidate
+  boundaries and are not relabeled as verification of later source changes.
 - Reconcile final receipts and prepare the requested session change list. The
   applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
   retain its actual evidence boundaries and keep stack upgrades separate.

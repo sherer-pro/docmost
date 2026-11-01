@@ -380,6 +380,9 @@ jobs:
       - name: Stale-client recovery navigation regression
         run: pnpm test:pwa:e2e
 
+      - name: Database focus and keyboard navigation regressions
+        run: pnpm test:database-focus:e2e
+
       - name: Editor browser acceptance against the production image
         env:
           DOCMOST_EDITOR_AUDIT_ROOT: ${{ github.workspace }}/output/audit/editor

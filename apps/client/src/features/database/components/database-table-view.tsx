@@ -367,6 +367,7 @@ export function DatabaseTableView({
   const [activeGroupKey, setActiveGroupKey] = useState<string | undefined>();
   const cellSaveCoordinator = useRef(new DatabaseCellSaveCoordinator());
   const editingSession = useRef(0);
+  const editingFocusOrigin = useRef<Element | null>(null);
   const cellRevisions = useRef(new Map<string, number>());
   const [cellSaveState, setCellSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -1525,7 +1526,15 @@ export function DatabaseTableView({
       return;
     }
 
+    const focusOrigin = editingFocusOrigin.current;
+    const session = editingSession.current;
     const frameId = window.requestAnimationFrame(() => {
+      if (
+        editingCellKeyRef.current !== editingCellKey ||
+        editingSession.current !== session
+      ) {
+        return;
+      }
       const activeCell = Array.from(
         tableViewportRef.current?.querySelectorAll<HTMLElement>(
           "[data-database-cell-key]",
@@ -1535,6 +1544,14 @@ export function DatabaseTableView({
         'textarea, input, button, [role="combobox"], [tabindex]:not([tabindex="-1"])',
       );
 
+      const focusedElement = document.activeElement;
+      if (
+        focusedElement !== document.body &&
+        focusedElement !== focusOrigin &&
+        !activeCell?.contains(focusedElement)
+      ) {
+        return;
+      }
       (editor ?? activeCell)?.focus();
     });
 
@@ -1589,6 +1606,7 @@ export function DatabaseTableView({
     }
 
     const key = `${row.pageId}:${property.id}`;
+    editingFocusOrigin.current = document.activeElement;
     editingSession.current += 1;
     setEditingCellKey(key);
     setEditingValue(
@@ -3568,6 +3586,7 @@ export function DatabaseTableView({
                               value={getRawCellValue(row, property.id)}
                               isEditable={rowIsEditable}
                               isEditing={isEditing}
+                              autoFocus={false}
                               editingValue={editingValue}
                               spaceId={spaceId}
                               pageId={row.pageId}

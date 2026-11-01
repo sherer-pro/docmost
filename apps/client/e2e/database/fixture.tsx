@@ -12,6 +12,7 @@ import i18n, { i18nReady } from "@/i18n";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import { queryClient } from "@/lib/query-client";
 import { DatabaseTableView } from "@/features/database/components/database-table-view";
+import { DatabaseTitleEditor } from "@/features/database/components/editors/database-title-editor";
 
 const params = new URLSearchParams(location.search);
 const store = createStore();
@@ -42,6 +43,20 @@ function Fixture() {
                     Toggle database
                   </Button>
                 </Group>
+                {params.has("header") && (
+                  <div data-database-title-fixture>
+                    <DatabaseTitleEditor
+                      databaseId={databaseId}
+                      value={
+                        params.get("header") === "empty"
+                          ? ""
+                          : "Existing database title"
+                      }
+                      editable={params.get("role") !== "reader"}
+                      onAutoSave={async () => {}}
+                    />
+                  </div>
+                )}
                 {mounted && (
                   <DatabaseTableView
                     key={databaseId}

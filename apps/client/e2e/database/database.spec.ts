@@ -436,7 +436,203 @@ test("an old cell response keeps a newer editor open", async ({ page }) => {
   await second.getByRole("textbox").press("Escape");
 });
 
-test("late Enter navigation preserves a newly focused cell", async ({ page }) => {
+async function deferDatabaseTitleFocus(page: Page) {
+  await page.addInitScript(() => {
+    const schedule = window.setTimeout;
+    const cancel = window.clearTimeout;
+    const pending = new Map<number, () => void>();
+    (window as any).__databaseTitleFocus = {
+      pending,
+      release: () => {
+        for (const [id, callback] of pending) {
+          pending.delete(id);
+          callback();
+        }
+      },
+    };
+    window.setTimeout = ((callback, delay, ...args) => {
+      if (
+        delay === 300 &&
+        typeof callback === "function" &&
+        new Error().stack?.includes("/database-title-editor.tsx")
+      ) {
+        const id = schedule(() => {}, 0);
+        pending.set(id, () => callback(...args));
+        return id;
+      }
+      return schedule(callback, delay, ...args);
+    }) as typeof window.setTimeout;
+    window.clearTimeout = ((id) => {
+      if (typeof id === "number") pending.delete(id);
+      cancel(id);
+    }) as typeof window.clearTimeout;
+  });
+}
+
+async function releaseDatabaseTitleFocus(page: Page) {
+  await page.evaluate(async () => {
+    (window as any).__databaseTitleFocus.release();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+  });
+}
+
+for (const header of ["filled", "empty"])
+  test(`late ${header} database title initialization preserves the cell draft`, async ({
+    page,
+  }) => {
+    await deferDatabaseTitleFocus(page);
+    await page.goto(`${fixtureUrl}?header=${header}`);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as any).__databaseTitleFocus.pending.size),
+      )
+      .toBe(1);
+    const cell = page.locator(
+      `[data-database-cell-key="${rowId(0)}:${notesId}"]`,
+    );
+    await cell.press("F2");
+    const editor = cell.getByRole("textbox");
+    await editor.fill("Preserved during header initialization");
+    await expect(editor).toBeFocused();
+    await releaseDatabaseTitleFocus(page);
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("Preserved during header initialization");
+    expect(
+      (await state(page)).requests.filter(
+        (request) =>
+          request.method === "PATCH" && request.path.endsWith("/cells"),
+      ),
+    ).toHaveLength(0);
+  });
+
+test("an empty database title receives initial focus when no control was chosen", async ({
+  page,
+}) => {
+  await deferDatabaseTitleFocus(page);
+  await page.goto(`${fixtureUrl}?header=empty`);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).__databaseTitleFocus.pending.size),
+    )
+    .toBe(1);
+  expect(
+    await page.evaluate(() => document.activeElement === document.body),
+  ).toBe(true);
+  await releaseDatabaseTitleFocus(page);
+  await expect(
+    page.locator('[data-database-title-fixture] [contenteditable="true"]'),
+  ).toBeFocused();
+});
+
+test("database title initialization cannot refocus after a later control choice", async ({
+  page,
+}) => {
+  await deferDatabaseTitleFocus(page);
+  await page.goto(`${fixtureUrl}?header=empty`);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).__databaseTitleFocus.pending.size),
+    )
+    .toBe(1);
+  const control = page.getByRole("button", {
+    name: "Toggle database",
+    exact: true,
+  });
+  await control.evaluate(async (button) => {
+    (window as any).__databaseTitleFocus.release();
+    button.focus();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+  });
+  await expect(control).toBeFocused();
+});
+
+test("pending cell focus preserves a newer cell choice before a blur save completes", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const schedule = window.requestAnimationFrame;
+    const cancel = window.cancelAnimationFrame;
+    const pending = new Map<number, FrameRequestCallback>();
+    (window as any).__databaseCellFocus = {
+      pending,
+      release: () => {
+        for (const [id, callback] of pending) {
+          pending.delete(id);
+          callback(performance.now());
+        }
+      },
+    };
+    window.requestAnimationFrame = (callback) => {
+      if (new Error().stack?.includes("/database-table-view.tsx")) {
+        const id = schedule(() => {});
+        pending.set(id, callback);
+        return id;
+      }
+      return schedule(callback);
+    };
+    window.cancelAnimationFrame = (id) => {
+      pending.delete(id);
+      cancel(id);
+    };
+  });
+  await page.goto(fixtureUrl);
+  const amount = page.locator(
+    `[data-database-cell-key="${rowId(0)}:50000000-0000-4000-8000-000000000002"]`,
+  );
+  const date = page.locator(
+    `[data-database-cell-key="${rowId(0)}:50000000-0000-4000-8000-000000000003"]`,
+  );
+  await amount.press("F2");
+  await amount.getByRole("textbox").fill("10.25");
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).__databaseCellFocus.pending.size),
+    )
+    .toBe(1);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let saving = false;
+  await page.route(
+    "**/cells",
+    async (route) => {
+      saving = true;
+      await gate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  try {
+    await date.focus();
+    await expect.poll(() => saving).toBe(true);
+    await page.evaluate(() => (window as any).__databaseCellFocus.release());
+    await expect(date).toBeFocused();
+  } finally {
+    const saved = saving
+      ? page.waitForResponse((response) =>
+          response.request().method() === "PATCH" &&
+          response.url().endsWith("/cells"),
+        )
+      : undefined;
+    release();
+    if (saved) expect((await saved).ok()).toBe(true);
+  }
+});
+
+test("late Enter navigation preserves a newly focused cell", async ({
+  page,
+}) => {
   await page.goto(fixtureUrl);
   const amount = page.locator(
     `[data-database-cell-key="${rowId(0)}:50000000-0000-4000-8000-000000000002"]`,
@@ -465,10 +661,13 @@ test("late Enter navigation preserves a newly focused cell", async ({ page }) =>
     await expect(amount).toHaveText("10.25");
     await expect(date).toBeFocused();
     await date.press("F2");
-    await expect(date.getByRole("switch", { name: "Date range" })).toBeVisible();
+    await expect(
+      date.getByRole("switch", { name: "Date range" }),
+    ).toBeVisible();
     expect(
       (await state(page)).requests.filter(
-        (request) => request.method === "PATCH" && request.path.endsWith("/cells"),
+        (request) =>
+          request.method === "PATCH" && request.path.endsWith("/cells"),
       ),
     ).toHaveLength(1);
   } finally {
@@ -476,7 +675,9 @@ test("late Enter navigation preserves a newly focused cell", async ({ page }) =>
   }
 });
 
-test("Enter still navigates down after saving the active cell", async ({ page }) => {
+test("Enter still navigates down after saving the active cell", async ({
+  page,
+}) => {
   await page.goto(fixtureUrl);
   const amount = (index: number) =>
     page.locator(

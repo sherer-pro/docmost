@@ -52,6 +52,7 @@ interface DatabaseCellRendererProps {
   value: unknown;
   isEditable: boolean;
   isEditing: boolean;
+  autoFocus?: boolean;
   editingValue: unknown;
   spaceId: string;
   pageId?: string;
@@ -248,6 +249,7 @@ export function DatabaseCellRenderer({
   value,
   isEditable: canEdit,
   isEditing,
+  autoFocus = isEditing,
   editingValue,
   spaceId,
   pageId,
@@ -536,7 +538,7 @@ export function DatabaseCellRenderer({
           onSave={onSave}
           onBlur={handleBlurSave}
           label={cellLabel}
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
         />
       );
     if (type === "checkbox") {
@@ -552,7 +554,7 @@ export function DatabaseCellRenderer({
         >
           <Checkbox
             aria-label={checkboxLabel}
-            autoFocus={isEditing}
+            autoFocus={autoFocus}
             checked={checked}
             onChange={(event) => {
               const checked = event.currentTarget.checked;
@@ -567,7 +569,7 @@ export function DatabaseCellRenderer({
     if (type === "multiline_text") {
       return (
         <DictionaryTextarea
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
           aria-label={cellLabel ?? property.name}
           autosize
           minRows={2}
@@ -583,7 +585,7 @@ export function DatabaseCellRenderer({
     if (type === "code") {
       return (
         <DictionaryTextarea
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
           aria-label={cellLabel ?? property.name}
           autosize
           minRows={3}
@@ -621,7 +623,7 @@ export function DatabaseCellRenderer({
 
       return (
         <Select
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
           aria-label={cellLabel ?? property.name}
           data={settings.map((option) => ({
             value: option.value,
@@ -656,7 +658,7 @@ export function DatabaseCellRenderer({
           spaceId={spaceId}
           pageId={pageId}
           ariaLabel={cellLabel ?? property.name}
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
           onChange={onChange}
           onSave={onSave}
           onBlur={handleBlurSave}
@@ -670,7 +672,7 @@ export function DatabaseCellRenderer({
 
       return (
         <Select
-          autoFocus={isEditing}
+          autoFocus={autoFocus}
           aria-label={cellLabel ?? property.name}
           searchable
           clearable
@@ -691,7 +693,7 @@ export function DatabaseCellRenderer({
 
     return (
       <TextInput
-        autoFocus={isEditing}
+        autoFocus={autoFocus}
         aria-label={cellLabel ?? property.name}
         value={normalizeDatabaseStringValue(editorValue)}
         onChange={(event) => onChange(event.currentTarget.value)}

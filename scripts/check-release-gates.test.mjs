@@ -682,6 +682,7 @@ const workflowMutations = [
   ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
   ["PWA browser", "ciSource", "pnpm test:pwa:e2e"],
+  ["database focus browser", "ciSource", "pnpm test:database-focus:e2e"],
   [
     "production Draw.io runtime",
     "ciSource",
@@ -929,6 +930,7 @@ for (const [scriptName, command] of [
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run check:fork-docs"],
   ["verify:release", "run test:pwa:e2e"],
+  ["verify:release", "run test:database-focus:e2e"],
   ["verify:release", "run test:ai:e2e"],
   ["verify:release", "run test:ai-agent:e2e"],
 ]) {
@@ -942,6 +944,26 @@ for (const [scriptName, command] of [
     );
     assert.ok(
       errors.some((error) => error.includes(`${scriptName} must include`)),
+    );
+  });
+}
+
+for (const command of [
+  "node apps/client/e2e/database/run.mjs",
+  "--browser=all",
+  "database title",
+  "pending cell focus",
+]) {
+  test(`rejects database focus verification without ${command}`, () => {
+    const mutatedPackage = structuredClone(packageJson);
+    mutatedPackage.scripts["test:database-focus:e2e"] = mutatedPackage.scripts[
+      "test:database-focus:e2e"
+    ].replace(command, "removed-focus-regression");
+    const errors = validateReleaseGateContract(
+      inputs({ packageJson: mutatedPackage }),
+    );
+    assert.ok(
+      errors.includes(`test:database-focus:e2e must include ${command}`),
     );
   });
 }

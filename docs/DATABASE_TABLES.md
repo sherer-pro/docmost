@@ -172,6 +172,13 @@ remains current and focus has not moved to another cell. A late response cannot
 close a newer editor or replace that newer cell focus; ordinary Enter still
 advances to the next row after saving.
 
+The grid coordinates editor focus after rendering and rechecks the edit session
+and current focus immediately before applying it. Native editor autofocus is
+disabled only in this coordinated host; other renderer consumers retain their
+existing default. An initialized database title may claim focus only when it is
+empty, editable and no other control is selected. Its initialization focuses
+synchronously rather than leaving a second Tiptap animation-frame focus queued.
+
 Assignment notification dispatch is recorded in the existing transactional outbox. A failed cell transaction creates neither persisted values nor notification work. Migration `20261013T120000-database-revisions.ts` adds revision metadata and a read-only SQL value adapter without rewriting values. Apply it before running the updated server. Its rollback removes the adapter and revision metadata, not the new property values; an older application is therefore not a compatible downgrade after using new types.
 
 RAG and AI projection boundaries remain independent of view filters. See [AI and RAG](AI_ASSISTANT_AND_RAG.md#database-table-property-contract).
@@ -210,6 +217,12 @@ for limits, policy controls, transaction recovery and MCP boundaries.
   edit and saving it must preserve scroll. Footnote creation explicitly moves
   the native caret to the document end before opening the slash command.
 - Browser: `node apps/client/e2e/database/run.mjs` owns Vite on localhost port 5195. It mounts the production table component with a synthetic API; this confirms browser behavior, while the separate PostgreSQL suite verifies backend transactions and query semantics.
+- Focus regression: `corepack pnpm test:database-focus:e2e` runs all three engines
+  with the real header and table components. Controlled callbacks verify that
+  late header initialization and cell focus preserve a newer user choice and
+  its draft, while a new empty title and ordinary Enter/Tab/dropdown navigation
+  still work. CI and `verify:release` require this suite. The synthetic runner
+  accepts `--browser=chromium|firefox|webkit|all`; its default remains Chromium.
 - Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>/`. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
 
 The live runner also accepts `--subnet=10.x.x.0/28` for an unused private

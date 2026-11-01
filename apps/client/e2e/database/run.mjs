@@ -6,6 +6,19 @@ import path from "node:path";
 import { createDatabaseFixtureApi } from "./synthetic-api.mjs";
 
 const require = createRequire(import.meta.url);
+const args = process.argv.slice(2);
+const browserArgs = args.filter((arg) => arg.startsWith("--browser="));
+if (browserArgs.length > 1)
+  throw new Error("Select one database browser option");
+const browser = browserArgs[0]?.slice("--browser=".length);
+if (browser && !["chromium", "firefox", "webkit", "all"].includes(browser))
+  throw new Error("Invalid database browser option");
+const browsers =
+  browser === "all"
+    ? ["chromium", "firefox", "webkit"]
+    : browser
+      ? [browser]
+      : [];
 const root = fileURLToPath(new URL("../..", import.meta.url));
 process.chdir(root);
 process.env.APP_URL = "http://127.0.0.1:5195";
@@ -37,7 +50,7 @@ try {
       "test",
       "--config",
       path.join(root, "e2e/database/playwright.config.ts"),
-      ...process.argv.slice(2),
+      ...args.filter((arg) => !arg.startsWith("--browser=")),
     ],
     {
       stdio: "inherit",
@@ -45,6 +58,7 @@ try {
         ...process.env,
         DATABASE_TABLES_OUTPUT_DIR: runDirectory,
         DATABASE_TABLES_BASE_URL: "http://127.0.0.1:5195",
+        DATABASE_TABLES_BROWSERS: browsers.join(","),
       },
     },
   );

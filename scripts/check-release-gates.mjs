@@ -46,6 +46,7 @@ const REQUIRED_JOB_COMMANDS = {
     "python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py",
     "pnpm test:editor:e2e",
     "pnpm test:pwa:e2e",
+    "pnpm test:database-focus:e2e",
     "pnpm test:ai:e2e",
     "pnpm test:ai-context:e2e",
     "node scripts/ci-embedded-rag-sync-smoke.mjs prepare",
@@ -145,6 +146,7 @@ const REQUIRED_VERIFICATION_COMMANDS = {
     "run test:mcp:audit-client",
     "pnpm audit --prod --audit-level high",
     "run test:pwa:e2e",
+    "run test:database-focus:e2e",
     "run test:ai:e2e",
     "run test:ai-agent:e2e",
     "run test:editor:e2e",
@@ -153,6 +155,17 @@ const REQUIRED_VERIFICATION_COMMANDS = {
 };
 
 const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
+  "test:database-focus:e2e": [
+    "node apps/client/e2e/database/run.mjs",
+    "--browser=all",
+    "--grep=",
+    "database title",
+    "pending cell focus",
+    "late Enter",
+    "Enter still",
+    "select keyboard",
+    "old cell response",
+  ],
   "check:fork-docs": [
     "node --test scripts/check-fork-docs-contract.test.mjs",
     "node scripts/check-fork-docs-contract.mjs",
