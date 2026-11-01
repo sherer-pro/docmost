@@ -2,13 +2,14 @@
 
 Date: 2026-11-01. The feature packages for stages 1–4 are implemented locally;
 final acceptance is still in progress. Push and deployment are explicitly on
-hold. The PWA candidate `dbe5d2c6` passes full Firefox, Chromium and release
-acceptance. Its subsequent WebKit run exposed two focus races. Their new
-correction passes deterministic browser regressions, but still requires the
-full application/browser/release gates. Earlier accepted candidates retain
-their actual revision boundaries below.
-Human-reviewed model quality remains pending, and Gemma 12B fails the database
-accuracy target. The operator approved testing Gemma 26B. Stages 1–4 are not
+hold. The focus correction `f4e0b5e5` passes complete application acceptance in
+Chromium, Firefox and WebKit, including the two original WebKit failures. The
+expanded final release gate is next. Earlier accepted candidates retain their
+actual revision boundaries below.
+Human-reviewed model quality remains pending. Both Gemma 12B and the
+operator-approved Gemma 26B fail the database accuracy target: 71/80 and 53/80,
+respectively. Both complete 26B captures are retained with an unaccepted
+160-case report and an offline review packet. Stages 1–4 are not
 yet complete. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
@@ -57,10 +58,29 @@ tests pass, including negative checks against removing the new CI/release
 command, browser matrix or critical scenarios. `AGENTS.md` and the database
 contract document its command and focus behavior. The English-comment check
 passes, and the maintenance baseline remains at 397 Knip findings and 16
-duplicate blocks, with no added findings. Full acceptance of this
-correction is still pending. The server, shared artifacts and AI inference
-pipeline are unchanged, so the approved 26B regression uses the frozen backend
-independently of the remaining client acceptance.
+duplicate blocks, with no added findings. The server, shared artifacts and AI
+inference pipeline are unchanged, so the approved 26B regression uses the frozen
+backend independently of the client acceptance.
+
+The corrected real WebKit subset passes both original failures in runtime
+`2026-11-01T13-58-05-511Z`, with all 31 PostgreSQL cases, 33 HTTP groups and
+successful cleanup. The three complete fresh runtimes then pass the same
+31 PostgreSQL cases, 33 HTTP groups and all 48 browser cases each:
+
+- Firefox: `2026-11-01T13-59-10-162Z`,
+  `roadmap-final-firefox-f4e0b5e5.log`.
+- WebKit: `2026-11-01T14-02-00-064Z`,
+  `roadmap-final-webkit-f4e0b5e5.log`.
+- Chromium: `2026-11-01T14-08-27-393Z`,
+  `roadmap-final-chromium-f4e0b5e5.log`.
+
+There are zero skips, retries, flaky cases or failures in all three full database
+matrices. Owned processes, containers, networks and temporary runtimes are
+removed. QA source remains clean at exact functional revision
+`f4e0b5e5cc1405e3f93365007d27cc42851c659c`; no source/build changes occur during
+the readers. Independent browser runtimes overlap only after inference and the
+build end. The expanded complete `verify:release` remains the final application
+gate; these results do not relabel the earlier release pass.
 
 ### Previous PWA candidate
 
@@ -266,6 +286,67 @@ a different physical loaded context; timings must retain that environment
 difference. Neither model's capture substitutes for actual human claim and
 refusal annotations. Cross-family testing, independent questions and heuristic
 ablation remain useful follow-up evidence, without being claimed as completed.
+
+The complete 26B database capture in `2026-11-01T11-47-36-296Z`, recorded by
+`ai-database-gemma26-regression-frozen-dbe5d2c6.log`, contains all 80 cases.
+Fifty-three traces match the oracle and 27 fail. It improves none of the nine
+12B failures and regresses on 18 previously passing cases. In particular, only
+one of eight proposals has the expected trace, compared with eight for 12B;
+all eight empty-budget questions fail. Actual observed failures include extra
+open-status filters and arrays supplied for single-select values. The server
+rejects invalid values; a rejected proposal is not an approvable change, even
+when the model's final text claims that it prepared one. No proposal was approved.
+
+`ai-database-gemma12-gemma26-frozen-regression.json` re-scores both complete
+captures with the existing evaluator and retains input hashes, failed IDs,
+per-category counts and successful cleanup. Its full configuration comparison
+finds only the model name and ephemeral capture-proxy origin changed. No
+production prompt, ranking, tool schema, scorer, corpus or acceptance target
+changed during comparison. Source/backend/shared artifact hashes remain frozen.
+This is a failed within-family regression on an already observed corpus, not a
+successful quality gate or evidence of generalization. Physical model context
+and external CPU load differ, so no comparative latency claim is made.
+
+The repeated access-question template says "closed or excluded rows" in Russian.
+It intends unavailable ACL/AI-policy sources, but "closed" can also describe a
+completed task. Both models add open-status conditions in these eight cases.
+That wording is a corpus ambiguity worth an independently specified follow-up;
+the capture alone does not prove its causal contribution. These cases remain
+in the original score. Other observed failures include unambiguous empty-budget
+questions and invalid single-select proposal values. Neither raw answers nor
+the current corpus/scorer are changed to repair the comparison retrospectively.
+
+The separate 80-question 26B RAG capture completed on the same frozen backend
+in `2026-11-01T12-58-32-821Z`. The exact-byte combined 160-case JSONL has a
+separate provenance record with source/configuration/corpus hashes. The official
+`ai-holdout-gemma26-final-cli-unreviewed-report.json` records recall 1.0, 91/91
+valid citations, zero forbidden evidence/control answers, database accuracy
+0.6625 and preparation p95 356 ms. Its expected CLI exit code is one: 27 database
+traces mismatch, actual human review is absent, and 159 refusal annotations are
+missing. `measured` and `accepted` remain false; factual support is unmeasured.
+
+The explicitly separate RAG-only diagnostic contains all 80 answers, recall 1.0,
+87/87 valid citations, zero forbidden evidence/control answers and preparation
+p95 2286 ms. It remains unreviewed and unaccepted. These p95 values describe
+different case populations; neither measures total generation latency. Both
+captures have successful cleanup. The offline 160-case review packet retains
+zero human annotations. No synthetic proposal was approved; two were cancelled
+after durable capture. A normal TLS-verified read-only request to the original
+provider still returns `ERR_TLS_CERT_ALTNAME_INVALID`; certificate validation
+remains enabled.
+
+The operator supplied another quiet window. A two-sample observation at
+13:48 UTC confirms ffmpeg at zero CPU; model capture then completed before
+building the updated client. The full Node 22 monorepo build passes for
+`f4e0b5e5` in `roadmap-focus-candidate-build-f4e0b5e5.log`. New application/browser
+acceptance is in progress with separate owned runtimes; QA source/build files
+remain fixed while those readers run. The operator approved parallel agents
+for independent verification and reporting. Claude Code 2.1.221 is installed,
+and its initial official status reported `loggedIn=false`. The operator then
+reported completing the native sign-in; a bounded CLI smoke and independent
+automatic-review pilot are being checked separately. No credentials were
+extracted. Automatic review does not replace the application-provider benchmark
+or human annotations.
 
 ### Earlier candidate findings
 
@@ -673,16 +754,20 @@ pending as listed below.
 
 ## Remaining required work
 
-- Resolve the selected model's nine database failures and obtain actual human
-  evidence/refusal annotations. Both full 80-case captures and the combined
-  automated score are complete; human-reviewed quality is not accepted.
-  The operator approved the available Gemma 26B, which LM Studio already shows
-  loaded. Its fixed-pipeline capture follows application acceptance; no model
-  source tuning or universal portability claim is included.
-- Complete final full application/browser/release acceptance on the new header
-  and cell focus correction. The deterministic 27-case matrix passes. Earlier
-  Chromium, Firefox, WebKit and release passes retain their actual candidate
-  boundaries and are not relabeled as verification of later source changes.
+- Obtain an acceptable model result and actual human evidence/refusal
+  annotations. The complete 12B captures and combined automated score are
+  retained; 12B passes only 71/80 database traces. The approved 26B comparison
+  passes only 53/80 with no inference-pipeline or scoring change. Its separate
+  RAG capture and combined 160-case score are complete; no human annotation has
+  been supplied. Neither configuration passes the quality gate.
+  An alternative provider/model was requested; the original provider still
+  fails normal TLS verification. Existing questions are a regression corpus,
+  and neither result establishes independent or cross-family generalization.
+- Complete the expanded final release gate on the new header and cell focus
+  correction. All three current full application/browser matrices and the
+  deterministic 27-case matrix pass. Earlier release passes retain their actual
+  candidate boundaries and are not relabeled as verification of later source
+  changes.
 - Reconcile final receipts and prepare the requested session change list. The
   applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
   retain its actual evidence boundaries and keep stack upgrades separate.
