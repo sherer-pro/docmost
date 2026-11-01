@@ -1,0 +1,2 @@
+# Preserve the original frozen v5 capture bytes across all checkout platforms.
+tests/rag-quality/corpus-v5.json -text whitespace=cr-at-eol

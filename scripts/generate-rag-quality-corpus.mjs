@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Deterministic synthetic fixture. Holdout product names are disjoint from tuning.
 const names = [
@@ -411,13 +413,74 @@ const corpus = {
   databaseFixtures,
   databaseQuestions,
 };
-await mkdir(new URL("../tests/rag-quality/", import.meta.url), {
-  recursive: true,
-});
-await writeFile(
-  new URL("../tests/rag-quality/corpus.json", import.meta.url),
-  JSON.stringify(corpus, null, 2) + "\n",
-);
-console.log(
-  "Wrote 200 RAG questions and 200 database cases: 240 tuning, 160 holdout",
-);
+export function createRagQualityCorpus(version = 6) {
+  if (version !== 5 && version !== 6)
+    throw new RangeError("Supported corpus versions are 5 and 6");
+  const result = JSON.parse(JSON.stringify(corpus));
+  result.version = version;
+  if (version === 6) {
+    const databaseNames = new Map(
+      result.databaseFixtures.map((fixture) => [fixture.databaseId, fixture.name]),
+    );
+    for (const question of result.databaseQuestions) {
+      if (question.category !== "database_access") continue;
+      const name = databaseNames.get(question.databaseContext.databaseId);
+      question.question = `Посчитайте бюджет по текущему представлению базы «${name}». Учитывайте только доступные вам по правам строки, разрешённые для AI, не меняя условия представления.`;
+    }
+  }
+  return result;
+}
+
+async function main(args) {
+  if (args.length === 1 && args[0] === "--help") {
+    console.log(
+      "node scripts/generate-rag-quality-corpus.mjs [--version 5|6] [--output NEW_PATH]; existing outputs and the frozen v5 archive are never replaced",
+    );
+    return;
+  }
+  const values = {};
+  for (let i = 0; i < args.length; i++) {
+    const match = /^--(version|output)(?:=(.*))?$/.exec(args[i]);
+    if (!match || Object.hasOwn(values, match[1]))
+      throw new Error("Invalid or duplicate corpus option");
+    const value = match[2] ?? args[++i];
+    if (!value || value.startsWith("--"))
+      throw new Error("Missing corpus option value");
+    values[match[1]] = value;
+  }
+  if (values.version !== undefined && !["5", "6"].includes(values.version))
+    throw new Error("Supported corpus versions are 5 and 6");
+  const version = Number(values.version ?? 6);
+  if (version === 5 && !values.output)
+    throw new Error("Version 5 requires an explicit new output path");
+  const output = resolve(
+    values.output ?? fileURLToPath(new URL("../tests/rag-quality/corpus.json", import.meta.url)),
+  );
+  const frozen = fileURLToPath(new URL("../tests/rag-quality/corpus-v5.json", import.meta.url));
+  const comparable = (value) => process.platform === "win32" ? value.toLowerCase() : value;
+  if (comparable(output) === comparable(frozen))
+    throw new Error("The frozen version 5 archive cannot be generated or replaced");
+  const bytes = Buffer.from(JSON.stringify(createRagQualityCorpus(version), null, 2) + "\n");
+  await mkdir(dirname(output), { recursive: true });
+  await writeFile(output, bytes, { flag: "wx" });
+  console.log(JSON.stringify({
+    version,
+    output,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    ragQuestions: 200,
+    databaseQuestions: 200,
+    tuning: 240,
+    holdout: 160,
+  }));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try {
+    await main(process.argv.slice(2));
+  } catch (error) {
+    console.error(error.code === "EEXIST"
+      ? "Corpus output already exists; choose a new candidate path"
+      : `Corpus generation refused: ${error.message}`);
+    process.exitCode = 1;
+  }
+}

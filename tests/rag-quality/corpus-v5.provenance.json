@@ -1,0 +1,13 @@
+{
+  "schema": "rag-quality-frozen-corpus/v1",
+  "version": 5,
+  "file": "corpus-v5.json",
+  "originalBytesSha256": "7b062ec4cfedaccd1980213f4549393117dd6fb9d11bf885c15db5b077f285d4",
+  "originalBytes": 5990221,
+  "originalLineEndings": "CRLF",
+  "canonicalLfSha256": "e840508bc389b45345cc8631058d9295c58fc67f445347e0d1e7d3a0f74c596d",
+  "preservation": "Exact original QA bytes copied without regeneration or JSON reserialization; protected by the scoped -text attribute.",
+  "clarificationProposalSha256": "c80a77f0e3ab4bf44ee286e78a58c8d6b6ebd4ec5b3ea9799888003809d35f4e",
+  "v6Change": "Only corpus version metadata and the twenty database_access question strings; all other corpus data and acceptance criteria are unchanged.",
+  "resultsBoundary": "Existing v5 captures and scores remain v5 results. Neither this archive nor v6 relabels or repairs them."
+}

@@ -1,15 +1,53 @@
 # RAG evidence quality evaluation
 
-`corpus.json` contains 80 synthetic documents, 120 tuning questions and 80 holdout
+`corpus.json` is version 6 and contains 80 synthetic documents, 120 tuning questions and 80 holdout
 questions about disjoint products. It is not a production sample; human validation
 is pending. Do not use holdout answers to tune prompts, embeddings or ranking.
 
-Regenerate with `node scripts/generate-rag-quality-corpus.mjs`; validate with
-`node --test scripts/rag-quality-benchmark.test.mjs`. Import into an isolated space
+Generate a new candidate with `node scripts/generate-rag-quality-corpus.mjs --version 6 --output artifacts/corpus-v6-candidate.json`;
+validate with `node --test scripts/generate-rag-quality-corpus.test.mjs scripts/rag-quality-benchmark.test.mjs`. Import into an isolated space
 and map fixture IDs to real source IDs. Apply each question's access and stale
 index setup, then restore it between questions. Policy mutations cover ACL
 revocation, deletion, moving to another space, non-DONE status and exclusion.
 Never weaken live ACLs. The private source remains unavailable in every variant.
+
+## Corpus versions and retained experiments
+
+`corpus-v5.json` preserves the exact original QA version 5 bytes, including CRLF
+line endings: SHA256 `7b062ec4cfedaccd1980213f4549393117dd6fb9d11bf885c15db5b077f285d4`.
+Its canonical LF SHA256 is
+`e840508bc389b45345cc8631058d9295c58fc67f445347e0d1e7d3a0f74c596d`.
+The scoped `.gitattributes` rule preserves the archive bytes across checkouts;
+`corpus-v5.provenance.json` records both hashes and the clarification proposal.
+The generator exports the pure `createRagQualityCorpus(5 | 6)` factory. Importing
+it performs no filesystem writes. The CLI defaults to version 6, requires an
+explicit output for version 5, writes only new files and always rejects the
+frozen archive path. There is no overwrite flag. For a canonical LF version 5
+reproduction, use `node scripts/generate-rag-quality-corpus.mjs --version 5 --output artifacts/corpus-v5-reproduced.json`;
+this creates a candidate and does not regenerate the frozen archive.
+
+Version 6 changes only the version number and twenty `database_access` question
+strings (12 tuning, 8 holdout). Those questions now explicitly request the current
+view, rows readable under the initiating user's ACL and AI policy, and unchanged
+view conditions. Version 5's wording combined permission language with excluding
+"closed or excluded" rows, which can also be read as a business-status condition.
+That ambiguity is a known limitation of the old wording, not a new scoring
+exception. Its original full authorized-row expectations and failed traces remain
+unchanged. The retained version 5 Sonnet tuning result of 9/10 and database
+holdout result of 73/80 remain version 5 results; version 6 does not relabel,
+rescore or repair those captures or reports.
+
+All RAG documents and questions, database fixtures, context, expected row sets,
+aggregates, selected rows, natural-language filter-override cases, scorer,
+evaluator thresholds and human-review requirements remain unchanged. Tests pin
+the original version 5 hashes and the approved twenty-question digest, then
+deep-compare both versions with only those question strings and version allowed
+to differ. The current evaluator CLI reads the adjacent `corpus.json` (version 6).
+Evaluate old captures only against their original frozen corpus and tooling;
+preserve original reports and record exact corpus bytes and version in every
+experiment. A version 6 run is a separate regression comparison after the wording
+clarification, not a new blind holdout or evidence of improved model quality by
+itself. Human validation is still pending.
 
 Capture one runtime record per question as JSONL:
 
@@ -43,7 +81,7 @@ connection with `canary: failed` means query-time evidence resolution needs
 investigation even when synchronization is healthy. Canaries do not write data
 or create recurring jobs.
 
-The version 5 corpus also includes 200 structured database cases (120 tuning / 80 holdout),
+Both corpus versions include 200 structured database cases (120 tuning / 80 holdout),
 in addition to the original 200 RAG questions. Provision the synthetic
 `databaseFixtures` with their supplied property/row IDs; the database root page
 uses the fixture database ID. Apply each case's selection and filters. Record
