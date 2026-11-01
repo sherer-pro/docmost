@@ -4,8 +4,10 @@ Date: 2026-11-01. The feature packages for stages 1–4 are implemented locally;
 final acceptance is still in progress. Push and deployment are explicitly on
 hold. The focus correction `f4e0b5e5` passes complete application acceptance in
 Chromium, Firefox and WebKit, including the two original WebKit failures. The
-expanded final release gate is next. Earlier accepted candidates retain their
-actual revision boundaries below.
+expanded final release gate passes on documentation revision `017f5a0d`.
+Its native application-log audit did not actually read the application logs;
+the test harness correction and its real-runtime recheck are separate below.
+Earlier accepted candidates retain their actual revision boundaries below.
 Human-reviewed model quality remains pending. Both Gemma 12B and the
 operator-approved Gemma 26B fail the database accuracy target: 71/80 and 53/80,
 respectively. Both complete 26B captures are retained with an unaccepted
@@ -13,6 +15,53 @@ respectively. Both complete 26B captures are retained with an unaccepted
 yet complete. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
+
+### Complete release gate and remaining native log recheck
+
+`roadmap-verify-release-017f5a0d-attempt2.log` records the complete isolated
+`verify:release` pass in runtime `2026-11-01T14-50-38-173Z`, on Node 22.23.4.
+It passes 31 PostgreSQL cases, 2540 backend tests, 945 client tests, 1044
+backend-security tests, 82 client-security tests, the real dependency checks,
+all 18 PWA, 27 database-focus and 28 AI browser cases, 157 editor-extension
+tests and 227 RAG Sync tests. Agent acceptance passes 18 runs and 54 steps.
+Editor acceptance passes 65 cases with the two existing explicit Firefox skips;
+there are no actual retries or flaky cases. Ten downloaded export artifacts
+pass content verification, and all 14 AI-context scenarios pass. Lint reports
+42 warnings and no errors. Owned runtime cleanup succeeds.
+
+The preceding attempt stopped at the existing 15-second dependency-suite
+startup budget. The unchanged isolated command then passed all eight cases,
+and the complete second attempt passed without extending any timeout. The
+original failure remains retained; its cause has not been established.
+
+The old AI application-log scanner invoked Docker logs with an empty container
+identifier for the native API and ignored the unavailable source. Its zero-byte
+report establishes no application-log coverage. The separate artifact scan
+passes and retains its own evidence. The corrected test-only path scans bounded
+API and collaboration stdout/stderr in memory through an authenticated loopback
+service. Missing, truncated, empty or inconsistent native sources fail closed.
+The new public `test:security:ai-harness` gate passes all 36 cases, including
+negative tests for decoded secrets, chunk boundaries, forged scan completeness
+and paid gateway admission. The targeted independent review closes all five
+reported defects. Real native AI browser acceptance of this correction remains
+pending; the old release result is not relabeled as that acceptance.
+
+### Bounded cloud model comparison
+
+Official authenticated HTTPS and an actual streaming forced-tool compatibility
+probe pass for `claude-sonnet-4-6`. The test-only cloud driver relays unchanged
+OpenAI-compatible JSON/SSE to the fixed Anthropic HTTPS origin, reads an explicitly
+provided API credential only in memory and bounds cumulative accounting before
+request admission. Unknown or cancelled usage retains a conservative charge;
+this estimate does not replace the provider invoice. No credentials enter child
+arguments, captures or receipts.
+
+The complete 160-case cloud capture has not yet run. The production AI pipeline
+still matches all 133 frozen source entries used for the Gemma comparison.
+Production prompts, filters, scoring and corpus are unchanged. This corpus has
+already been observed, so another model's result is a fixed-pipeline regression
+comparison rather than independent blind evidence. Human annotations and the
+answer-quality acceptance gate remain pending.
 
 ### Latest database focus correction
 
@@ -79,8 +128,8 @@ matrices. Owned processes, containers, networks and temporary runtimes are
 removed. QA source remains clean at exact functional revision
 `f4e0b5e5cc1405e3f93365007d27cc42851c659c`; no source/build changes occur during
 the readers. Independent browser runtimes overlap only after inference and the
-build end. The expanded complete `verify:release` remains the final application
-gate; these results do not relabel the earlier release pass.
+build end. The expanded complete `verify:release` subsequently passes as recorded
+above; these browser results do not relabel the earlier release pass.
 
 ### Previous PWA candidate
 

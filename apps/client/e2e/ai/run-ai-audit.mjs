@@ -5,6 +5,10 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { request } from "@playwright/test";
+import {
+  requestApplicationLogScan,
+  scanDockerApplicationLogs,
+} from "../../../../scripts/ai-application-log-scan.mjs";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -442,54 +446,55 @@ try {
     ).catch(() => undefined);
   }
   if (api) await api.dispose();
-  const appContainer =
-    process.env.DOCMOST_CONTAINER_NAME ??
-    (
-      await execFileAsync("docker", ["compose", "ps", "-q", "docmost"], {
-        cwd: repoRoot,
-      }).catch(() => ({ stdout: "" }))
-    ).stdout.trim();
-  const appLogs = await execFileAsync("docker", ["logs", appContainer], {
-    maxBuffer: 20 * 1024 * 1024,
-  }).catch((error) => ({
-    stdout: "",
-    stderr: "",
-    error: error instanceof Error ? error.message : String(error),
-  }));
-  const appLogText = `${appLogs.stdout ?? ""}${appLogs.stderr ?? ""}`;
-  const count = (value) =>
-    value && appLogText.includes(value)
-      ? appLogText.split(value).length - 1
-      : 0;
+  const patterns = [
+    { label: "canary", value: canary },
+    { label: "auth-token", value: process.env.DOCMOST_AUTH_TOKEN },
+    { label: "csrf-token", value: process.env.DOCMOST_CSRF_TOKEN },
+    ...(process.env.DOCMOST_AUDIT_EXTRA_SECRETS ?? "")
+      .split(",")
+      .filter(Boolean)
+      .map((value, index) => ({ label: `extra-${index + 1}`, value })),
+  ].filter(({ value }) => Boolean(value));
+  const nativeScan = Boolean(
+    process.env.DOCMOST_AI_APPLICATION_LOG_SCAN_URL ||
+      process.env.DOCMOST_AI_APPLICATION_LOG_SCAN_TOKEN,
+  );
+  const appLogScan = nativeScan
+    ? await requestApplicationLogScan({
+        url: process.env.DOCMOST_AI_APPLICATION_LOG_SCAN_URL,
+        token: process.env.DOCMOST_AI_APPLICATION_LOG_SCAN_TOKEN,
+        patterns,
+      })
+    : await scanDockerApplicationLogs({
+        resolveContainer: async () =>
+          process.env.DOCMOST_CONTAINER_NAME ??
+          (
+            await execFileAsync("docker", ["compose", "ps", "-q", "docmost"], {
+              cwd: repoRoot,
+            })
+          ).stdout.trim(),
+        readLogs: (container) =>
+          execFileAsync("docker", ["logs", container], {
+            maxBuffer: 8 * 1024 * 1024,
+          }),
+        patterns,
+      });
   await fs.writeFile(
     path.join(auditRoot, "application-log-secret-scan.json"),
     `${JSON.stringify(
       {
         scannedAt: new Date().toISOString(),
-        container: appContainer,
-        bytesScanned: Buffer.byteLength(appLogText),
-        canaryOccurrences: count(canary),
-        authTokenOccurrences: count(process.env.DOCMOST_AUTH_TOKEN),
-        csrfTokenOccurrences: count(process.env.DOCMOST_CSRF_TOKEN),
-        extraSecretOccurrences: (process.env.DOCMOST_AUDIT_EXTRA_SECRETS ?? "")
-          .split(",")
-          .filter(Boolean)
-          .reduce((sum, secret) => sum + count(secret), 0),
-        error: appLogs.error ?? null,
+        source: nativeScan ? "native" : "docker",
+        ...appLogScan,
       },
       null,
       2,
     )}\n`,
   );
-  if (
-    count(canary) > 0 ||
-    count(process.env.DOCMOST_AUTH_TOKEN) > 0 ||
-    count(process.env.DOCMOST_CSRF_TOKEN) > 0 ||
-    (process.env.DOCMOST_AUDIT_EXTRA_SECRETS ?? "")
-      .split(",")
-      .filter(Boolean)
-      .some((secret) => count(secret) > 0)
-  ) {
+  if (!appLogScan.passed) {
+    console.error(
+      `Application log secret scan failed: ${appLogScan.reason ?? "secret-match"}`,
+    );
     exitCode = 1;
   }
   if (mockStarted) {

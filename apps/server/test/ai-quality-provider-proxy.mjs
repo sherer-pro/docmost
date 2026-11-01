@@ -12,6 +12,7 @@ export async function createQualityProviderProxy({
   isolated,
   onCapture = async () => {},
   timeoutMs = 660000,
+  upstreamGatewayToken,
 }) {
   assert.equal(
     isolated,
@@ -32,6 +33,12 @@ export async function createQualityProviderProxy({
   assert(
     typeof model === 'string' && model.length > 0 && model.length <= 256,
     'A fixed model is required',
+  );
+  assert(
+    upstreamGatewayToken === undefined ||
+      (typeof upstreamGatewayToken === 'string' &&
+        /^[A-Za-z0-9_-]{32,128}$/.test(upstreamGatewayToken)),
+    'Invalid synthetic upstream gateway token',
   );
   const token = randomBytes(32).toString('hex');
   let caseId = 'probe';
@@ -103,6 +110,18 @@ export async function createQualityProviderProxy({
           );
       }
       const label = caseId;
+      if (
+        chat &&
+        [token, upstreamGatewayToken].some(
+          (secret) =>
+            secret !== undefined && JSON.stringify(parsed).includes(secret),
+        )
+      )
+        return reply(
+          response,
+          400,
+          'Transport credentials are not accepted in inference data',
+        );
       const controller = new AbortController();
       controllers.add(controller);
       request.once('aborted', () => controller.abort());
@@ -142,6 +161,9 @@ export async function createQualityProviderProxy({
           headers: {
             accept: 'application/json, text/event-stream',
             ...(chat ? { 'content-type': 'application/json' } : {}),
+            ...(upstreamGatewayToken === undefined
+              ? {}
+              : { 'x-docmost-quality-gateway-token': upstreamGatewayToken }),
           },
           ...(chat ? { body } : {}),
           signal: AbortSignal.any([

@@ -900,6 +900,36 @@ test("rejects dependency acceptance without the real runtime fixture", () => {
   );
 });
 
+test("rejects security verification without the AI harness safeguards", () => {
+  const mutatedPackage = structuredClone(packageJson);
+  mutatedPackage.scripts["test:security"] = mutatedPackage.scripts[
+    "test:security"
+  ].replace("corepack pnpm run test:security:ai-harness", "removed-ai-harness");
+  assert.ok(
+    validateReleaseGateContract(inputs({ packageJson: mutatedPackage })).includes(
+      "test:security must include corepack pnpm run test:security:ai-harness",
+    ),
+  );
+});
+
+for (const fixture of [
+  "scripts/ai-application-log-scan.test.mjs",
+  "apps/server/test/ai-quality-cloud-gateway.test.mjs",
+  "apps/server/test/ai-quality-provider-proxy.test.mjs",
+]) {
+  test(`rejects AI harness security verification without ${fixture}`, () => {
+    const mutatedPackage = structuredClone(packageJson);
+    mutatedPackage.scripts["test:security:ai-harness"] = mutatedPackage.scripts[
+      "test:security:ai-harness"
+    ].replace(fixture, "removed-fixture.mjs");
+    assert.ok(
+      validateReleaseGateContract(inputs({ packageJson: mutatedPackage })).includes(
+        `test:security:ai-harness must include ${fixture}`,
+      ),
+    );
+  });
+}
+
 test("rejects a fork documentation gate without its contract tests", () => {
   const mutatedPackage = structuredClone(packageJson);
   mutatedPackage.scripts["check:fork-docs"] = mutatedPackage.scripts[

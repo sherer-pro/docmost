@@ -15,6 +15,11 @@ import {
 import path from 'node:path';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
 import {
+  applicationAuditMode,
+  applicationLogErrorSummary,
+  createApplicationLogCapture,
+} from '../../../scripts/ai-application-log-scan.mjs';
+import {
   databaseQualityConfiguration,
   runDatabaseQuality,
   artifactHash,
@@ -31,20 +36,13 @@ const require = createRequire(path.join(repo, 'apps/server/package.json'));
 const postgres = require('postgres');
 const quality = databaseQualityConfiguration();
 const release = process.argv.includes('--release');
-if (release && process.versions.node.split('.')[0] !== '22')
+const auditMode = applicationAuditMode(process.argv.slice(2));
+const aiBrowserOnly = auditMode === 'ai-browser-only';
+if (auditMode && process.versions.node.split('.')[0] !== '22')
   throw new Error('Isolated release acceptance requires Node 22');
-if (release && quality)
+if (auditMode && quality)
   throw new Error(
     'Release acceptance and real-model quality capture use separate runtimes',
-  );
-if (
-  release &&
-  process.argv.slice(2).some(
-    (arg) => arg !== '--release' && !arg.startsWith('--subnet='),
-  )
-)
-  throw new Error(
-    'Full release acceptance accepts only --release and an optional isolated --subnet',
   );
 const runId = randomUUID();
 const prefix = `docmost-tables-live-${runId.slice(0, 8)}`;
@@ -55,6 +53,7 @@ const output = path.join(
 );
 const cwd = path.join(output, 'runtime/apps/server');
 const children = [];
+const applicationLogs = createApplicationLogCapture();
 const containers = [];
 let connection;
 let networkCreated = false;
@@ -66,19 +65,21 @@ const report = {
   isolated: true,
   scope: quality
     ? `ai-${quality.scope}-quality`
-    : release
-      ? 'release'
-      : process.argv.includes('--templates-only')
-        ? 'targeted-templates'
-        : process.argv.includes('--postgres-only')
-          ? 'postgres'
-          : process.argv.includes('--advanced-only')
-            ? 'targeted-database-values'
-            : process.argv.includes('--api-only')
-              ? 'api'
-              : process.argv.includes('--startup-only')
-                ? 'startup'
-                : 'full',
+    : aiBrowserOnly
+      ? 'diagnostic-ai-browser'
+      : release
+        ? 'release'
+        : process.argv.includes('--templates-only')
+          ? 'targeted-templates'
+          : process.argv.includes('--postgres-only')
+            ? 'postgres'
+            : process.argv.includes('--advanced-only')
+              ? 'targeted-database-values'
+              : process.argv.includes('--api-only')
+                ? 'api'
+                : process.argv.includes('--startup-only')
+                  ? 'startup'
+                  : 'full',
   tests: [],
   cleanup: {},
 };
@@ -113,11 +114,13 @@ const start = (role, entry, env, args = []) => {
     },
   );
   let tail = '';
-  const capture = (data) => {
+  const capture = (data, stream) => {
+    if (role === 'api' || role === 'collaboration')
+      applicationLogs.append(role, data, stream);
     tail = (tail + scrub(data.toString())).slice(-16_000);
   };
-  child.stdout.on('data', capture);
-  child.stderr.on('data', capture);
+  child.stdout.on('data', (data) => capture(data, 'stdout'));
+  child.stderr.on('data', (data) => capture(data, 'stderr'));
   children.push({ role, child, tail: () => tail });
   return child;
 };
@@ -142,11 +145,14 @@ const wait = async (label, check, timeout = 120_000) => {
 await mkdir(cwd, { recursive: true });
 try {
   if (quality) {
+    if (process.env.DOCMOST_QUALITY_GATEWAY_TOKEN)
+      exactSecrets.add(process.env.DOCMOST_QUALITY_GATEWAY_TOKEN);
     const capturePath = path.join(output, 'quality-provider-requests.jsonl');
     await writeFile(capturePath, '');
     let captureWrites = Promise.resolve();
     providerCapture = await createQualityProviderProxy({
       upstream: quality.baseUrl,
+      upstreamGatewayToken: process.env.DOCMOST_QUALITY_GATEWAY_TOKEN,
       model: quality.model,
       isolated: true,
       onCapture: (record) => {
@@ -190,7 +196,7 @@ try {
     path.join(cwd, 'node_modules'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
-  if (quality || release) {
+  if (quality || auditMode) {
     const aliases = path.join(cwd, 'dist/node_modules/@docmost');
     await mkdir(aliases, { recursive: true });
     report.sharedArtifactSha256 = {};
@@ -342,7 +348,7 @@ try {
     COLLAB_URL: collabURL,
     COLLAB_INTERNAL_URL: collabURL,
     COLLAB_INTERNAL_SECRET: collabSecret,
-    COLLAB_SHOW_STATS: release ? 'true' : 'false',
+    COLLAB_SHOW_STATS: auditMode ? 'true' : 'false',
     AUTH_RATE_LIMIT_STORAGE: 'redis',
     DATABASE_MIGRATION_MODE: 'auto',
     MAIL_DRIVER: 'log',
@@ -359,14 +365,14 @@ try {
       `http://127.0.0.1:${modelPort}`,
       quality?.origin,
       providerCapture?.origin,
-      release ? 'http://127.0.0.1:1080' : null,
+      auditMode ? 'http://127.0.0.1:1080' : null,
     ]
       .filter(Boolean)
       .join(','),
-    AI_RETRIEVAL_ALLOWED_ORIGINS: release
+    AI_RETRIEVAL_ALLOWED_ORIGINS: auditMode
       ? 'http://127.0.0.1:1080'
-      : staleIndex?.origin ?? '',
-    ...(release ? { DRAWIO_URL: 'https://embed.diagrams.net' } : {}),
+      : (staleIndex?.origin ?? ''),
+    ...(auditMode ? { DRAWIO_URL: 'https://embed.diagrams.net' } : {}),
     PAGE_TEMPLATES_ENABLED: 'true',
     CLOUD: 'false',
     LOG_HTTP: 'false',
@@ -384,9 +390,14 @@ try {
   console.log(
     'Starting isolated API and collaboration with real PostgreSQL and Redis.',
   );
-  if (!quality && !release) {
-    env.INTEGRATION_PREVIEW_ALLOWED_ORIGINS = 'https://api.github.com,https://gitlab.com,https://api.figma.com';
-    qualityPreloadArgs = ['--require', path.join(repo, 'apps/server/test/integration-preview-fixture.cjs'), '--synthetic-integration-previews'];
+  if (!quality && !auditMode) {
+    env.INTEGRATION_PREVIEW_ALLOWED_ORIGINS =
+      'https://api.github.com,https://gitlab.com,https://api.figma.com';
+    qualityPreloadArgs = [
+      '--require',
+      path.join(repo, 'apps/server/test/integration-preview-fixture.cjs'),
+      '--synthetic-integration-previews',
+    ];
   }
   start(
     'ai-model',
@@ -428,6 +439,7 @@ try {
     passed: true,
   });
   if (
+    !aiBrowserOnly &&
     !process.argv.includes('--startup-only') &&
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&
@@ -468,14 +480,14 @@ try {
     !process.argv.includes('--postgres-only')
   ) {
     connection = postgres(env.DATABASE_URL, { max: 4, onnotice: () => {} });
-    const acceptance = release
+    const acceptance = auditMode
       ? (await import('./release-live-acceptance.mjs')).runReleaseAcceptance
       : quality
-      ? quality.scope === 'rag'
-        ? runRagQuality
-        : runDatabaseQuality
-      : (await import('./database-tables-live-acceptance.mjs'))
-          .runLiveAcceptance;
+        ? quality.scope === 'rag'
+          ? runRagQuality
+          : runDatabaseQuality
+        : (await import('./database-tables-live-acceptance.mjs'))
+            .runLiveAcceptance;
     await acceptance({
       config: quality,
       providerCapture,
@@ -487,6 +499,17 @@ try {
       report,
       output,
       exactSecrets,
+      auditMode,
+      scanApplicationLogs: (patterns) => {
+        for (const { value } of patterns) exactSecrets.add(value);
+        return applicationLogs.scan([
+          ...patterns,
+          ...[...exactSecrets].filter(Boolean).map((value, index) => ({
+            label: `root-secret-${index + 1}`,
+            value,
+          })),
+        ]);
+      },
     });
   }
   report.passed = quality ? null : true;
@@ -499,7 +522,8 @@ try {
     ?.tail()
     .split('\n')
     .filter((line) => /ERROR|TypeError|Error:|at .*user/i.test(line));
-  if (serverErrors?.length) console.error(serverErrors.slice(-14).join('\n'));
+  if (serverErrors?.length)
+    console.error(applicationLogErrorSummary(serverErrors.slice(-14), scrub));
   console.error(report.error);
   for (const child of children.filter((item) =>
     ['api', 'collaboration'].includes(item.role),
@@ -523,6 +547,8 @@ try {
     }
   }
   report.cleanup.processesStopped = true;
+  applicationLogs.dispose();
+  report.cleanup.applicationLogsDisposed = true;
   if (providerCapture) {
     try {
       await providerCapture.close();

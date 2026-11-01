@@ -4,9 +4,14 @@ import path from "node:path";
 
 const args = process.argv.slice(2);
 const apiOnly = args.some((arg) =>
-  ["--api-only", "--startup-only", "--postgres-only", "--ai-quality", "--release"].includes(
-    arg,
-  ),
+  [
+    "--api-only",
+    "--startup-only",
+    "--postgres-only",
+    "--ai-quality",
+    "--release",
+    "--ai-browser-only",
+  ].includes(arg),
 );
 // Each browser mutates its fixture through the real API and collaboration server.
 // A fresh runtime prevents one browser's saved state from seeding the next one.

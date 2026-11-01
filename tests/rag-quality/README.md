@@ -185,3 +185,60 @@ The schema acceptance test uses a dedicated local PostgreSQL database ending in
 and run `corepack pnpm --filter ./apps/server exec jest --config test/jest-e2e.json
 --runInBand test/rag-evidence-quality.e2e-spec.ts`. The test owns a unique schema
 and verifies defaults, constraints, evidence JSON and migration rollback.
+
+## Bounded cloud capture
+
+The optional test-only cloud driver uses the same built application, corpus,
+observer and evaluator. It changes the inference transport only; Docmost still
+executes the actual tools, ACL checks and unapproved proposals. Build first with
+Node 22 and the frozen lockfile, then supply an explicitly authorized credential
+file outside the repository:
+
+```powershell
+node apps/server/test/ai-quality-cloud-gateway.mjs --credential-file "D:\Private\anthropic-api.md" --output artifacts/cloud-quality --split holdout --scope all --budget-usd 20 --concurrency 1
+```
+
+The driver fixes `claude-sonnet-4-6` and the official Anthropic HTTPS origin. The
+API key stays in its memory. A separate random gateway token reaches only its
+own quality child through `DOCMOST_QUALITY_GATEWAY_TOKEN`; it is not a model
+message, command argument, configuration capture or deployment setting. The
+observer continues to discard the initiating request's authorization and other
+client headers. Only the explicit synthetic gateway header authenticates the
+local relay. JSON requests and successful JSON/SSE responses pass unchanged.
+Model-generated SQL, external URLs and filesystem operations are not executed
+by the relay.
+
+Admission reserves a conservative amount before sending a request and reconciles
+reported usage afterwards. Cancelled or missing-usage requests keep a conservative
+charge. The ledger records its text-only input bounds, structural allowance,
+pricing/cache assumptions and known versus uncertain usage; these estimates are
+not an independent statement of the provider's final invoice. There are no
+automatic model fallbacks or inference retries. A cap or authentication failure
+stops new admission. Keep the ledger, original captures and failed cases.
+
+Holdout mode requires both complete 80-case scopes and rejects partial selection.
+Use `--split tuning --scope database --quality-limit 2` only for connectivity;
+that diagnostic cannot replace full capture. The driver always leaves human
+review pending. A second provider on the already observed corpus is a regression
+comparison, not a new blind evaluation. An automatic CLI reviewer cannot set
+`review.human` or substitute for the application's provider path.
+
+Run `corepack pnpm test:security:ai-harness` without real credentials to exercise
+relay authentication, body/route restrictions, byte preservation, cancellation,
+budget accounting and native application-log scan guards against fake fixtures.
+
+## Native application-log audit
+
+`node apps/client/e2e/database/run-live.mjs --ai-browser-only` owns a diagnostic
+PostgreSQL/Redis/API/collaboration runtime and runs the existing AI browser suite.
+Only an optional `--subnet=10.x.x.0/28` may accompany this flag; it cannot be mixed
+with release, quality or browser subsets. The complete `--release` command keeps
+its original suite chain and also supplies the native log source.
+
+Raw API/collaboration logs remain in bounded memory. The authenticated loopback
+service returns only scan labels, counts, byte totals and completeness. Its
+`DOCMOST_AI_APPLICATION_LOG_SCAN_URL` and `DOCMOST_AI_APPLICATION_LOG_SCAN_TOKEN`
+exist only in the owned child environment. Empty, unavailable, truncated or
+inconsistent native sources fail the audit. Docker-based standalone audits keep
+their container source. Artifact scans remain separate from application-log
+scans; a clean artifact report cannot stand in for missing application logs.

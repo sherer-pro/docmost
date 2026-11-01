@@ -19,6 +19,7 @@
         "src/**/*.spec.tsx"
       ],
       "project": ["src/**/*.ts", "src/**/*.tsx"],
+      "ignoreBinaries": ["taskkill"],
       "ignoreDependencies": ["pino-pretty"]
     },
     "apps/client": {

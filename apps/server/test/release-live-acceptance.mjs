@@ -9,6 +9,10 @@ import { createInterface } from 'node:readline';
 import { finished } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
+import {
+  applicationAuditCommand,
+  createApplicationLogScanService,
+} from '../../../scripts/ai-application-log-scan.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
 
 const repo = path.resolve(import.meta.dirname, '../../..');
@@ -20,7 +24,15 @@ export async function runReleaseAcceptance({
   report,
   output,
   exactSecrets,
+  scanApplicationLogs,
+  auditMode = 'release',
 }) {
+  const command = applicationAuditCommand(auditMode);
+  assert.equal(
+    typeof scanApplicationLogs,
+    'function',
+    'Native application log scan callback is required',
+  );
   assert.equal(
     process.versions.node.split('.')[0],
     '22',
@@ -64,7 +76,10 @@ export async function runReleaseAcceptance({
     await api.dispose();
   }
 
-  const auditRoot = path.join(output, 'release');
+  const auditRoot = path.join(
+    output,
+    auditMode === 'release' ? 'release' : 'ai-browser-diagnostic',
+  );
   await mkdir(auditRoot, { recursive: true });
   const env = Object.fromEntries(
     [
@@ -120,58 +135,77 @@ export async function runReleaseAcceptance({
   const sourceRevision = (
     await exec('git', ['rev-parse', 'HEAD'], { cwd: repo, windowsHide: true })
   ).stdout.trim();
-  report.release = {
-    command: 'corepack pnpm verify:release',
+  const auditRecord = {
+    command,
+    fullRelease: auditMode === 'release',
     sourceRevision,
     node: process.version,
     startedAt: new Date().toISOString(),
     credentialsPersisted: false,
     auditRoot: path.relative(repo, auditRoot),
   };
-  const log = createWriteStream(path.join(output, 'verify-release.log'), {
-    flags: 'wx',
+  report[auditMode === 'release' ? 'release' : 'aiBrowserDiagnostic'] =
+    auditRecord;
+  const scanService = await createApplicationLogScanService({
+    scan: scanApplicationLogs,
   });
-  const logFinished = finished(log);
-  const child = spawn(
-    process.platform === 'win32'
-      ? (env.ComSpec ?? env.COMSPEC ?? 'cmd.exe')
-      : 'corepack',
-    process.platform === 'win32'
-      ? ['/d', '/s', '/c', 'corepack pnpm verify:release']
-      : ['pnpm', 'verify:release'],
-    { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  const relay = async (stream) => {
-    for await (const line of createInterface({
-      input: stream,
-      crlfDelay: Infinity,
-    })) {
-      let safe = line;
-      for (const secret of exactSecrets)
-        safe = safe.replaceAll(secret, '[REDACTED]');
-      safe = `${sanitizeLogText(safe)}\n`;
-      if (!log.write(safe)) await once(log, 'drain');
-      process.stdout.write(safe);
-    }
-  };
-  const streams = Promise.all([relay(child.stdout), relay(child.stderr)]);
-  let code;
+  exactSecrets.add(scanService.token);
+  env.DOCMOST_AI_APPLICATION_LOG_SCAN_URL = scanService.url;
+  env.DOCMOST_AI_APPLICATION_LOG_SCAN_TOKEN = scanService.token;
   try {
-    [code] = await once(child, 'exit');
+    const log = createWriteStream(path.join(output, 'verify-release.log'), {
+      flags: 'wx',
+    });
+    const logFinished = finished(log);
+    const child = spawn(
+      process.platform === 'win32'
+        ? (env.ComSpec ?? env.COMSPEC ?? 'cmd.exe')
+        : 'corepack',
+      process.platform === 'win32'
+        ? ['/d', '/s', '/c', command]
+        : ['pnpm', auditMode === 'release' ? 'verify:release' : 'test:ai:e2e'],
+      { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const relay = async (stream) => {
+      for await (const line of createInterface({
+        input: stream,
+        crlfDelay: Infinity,
+      })) {
+        let safe = line;
+        for (const secret of exactSecrets)
+          safe = safe.replaceAll(secret, '[REDACTED]');
+        safe = `${sanitizeLogText(safe)}\n`;
+        if (!log.write(safe)) await once(log, 'drain');
+        process.stdout.write(safe);
+      }
+    };
+    const streams = Promise.all([relay(child.stdout), relay(child.stderr)]);
+    let code;
+    try {
+      [code] = await once(child, 'exit');
+    } finally {
+      await streams;
+      log.end();
+      await logFinished;
+      auditRecord.finishedAt = new Date().toISOString();
+      auditRecord.exitCode = code ?? 1;
+    }
+    report.tests.push({
+      name:
+        auditMode === 'release'
+          ? 'Full isolated verify:release'
+          : 'Isolated AI browser diagnostic',
+      passed: code === 0,
+    });
+    assert.equal(
+      code,
+      0,
+      auditMode === 'release'
+        ? 'Full isolated verify:release failed; inspect its sanitized log and audit receipts'
+        : 'Isolated AI browser diagnostic failed; inspect its sanitized log and audit receipts',
+    );
   } finally {
-    await streams;
-    log.end();
-    await logFinished;
-    report.release.finishedAt = new Date().toISOString();
-    report.release.exitCode = code ?? 1;
+    await scanService.close();
+    report.cleanup.applicationLogScanServiceClosed = true;
   }
-  report.tests.push({
-    name: 'Full isolated verify:release',
-    passed: code === 0,
-  });
-  assert.equal(
-    code,
-    0,
-    'Full isolated verify:release failed; inspect its sanitized log and audit receipts',
-  );
 }

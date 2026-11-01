@@ -172,10 +172,17 @@ const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
   ],
   "test:security": [
     "corepack pnpm run test:security:dependencies",
+    "corepack pnpm run test:security:ai-harness",
     "node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs",
   ],
   "test:security:dependencies": [
     "node --import tsx --test --test-timeout=15000 scripts/security-dependencies.test.mjs",
+  ],
+  "test:security:ai-harness": [
+    "node --test",
+    "scripts/ai-application-log-scan.test.mjs",
+    "apps/server/test/ai-quality-cloud-gateway.test.mjs",
+    "apps/server/test/ai-quality-provider-proxy.test.mjs",
   ],
 };
 
