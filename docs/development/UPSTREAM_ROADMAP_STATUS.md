@@ -1,23 +1,129 @@
 # Upstream roadmap implementation checkpoint
 
-Date: 2026-11-01. The feature packages for stages 1–4 are implemented locally;
-final acceptance is still in progress. Push and deployment are explicitly on
-hold. The focus correction `f4e0b5e5` passes complete application acceptance in
-Chromium, Firefox and WebKit, including the two original WebKit failures. The
-expanded final release gate passes on `f537999c`, including the corrected native
-application-log source. The earlier `017f5a0d` run did not actually read those
-logs and retains that explicit coverage limit.
-Earlier accepted candidates retain their actual revision boundaries below.
-Human-reviewed model quality remains pending. Both Gemma 12B and the
-operator-approved Gemma 26B fail the database accuracy target: 71/80 and 53/80,
-respectively. Claude Sonnet 4.6 completes all 160 cases and reaches 73/80 on the
-same frozen database gate. Original captures and unaccepted reports are retained.
-Human answer review and strict model acceptance remain unfinished. Stages 1–4 are not
-yet complete. Remote CI for the new commits is on hold with push.
+Date: 2026-11-02. The feature packages for stages 1–4 are implemented locally.
+The complete software `verify:release` on frozen production code `fe7100a3`
+passed with exit 0. The separate test-data package `316a9a3f` preserves v5 and
+clarifies twenty ACL questions in corpus v6; it changes no production source.
+Its complete DB80 + RAG80 capture is closed and its automated technical metrics
+pass. Push, remote CI, image publication and deployment remain on hold.
+
+Human-reviewed model quality remains pending: all 160 records are unreviewed,
+so the official report retains `measured=false` and `accepted=false`.
+The retained v5 results remain Gemma 12B 71/80, Gemma 26B 53/80 and Sonnet 4.6
+73/80, with two later Sonnet v5 controls at 9/10. V6 passes its ten-case control
+and 80/80 database traces without changing expected rows, scorer or thresholds.
+No old score is relabeled, and this observed synthetic comparison is not a new
+blind holdout. The implementation and automated checks are complete; human
+answer-quality acceptance is outstanding.
 
 ## Current acceptance state
 
-### Latest complete release on the corrected runner
+### Current source fixes and completed automated gates
+
+`05110521` makes frozen selection facts explicit and separates live ACL/AI
+visibility from business filters, with one server aggregate per intended whole
+selection. `1156b7ed` commits the Firefox reference-content focus boundary and
+its diagnostics. `fe7100a3` adds the generic ambiguity default policy and guide
+v44: linguistic similarity alone does not select a business option; an explicit
+current view retains frozen conditions when business intent is unclear, while
+unambiguous natural-language status/date criteria remain supported. Without an
+explicit current view, ambiguous criteria require clarification. These model
+instructions add no ACL guard and do not guarantee answer accuracy. See the
+[independent AI review](D:/DevProjects/docmost/artifacts/roadmap-ai44-fe7100a3-independent-review.json)
+and [production freeze](D:/DevProjects/docmost/artifacts/ai-db-selection-source-freeze-fe7100a3.json).
+
+The later Firefox diagnosis identifies host-editor focus restoration after a
+native drag inside read-only reference content: the nested content had no
+focusable boundary, and the host ProseMirror focus handler could restore its own
+cursor. `tabIndex={-1}` keeps native focus within the reference content without
+adding it to sequential Tab navigation. In the frozen same-driver pair, each
+variant has 12 gestures and 12 complete native selections; baseline focus goes
+to the host 12/12 and passes zero keyboard-boundary checks, while the fix focuses
+the reference 12/12 and passes all 12 keyboard-boundary checks. This pair does
+not claim twelve reproduced selection collapses. A separate rebuilt native
+Firefox synced-blocks candidate passes its one case with zero actual retries;
+the configured retry budget, assertions and timeouts are unchanged. The original
+flaky release evidence is preserved. These targeted results do not replace the
+current full release. See the [frozen regression](D:/DevProjects/docmost/artifacts/roadmap-firefox-focus-boundary-regression-receipt.json)
+and [native candidate receipt](D:/DevProjects/docmost/artifacts/roadmap-firefox-focus-candidate-native-receipt.json).
+
+`316a9a3f` versions the benchmark separately from production code. Corpus v6
+changes only version metadata and twenty approved access-question strings
+(12 tuning, 8 holdout), explicitly requesting current-view ACL/AI-allowed rows
+without changing view conditions. All fixtures, contexts, expectations, RAG
+questions, scorer, thresholds and human criteria remain unchanged. The exact v5
+archive and all original failed results remain retained; wording ambiguity is a
+known v5 limitation, not a scoring exception. See the [versioned-corpus freeze](D:/DevProjects/docmost/artifacts/ai-quality-v6-source-freeze-316a9a3f.json),
+[v5 provenance](D:/DevProjects/docmost/tests/rag-quality/corpus-v5.provenance.json)
+and [benchmark contract](D:/DevProjects/docmost/tests/rag-quality/README.md).
+Both retained v5 controls remain 9/10: [05110521](D:/DevProjects/docmost/artifacts/roadmap-release-checkout/artifacts/cloud-sonnet46-tuning10-05110521/result.json)
+and [fe7100a3](D:/DevProjects/docmost/artifacts/roadmap-release-checkout/artifacts/cloud-sonnet46-tuning10-fe7100a3/result.json).
+
+The v6 control completes 10/10 with successful cleanup, zero remaining active
+reservations or in-flight requests and a conservative charge of USD 0.565089.
+It is a tuning control, not complete model acceptance. The current permanent
+AI-harness gate passes 62/62, release guards pass 117/117, and maintenance remains
+397 Knip findings and 16 duplicate blocks. Evidence: [calibration](D:/DevProjects/docmost/artifacts/ai-quality-v6-calibration-316a9a3f.json),
+[harness log](D:/DevProjects/docmost/artifacts/roadmap-v6-316a9a3f-ai-harness.log),
+[guard log](D:/DevProjects/docmost/artifacts/roadmap-v6-316a9a3f-guards.log) and
+[maintenance log](D:/DevProjects/docmost/artifacts/roadmap-v6-316a9a3f-maintenance.log).
+
+<!-- ROADMAP_VERIFIED_SOFTWARE_FE7100A3 -->
+The complete isolated `verify:release` on `fe7100a3`/v5 passed, actual exit 0.
+It covered 31 PostgreSQL checks, 2544 backend tests, 945 client tests, 1048 server
+and 82 client security tests, 157 editor-extension and 227 RAG-contract tests;
+18 PWA, 27 focus, 28 AI browser cases, Agent 18 runs/54 steps and 14 AI-context
+cases also passed. The full editor matrix has 65 passed, two existing Firefox
+TOC skips, zero retries, zero flaky results and zero failed attempts. The
+Firefox synced-blocks case passed on its first attempt (42.292 s).
+
+Ten downloaded export artifacts passed content checks; four non-blocking PDF
+FontBBox warnings and 45 lint warnings remain recorded. The native AI-finalizer
+app-log scan covered 33024 bytes completely with all 34 secret counters zero;
+its snapshot scope is explicit in the receipt. All five owned cleanup flags are
+true, and external container/network/volume/process/listener checks are empty.
+Strict AI-guide changes were separately checked on their actual adjacent source
+versions 42→43 and 43→44. The inner release runner performs structural guide
+validation because it does not forward the diff variables; a direct aggregate
+42→44 check remains rejected by the existing exact-one-increment rule.
+[Immutable release receipt](D:/DevProjects/docmost/artifacts/roadmap-verify-release-fe7100a3-quiet-receipt.json) and
+[complete log](D:/DevProjects/docmost/artifacts/roadmap-verify-release-fe7100a3-quiet.log).
+The later data-only package adds its separately verified 62-test harness and
+117 release guards; it does not relabel the software run.
+
+<!-- ROADMAP_VERIFIED_QUALITY_V6_316A9A3F -->
+The complete v6 capture closed with actual exit 0: 80 database and 80 RAG cases,
+160 unique IDs. The unchanged scorer gives database accuracy 1.0; evidence
+recall and citation validity are 1.0, with zero forbidden evidence or answers.
+Combined preparation P95 is 335 ms. Independent database review recomputed all
+80 traces, exact ACL memberships and eight cancelled, unapproved proposals.
+The official evaluator exits 1 because all 160 human refusal annotations are
+missing; factual support is unmeasured, human review is zero, and acceptance
+remains false. This is a completed technical capture, not human quality approval.
+[Finalization receipt](D:/DevProjects/docmost/artifacts/ai-holdout-sonnet46-v6-316a9a3f-finalization-receipt.json), [official unreviewed report](D:/DevProjects/docmost/artifacts/ai-holdout-sonnet46-v6-316a9a3f-unreviewed-report.json),
+[offline human-review packet](D:/DevProjects/docmost/artifacts/ai-holdout-sonnet46-v6-316a9a3f-review.html) and [independent DB review](D:/DevProjects/docmost/artifacts/ai-quality-v6-db80-independent-review-316a9a3f.json).
+The [independent full160 review](D:/DevProjects/docmost/artifacts/ai-quality-v6-full160-independent-review-316a9a3f.json) verified 240/240 exact delivered reference texts and markers, 110/110 citations, unchanged source/artifacts and accounting. It adds no human annotations.
+
+<!-- ROADMAP_VERIFIED_FULL_COST_AND_CLEANUP -->
+The full v6 capture has a conservative charge of USD 4.434195. The cumulative
+estimate including all earlier attempts is USD 10.343064 within USD 20:
+USD 10.231008 estimated from reported usage plus the historical unknown-usage
+reserve of USD 0.112056, retained exactly once. The vendor invoice was not
+verified. Both gateways and children are closed, active reservations and
+inflight requests are zero, and both model runtimes report all five cleanup
+flags true. [External owned-resource verification](D:/DevProjects/docmost/artifacts/ai-quality-v6-external-cleanup-316a9a3f.json) found no remaining
+owned containers, networks, volumes or application listeners. No user process
+or VPN was controlled, and the user's ffmpeg auto-resume was not changed.
+
+<!-- ROADMAP_VERIFIED_LOCAL_COMMIT_COUNT -->
+The final documentation checkpoint brings local `main` to 51 commits and
+471 changed files since `8960cc61`; the [current review index](D:/DevProjects/docmost/artifacts/roadmap-session-change-index.json)
+is regenerated after that commit. The file total includes the preserved v5
+fixture archive. Four pre-existing database working-tree paths remain unstaged
+and byte-for-byte preserved. No push, remote CI, image publication or deployment
+was performed.
+
+### Previous complete release on the corrected runner (f537999c)
 
 `roadmap-verify-release-f537999c.log` records the complete isolated release pass
 in runtime `2026-11-01T16-57-37-999Z`, with Node 22.23.4 and the unchanged
@@ -38,8 +144,10 @@ The flaky Firefox synced-block test reads an empty native mouse selection on
 its first attempt at `synced-blocks.spec.ts:562:60`; both earlier clipboard
 checks pass. Its original trace, screenshot and video remain retained, and
 `roadmap-firefox-synced-blocks-f537999c-diagnosis.md` records the evidence.
-The root cause is unconfirmed. No source, timeout, assertion or retry policy is
-changed to obtain the passing retry. This run is not reported as retry-free.
+The root cause was unconfirmed at that checkpoint; the subsequent focused
+mechanism and correction are recorded above. No timeout, assertion or retry
+policy was changed to obtain its passing retry. This original run is not
+reported as retry-free.
 
 ### Previous release and native log correction
 
@@ -892,22 +1000,19 @@ pending as listed below.
 
 ## Remaining required work
 
-- Obtain an acceptable model result and actual human evidence/refusal
-  annotations. The complete 12B captures and combined automated score are
-  retained; 12B passes only 71/80 database traces. The approved 26B comparison
-  passes only 53/80 with no inference-pipeline or scoring change. Its separate
-  RAG capture and combined 160-case score are complete; no human annotation has
-  been supplied. Neither configuration passes the quality gate.
-  An alternative provider/model was requested; the original provider still
-  fails normal TLS verification. Existing questions are a regression corpus,
-  and neither result establishes independent or cross-family generalization.
-- Complete the expanded final release gate on the new header and cell focus
-  correction. All three current full application/browser matrices and the
-  deterministic 27-case matrix pass. Earlier release passes retain their actual
-  candidate boundaries and are not relabeled as verification of later source
-  changes.
-- Reconcile final receipts and prepare the requested session change list. The
-  applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
+- Close the current full software release on frozen `fe7100a3` and retain its
+  actual counts, artifacts, source boundary and cleanup. It is pending; earlier
+  release and targeted Firefox passes do not substitute for it.
+- Complete the separate v6 160-case capture, evaluate all DB80 and RAG80 against
+  its exact recorded corpus bytes, and retain the original v5 results unchanged.
+  The v6 10/10 control does not replace the complete gate. Reconcile final cost,
+  usage uncertainty and owned-resource cleanup only after closure.
+- Obtain actual human evidence, factual-claim and refusal annotations. Human
+  validation is zero; completed automated reports remain unmeasured/unaccepted.
+  The known v5 results (12B 71/80, 26B 53/80, Sonnet 73/80 and two 9/10 controls)
+  are not relabeled, and v6 is not independent blind or cross-family evidence.
+- Reconcile final receipts, the local commit count and the session change list.
+  The applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
   retain its actual evidence boundaries and keep stack upgrades separate.
 
 Push, remote CI for the new commits, image publication and deployment are a
