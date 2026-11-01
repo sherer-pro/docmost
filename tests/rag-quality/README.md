@@ -71,6 +71,11 @@ The default provider is the operator-selected LM Studio endpoint above. The
 runner accepts only unauthenticated HTTP loopback origins, creates synthetic
 actors and databases, enforces row ACLs and inherited AI exclusions, and records
 actual `ai_run_steps` plus safe run snapshots. Proposals remain unapproved.
+After durably capturing each proposal and its trace, the runner cancels that
+synthetic run and records the cancellation separately in
+`quality-proposal-cleanup.jsonl`. The captured answer and proposal keep their
+original status. This releases the separate pending-proposal admission quota;
+it does not change production concurrency limits or approve model writes.
 Read cases also enumerate the initiating user's private result link and compare
 the complete observed row-ID set with the oracle. A coincidental correct number,
 partial enumeration or duplicate row fails. `database_nl_done` and

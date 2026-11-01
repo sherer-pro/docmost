@@ -522,6 +522,23 @@ export async function runDatabaseQuality({
       console.log(
         `Quality ${question.id}: ${run.status}, database trace ${record.databaseTraceCorrect ? 'correct' : 'incorrect'}, ${record.totalMs} ms`,
       );
+      if (run.status === 'awaiting_approval') {
+        const cancelled = await api(
+          writer,
+          `/ai/runs/${run.id}/actions/cancel`,
+          'POST',
+          {},
+        );
+        assert.equal(cancelled.status, 'cancelled');
+        await appendFile(
+          path.join(output, 'quality-proposal-cleanup.jsonl'),
+          `${JSON.stringify({
+            id: question.id,
+            runId: run.id,
+            status: cancelled.status,
+          })}\n`,
+        );
+      }
       if (
         !['completed', 'failed', 'cancelled', 'awaiting_approval'].includes(
           run.status,

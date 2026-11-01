@@ -2,13 +2,67 @@
 
 Date: 2026-11-01. The user resumed implementation of all remaining work in
 stages 1–4. Push and deployment are explicitly on hold. The complete release
-gate passed on `a0f360fe`; its later full WebKit database run exposed a deferred
-checkbox-event defect. That fix now has targeted acceptance, but the corrected
-candidate still requires full WebKit/release acceptance and human-reviewed model
-quality. Stages 1–4 are not yet complete. Remote CI for new commits is on hold
-with push.
+gate passed on `a0f360fe`; later full WebKit runs exposed two UI races, corrected
+in `bff6ec5b` and `d259a0db`. The latter now passes complete WebKit and release
+acceptance; human-reviewed model quality and the remaining final Chromium/Firefox
+database runs are pending. Stages 1–4 are not yet complete. Remote CI for new
+commits is on hold with push.
 
 ## Current acceptance state
+
+`roadmap-final-webkit-d259a0db.log` completed with all 48 browser cases passing,
+no skips, no failures and no retries. The fresh runtime
+`2026-11-01T05-08-16-016Z` also passed all 31 PostgreSQL cases and 33 HTTP groups.
+Processes, containers and temporary runtime files were removed. Both deletion
+cases retained 580 rendered cells before and after confirmation; destination
+readiness took 3575 and 3563 ms from confirmation, below the unchanged 5000 ms
+limit. The six-second undo grace is unchanged.
+
+The unchanged complete `verify:release` passed with exit code zero on this same
+corrected candidate in runtime `2026-11-01T05-18-11-846Z`, recorded by
+`roadmap-verify-release-d259a0db.log`. Its receipt names exact revision
+`d259a0dbe8c9e60764e4f2240639149d224f4bdd`, Node 22.23.4 and successful cleanup.
+It includes all 2540 server tests, 943 client tests, complete security and release
+contracts, 28 AI browser cases, Agent Docker acceptance, editor artifacts and
+AI context audit `01a195a5-0f75-7c77-82a4-ca4b9bb33bfd`.
+
+The editor result is 64 passed, two existing explicit skips and one flaky case
+that passed its configured retry. The first Firefox complex-document attempt
+showed the generic error page after Back navigation; the retained console has an
+error object without an explanatory message. Its cause is not established. The
+current lifecycle/connection-count case passed its first attempt. These facts
+do not erase the earlier, different `a0f360fe` navigation flake described below.
+No retry setting, assertion, timeout or production route was changed for either.
+
+The corrected database holdout in `2026-11-01T05-49-04-793Z`, recorded by
+`ai-database-holdout-d259a0db.log`, stopped after 58 of 80 questions. Fifty-three
+tool traces matched the oracle; five access cases did not. These original
+captures are retained unchanged and are not accepted as a complete holdout.
+The model used `google/gemma-4-12b-qat` at `http://127.0.0.1:1234/v1` with frozen
+inference settings. The next request returned the normal pending-proposal quota
+error after six synthetic proposals accumulated without a decision. This is
+the separate documented proposal quota, not a provider-slot leak. The harness
+now cancels each synthetic proposal after capturing its unchanged answer and
+tool trace, recording cancellation separately. Production admission limits,
+model settings, prompts and scoring are unchanged. A complete corrected-harness
+capture remains required.
+
+The harness repair passes Node 22 syntax validation, all ten quality-selection
+and benchmark contract tests, the AI/fork documentation contracts and the
+English-comment check. It changes no application source or inference settings.
+
+The separate RAG holdout completed all 80 questions in
+`2026-11-01T06-32-36-163Z`, recorded by `ai-rag-holdout-d259a0db.log`. The
+capture receipt has `captureComplete=true`, `passed=null` and successful cleanup.
+Its automated evidence recall and citation validity are both 1.0; forbidden
+evidence and forbidden control answers are both zero, and preparation p95 is
+2140 ms. `ai-rag-holdout-d259a0db-unreviewed-report.json` retains the evaluator
+output. Actual human review remains pending, so `measured` and `accepted` remain
+false. The two remaining complete database browser passes will use this same
+application code after model capture, to avoid concurrent heavy work during
+measurements; earlier Chromium/Firefox receipts are not relabeled as this revision.
+
+### Earlier candidate findings
 
 The subsequent `bff6ec5b` full WebKit run also passed PostgreSQL, all HTTP groups
 and 47 browser cases, including both corrected deletion cases. Its one failure
@@ -414,18 +468,17 @@ pending as listed below.
 
 ## Remaining required work
 
-- Complete measured natural-language filter and actual-transmission RAG quality
-  acceptance. The corpus and observation harness are implemented; full tuning,
-  holdout and human evidence review remain required. Tool traces alone are insufficient.
-- Check the applicability of the listed upstream fixes before changing the
-  corresponding fork paths. Redis URL/TLS and copied labels are confirmed and
-  corrected; Markdown export/reader fixes also have recorded acceptance.
-  Final draw.io/WebSocket/search receipts remain required.
-  See [the applicability checklist](../UPSTREAM_FIX_APPLICABILITY.md). Keep stack
-  upgrades separate.
-- Measure the real-model benchmark on fixed tuning/holdout settings and run the
-  remaining editor, Agent and AI-context browser matrices and release gates on
-  the final isolated production-like runtime.
+- Complete the database and RAG holdout captures on fixed settings, obtain
+  actual human evidence/refusal annotations and score the combined 160 cases.
+  The observed database selection mismatches remain failures. Tool traces alone
+  are insufficient, and neither fixture tests nor a successful capture process
+  establishes answer faithfulness.
+- Complete the remaining Chromium and Firefox database matrices on the final
+  application source. Full WebKit and the unchanged complete release gate already
+  passed on `d259a0db`, with the Firefox editor retry documented above.
+- Reconcile final receipts and prepare the requested session change list. The
+  applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
+  retain its actual evidence boundaries and keep stack upgrades separate.
 
 Push, remote CI for the new commits, image publication and deployment are a
 separate operational follow-up explicitly on hold. The current authorization is

@@ -166,6 +166,12 @@ Cells and views carry integer revisions. A new client sends `expectedRevision`; 
 
 TSV insertion preserves internal empty rows and cells. An oversized area is rejected before mutation and asks the user to load additional rows or reduce the area. It does not create rows automatically. Pending deletion retains the original database and its six-second undo window across component unmounts.
 
+Row selection captures checkbox values before scheduling React state updates.
+An Enter/Tab save moves to its next cell only while its original edit session
+remains current and focus has not moved to another cell. A late response cannot
+close a newer editor or replace that newer cell focus; ordinary Enter still
+advances to the next row after saving.
+
 Assignment notification dispatch is recorded in the existing transactional outbox. A failed cell transaction creates neither persisted values nor notification work. Migration `20261013T120000-database-revisions.ts` adds revision metadata and a read-only SQL value adapter without rewriting values. Apply it before running the updated server. Its rollback removes the adapter and revision metadata, not the new property values; an older application is therefore not a compatible downgrade after using new types.
 
 RAG and AI projection boundaries remain independent of view filters. See [AI and RAG](AI_ASSISTANT_AND_RAG.md#database-table-property-contract).
