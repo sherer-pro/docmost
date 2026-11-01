@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 43 -->
+<!-- ai-admin-guide-contract-version: 44 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -323,6 +323,22 @@ rows does not by itself request a status filter. A new business criterion must
 be explicitly requested by the user; preserve other business filters and the
 frozen row and group constraints when adding it. Explicitly selected rows are a
 selection constraint, not a substitute for current authorization.
+
+When an exclusion could refer either to ACL/AI visibility or to a business value,
+the default model policy is not to map ambiguous wording to a property option
+from linguistic similarity alone. With an explicitly selected current view and
+unclear business intent, preserve that view's frozen filters, selected rows and
+focused group without a `viewState` override. Report the result specifically as
+applying to that current view, state its actual conditions and the interpretation
+used, and offer to clarify the business restriction. Without an explicitly
+selected current view, clarify ambiguous criteria instead of assuming a view or
+new conditions. Unambiguous natural-language status or date criteria may still
+request the corresponding business change without literal field or option names;
+preserve all other selection constraints. This is a default interpretation policy,
+not a claim that ambiguous requests have a unique meaning. It adds no runtime
+guard and does not guarantee answer accuracy; existing live ACL/AI checks remain
+unchanged.
+
 For a focused group, the model is instructed to retain the current `groupBy`
 property in every `viewState` override. The override is still a complete view
 replacement: omitting `groupBy` does not automatically inherit the focused group.

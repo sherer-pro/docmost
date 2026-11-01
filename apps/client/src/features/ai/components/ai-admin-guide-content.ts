@@ -117,6 +117,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
       "step13",
       "step14",
       "step15",
+      "step16",
     ],
     profileIconCount: AI_ASSISTANT_PROFILE_ICONS.length,
   },

@@ -1,5 +1,5 @@
 {
-  "version": 43,
+  "version": 44,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,15 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "database-ambiguous-exclusion-default",
+      "key": "scenario.assistant.steps.step16",
+      "needles": [
+        "ACL",
+        "viewState",
+        "summarizeDatabaseView"
+      ]
+    },
     {
       "id": "database-visibility-and-full-selection-totals",
       "key": "scenario.assistant.steps.step15",
@@ -449,6 +458,7 @@
     "scenario.retrieval.steps.step6",
     "scenario.retrieval.steps.step7",
     "scenario.assistant.steps.step14",
-    "scenario.assistant.steps.step15"
+    "scenario.assistant.steps.step15",
+    "scenario.assistant.steps.step16"
   ]
 }
