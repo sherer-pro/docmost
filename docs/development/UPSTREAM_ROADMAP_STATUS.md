@@ -7,9 +7,10 @@ pending. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
 
-The local candidate is `818d0bb2`. Its application code is identical to
-`4fa57820`; the later commit establishes the tabs fixture's initial Read mode
-and records endpoint-only navigation timings without credentials or bodies.
+The application/test candidate is `818d0bb2`; `bb627042` adds only checkpoint
+documentation. Application code remains identical to `4fa57820`. The test commit
+establishes the tabs fixture's initial Read mode and records endpoint-only
+navigation timings without credentials or bodies.
 
 - `roadmap-final-firefox-attempt2.log` passed readiness, the complete 48-case
   browser suite, all 30 PostgreSQL cases and all 33 HTTP/export/import groups. Both deletion
@@ -47,11 +48,36 @@ and records endpoint-only navigation timings without credentials or bodies.
   the Agent Docker audit. That release attempt stopped at the Draw.io defects
   described below. The unchanged complete `verify:release` still must pass
   on the final candidate, including export-artifact verification.
+- `roadmap-verify-release-candidate-bb627042.log` passed the current build,
+  lint, all 291 backend suites / 2535 tests and all 195 frontend files / 943 tests.
+  It then stopped before the dependency protocol tests could register: their
+  original 15000 ms file startup limit expired under sustained concurrent load.
+  This is not a complete `verify:full` or `verify:release` pass. An isolated
+  repeat kept the same limit and passed all eight protocol tests in 10 seconds.
+  The separate complete `roadmap-security-candidate-bb627042.log` then passed
+  all eight protocol tests, three hostile-MCP cases, 86 server suites / 1044 tests
+  and seven client files / 82 tests. Every resource from the failed release
+  attempt was cleaned up.
+- `rag-evidence-quality-postgres-final.log` passed the real PostgreSQL migration
+  check in its owned schema: existing-configuration defaults, constrained
+  profiles, evidence JSON and retained answer content across rollback.
+- `roadmap-ai-docs-history-coupling.json` verifies all 13 consecutive version
+  transitions from v28 through v41, with canonical documentation, structured
+  guide, contract and all 12 locales updated in every package. The trailing
+  changes contain no uncoupled production AI logic. The single-update PR gate
+  correctly rejects treating the entire 13-update history as one version bump;
+  its original diagnostic output is retained, and the checker was not changed.
+- The current AST graph has 17723 nodes and 50565 edges. The approved shared
+  AgentMemory import admitted 5000 nodes and 9783 edges within its configured
+  cap. A repeated import added zero nodes and edges. The complete graph remains
+  local; no model extraction or service lifecycle change was performed.
 - Full database tuning captured 120 cases; the separate six-case diagnostic
   passed the two observed date failures and four controls. Full RAG tuning
   captured 120 answers; the separate eight-case diagnostic passed all six
   attachment misses and two controls after the indexing repair. Neither has
-  human annotations. The 160-case combined holdout remains unopened.
+  human annotations. Full database holdout capture has started on the frozen
+  candidate and model; its environment receipt records the concurrent load.
+  RAG holdout has not started, and neither holdout has quality acceptance.
 
 The model remains `google/gemma-4-12b-qat` at
 `http://127.0.0.1:1234/v1`, temperature 0, output limit 4096 tokens, configured
