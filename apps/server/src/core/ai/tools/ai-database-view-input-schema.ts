@@ -1,5 +1,8 @@
 import type { DatabaseFilterOperator } from '@docmost/api-contract';
 
+export const AI_DATABASE_SELECTION_GUIDANCE =
+  'The server independently enforces live page ACL and AI content exclusions on every read. These visibility rules are not business-property filters. A request to use only permitted or AI-eligible records does not itself request a status filter. Never infer access from property names or select options. Preserve the current business filters unless the user requests different record criteria. When a focused group is active, retain the current groupBy property in every viewState override so that the group remains selected. For a total over one intended selection, obtain one successful summarizeDatabaseView covering that entire selection. Do not construct that total by adding separately filtered summaries: they may overlap, omit other or empty values, or describe different snapshots.';
+
 const operators = [
   'contains',
   'not_contains',
@@ -50,7 +53,7 @@ const group = (items: unknown) => ({
 export const AI_DATABASE_VIEW_INPUT_SCHEMA = {
   type: 'object',
   description:
-    'Optional complete view override, not a patch. Omit it to preserve the frozen current view. To answer a different requested selection, set filter with conjunction and conditions using exact property IDs. Preserve current conditions that the user did not override. An empty conditions array removes all filters. Date criteria are supported. Use at most ten rules in total and one nested group level. Existing selected rows remain the authorization scope.',
+    'Optional complete business-view override, not a patch. Omit it to preserve the frozen current view. To answer different requested record criteria, set filter with conjunction and conditions using exact property IDs. Preserve current conditions that the user did not override. A focused group requires retaining the current groupBy property in this override. An empty conditions array removes all business filters. Date criteria are supported. Use at most ten rules in total and one nested group level. Existing selected rows remain a frozen selection constraint; live ACL and AI content rules are enforced separately. Do not add property conditions to represent those visibility rules.',
   additionalProperties: true,
   properties: {
     version: { type: 'integer', enum: [2, 3] },

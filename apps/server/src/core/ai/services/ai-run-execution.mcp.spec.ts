@@ -83,6 +83,7 @@ function buildService() {
 function instructionsFor(
   service: AiRunExecutionService,
   value: AiMcpRunSnapshot | null,
+  run: unknown = RUN,
 ): Promise<string> {
   return (
     service as never as {
@@ -91,7 +92,7 @@ function instructionsFor(
         snapshot: AiMcpRunSnapshot | null,
       ) => Promise<string>;
     }
-  ).buildAgentInstructions(RUN, value);
+  ).buildAgentInstructions(run, value);
 }
 
 describe('agent instructions with external MCP tools', () => {
@@ -163,6 +164,110 @@ describe('agent instructions with external MCP tools', () => {
     );
 
     expect(text).toContain('- mcp__tavily__*: line one line two');
+  });
+});
+
+describe('frozen database selection instructions', () => {
+  const databaseId = '11111111-1111-4111-8111-111111111111';
+  const propertyId = '22222222-2222-4222-8222-222222222222';
+  const rowId = '33333333-3333-4333-8333-333333333333';
+  const dateId = '44444444-4444-4444-8444-444444444444';
+
+  it('makes absent filters and independent selection constraints explicit', async () => {
+    const { service } = buildService();
+    const databaseContext = Object.freeze({
+      databaseId,
+      selectedPageIds: Object.freeze([]),
+    });
+    const before = JSON.stringify(databaseContext);
+    const text = await instructionsFor(service, null, {
+      pageId: 'page-1',
+      databaseContext,
+    });
+
+    expect(text).toContain('Business filters: none.');
+    expect(text).toContain('Explicit selected-row constraint: none.');
+    expect(text).toContain('Focused group constraint: none.');
+    expect(text).not.toContain('"filter":null');
+    expect(JSON.stringify(databaseContext)).toBe(before);
+  });
+
+  it('retains compound business criteria, selected rows and the focused group together', async () => {
+    const { service } = buildService();
+    const filter = {
+      conjunction: 'and',
+      conditions: [
+        { propertyId, operator: 'equals', value: 'reviewed' },
+        {
+          propertyId: dateId,
+          operator: 'between',
+          value: ['2026-09-01', '2026-09-30'],
+        },
+      ],
+    };
+    const databaseContext = {
+      databaseId,
+      selectedPageIds: [rowId],
+      viewState: {
+        filter,
+        groupBy: propertyId,
+        sorts: [{ propertyId: dateId, direction: 'asc' }],
+      },
+      groupKey: '"reviewed"',
+    };
+    const before = JSON.stringify(databaseContext);
+    const text = await instructionsFor(service, null, {
+      pageId: 'page-1',
+      databaseContext,
+    });
+
+    expect(text).toContain(`Business filters: ${JSON.stringify(filter)}.`);
+    expect(text).not.toContain('Business filters: none.');
+    expect(text).toContain(
+      `Explicit selected-row constraint: ${JSON.stringify([rowId])}.`,
+    );
+    expect(text).toContain(
+      `Focused group constraint: active (${JSON.stringify('"reviewed"')}).`,
+    );
+    expect(text).toContain(`"groupBy":"${propertyId}"`);
+    expect(text).toContain(
+      'retain the current groupBy property in every viewState override',
+    );
+    expect(text).toContain(
+      '"sorts":[{"propertyId":"' + dateId + '","direction":"asc"}]',
+    );
+    expect(JSON.stringify(databaseContext)).toBe(before);
+  });
+
+  it('keeps explicit row selection when no business filter exists', async () => {
+    const { service } = buildService();
+    const text = await instructionsFor(service, null, {
+      pageId: 'page-1',
+      databaseContext: { databaseId, selectedPageIds: [rowId] },
+    });
+
+    expect(text).toContain('Business filters: none.');
+    expect(text).toContain(
+      `Explicit selected-row constraint: ${JSON.stringify([rowId])}.`,
+    );
+    expect(text).not.toContain('Explicit selected-row constraint: none.');
+  });
+
+  it('identifies the empty-value group as active rather than ungrouped', async () => {
+    const { service } = buildService();
+    const text = await instructionsFor(service, null, {
+      pageId: 'page-1',
+      databaseContext: {
+        databaseId,
+        selectedPageIds: [],
+        viewState: { groupBy: propertyId },
+        groupKey: 'null',
+      },
+    });
+
+    expect(text).toContain('Business filters: none.');
+    expect(text).toContain('Focused group constraint: active ("null").');
+    expect(text).not.toContain('Focused group constraint: none.');
   });
 });
 

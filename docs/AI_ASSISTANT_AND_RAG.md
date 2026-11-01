@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 42 -->
+<!-- ai-admin-guide-contract-version: 43 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -313,11 +313,30 @@ row dependencies are retained; the run API and approval endpoints revalidate
 them before returning tool results or previews. Losing access produces
 `source_access_changed` instead of exposing an older result.
 
-Omitting the optional tool `viewState` uses the run's frozen filters,
-calculations and selected rows. Agent instructions prefer this form for a
-current-view question and require a failed query to be reported as an error,
-  never as a zero total. These are model instructions; server validation remains
-mandatory and answer faithfulness still requires evaluation.
+Omitting the optional tool `viewState` uses the run's frozen business filters,
+calculations, selected rows and focused group. The server-controlled Agent
+preamble explicitly states when there are no business filters, no explicit row
+selection or no focused group. These selection facts are separate from live
+visibility: row ACL and AI content exclusions are enforced by the server and
+do not derive from a business property's name or value. Asking for permitted
+rows does not by itself request a status filter. A new business criterion must
+be explicitly requested by the user; preserve other business filters and the
+frozen row and group constraints when adding it. Explicitly selected rows are a
+selection constraint, not a substitute for current authorization.
+For a focused group, the model is instructed to retain the current `groupBy`
+property in every `viewState` override. The override is still a complete view
+replacement: omitting `groupBy` does not automatically inherit the focused group.
+
+For one total over the intended complete selection, Agent is instructed to use
+one successful `summarizeDatabaseView` result covering that whole selection.
+Adding separately filtered partial summaries does not establish a complete
+total: they may overlap, omit other or empty values, or come from different
+snapshots. A successful result's `complete` flag describes its actual returned
+selection, not whether the model chose the user's intended conditions. A failed
+query must be reported as an error, never as a zero total. The server revalidates
+live source access before returning results and previews. These model
+instructions do not replace runtime ACL/AI-policy checks or guarantee answer
+accuracy; inspect the executed conditions, result and source evidence.
 
 The fixed Agent preamble treats document text and database cell values returned
 by built-in tools as untrusted source data. Embedded commands cannot authorize
@@ -948,12 +967,18 @@ One nested group level and at most ten rules in total are supported. Date
 comparisons use ISO `YYYY-MM-DD` strings; `is_empty` and `is_not_empty` do not
 require a value. Property IDs and select values come from `getDatabaseContext`.
 An explicit `viewState` replaces the current view rather than merging its filter;
-omitting it preserves the frozen view. Explicitly selected rows still constrain
-the result. For questions about how many records match, Agent is instructed to
-call `summarizeDatabaseView` and use its server-owned `count`, including when the
-user requests different date or status conditions. Reading a context snapshot or
-one page of rows is not a substitute. The existing compiler remains responsible
-for live ACL/AI policy, property types, identifiers and the combined rule budget.
+omitting it preserves the frozen view. An additional requested business condition
+must retain the other current filters and the `groupBy` property for a focused
+group; an explicit change to one condition does not clear unrelated conditions.
+The model must include that grouping property in the complete override.
+Explicitly selected rows still constrain the result. Permission qualifiers alone
+do not request a new or different business-status filter. For questions about how many
+records match, Agent is instructed to call `summarizeDatabaseView` for the whole
+intended selection and use its server-owned `count`, including when the user
+requests different date or status conditions. Reading a context snapshot, one
+page of rows or a sum of partial summaries is not a substitute. The existing
+compiler remains responsible for live ACL/AI policy, property types, identifiers
+and the combined rule budget.
 
 Open WebUI receives explicit `k=40` and `k_reranker=40` candidate limits; Docmost
 then selects eight final readable fragments by default. Keeping reranked

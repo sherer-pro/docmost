@@ -70,7 +70,10 @@ import {
   AiDatabaseService,
   AI_DATABASE_CALCULATIONS,
 } from '../services/ai-database.service';
-import { AI_DATABASE_VIEW_INPUT_SCHEMA } from './ai-database-view-input-schema';
+import {
+  AI_DATABASE_SELECTION_GUIDANCE,
+  AI_DATABASE_VIEW_INPUT_SCHEMA,
+} from './ai-database-view-input-schema';
 
 // Model steps and tool calls are budgeted per approval segment: an approved,
 // rejected, or expired write proposal starts a new segment. The run-level
@@ -567,8 +570,7 @@ export class AiToolRegistryService {
       },
       {
         name: 'getDatabaseContext',
-        description:
-          'Get curated metadata, schema properties, and compact view metadata for one readable database.',
+        description: `Get curated metadata, schema properties, and compact view metadata for one readable database. Schema properties and view names do not define the active selection. ${AI_DATABASE_SELECTION_GUIDANCE}`,
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -1061,8 +1063,8 @@ export class AiToolRegistryService {
     const tools: InternalAiToolDefinition[] = [false, true].map((summary) => ({
       name: summary ? 'summarizeDatabaseView' : 'queryDatabaseView',
       description: summary
-        ? 'Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Use this tool for how many, totals and date counts; read count as the number of matching rows. Omit viewState only when the requested selection matches the frozen current filters and selected rows. When the user requests different criteria, including dates or all statuses, supply the corresponding viewState.filter conditions. Get exact property IDs and select options from getDatabaseContext. For calculation overrides prefer calculations: [{propertyId, operation}]. This array replaces only calculations, preserving filters and sorting. Never sum a context snapshot or one page of rows.'
-        : 'Query typed database cells for records and their revisions. Use summarizeDatabaseView for counts and totals. Omit viewState to use the frozen current view and selected rows. For a different requested selection, supply viewState.filter conditions, including date criteria. Get exact property IDs and select options from getDatabaseContext. For calculation overrides prefer calculations: [{propertyId, operation}]. Results are paginated; hasMore means the selection is incomplete.',
+        ? `Compute counts and calculations on the complete filtered accessible AI-allowed database selection. Use this tool for how many, totals and date counts; read count as the number of matching rows. Omit viewState when the requested selection matches the frozen current filters and selected rows. For different requested business criteria, including dates or all statuses, supply the corresponding viewState.filter while preserving other current conditions. Get exact property IDs and select options from getDatabaseContext. For calculation overrides prefer calculations: [{propertyId, operation}]. This array replaces only calculations, preserving filters and sorting. Never sum a context snapshot or one page of rows. ${AI_DATABASE_SELECTION_GUIDANCE}`
+        : `Query typed database cells for records and their revisions. Use summarizeDatabaseView for counts and totals. Omit viewState to use the frozen current view and selected rows. For different requested business criteria, supply viewState.filter while preserving other current conditions. Get exact property IDs and select options from getDatabaseContext. For calculation overrides prefer calculations: [{propertyId, operation}]. Results are paginated; hasMore means the selection is incomplete. ${AI_DATABASE_SELECTION_GUIDANCE}`,
       inputSchema: {
         type: 'object',
         additionalProperties: false,
