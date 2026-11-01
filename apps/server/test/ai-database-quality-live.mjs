@@ -13,6 +13,7 @@ import {
   providerTextSegments,
   sourceWasTransmitted,
 } from './ai-quality-transmission.mjs';
+import { projectDatabaseRowEvidence } from './ai-quality-database-evidence.mjs';
 
 const option = (name, fallback) =>
   process.argv
@@ -374,9 +375,10 @@ export async function runDatabaseQuality({
         writer,
         `/ai/conversations/${conversation.id}/context`,
       );
-      const snapshot = fixtures.find(
+      const fixture = fixtures.find(
         (fixture) => fixture.databaseId === databaseId,
-      ).name;
+      );
+      const snapshot = fixture.name;
       const sent = await api(
         writer,
         `/ai/conversations/${conversation.id}/messages`,
@@ -482,7 +484,13 @@ export async function runDatabaseQuality({
         runId: run.id,
         status: run.status,
         candidates: [],
-        evidence,
+        evidence: projectDatabaseRowEvidence({
+          caseId: question.id,
+          evidence,
+          toolCalls,
+          providerRequests,
+          fixture,
+        }),
         citations: [
           ...new Set(
             [...answer.matchAll(/\[(S\d+)\]/g)].map((match) => match[1]),

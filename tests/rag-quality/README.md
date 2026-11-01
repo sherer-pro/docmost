@@ -94,6 +94,33 @@ bodies, and closes with its isolated runtime. It exposes no model-management
 endpoint and forwards inference only to the fixed selected model.
 Transport capture alone does not provide retrieval-candidate instrumentation,
 human claim review or combined RAG quality acceptance.
+
+Database-row citation IDs identify row entities, while the corpus identifies
+their pages. The database observer normalizes that identity only after finding
+the bound page and exact row payload in a completed scoped server read.
+Readability follows the immutable seeded ACL/AI-policy fixture; current values
+must match its complete property set. Transmission requires the exact observed
+row and its citation marker together in one captured tool-result message.
+It never fills row text from the oracle. Missing, altered, cross-case or
+non-transmitted payloads remain failed evidence. Verify the observation and
+offline replay guards with
+`node --test apps/server/test/ai-quality-database-evidence.test.mjs`.
+
+After an observation-only correction, existing captures can be projected
+without repeating inference:
+
+```text
+node apps/server/test/reproject-ai-database-evidence.mjs CORPUS.json RUNS.jsonl PROVIDER.jsonl OUTPUT.jsonl
+```
+
+Use the exact captured corpus file, including its original line endings. Replay
+checks the corpus hash against the sibling `quality-configuration.json` and
+each referenced provider request's case, model, sequence and hash. It writes a
+separate JSONL and `.projection.json` provenance file with input/output hashes.
+Original captures, answers, tool traces, timing, refusals and human annotations
+remain unchanged. Keep the initial report alongside the projected report;
+identity correction does not turn incorrect tool selections into passing cases.
+
 `--quality-limit=6` is a connectivity/tuning diagnostic, not corpus acceptance.
 After a complete tuning capture, `--quality-ids=id1,id2` can isolate observed
 tuning failures without opening holdout. IDs must belong to the selected scope

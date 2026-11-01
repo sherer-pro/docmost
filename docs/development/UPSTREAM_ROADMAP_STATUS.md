@@ -4,8 +4,9 @@ Date: 2026-11-01. The user resumed implementation of all remaining work in
 stages 1–4. Push and deployment are explicitly on hold. The complete release
 gate passed on `a0f360fe`; later full WebKit runs exposed two UI races, corrected
 in `bff6ec5b` and `d259a0db`. The latter now passes complete WebKit and release
-acceptance; human-reviewed model quality and the remaining final Chromium/Firefox
-database runs are pending. Stages 1–4 are not yet complete. Remote CI for new
+acceptance; complete Chromium also passes on the identical application source.
+Final Firefox and human-reviewed model quality remain pending. The selected
+Gemma 12B fails the database accuracy target. Stages 1–4 are not yet complete. Remote CI for new
 commits is on hold with push.
 
 ## Current acceptance state
@@ -17,6 +18,14 @@ Processes, containers and temporary runtime files were removed. Both deletion
 cases retained 580 rendered cells before and after confirmation; destination
 readiness took 3575 and 3563 ms from confirmation, below the unchanged 5000 ms
 limit. The six-second undo grace is unchanged.
+
+`roadmap-final-chromium-3a02f23b.log` passed all 31 PostgreSQL cases, 33 HTTP
+groups and 48 browser cases in runtime `2026-11-01T07-09-11-363Z`, with no
+skips, failures or retries and successful cleanup. The final full Firefox run
+is active in `2026-11-01T07-19-38-348Z`, recorded by
+`roadmap-final-firefox-3a02f23b.log`. Commit `3a02f23b` changes only the
+quality harness and documentation after `d259a0db`; application source and
+built server/shared artifacts are unchanged.
 
 The unchanged complete `verify:release` passed with exit code zero on this same
 corrected candidate in runtime `2026-11-01T05-18-11-846Z`, recorded by
@@ -33,6 +42,8 @@ error object without an explanatory message. Its cause is not established. The
 current lifecycle/connection-count case passed its first attempt. These facts
 do not erase the earlier, different `a0f360fe` navigation flake described below.
 No retry setting, assertion, timeout or production route was changed for either.
+The two explicit Firefox skips are existing Chromium-only responsive TOC and
+desktop header-order checks; their Chromium executions passed.
 
 The corrected database holdout in `2026-11-01T05-49-04-793Z`, recorded by
 `ai-database-holdout-d259a0db.log`, stopped after 58 of 80 questions. Fifty-three
@@ -44,12 +55,25 @@ error after six synthetic proposals accumulated without a decision. This is
 the separate documented proposal quota, not a provider-slot leak. The harness
 now cancels each synthetic proposal after capturing its unchanged answer and
 tool trace, recording cancellation separately. Production admission limits,
-model settings, prompts and scoring are unchanged. A complete corrected-harness
-capture remains required.
+model settings, prompts and scoring are unchanged. The subsequent complete
+capture is described below.
 
 The harness repair passes Node 22 syntax validation, all ten quality-selection
 and benchmark contract tests, the AI/fork documentation contracts and the
 English-comment check. It changes no application source or inference settings.
+
+The full corrected-harness database capture completed all 80 cases in
+`2026-11-01T06-50-50-870Z` on local commit `3a02f23b`, with log
+`ai-database-holdout-3a02f23b.log`. The configuration comparison receipt confirms
+identical model, provider, inference limits, complete question list, corpus,
+hardware, concurrency, lockfile and server/shared artifact hashes. No application
+source changed after `d259a0db`. All eight proposals have correct tool traces
+and were cancelled without approval after capture. Seventy-one of 80 cases
+match the oracle. All eight access questions and `db-19-empty_budget` fail:
+the model introduces wrong or malformed extra filters, sometimes falling back
+to a partial legacy row list. The immutable original interrupted capture is
+retained independently. Owned processes, capture proxy and containers were
+removed successfully.
 
 The separate RAG holdout completed all 80 questions in
 `2026-11-01T06-32-36-163Z`, recorded by `ai-rag-holdout-d259a0db.log`. The
@@ -58,9 +82,34 @@ Its automated evidence recall and citation validity are both 1.0; forbidden
 evidence and forbidden control answers are both zero, and preparation p95 is
 2140 ms. `ai-rag-holdout-d259a0db-unreviewed-report.json` retains the evaluator
 output. Actual human review remains pending, so `measured` and `accepted` remain
-false. The two remaining complete database browser passes will use this same
-application code after model capture, to avoid concurrent heavy work during
-measurements; earlier Chromium/Firefox receipts are not relabeled as this revision.
+false. Model capture completed before the remaining heavy browser work began.
+
+The first combined report incorrectly marked 100 legacy row sources as
+forbidden: the observer compared row entity IDs with corpus page IDs and treated
+their null document excerpts as missing row data. The captured completed tool
+results retain both identities and the row payload, and the actual provider
+requests retain that payload with its marker. The observation helper now checks
+that binding, the complete immutable seeded cell values, ACL/AI-policy fixture
+flags, and exact row-plus-marker transmission within one tool-result message.
+It preserves unknown, inaccessible, stale, altered or untransmitted sources as
+failed evidence. No application behavior or evaluator threshold changes.
+
+`reproject-ai-database-evidence.mjs` validated the exact original corpus bytes,
+case/model/sequence/hash references and wrote separate derived evidence with
+input/output provenance. All 100 row sources are supported by actual reads and
+transmission. Raw captures and the initial report remain unchanged. The
+projected combined report contains all 160 cases, recall and citation validity
+1.0, zero forbidden evidence/control answers and database accuracy 0.8875.
+The nine database failures are unchanged. Human review is zero, so neither
+faithfulness nor false abstention is accepted and `measured/accepted` remain
+false. Inference was not repeated for this metadata correction.
+
+All 18 focused observation/transmission/selection/evaluator tests pass, including
+negative cases and offline replay/overwrite guards. Syntax, AI/fork documentation
+contracts and the English-comment check pass. The full 160-case projected
+review packet loads and navigates in headless Chromium with zero page errors
+and zero human annotations; its screenshot was inspected. This UI smoke created
+no review annotation or export.
 
 ### Earlier candidate findings
 
@@ -468,14 +517,14 @@ pending as listed below.
 
 ## Remaining required work
 
-- Complete the database and RAG holdout captures on fixed settings, obtain
-  actual human evidence/refusal annotations and score the combined 160 cases.
-  The observed database selection mismatches remain failures. Tool traces alone
-  are insufficient, and neither fixture tests nor a successful capture process
-  establishes answer faithfulness.
-- Complete the remaining Chromium and Firefox database matrices on the final
-  application source. Full WebKit and the unchanged complete release gate already
-  passed on `d259a0db`, with the Firefox editor retry documented above.
+- Resolve the selected model's nine database failures and obtain actual human
+  evidence/refusal annotations. Both full 80-case captures and the combined
+  automated score are complete; human-reviewed quality is not accepted.
+  The operator has been asked whether to load the available Gemma 26B, provide
+  another endpoint/model, or retain the measured Gemma 12B limitations.
+- Complete the remaining full Firefox database matrix on the final application
+  source. Full Chromium, WebKit and the unchanged complete release gate already
+  passed, with the Firefox editor retry documented above.
 - Reconcile final receipts and prepare the requested session change list. The
   applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
   retain its actual evidence boundaries and keep stack upgrades separate.
