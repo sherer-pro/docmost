@@ -316,6 +316,9 @@ a transactional receipt. Both MCP directions remain read-only. Administrators
 can require read-only tools and answers grounded in permitted sources; the
 workspace restriction cannot be weakened by a space or assistant profile.
 
+Legacy `listDatabaseRows` also applies row ACL and AI exclusions before pagination
+and rechecks access before exposing rows or cursor metadata.
+
 Server result cards show the calculation time, conditions, accessible record
 count and incomplete-result warnings. Their read-only result page is visible
 only to the initiating user, reuses the frozen selection, rechecks current access

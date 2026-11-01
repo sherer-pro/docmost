@@ -1,5 +1,5 @@
 {
-  "version": 41,
+  "version": 42,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,15 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "legacy-database-cursor-privacy",
+      "key": "scenario.assistant.steps.step14",
+      "needles": [
+        "listDatabaseRows",
+        "ACL",
+        "summarizeDatabaseView"
+      ]
+    },
     {
       "id": "database-view-filter-grammar",
       "key": "scenario.assistant.steps.step13",
@@ -429,6 +438,7 @@
     "scenario.assistant.steps.step12",
     "scenario.assistant.steps.step13",
     "scenario.retrieval.steps.step6",
-    "scenario.retrieval.steps.step7"
+    "scenario.retrieval.steps.step7",
+    "scenario.assistant.steps.step14"
   ]
 }

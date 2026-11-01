@@ -10,6 +10,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
+import { sql } from 'kysely';
 import type { JSONContent } from '@tiptap/core';
 import {
   prosemirrorNodeToYJson,
@@ -1639,6 +1640,17 @@ export class AiToolRegistryService {
   ): Promise<AiToolExecutionResult> {
     const database = await this.getReadableDatabase(databaseId, context);
     const keyset = this.decodeCursor(cursor, 'listDatabaseRows', databaseId);
+    const snapshot = await this.pageAccess.getSidebarAccessSnapshot(
+      context.user,
+      context.spaceId,
+    );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      context.spaceId,
+      context.workspaceId,
+    );
+    const eligiblePageIds = [...snapshot.readablePageIds].filter(
+      (pageId) => !excluded.has(pageId),
+    );
     let rawRowsQuery = this.db
       .selectFrom('databaseRows as row')
       .innerJoin('pages as page', 'page.id', 'row.pageId')
@@ -1657,7 +1669,8 @@ export class AiToolRegistryService {
       .where('row.archivedAt', 'is', null)
       .where('page.workspaceId', '=', context.workspaceId)
       .where('page.spaceId', '=', context.spaceId)
-      .where('page.deletedAt', 'is', null);
+      .where('page.deletedAt', 'is', null)
+      .where(sql<boolean>`page.id = any(${eligiblePageIds}::uuid[])`);
     if (keyset) {
       rawRowsQuery = rawRowsQuery.where((eb) =>
         eb.or([
@@ -1676,14 +1689,6 @@ export class AiToolRegistryService {
       .execute();
     const hasMore = rawRows.length > limit;
     const pageRows = rawRows.slice(0, limit);
-    const snapshot = await this.pageAccess.getSidebarAccessSnapshot(
-      context.user,
-      context.spaceId,
-    );
-    const excluded = await this.contentPolicy.getExcludedPageIds(
-      context.spaceId,
-      context.workspaceId,
-    );
     const readableRows = pageRows.filter(
       (row) =>
         snapshot.readablePageIds.has(row.pageId) && !excluded.has(row.pageId),
@@ -1769,6 +1774,38 @@ export class AiToolRegistryService {
         )
       : pageRows.length;
     const cursorRow = pageRows[consumedRows - 1];
+    const citations = await this.pageRootCitations(
+      [
+        { pageId: database.pageId, type: 'page' },
+        ...fitted.items.map((row) => ({
+          pageId: row.pageId,
+          type: 'database_row' as const,
+        })),
+      ],
+      context,
+    );
+    const currentDatabase = await this.getReadableDatabase(databaseId, context);
+    const currentSnapshot = await this.pageAccess.getSidebarAccessSnapshot(
+      context.user,
+      context.spaceId,
+    );
+    const currentExcluded = await this.contentPolicy.getExcludedPageIds(
+      context.spaceId,
+      context.workspaceId,
+    );
+    const rootPageId = database.pageId ?? database.id;
+    if (
+      (currentDatabase.pageId ?? currentDatabase.id) !== rootPageId ||
+      !currentSnapshot.readablePageIds.has(rootPageId) ||
+      currentExcluded.has(rootPageId) ||
+      rawRows.some(
+        (row) =>
+          !currentSnapshot.readablePageIds.has(row.pageId) ||
+          currentExcluded.has(row.pageId),
+      )
+    ) {
+      throw new ConflictException('Database row access changed; query again');
+    }
     return {
       content: {
         databaseId,
@@ -1782,16 +1819,7 @@ export class AiToolRegistryService {
             : null,
         truncated: hasMore || fitted.truncated,
       },
-      citations: await this.pageRootCitations(
-        [
-          { pageId: database.pageId, type: 'page' },
-          ...fitted.items.map((row) => ({
-            pageId: row.pageId,
-            type: 'database_row' as const,
-          })),
-        ],
-        context,
-      ),
+      citations,
     };
   }
 

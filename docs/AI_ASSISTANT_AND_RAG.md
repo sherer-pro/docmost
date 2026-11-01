@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 41 -->
+<!-- ai-admin-guide-contract-version: 42 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -1682,6 +1682,16 @@ Paginated built-in reads use opaque versioned keyset cursors bound to the tool
 name and target resource. Replaying a cursor for another page, database, or
 tool, or supplying a malformed or oversized cursor, returns `400`; cursors do
 not encode a caller-controlled SQL offset.
+
+`listDatabaseRows` intersects row ACL and AI content exclusions in SQL before
+pagination. Its cursor and continuation flag depend only on eligible rows.
+After projecting values and constructing citations, the server rechecks the
+database root, returned rows and the lookahead row. A changed root or a newly
+denied/excluded source returns a conflict without row or cursor data; retry the
+query under the current permissions. The scoped keyset format remains v1.
+This compatibility tool still has no view filters or aggregates. Use
+`queryDatabaseView` for a view selection and `summarizeDatabaseView` for full
+server totals.
 
 `getPage` includes full editor JSON only when its serialized document fits the
 compact-response threshold. For larger pages it returns `content=null`, at

@@ -520,13 +520,13 @@ describe('extended built-in AI read tools', () => {
     );
   });
 
-  it('advances a database cursor past filtered rows without repeating them', async () => {
+  it('advances a database cursor using the last eligible returned row', async () => {
     const databaseRows = [
       {
         id: 'row-1',
         pageId: 'row-page-1',
-        title: 'Hidden row',
-        slugId: 'hidden-row',
+        title: 'First readable row',
+        slugId: 'first-readable-row',
         updatedAt: new Date('2026-08-04T03:00:00.000Z'),
       },
       {
@@ -545,7 +545,7 @@ describe('extended built-in AI read tools', () => {
       },
     ];
     const { registry } = buildRegistry({
-      readablePageIds: ['row-page-2'],
+      readablePageIds: [PAGE.id, 'row-page-1', 'row-page-2', 'row-page-3'],
       rows: {
         databases: [
           {
@@ -577,7 +577,10 @@ describe('extended built-in AI read tools', () => {
     );
     const content = result.content as any;
 
-    expect(content.items.map((row: any) => row.pageId)).toEqual(['row-page-2']);
+    expect(content.items.map((row: any) => row.pageId)).toEqual([
+      'row-page-1',
+      'row-page-2',
+    ]);
     expect(
       JSON.parse(Buffer.from(content.nextCursor, 'base64url').toString('utf8')),
     ).toEqual({
@@ -597,6 +600,82 @@ describe('extended built-in AI read tools', () => {
       ]),
     );
   });
+
+  it.each([
+    ['returned row ACL', [PAGE.id, 'row-page-2'], []],
+    ['lookahead row ACL', [PAGE.id, 'row-page-1'], []],
+    [
+      'lookahead AI exclusion',
+      [PAGE.id, 'row-page-1', 'row-page-2'],
+      ['row-page-2'],
+    ],
+    ['database root ACL', ['row-page-1', 'row-page-2'], []],
+    [
+      'database root AI exclusion',
+      [PAGE.id, 'row-page-1', 'row-page-2'],
+      [PAGE.id],
+    ],
+  ])(
+    'rejects legacy row results after %s changes before emission',
+    async (_reason, liveReadable, liveExcluded) => {
+      const databaseRows = ['row-page-1', 'row-page-2'].map(
+        (pageId, index) => ({
+          id: `row-${index + 1}`,
+          pageId,
+          title: 'Readable row',
+          slugId: pageId,
+          updatedAt: new Date(`2026-08-04T0${2 - index}:00:00.000Z`),
+        }),
+      );
+      const { registry, pageAccess, contentPolicy } = buildRegistry({
+        readablePageIds: [PAGE.id, ...databaseRows.map((row) => row.pageId)],
+        rows: {
+          databases: [
+            {
+              id: 'database-1',
+              pageId: PAGE.id,
+              workspaceId: CONTEXT.workspaceId,
+              spaceId: CONTEXT.spaceId,
+            },
+          ],
+          'databaseRows as row': databaseRows,
+          databaseRows,
+          databaseCells: [],
+          pages: [
+            PAGE,
+            ...databaseRows.map((row) => ({
+              id: row.pageId,
+              title: row.title,
+              slugId: row.slugId,
+            })),
+          ],
+          spaces: [{ slug: 'space' }],
+        },
+      });
+      pageAccess.getSidebarAccessSnapshot
+        .mockResolvedValueOnce({
+          readablePageIds: new Set([
+            PAGE.id,
+            ...databaseRows.map((row) => row.pageId),
+          ]),
+        })
+        .mockResolvedValue({ readablePageIds: new Set(liveReadable) });
+      contentPolicy.getExcludedPageIds
+        .mockResolvedValueOnce(new Set())
+        .mockResolvedValue(new Set(liveExcluded));
+
+      await expect(
+        registry.execute(
+          'listDatabaseRows',
+          {
+            databaseId: 'database-1',
+            limit: 1,
+          },
+          CONTEXT,
+        ),
+      ).rejects.toThrow(ConflictException);
+    },
+  );
 
   it('filters transclusion references and advances across raw candidates', async () => {
     const references = [

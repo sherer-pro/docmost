@@ -1650,7 +1650,8 @@
             "step10": "Agent ではシステムフィールド、数式、ファイル属性は読み取り専用です。合計を使う前に計算エラーを確認してください。参加者の提案には割り当て可能な既存メンバーを最大 20 人含められます。",
             "step11": "サーバーの結果カード、計算日時、保存された条件を確認してください。一致するレコードは現在のアクセス権とAIポリシーに従って再読取されます。スキーマ変更時は再照会が必要です。個別のレコードの読取には照会権限も必要です。",
             "step12": "連携カードとメンションは、共有文書、エクスポート、AI/RAGコンテンツにURLのみを保存します。非公開メタデータは閲覧者自身の接続で取得し、AIの知識ソースにはしません。INTEGRATION_PREVIEW_ALLOWED_ORIGINSはAIプロバイダー、検索、MCPの許可リストとは別です。",
-            "step13": "データベースツールでは、viewState.filter の conjunction と conditions [{propertyId, operator, value}] で選択条件を明示的に変更できます。日付は YYYY-MM-DD、空の値の判定は is_empty / is_not_empty を使います。viewState を省略すると固定済みのビューが維持されます。該当行数は summarizeDatabaseView.count が返します。不完全な行プレビューから選択全体の合計を確定することはできません。"
+            "step13": "データベースツールでは、viewState.filter の conjunction と conditions [{propertyId, operator, value}] で選択条件を明示的に変更できます。日付は YYYY-MM-DD、空の値の判定は is_empty / is_not_empty を使います。viewState を省略すると固定済みのビューが維持されます。該当行数は summarizeDatabaseView.count が返します。不完全な行プレビューから選択全体の合計を確定することはできません。",
+            "step14": "listDatabaseRows は、ACL と AI のコンテンツ除外を適用してからページを選択します。非表示の行はカーソルや続行の有無に影響しません。サーバーは結果を返す前にアクセス権を再確認します。サーバーがアクセス権の変更を通知した場合は、クエリを再実行してください。ビュー全体の集計には summarizeDatabaseView を使用してください。"
           },
           "success": "テストの解答が完了します。 Agent は許可されたツールのみをリストし、書き込み前に質問します",
           "rollback": "Agent または宇宙モデルを無効にして、前回の正常な設定を復元します。",

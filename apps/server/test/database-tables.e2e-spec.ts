@@ -24,6 +24,7 @@ import { DatabaseViewRepo } from '../src/database/repos/database/database-view.r
 import { DatabaseViewQueryService } from '../src/core/database/services/database-view-query.service';
 import { DatabaseService } from '../src/core/database/services/database.service';
 import { AiDatabaseService } from '../src/core/ai/services/ai-database.service';
+import { AiToolRegistryService } from '../src/core/ai/tools/ai-tool-registry.service';
 import { AiRunStepService } from '../src/core/ai/services/ai-run-step.service';
 import { normalizeDatabaseViewState } from '@docmost/api-contract';
 import { ExportService } from '../src/integrations/export/export.service';
@@ -333,6 +334,142 @@ suite('Database tables PostgreSQL acceptance', () => {
     expect(summary.count).toBe(900);
     expect(summary.values[propertyIds[0]]).toBe(494550);
     expect(summary.values[propertyIds[2]]).toBe('2026-10-12');
+  });
+
+  it('keeps denied and AI-excluded row identifiers out of legacy AI pagination', async () => {
+    const cursorDatabaseId = randomUUID();
+    const rootId = randomUUID();
+    const pageIds = Array.from({ length: 4 }, () => randomUUID());
+    const rowIds = Array.from({ length: 4 }, () => randomUUID());
+    const allowed = new Set([rootId, ...pageIds.slice(1)]);
+    const excluded = new Set([pageIds[1]]);
+    const pageAccess = {
+      getSidebarAccessSnapshot: jest.fn(async () => ({
+        readablePageIds: allowed,
+      })),
+    };
+    const registry = new AiToolRegistryService(
+      db as any,
+      pageAccess as any,
+      null as any,
+      { getExcludedPageIds: async () => excluded } as any,
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+      null as any,
+    );
+    jest.spyOn(registry as any, 'getReadableDatabase').mockResolvedValue({
+      id: cursorDatabaseId,
+      pageId: rootId,
+      spaceId,
+      workspaceId,
+    });
+    jest.spyOn(registry as any, 'pageRootCitations').mockResolvedValue([]);
+    try {
+      await db
+        .insertInto('pages')
+        .values(
+          [rootId, ...pageIds].map((id) => ({
+            id,
+            workspaceId,
+            spaceId,
+            title: 'Cursor fixture',
+            slugId: id,
+          })),
+        )
+        .execute();
+      await db
+        .insertInto('databases')
+        .values({
+          id: cursorDatabaseId,
+          workspaceId,
+          spaceId,
+          pageId: rootId,
+          name: 'Cursor fixture',
+        })
+        .execute();
+      await db
+        .insertInto('databaseRows')
+        .values(
+          pageIds.map((pageId, index) => ({
+            id: rowIds[index],
+            pageId,
+            databaseId: cursorDatabaseId,
+            workspaceId,
+            updatedAt: new Date(`2026-10-01T0${4 - index}:00:00Z`),
+          })),
+        )
+        .execute();
+      for (const source of ['agent', 'mcp'] as const) {
+        const context = { user: actor, workspaceId, spaceId, source } as any;
+        const first = (
+          await registry.execute(
+            'listDatabaseRows',
+            {
+              databaseId: cursorDatabaseId,
+              limit: 1,
+            },
+            context,
+          )
+        ).content as any;
+        const anchor = first.nextCursor
+          ? JSON.parse(
+              Buffer.from(first.nextCursor, 'base64url').toString('utf8'),
+            )
+          : null;
+        expect(anchor?.id).not.toBe(rowIds[0]);
+        expect(anchor?.id).not.toBe(rowIds[1]);
+        expect(first.items.map((row: any) => row.pageId)).toEqual([pageIds[2]]);
+        expect(anchor?.id).toBe(rowIds[2]);
+        const second = (
+          await registry.execute(
+            'listDatabaseRows',
+            {
+              databaseId: cursorDatabaseId,
+              limit: 1,
+              cursor: first.nextCursor,
+            },
+            context,
+          )
+        ).content as any;
+        expect(second.items.map((row: any) => row.pageId)).toEqual([
+          pageIds[3],
+        ]);
+        expect(second.nextCursor).toBeNull();
+        expect(second.truncated).toBe(false);
+      }
+      allowed.clear();
+      allowed.add(rootId);
+      const empty = (
+        await registry.execute(
+          'listDatabaseRows',
+          {
+            databaseId: cursorDatabaseId,
+            limit: 1,
+          },
+          { user: actor, workspaceId, spaceId, source: 'mcp' } as any,
+        )
+      ).content as any;
+      expect(empty.items).toEqual([]);
+      expect(empty.nextCursor).toBeNull();
+      expect(empty.truncated).toBe(false);
+    } finally {
+      await db
+        .deleteFrom('databaseRows')
+        .where('databaseId', '=', cursorDatabaseId)
+        .execute();
+      await db
+        .deleteFrom('databases')
+        .where('id', '=', cursorDatabaseId)
+        .execute();
+      await db
+        .deleteFrom('pages')
+        .where('id', 'in', [rootId, ...pageIds])
+        .execute();
+    }
   });
 
   it('queries complete AI-allowed views and rolls approved cell batches back with their transaction', async () => {

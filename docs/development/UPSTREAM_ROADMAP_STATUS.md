@@ -7,8 +7,37 @@ pending. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
 
-The application/test candidate is `818d0bb2`; `bb627042` adds only checkpoint
-documentation. Application code remains identical to `4fa57820`. The test commit
+The v42 package fixes a real legacy database-tool cursor disclosure. The
+PostgreSQL reproduction in `legacy-ai-cursor-before-postgres-repro.log` returned
+the internal ID of a denied row in the encoded cursor. ACL and AI exclusions
+now participate in SQL before pagination; the root, returned rows and lookahead
+row are revalidated before emission. The scoped v1 cursor format remains
+compatible, and tool schemas and inference settings were not tuned.
+
+The targeted server run passed 47 tests, including five access-change cases.
+`legacy-ai-cursor-full-postgres.log` passed all 32 cases across database tables,
+plain-text attachment indexing and the RAG evidence migration. The canonical
+document, structured guide, contract v42, all 12 locales and both approved fork
+overviews describe the same boundary. Static AI/fork documentation contracts and
+the English-comment check pass. Complete final release acceptance is pending.
+
+The old v41 database holdout was intentionally interrupted after 24 complete
+records (22 correct traces). Both failed traces used malformed filters; the
+separate SQL reproduction established the cursor defect. Raw captures remain
+unchanged, and the interruption reason is recorded separately. The old runtime
+cleaned up its processes, provider observer, containers and temporary files.
+These partial records are an obsolete baseline, not final holdout acceptance.
+Final captures must use the corrected candidate; human review remains pending.
+
+The operator has paused external ffmpeg again; the resumed-window sample measured
+3% CPU. Final browser/release checks will use this window. After stages 1-4 and
+their checks, deliver the requested session-wide implementation/review list.
+Push and deployment remain on hold.
+
+## Earlier v41 acceptance
+
+The application/test candidate was `818d0bb2`; `bb627042` added only checkpoint
+documentation. Its application code was identical to `4fa57820`. The test commit
 establishes the tabs fixture's initial Read mode and records endpoint-only
 navigation timings without credentials or bodies.
 
@@ -75,9 +104,10 @@ navigation timings without credentials or bodies.
   passed the two observed date failures and four controls. Full RAG tuning
   captured 120 answers; the separate eight-case diagnostic passed all six
   attachment misses and two controls after the indexing repair. Neither has
-  human annotations. Full database holdout capture has started on the frozen
-  candidate and model; its environment receipt records the concurrent load.
-  RAG holdout has not started, and neither holdout has quality acceptance.
+  human annotations. The database holdout capture began on that frozen candidate
+  and model; its environment receipt records the concurrent load. It was later
+  interrupted as recorded above. RAG holdout had not started, and neither
+  holdout has quality acceptance.
 
 The model remains `google/gemma-4-12b-qat` at
 `http://127.0.0.1:1234/v1`, temperature 0, output limit 4096 tokens, configured
