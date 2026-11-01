@@ -267,6 +267,8 @@ inventory, and authenticated UI access are accepted.
 
 ## Acceptance and failure handling
 
+Infrastructure Telegram message formatting, delivery ownership, and repeat policy are defined in the [AllDocker notification standard](https://gitlab.sherer.pro/sherer-projects/alldocker-infra/-/blob/main/docs/NOTIFICATIONS.md). Application backup and recovery procedures remain in this runbook.
+
 After restore, record:
 
 - HTTP `200` from API and collaboration health endpoints;
