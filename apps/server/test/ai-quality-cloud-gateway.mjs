@@ -27,7 +27,7 @@ const INPUT_BOUND = 1_000_000;
 const MAX_OUTPUT = 4096;
 const MICRO = 1_000_000;
 // Text-only admission uses one token per UTF-8 body byte plus structural headroom.
-// These explicit assumptions are conservative estimates, not billing guarantees.
+// These explicit assumptions are conservative estimates, not invoice guarantees.
 const STRUCTURAL_BASE = 4096;
 const secretField =
   /^(api_?key|authorization|proxy_authorization|headers|extra_headers|password|secret|credentials?|access_?token|refresh_?token|auth_?token)$/i;
