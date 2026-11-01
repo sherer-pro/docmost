@@ -436,6 +436,60 @@ test("an old cell response keeps a newer editor open", async ({ page }) => {
   await second.getByRole("textbox").press("Escape");
 });
 
+test("late Enter navigation preserves a newly focused cell", async ({ page }) => {
+  await page.goto(fixtureUrl);
+  const amount = page.locator(
+    `[data-database-cell-key="${rowId(0)}:50000000-0000-4000-8000-000000000002"]`,
+  );
+  const date = page.locator(
+    `[data-database-cell-key="${rowId(0)}:50000000-0000-4000-8000-000000000003"]`,
+  );
+  await amount.press("F2");
+  await amount.getByRole("textbox").fill("10.25");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    "**/cells",
+    async (route) => {
+      await gate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  try {
+    await amount.getByRole("textbox").press("Enter");
+    await date.focus();
+    release();
+    await expect(amount).toHaveText("10.25");
+    await expect(date).toBeFocused();
+    await date.press("F2");
+    await expect(date.getByRole("switch", { name: "Date range" })).toBeVisible();
+    expect(
+      (await state(page)).requests.filter(
+        (request) => request.method === "PATCH" && request.path.endsWith("/cells"),
+      ),
+    ).toHaveLength(1);
+  } finally {
+    release();
+  }
+});
+
+test("Enter still navigates down after saving the active cell", async ({ page }) => {
+  await page.goto(fixtureUrl);
+  const amount = (index: number) =>
+    page.locator(
+      `[data-database-cell-key="${rowId(index)}:50000000-0000-4000-8000-000000000002"]`,
+    );
+  await amount(0).press("F2");
+  await amount(0).getByRole("textbox").fill("10.25");
+  await amount(0).getByRole("textbox").press("Enter");
+  await expect(amount(0)).toHaveText("10.25");
+  await expect(amount(1).getByRole("textbox")).toHaveValue("1");
+  await expect(amount(1).getByRole("textbox")).toBeFocused();
+});
+
 test("row selection snapshots checkbox values before deferred React updates", async ({
   page,
 }) => {

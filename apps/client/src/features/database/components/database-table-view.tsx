@@ -3492,6 +3492,7 @@ export function DatabaseTableView({
                               }
 
                               event.preventDefault();
+                              const navigationCell = event.currentTarget;
                               const navigationSession = editingSession.current;
                               void (async () => {
                                 if (
@@ -3501,6 +3502,12 @@ export function DatabaseTableView({
                                 if (
                                   editingSession.current !== navigationSession
                                 )
+                                  return;
+                                const focusedCell =
+                                  document.activeElement?.closest(
+                                    "[data-database-cell-key]",
+                                  );
+                                if (focusedCell && focusedCell !== navigationCell)
                                   return;
                                 const nextCell = navigateEditingCell(
                                   rowIndex,

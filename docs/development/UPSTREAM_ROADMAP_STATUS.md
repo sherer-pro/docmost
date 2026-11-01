@@ -10,6 +10,29 @@ with push.
 
 ## Current acceptance state
 
+The subsequent `bff6ec5b` full WebKit run also passed PostgreSQL, all HTTP groups
+and 47 browser cases, including both corrected deletion cases. Its one failure
+was the decimal/date sequence, not another checkbox crash. There were no script
+errors: after numeric Enter/save, a late navigation opened the next row's amount
+editor instead of preserving the date cell's newly acquired focus. The complete
+receipt is `2026-11-01T04-43-27-735Z`; owned runtime cleanup passed.
+
+`database-enter-focus-before-webkit-target.log` reproduced this precisely by
+holding the numeric save response until another cell had focus. The initial
+`database-enter-focus-before-webkit.log` used an incorrect input role and did not
+exercise the hypothesis. The corrected reproduction retained a focused next-row
+amount editor in its screenshot. The completion handler now checks whether a
+different cell acquired focus before performing its old Enter/Tab navigation.
+The existing edit-session check is preserved.
+
+`database-enter-focus-after-browser-matrix.log` passed all 18 focused scenarios
+across Chromium, Firefox and WebKit: keyboard selection, a newer edit session,
+the focus race, checkbox state and both deletion paths. The final Enter cases
+then passed all six checks in `database-enter-focus-both-paths.log`, including
+ordinary Enter navigation when focus stays in the source cell. Targeted ESLint
+passes. Full corrected-candidate WebKit/release acceptance remains required;
+neither failed full run is relabeled as accepted.
+
 The full `a0f360fe` WebKit run passed 31 PostgreSQL cases, all 33 HTTP groups and
 47 of 48 browser cases. The remaining case crashed while selecting a row, before
 deletion or undo: its browser-error attachment records a null
