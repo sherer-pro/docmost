@@ -60,6 +60,15 @@ Those later samples do not prove the cause of every earlier failure. The
 operator has been asked for a new quiet window; user processes are unchanged.
 Final full browser and release acceptance remain required after the PWA fix.
 
+The PWA package is committed locally as `4d4899b5`. Its clean isolated QA
+checkout contains no `.env`. The Node 22 client build succeeds, and its current
+bundle budget passes with 439 JavaScript chunks, 44 CSS assets and initial
+closure 203059 JS / 32632 CSS gzip bytes. The strict AI-guide diff gate passes
+at v42; this package changes the general client recovery path, not AI tools,
+policies or server inference. The compiled version is ready for final runtime
+acceptance when resources are available. These build/static/focused results do
+not substitute for that final full acceptance.
+
 The unchanged complete `verify:release` passed with exit code zero on this same
 corrected candidate in runtime `2026-11-01T05-18-11-846Z`, recorded by
 `roadmap-verify-release-d259a0db.log`. Its receipt names exact revision
@@ -555,7 +564,7 @@ pending as listed below.
   automated score are complete; human-reviewed quality is not accepted.
   The operator has been asked whether to load the available Gemma 26B, provide
   another endpoint/model, or retain the measured Gemma 12B limitations.
-- Build the PWA correction and repeat final full browser/release acceptance on
+- Repeat final full browser/release acceptance on
   its source in a quiet resource window. Earlier Chromium, WebKit and release
   passes retain their actual candidate boundaries; they are not relabeled as
   verification of the new PWA correction.
