@@ -73,14 +73,19 @@ reader denial and source-byte preservation. The focused Chromium and Firefox
 cases in `diagram-copy-fixed-ai-context-diagnostic.log` passed actual same-page
 and cross-page copies, independent attachment IDs, editing and reload. That
 combined diagnostic later stopped at an unrelated Python prerequisite; it is not
-a complete release result.
+a complete release result. The subsequent unchanged `verify:release` completed
+on `a0f360fe` in `roadmap-verify-release-a0f360fe.log`, including both desktop
+copying cases, real collaboration connection-count assertions and downloaded
+export verification. One Firefox lifecycle navigation was flaky and passed its
+configured retry; the retained trace reports `NS_BINDING_ABORTED`. Its initiator
+is unconfirmed, and no production route or test assertion was changed.
 
 | Area | Source-backed finding | Acceptance evidence and remaining boundary |
 | --- | --- | --- |
 | Markdown tables | `upstream-markdown-before.json` reproduces an empty header from actual editor HTML containing semantic `th` cells after `colgroup`. A pinned patch fixes header detection and loss of repeated pipes; the dependency stays at 1.0.56. | Seven export regressions pass, including a genuinely headerless table. The Node 22 live suite verifies downloaded Markdown/HTML headers and complete pipe values. |
 | Markdown `details` | Rich summary Markdown has explicit block boundaries; adjacent body blocks remain separate. Readers preserve an isolated paragraph wrapper and prioritize structured footnotes over generic superscript marks. | All 157 shared package tests pass. Compiled server round-trip, four theme/size browser cases and Node 22 downloaded files pass. |
-| draw.io copy | Repeated references detach; the confirmed cross-page HTTP wrapper defect now has a uniform explicit conflict code. Other upload failures cannot trigger creation. | Real HTTP and focused Chromium/Firefox copying, editing, source-byte and reload checks pass in the receipts above. Complete release acceptance remains pending. |
-| WebSocket | The API and dedicated collaboration process remain separate, with authenticated Redis relay and ownership leases. | Both desktop engines passed the real lifecycle/authentication-refresh test with server connection-count assertions enabled in the v41 diagnostic release attempt. Final complete release acceptance remains pending. |
+| draw.io copy | Repeated references detach; the confirmed cross-page HTTP wrapper defect now has a uniform explicit conflict code. Other upload failures cannot trigger creation. | Real HTTP and focused Chromium/Firefox copying, editing, source-byte and reload checks pass. Both desktop cases also passed in the complete `a0f360fe` release run above. |
+| WebSocket | The API and dedicated collaboration process remain separate, with authenticated Redis relay and ownership leases. | Both desktop engines passed lifecycle/authentication refresh with real server connection counts in the complete `a0f360fe` release run; the Firefox navigation retry is recorded above. |
 | Search performance | The fork keeps its PostgreSQL/Typesense, structured-value, label and dictionary paths. | Complete the existing final performance/browser gates; no new search driver is added. |
 
 The last column distinguishes recorded checks from the remaining release boundary.

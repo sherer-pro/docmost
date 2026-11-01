@@ -1,11 +1,30 @@
 # Upstream roadmap implementation checkpoint
 
 Date: 2026-11-01. The user resumed implementation of all remaining work in
-stages 1–4. Push and deployment are explicitly on hold. Stages 1–4 are not
-complete; final release acceptance and human-reviewed model quality remain
-pending. Remote CI for the new commits is on hold with push.
+stages 1–4. Push and deployment are explicitly on hold. The complete release
+gate passed on `a0f360fe`; its later full WebKit database run exposed a deferred
+checkbox-event defect. That fix now has targeted acceptance, but the corrected
+candidate still requires full WebKit/release acceptance and human-reviewed model
+quality. Stages 1–4 are not yet complete. Remote CI for new commits is on hold
+with push.
 
 ## Current acceptance state
+
+The full `a0f360fe` WebKit run passed 31 PostgreSQL cases, all 33 HTTP groups and
+47 of 48 browser cases. The remaining case crashed while selecting a row, before
+deletion or undo: its browser-error attachment records a null
+`event.currentTarget.checked` in the table's deferred state updater. The failed
+runtime `2026-11-01T04-19-15-408Z` cleaned up all owned resources. Its log is
+`roadmap-final-webkit-a0f360fe.log`; it is not accepted as a complete browser pass.
+
+A small synthetic browser regression dispatches native checkbox clicks in one
+JavaScript turn. On the old code it reproduced the same null `currentTarget`
+error (`database-checkbox-before-webkit.log` and its trace). The handler now
+captures the boolean before scheduling React's updater. The regression plus
+existing undo/final-deletion tests pass in Chromium, Firefox and WebKit: nine
+cases in `database-checkbox-after-browser-matrix.log`. No wait, assertion, route,
+event retry or six-second undo grace was weakened. Full corrected-candidate
+acceptance follows this focused check.
 
 The v42 package fixes a real legacy database-tool cursor disclosure. The
 PostgreSQL reproduction in `legacy-ai-cursor-before-postgres-repro.log` returned
@@ -19,7 +38,27 @@ The targeted server run passed 47 tests, including five access-change cases.
 plain-text attachment indexing and the RAG evidence migration. The canonical
 document, structured guide, contract v42, all 12 locales and both approved fork
 overviews describe the same boundary. Static AI/fork documentation contracts and
-the English-comment check pass. Complete final release acceptance is pending.
+the English-comment check pass. The strict guide diff from `8ce20d3b` to
+`a0f360fe` passes, and the 21 client guide tests pass.
+
+`roadmap-verify-release-a0f360fe.log` completed the unchanged `verify:release`
+command with exit code zero on Node 22.23.4. Its runtime receipt is
+`2026-11-01T03-46-37-058Z/result.json`, with source revision
+`a0f360fe97bd7142c7aa6039afbe06598b63acba`. It includes 31 PostgreSQL cases,
+291 server suites / 2540 tests, 195 client files / 943 tests, the complete
+security and extended release contracts, all 28 AI browser cases, Agent Docker
+acceptance, editor artifact verification and the AI context audit. Owned
+processes, containers and temporary runtime files were removed.
+
+The editor matrix reports 64 passed, two pre-existing explicit Firefox skips and
+one flaky case that passed its configured retry. Its first Firefox lifecycle
+attempt reached the final authentication-refresh navigation, then `page.goto`
+returned `NS_BINDING_ABORTED`; earlier connection-count assertions had passed.
+The abort initiator is not established by the retained trace. No timeout,
+assertion, retry setting or production route was changed for this observation.
+Downloaded Markdown, HTML, PDF and Docmost artifacts passed content verification.
+The production dependency audit reports nine low and 24 moderate findings, with
+no high or critical findings; no unrelated dependency changes were introduced.
 
 The old v41 database holdout was intentionally interrupted after 24 complete
 records (22 correct traces). Both failed traces used malformed filters; the
@@ -30,7 +69,8 @@ These partial records are an obsolete baseline, not final holdout acceptance.
 Final captures must use the corrected candidate; human review remains pending.
 
 The operator has paused external ffmpeg again; the resumed-window sample measured
-3% CPU. Final browser/release checks will use this window. After stages 1-4 and
+3% CPU. Release acceptance used this window; the complete WebKit database run is
+now using a fresh isolated runtime. After stages 1-4 and
 their checks, deliver the requested session-wide implementation/review list.
 Push and deployment remain on hold.
 

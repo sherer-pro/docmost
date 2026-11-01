@@ -142,7 +142,9 @@ question and completed without inference in grounded mode. This is a measured
 retrieval miss, not successful quality acceptance. The ten-case database tuning
 diagnostic completed with nine correct traces; the remaining trace contained
 model-generated quotes inside a property ID and was rejected by validation.
-Holdout remains unopened. Final acceptance also requires a human-reviewed boolean
+Those tuning diagnostics preceded holdout. Current captures, interruptions and
+acceptance boundaries are recorded in the [roadmap checkpoint](../../docs/development/UPSTREAM_ROADMAP_STATUS.md).
+Final acceptance also requires a human-reviewed boolean
 `refused` annotation for every case, including useful refusals and false abstention;
 an omitted annotation cannot silently count as a successful answer.
 

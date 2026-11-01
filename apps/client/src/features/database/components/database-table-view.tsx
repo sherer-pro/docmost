@@ -3319,12 +3319,13 @@ export function DatabaseTableView({
                             aria-label={t("Select row")}
                             disabled={!rowIsEditable}
                             checked={Boolean(selectedRowPageIds[row.pageId])}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
                               setSelectedRowPageIds((previousSelection) => ({
                                 ...previousSelection,
-                                [row.pageId]: event.currentTarget.checked,
-                              }))
-                            }
+                                [row.pageId]: checked,
+                              }));
+                            }}
                           />
                         </Table.Td>
                       )}

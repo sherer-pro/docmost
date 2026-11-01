@@ -436,6 +436,37 @@ test("an old cell response keeps a newer editor open", async ({ page }) => {
   await second.getByRole("textbox").press("Escape");
 });
 
+test("row selection snapshots checkbox values before deferred React updates", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(fixtureUrl);
+  const checkboxes = page.getByRole("checkbox", {
+    name: "Select row",
+    exact: true,
+  });
+  await expect(checkboxes.first()).toBeVisible();
+  // Native clicks in one turn keep both state updates queued until events end.
+  await checkboxes.evaluateAll((inputs) => {
+    (inputs[0] as HTMLInputElement).click();
+    (inputs[1] as HTMLInputElement).click();
+  });
+  await expect(checkboxes.nth(0)).toBeChecked();
+  await expect(checkboxes.nth(1)).toBeChecked();
+  await expect(page.getByText("Rows: 2", { exact: true })).toBeVisible();
+  await checkboxes.evaluateAll((inputs) => {
+    (inputs[0] as HTMLInputElement).click();
+    (inputs[1] as HTMLInputElement).click();
+  });
+  await expect(checkboxes.nth(0)).not.toBeChecked();
+  await expect(checkboxes.nth(1)).not.toBeChecked();
+  await expect(
+    page.getByRole("button", { name: "Delete", exact: true }),
+  ).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 for (const undo of [true, false])
   test(`deletion after unmount retains six seconds and ${undo ? "undo" : "original target"}`, async ({
     page,
