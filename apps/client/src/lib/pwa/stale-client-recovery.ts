@@ -7,12 +7,17 @@ interface StaleClientRecoveryDependencies {
   now: () => number;
   reload: () => void;
   storage: Pick<Storage, "getItem" | "setItem">;
+  isLeavingDocument?: () => boolean;
 }
 
 export function recoverFromStaleClient(
   event: Event,
   dependencies: StaleClientRecoveryDependencies,
 ): boolean {
+  if (dependencies.isLeavingDocument?.()) {
+    return false;
+  }
+
   const now = dependencies.now();
 
   try {
@@ -47,11 +52,30 @@ export function registerStaleClientRecovery(): void {
   }
 
   registered = true;
+  let leavingDocument = false;
+  const markDeparture = () => {
+    leavingDocument = true;
+  };
+  const resumeDocument = () => {
+    leavingDocument = false;
+    window.addEventListener("beforeunload", markDeparture, { once: true });
+  };
+  const resumeAfterInteraction = (event: Event) => {
+    if (leavingDocument && event.isTrusted) {
+      resumeDocument();
+    }
+  };
+  window.addEventListener("pageshow", resumeDocument);
+  window.addEventListener("pointerdown", resumeAfterInteraction, true);
+  window.addEventListener("keydown", resumeAfterInteraction, true);
+  resumeDocument();
+
   window.addEventListener("vite:preloadError", (event) => {
     recoverFromStaleClient(event, {
       now: Date.now,
       reload: () => window.location.reload(),
       storage: window.sessionStorage,
+      isLeavingDocument: () => leavingDocument,
     });
   });
 

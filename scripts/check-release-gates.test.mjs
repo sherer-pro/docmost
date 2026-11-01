@@ -681,6 +681,7 @@ const workflowMutations = [
     "python -m unittest apps/client/e2e/editor/test_verify_export_artifacts.py",
   ],
   ["editor browser", "ciSource", "pnpm test:editor:e2e"],
+  ["PWA browser", "ciSource", "pnpm test:pwa:e2e"],
   [
     "production Draw.io runtime",
     "ciSource",
@@ -927,6 +928,7 @@ for (const [scriptName, command] of [
   ["verify:full", "run check:client-bundle"],
   ["verify:release", "run routes:inventory:check"],
   ["verify:release", "run check:fork-docs"],
+  ["verify:release", "run test:pwa:e2e"],
   ["verify:release", "run test:ai:e2e"],
   ["verify:release", "run test:ai-agent:e2e"],
 ]) {

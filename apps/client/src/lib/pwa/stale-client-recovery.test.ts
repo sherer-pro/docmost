@@ -16,6 +16,46 @@ function createStorage(initialValue: string | null = null) {
 }
 
 describe("stale client recovery", () => {
+  it("does not reload or reserve recovery while the document is leaving", () => {
+    const event = new Event("vite:preloadError", { cancelable: true });
+    const storage = createStorage();
+    const reload = vi.fn();
+    const now = vi.fn(() => 42_000);
+
+    expect(
+      recoverFromStaleClient(event, {
+        now,
+        reload,
+        storage,
+        isLeavingDocument: () => true,
+      }),
+    ).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(now).not.toHaveBeenCalled();
+  });
+
+  it("can recover after a document resumes without consuming an earlier marker", () => {
+    let leaving = true;
+    const storage = createStorage();
+    const reload = vi.fn();
+    const dependencies = {
+      now: () => 42_000,
+      reload,
+      storage,
+      isLeavingDocument: () => leaving,
+    };
+    expect(
+      recoverFromStaleClient(new Event("vite:preloadError"), dependencies),
+    ).toBe(false);
+    leaving = false;
+    expect(
+      recoverFromStaleClient(new Event("vite:preloadError"), dependencies),
+    ).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it("reloads once and records a bounded recovery marker", () => {
     const event = new Event("vite:preloadError", { cancelable: true });
     const storage = createStorage();

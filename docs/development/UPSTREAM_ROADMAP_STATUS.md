@@ -3,10 +3,12 @@
 Date: 2026-11-01. The user resumed implementation of all remaining work in
 stages 1–4. Push and deployment are explicitly on hold. The complete release
 gate passed on `a0f360fe`; later full WebKit runs exposed two UI races, corrected
-in `bff6ec5b` and `d259a0db`. The latter now passes complete WebKit and release
-acceptance; complete Chromium also passes on the identical application source.
-Final Firefox and human-reviewed model quality remain pending. The selected
-Gemma 12B fails the database accuracy target. Stages 1–4 are not yet complete. Remote CI for new
+in `bff6ec5b` and `d259a0db`. That candidate passes complete WebKit/release
+acceptance and complete Chromium on identical application source. The following
+Firefox run exposed a separate PWA navigation defect, now corrected and covered
+by focused tests; final application acceptance must use the new correction.
+Human-reviewed model quality remains pending, and Gemma 12B fails the database
+accuracy target. Stages 1–4 are not yet complete. Remote CI for new
 commits is on hold with push.
 
 ## Current acceptance state
@@ -21,11 +23,42 @@ limit. The six-second undo grace is unchanged.
 
 `roadmap-final-chromium-3a02f23b.log` passed all 31 PostgreSQL cases, 33 HTTP
 groups and 48 browser cases in runtime `2026-11-01T07-09-11-363Z`, with no
-skips, failures or retries and successful cleanup. The final full Firefox run
-is active in `2026-11-01T07-19-38-348Z`, recorded by
-`roadmap-final-firefox-3a02f23b.log`. Commit `3a02f23b` changes only the
+skips, failures or retries and successful cleanup. The full Firefox run in
+`2026-11-01T07-19-38-348Z`, recorded by
+`roadmap-final-firefox-3a02f23b.log`, passed 31 PostgreSQL cases, all 33 HTTP
+groups and 44 browser cases, with four failures and successful cleanup.
+Commit `3a02f23b` changes only the
 quality harness and documentation after `d259a0db`; application source and
-built server/shared artifacts are unchanged.
+built server/shared artifacts were unchanged in those runs.
+
+The Firefox integration-preview navigation failed with `NS_BINDING_ABORTED`
+and an undefined `AiDocumentContextSync` lazy export. The isolated
+`preload-navigation-before.json` probe reproduced both on the unchanged
+recovery source: a cancelled dynamic import rejected just after
+`beforeunload`, and the PWA stale-client handler reloaded the departing page,
+aborting its intended destination. Chromium completed the same transition.
+The corrected handler suppresses automatic recovery while departing, without
+consuming its durable marker. Trusted interaction and `pageshow` rearm it.
+The same after probe reaches the destination in both engines.
+
+The permanent production-mode Vite regression passes all 18 cases across
+Chromium, Firefox and WebKit in
+`artifacts/pwa-recovery/2026-11-01T08-03-44.292Z`. Five recovery unit tests and
+targeted ESLint pass. CI and `verify:release` now include the suite; 107 release
+contract/log-sanitization/negative tests pass, including guards against removing
+the new CI/release check. One earlier default-sandbox test could not reach its
+own loopback mock; that focused test and the complete 107-case run pass with
+loopback access. No assertion, retry, five-second deadline or undo grace changes.
+
+The other Firefox failures were a record title not visible within five seconds,
+destination readiness after undo at 6817 ms, and the next deletion case expecting
+900 rows after the preceding failed test had never clicked Undo. Its screenshot
+shows 899 rows. The direct-record screenshot shows the correct row-800 properties
+and a still-pending title. The initial post-failure host sample observed ffmpeg
+using 87.1% of all CPU, and the later sample at 08:07 UTC observed 74.8%.
+Those later samples do not prove the cause of every earlier failure. The
+operator has been asked for a new quiet window; user processes are unchanged.
+Final full browser and release acceptance remain required after the PWA fix.
 
 The unchanged complete `verify:release` passed with exit code zero on this same
 corrected candidate in runtime `2026-11-01T05-18-11-846Z`, recorded by
@@ -522,9 +555,10 @@ pending as listed below.
   automated score are complete; human-reviewed quality is not accepted.
   The operator has been asked whether to load the available Gemma 26B, provide
   another endpoint/model, or retain the measured Gemma 12B limitations.
-- Complete the remaining full Firefox database matrix on the final application
-  source. Full Chromium, WebKit and the unchanged complete release gate already
-  passed, with the Firefox editor retry documented above.
+- Build the PWA correction and repeat final full browser/release acceptance on
+  its source in a quiet resource window. Earlier Chromium, WebKit and release
+  passes retain their actual candidate boundaries; they are not relabeled as
+  verification of the new PWA correction.
 - Reconcile final receipts and prepare the requested session change list. The
   applicability work is recorded in [the upstream checklist](../UPSTREAM_FIX_APPLICABILITY.md);
   retain its actual evidence boundaries and keep stack upgrades separate.
