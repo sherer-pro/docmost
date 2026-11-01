@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
 import {
   applicationAuditCommand,
+  applicationAuditEnvironment,
   createApplicationLogScanService,
 } from '../../../scripts/ai-application-log-scan.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -28,6 +29,7 @@ export async function runReleaseAcceptance({
   auditMode = 'release',
 }) {
   const command = applicationAuditCommand(auditMode);
+  const editorDiagnostic = auditMode === 'editor-browser-only';
   assert.equal(
     typeof scanApplicationLogs,
     'function',
@@ -78,7 +80,11 @@ export async function runReleaseAcceptance({
 
   const auditRoot = path.join(
     output,
-    auditMode === 'release' ? 'release' : 'ai-browser-diagnostic',
+    auditMode === 'release'
+      ? 'release'
+      : editorDiagnostic
+        ? 'editor-browser-diagnostic'
+        : 'ai-browser-diagnostic',
   );
   await mkdir(auditRoot, { recursive: true });
   const env = Object.fromEntries(
@@ -125,6 +131,7 @@ export async function runReleaseAcceptance({
     DOCMOST_AI_AGENT_AUDIT_ROOT: path.join(auditRoot, 'agent'),
     DOCMOST_EDITOR_AUDIT_ROOT: path.join(auditRoot, 'editor'),
     DOCMOST_AI_CONTEXT_AUDIT_ROOT: path.join(auditRoot, 'context'),
+    ...applicationAuditEnvironment(auditMode),
   });
   for (const name of [
     'DOCMOST_AI_AGENT_DEFAULT_SUBNET',
@@ -144,8 +151,13 @@ export async function runReleaseAcceptance({
     credentialsPersisted: false,
     auditRoot: path.relative(repo, auditRoot),
   };
-  report[auditMode === 'release' ? 'release' : 'aiBrowserDiagnostic'] =
-    auditRecord;
+  report[
+    auditMode === 'release'
+      ? 'release'
+      : editorDiagnostic
+        ? 'editorBrowserDiagnostic'
+        : 'aiBrowserDiagnostic'
+  ] = auditRecord;
   const scanService = await createApplicationLogScanService({
     scan: scanApplicationLogs,
   });
@@ -163,7 +175,7 @@ export async function runReleaseAcceptance({
         : 'corepack',
       process.platform === 'win32'
         ? ['/d', '/s', '/c', command]
-        : ['pnpm', auditMode === 'release' ? 'verify:release' : 'test:ai:e2e'],
+        : command.split(' ').slice(1),
       { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const relay = async (stream) => {
@@ -194,7 +206,9 @@ export async function runReleaseAcceptance({
       name:
         auditMode === 'release'
           ? 'Full isolated verify:release'
-          : 'Isolated AI browser diagnostic',
+          : editorDiagnostic
+            ? 'Isolated Firefox synced-blocks diagnostic'
+            : 'Isolated AI browser diagnostic',
       passed: code === 0,
     });
     assert.equal(
@@ -202,7 +216,7 @@ export async function runReleaseAcceptance({
       0,
       auditMode === 'release'
         ? 'Full isolated verify:release failed; inspect its sanitized log and audit receipts'
-        : 'Isolated AI browser diagnostic failed; inspect its sanitized log and audit receipts',
+        : 'Isolated browser diagnostic failed; inspect its sanitized log and audit receipts',
     );
   } finally {
     await scanService.close();

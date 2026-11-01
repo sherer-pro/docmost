@@ -20,9 +20,14 @@ const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 
 export function applicationAuditMode(args) {
   const release = args.includes("--release");
-  const diagnostic = args.includes("--ai-browser-only");
+  const editorDiagnostic = args.includes("--editor-browser-only");
+  const diagnostic = args.includes("--ai-browser-only") || editorDiagnostic;
   if (!release && !diagnostic) return null;
-  const flag = release ? "--release" : "--ai-browser-only";
+  const flag = release
+    ? "--release"
+    : editorDiagnostic
+      ? "--editor-browser-only"
+      : "--ai-browser-only";
   if (
     args.some((arg) => arg !== flag && !arg.startsWith("--subnet=")) ||
     (diagnostic &&
@@ -32,15 +37,26 @@ export function applicationAuditMode(args) {
     throw new Error(
       release
         ? "Full release acceptance accepts only --release and an optional isolated --subnet"
-        : "AI browser diagnostic accepts only --ai-browser-only and an optional isolated --subnet",
+        : `Browser diagnostic accepts only ${flag} and an optional isolated --subnet`,
     );
-  return release ? "release" : "ai-browser-only";
+  return release ? "release" : flag.slice(2);
 }
 
 export function applicationAuditCommand(mode) {
   if (mode === "release") return "corepack pnpm verify:release";
   if (mode === "ai-browser-only") return "corepack pnpm test:ai:e2e";
+  if (mode === "editor-browser-only") return "corepack pnpm test:editor:e2e";
   throw new Error("Invalid isolated application audit mode");
+}
+
+export function applicationAuditEnvironment(mode) {
+  applicationAuditCommand(mode);
+  return mode === "editor-browser-only"
+    ? {
+        DOCMOST_EDITOR_AUDIT_FILES: "synced-blocks.spec.ts",
+        DOCMOST_EDITOR_AUDIT_PROJECTS: "firefox-desktop",
+      }
+    : {};
 }
 
 export function applicationLogErrorSummary(lines, redact) {

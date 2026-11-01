@@ -164,3 +164,12 @@ The pinned Hocuspocus 3.4.4 patch clears rejected save-queue entries in `finally
 Without it, a storage error prevents both live-document recovery and subsequent
 operations on the same document. Native dependency tests and a real PostgreSQL
 attachment-insertion failure verify the recovery path.
+
+## Synced block selection diagnostic
+
+After building with Node 22, run
+`node apps/client/e2e/database/run-live.mjs --editor-browser-only`.
+The isolated runtime runs only `synced-blocks.spec.ts` in `firefox-desktop`.
+This preset accepts only that flag and an optional unused
+`--subnet=10.x.x.0/28`; release, quality, browser and subset flags are rejected.
+It is a focused diagnostic and does not replace the full `--release` acceptance.

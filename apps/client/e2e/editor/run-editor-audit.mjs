@@ -32,6 +32,20 @@ const selectedFiles = (process.env.DOCMOST_EDITOR_AUDIT_FILES ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const selectedProjects = (process.env.DOCMOST_EDITOR_AUDIT_PROJECTS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const projectNames = new Set([
+  "chromium-desktop",
+  "firefox-desktop",
+  "webkit-media-clipboard",
+  "mobile-chromium",
+  "mobile-webkit",
+]);
+if (selectedProjects.some((project) => !projectNames.has(project))) {
+  throw new Error("Unknown editor audit project");
+}
 const sharedMemberSpecs = [
   "collaboration-share-offline.spec.ts",
   "synced-blocks.spec.ts",
@@ -208,7 +222,13 @@ async function runPlaywright() {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [cli, "test", "--config=playwright.editor.config.ts", ...selectedFiles],
+      [
+        cli,
+        "test",
+        "--config=playwright.editor.config.ts",
+        ...selectedFiles,
+        ...selectedProjects.map((project) => `--project=${project}`),
+      ],
       {
         cwd: clientRoot,
         env: process.env,
@@ -338,7 +358,7 @@ try {
   await fs.writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 
   exitCode = await runPlaywright();
-  if (selectedFiles.length === 0) {
+  if (selectedFiles.length === 0 && selectedProjects.length === 0) {
     try {
       const verifierExitCode = await runExportVerification();
       if (verifierExitCode !== 0) {

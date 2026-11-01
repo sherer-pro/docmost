@@ -562,6 +562,7 @@ test("audits synced block creation, lookup recovery, ACL, clipboard and unsync",
     expect(await selectTextWithMouse(page, referenceText)).toContain(
       `Shared text ${suffix}`,
     );
+    await expect(mainEditor(page)).not.toBeFocused();
     await firstReference.hover();
     await expect(
       firstReference.getByRole("button", { name: "Refresh" }),

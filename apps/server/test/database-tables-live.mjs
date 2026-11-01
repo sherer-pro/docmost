@@ -38,6 +38,7 @@ const quality = databaseQualityConfiguration();
 const release = process.argv.includes('--release');
 const auditMode = applicationAuditMode(process.argv.slice(2));
 const aiBrowserOnly = auditMode === 'ai-browser-only';
+const editorBrowserOnly = auditMode === 'editor-browser-only';
 if (auditMode && process.versions.node.split('.')[0] !== '22')
   throw new Error('Isolated release acceptance requires Node 22');
 if (auditMode && quality)
@@ -67,19 +68,21 @@ const report = {
     ? `ai-${quality.scope}-quality`
     : aiBrowserOnly
       ? 'diagnostic-ai-browser'
-      : release
-        ? 'release'
-        : process.argv.includes('--templates-only')
-          ? 'targeted-templates'
-          : process.argv.includes('--postgres-only')
-            ? 'postgres'
-            : process.argv.includes('--advanced-only')
-              ? 'targeted-database-values'
-              : process.argv.includes('--api-only')
-                ? 'api'
-                : process.argv.includes('--startup-only')
-                  ? 'startup'
-                  : 'full',
+      : editorBrowserOnly
+        ? 'diagnostic-editor-browser'
+        : release
+          ? 'release'
+          : process.argv.includes('--templates-only')
+            ? 'targeted-templates'
+            : process.argv.includes('--postgres-only')
+              ? 'postgres'
+              : process.argv.includes('--advanced-only')
+                ? 'targeted-database-values'
+                : process.argv.includes('--api-only')
+                  ? 'api'
+                  : process.argv.includes('--startup-only')
+                    ? 'startup'
+                    : 'full',
   tests: [],
   cleanup: {},
 };
@@ -440,6 +443,7 @@ try {
   });
   if (
     !aiBrowserOnly &&
+    !editorBrowserOnly &&
     !process.argv.includes('--startup-only') &&
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&

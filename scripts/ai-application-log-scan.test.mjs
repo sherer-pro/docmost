@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 import {
   applicationAuditCommand,
+  applicationAuditEnvironment,
   applicationAuditMode,
   applicationLogErrorSummary,
   applicationLogScanResult,
@@ -104,6 +105,7 @@ test("isolated diagnostic is a fixed AI-only preset and cannot shorten release a
   );
   for (const flag of [
     "--release",
+    "--editor-browser-only",
     "--ai-quality",
     "--browser=all",
     "--grep=anything",
@@ -118,6 +120,52 @@ test("isolated diagnostic is a fixed AI-only preset and cannot shorten release a
     applicationAuditMode(["--ai-browser-only", "--subnet=a", "--subnet=b"]),
   );
   assert.throws(() => applicationAuditCommand("anything"));
+});
+
+test("editor diagnostic fixes the Firefox synced-blocks selection and rejects subsets", () => {
+  assert.equal(
+    applicationAuditMode(["--editor-browser-only"]),
+    "editor-browser-only",
+  );
+  assert.equal(
+    applicationAuditMode(["--editor-browser-only", "--subnet=10.241.244.0/28"]),
+    "editor-browser-only",
+  );
+  assert.equal(
+    applicationAuditCommand("editor-browser-only"),
+    "corepack pnpm test:editor:e2e",
+  );
+  assert.deepEqual(applicationAuditEnvironment("editor-browser-only"), {
+    DOCMOST_EDITOR_AUDIT_FILES: "synced-blocks.spec.ts",
+    DOCMOST_EDITOR_AUDIT_PROJECTS: "firefox-desktop",
+  });
+  assert.deepEqual(applicationAuditEnvironment("release"), {});
+  assert.deepEqual(applicationAuditEnvironment("ai-browser-only"), {});
+  assert.equal(
+    applicationAuditCommand("release"),
+    "corepack pnpm verify:release",
+  );
+  for (const flag of [
+    "--release",
+    "--ai-browser-only",
+    "--ai-quality",
+    "--browser=firefox",
+    "--grep=synced",
+    "--api-only",
+    "--postgres-only",
+    "--skip-postgres",
+    "--templates-only",
+    "--advanced-only",
+    "--startup-only",
+    "--project=firefox-desktop",
+    "--editor-browser-only",
+  ]) {
+    assert.throws(() => applicationAuditMode(["--editor-browser-only", flag]));
+  }
+  assert.throws(() =>
+    applicationAuditMode(["--editor-browser-only", "--subnet=a", "--subnet=b"]),
+  );
+  assert.throws(() => applicationAuditEnvironment("unknown"));
 });
 
 test("native capture detects exact secrets across chunks and returns labels only", () => {

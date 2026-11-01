@@ -40,9 +40,11 @@ function TransclusionContent({
   // - dragstart from the nested view must not initiate a host block drag
   // - external file dragover/drop must stay isolated to avoid duplicate
   //   uploads, while ProseMirror block drags must reach the host editor.
+  // Keep native mouse focus here so the host cannot reset nested selection.
   return (
     <div
       ref={contentRef}
+      tabIndex={-1}
       className={classes.transclusionContent}
       style={
         renderEditor
