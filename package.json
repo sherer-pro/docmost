@@ -24,7 +24,7 @@
     "test:performance": "node --test scripts/performance-audit.test.mjs && node scripts/performance-audit.mjs",
     "test:security": "corepack pnpm run test:security:dependencies && corepack pnpm run test:security:ai-harness && node --test apps/server/test/fixtures/ai-external-mcp-hostile-server.test.mjs && corepack pnpm --filter ./apps/server test:security && corepack pnpm --filter ./apps/client test:security",
     "test:security:dependencies": "node --import tsx --test --test-timeout=15000 scripts/security-dependencies.test.mjs",
-    "test:security:ai-harness": "node --test scripts/ai-application-log-scan.test.mjs apps/server/test/ai-quality-cloud-gateway.test.mjs apps/server/test/ai-quality-provider-proxy.test.mjs",
+    "test:security:ai-harness": "node --test scripts/ai-application-log-scan.test.mjs apps/server/test/ai-quality-cloud-gateway.test.mjs apps/server/test/ai-quality-provider-proxy.test.mjs apps/server/test/ai-quality-transmission.test.mjs apps/server/test/reproject-ai-rag-transmission.test.mjs",
     "test:redis-tls": "node apps/server/test/redis-url-live.mjs",
     "test": "corepack pnpm run test:server && corepack pnpm run test:client:smoke",
     "test:all": "corepack pnpm run test && corepack pnpm run test:client",

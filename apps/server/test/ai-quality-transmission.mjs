@@ -6,7 +6,10 @@ export function providerTextSegments(requests) {
       throw new Error('Quality transmission observation exceeds its bounds');
     if (typeof value === 'string') {
       let trimmed = value.trim();
-      const envelope = /^UNTRUSTED_REFERENCE_DATA_JSON\r?\n([\s\S]*?)\r?\nEND_UNTRUSTED_REFERENCE_DATA_JSON(?:\r?\n|$)/.exec(trimmed);
+      const envelope =
+        /^UNTRUSTED_REFERENCE_DATA_JSON\r?\n([\s\S]*?)\r?\nEND_UNTRUSTED_REFERENCE_DATA_JSON(?:\r?\n|$)/.exec(
+          trimmed,
+        );
       if (envelope) trimmed = envelope[1];
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         let decoded;
@@ -27,7 +30,12 @@ export function providerTextSegments(requests) {
       for (const item of Object.values(value)) visit(item, depth + 1);
   };
   for (const request of requests) {
-    if (!request.transmitted || request.transportError) continue;
+    const confirmedStatus =
+      Number.isInteger(request.status) &&
+      request.status >= 200 &&
+      request.status < 300;
+    // A response-stream failure does not undo confirmed input delivery.
+    if (request.transmitted !== true || !confirmedStatus) continue;
     for (const message of request.messages ?? []) visit(message.content);
   }
   return result;

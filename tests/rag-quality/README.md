@@ -169,6 +169,21 @@ user request; JSON string escapes must not be mistaken for missing multiline
 evidence. Preserve original captures when auditing an observer correction and
 write a separate derived receipt identifying its inputs.
 
+The capture proxy sets `transmitted=true` only after successful upstream HTTP
+headers. A later response-read error cannot undo that confirmed request delivery.
+The observer still requires the complete canonical text and its exact marker in
+one decoded reference frame. A transport error without successful headers, an
+unsuccessful response or a false delivery flag cannot establish transmission.
+Replay corrections into separate files with checked corpus/configuration and
+provider references; preserve original answers, citations, scores and human
+annotations. A corrected observation is not a new model experiment.
+
+Use `node apps/server/test/reproject-ai-rag-transmission.mjs CORPUS.json RUNS.jsonl PROVIDER.jsonl OUTPUT.jsonl` for a retained RAG capture. Its adjacent
+`quality-configuration.json` and exact corpus bytes must match. The command
+checks case/model/sequence/hash/status references, changes only derived
+`evidence[].transmitted` flags and creates a separate checksum provenance file.
+Existing outputs and input/output collisions are rejected.
+
 The initial RAG canary returned zero local candidates for its full natural-language
 question and completed without inference in grounded mode. This is a measured
 retrieval miss, not successful quality acceptance. The ten-case database tuning

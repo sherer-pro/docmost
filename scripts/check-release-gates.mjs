@@ -183,6 +183,8 @@ const REQUIRED_PACKAGE_SCRIPT_COMMANDS = {
     "scripts/ai-application-log-scan.test.mjs",
     "apps/server/test/ai-quality-cloud-gateway.test.mjs",
     "apps/server/test/ai-quality-provider-proxy.test.mjs",
+    "apps/server/test/ai-quality-transmission.test.mjs",
+    "apps/server/test/reproject-ai-rag-transmission.test.mjs",
   ],
 };
 

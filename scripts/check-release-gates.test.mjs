@@ -916,6 +916,8 @@ for (const fixture of [
   "scripts/ai-application-log-scan.test.mjs",
   "apps/server/test/ai-quality-cloud-gateway.test.mjs",
   "apps/server/test/ai-quality-provider-proxy.test.mjs",
+  "apps/server/test/ai-quality-transmission.test.mjs",
+  "apps/server/test/reproject-ai-rag-transmission.test.mjs",
 ]) {
   test(`rejects AI harness security verification without ${fixture}`, () => {
     const mutatedPackage = structuredClone(packageJson);

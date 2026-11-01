@@ -4,19 +4,44 @@ Date: 2026-11-01. The feature packages for stages 1–4 are implemented locally;
 final acceptance is still in progress. Push and deployment are explicitly on
 hold. The focus correction `f4e0b5e5` passes complete application acceptance in
 Chromium, Firefox and WebKit, including the two original WebKit failures. The
-expanded final release gate passes on documentation revision `017f5a0d`.
-Its native application-log audit did not actually read the application logs;
-the test harness correction and its real-runtime recheck are separate below.
+expanded final release gate passes on `f537999c`, including the corrected native
+application-log source. The earlier `017f5a0d` run did not actually read those
+logs and retains that explicit coverage limit.
 Earlier accepted candidates retain their actual revision boundaries below.
 Human-reviewed model quality remains pending. Both Gemma 12B and the
 operator-approved Gemma 26B fail the database accuracy target: 71/80 and 53/80,
-respectively. Both complete 26B captures are retained with an unaccepted
-160-case report and an offline review packet. Stages 1–4 are not
+respectively. Claude Sonnet 4.6 completes all 160 cases and reaches 73/80 on the
+same frozen database gate. Original captures and unaccepted reports are retained.
+Human answer review and strict model acceptance remain unfinished. Stages 1–4 are not
 yet complete. Remote CI for the new commits is on hold with push.
 
 ## Current acceptance state
 
-### Complete release gate and remaining native log recheck
+### Latest complete release on the corrected runner
+
+`roadmap-verify-release-f537999c.log` records the complete isolated release pass
+in runtime `2026-11-01T16-57-37-999Z`, with Node 22.23.4 and the unchanged
+application snapshot. All 31 PostgreSQL cases, the complete `verify:full`,
+release contracts, 18 PWA, 27 database-focus and 28 AI browser cases pass.
+Agent audit `20261101170944-890fdcca` passes 18 runs and 54 steps and removes
+its owned volumes. AI-context audit `01a19831-971d-7d85-b780-817fe560cfc4`
+passes all 14 scenarios. All owned runtime cleanup succeeds.
+
+The native scan reads all 32835 API bytes and 1300 collaboration bytes:
+34135 observed and scanned bytes, both sources complete, no truncation and all
+34 secret counts zero. Artifact scans remain separate. The editor records
+64 passed cases, one flaky case that passes its configured retry, and the two
+existing explicit Firefox skips. Ten downloaded export artifacts pass content
+verification; four non-blocking FontBBox warnings remain.
+
+The flaky Firefox synced-block test reads an empty native mouse selection on
+its first attempt at `synced-blocks.spec.ts:562:60`; both earlier clipboard
+checks pass. Its original trace, screenshot and video remain retained, and
+`roadmap-firefox-synced-blocks-f537999c-diagnosis.md` records the evidence.
+The root cause is unconfirmed. No source, timeout, assertion or retry policy is
+changed to obtain the passing retry. This run is not reported as retry-free.
+
+### Previous release and native log correction
 
 `roadmap-verify-release-017f5a0d-attempt2.log` records the complete isolated
 `verify:release` pass in runtime `2026-11-01T14-50-38-173Z`, on Node 22.23.4.
@@ -27,7 +52,7 @@ tests and 227 RAG Sync tests. Agent acceptance passes 18 runs and 54 steps.
 Editor acceptance passes 65 cases with the two existing explicit Firefox skips;
 there are no actual retries or flaky cases. Ten downloaded export artifacts
 pass content verification, and all 14 AI-context scenarios pass. Lint reports
-42 warnings and no errors. Owned runtime cleanup succeeds.
+45 warnings and no errors. Owned runtime cleanup succeeds.
 
 The preceding attempt stopped at the existing 15-second dependency-suite
 startup budget. The unchanged isolated command then passed all eight cases,
@@ -43,8 +68,25 @@ service. Missing, truncated, empty or inconsistent native sources fail closed.
 The new public `test:security:ai-harness` gate passes all 36 cases, including
 negative tests for decoded secrets, chunk boundaries, forged scan completeness
 and paid gateway admission. The targeted independent review closes all five
-reported defects. Real native AI browser acceptance of this correction remains
-pending; the old release result is not relabeled as that acceptance.
+reported defects. The real native AI browser diagnostic passes all 28 cases on `cfb3e554`, with
+zero skips, retries or flaky cases, in runtime `2026-11-01T16-37-20-721Z`.
+The audit scans all 31719 API bytes and 1300 collaboration bytes: observed and
+scanned totals are equal, both sources are complete, neither is truncated and
+all 34 secret counts are zero. Artifact scans and all owned-resource cleanup
+checks pass. `roadmap-native-ai-log-audit-cfb3e554-receipt.json` retains its
+source-specific evidence; the old release result is not relabeled.
+
+The updated complete `verify:full` passes on `f537999c`: 2540 backend tests,
+945 client tests, eight real dependency cases, 36 AI-harness safeguards, three
+hostile MCP cases, 1044 backend-security tests and 82 client-security tests.
+All contracts, maintenance, build and bundle checks pass. Lint retains the
+same 45 warnings and zero errors as the actual `017f5a0d` release log. QA remains
+clean. `roadmap-verify-full-f537999c.log` records the complete command.
+The first new attempt on `cfb3e554` stopped at the CE gate because a comment
+contained a retired-runtime keyword. The only correction replaces that English
+comment's word `billing` with `invoice`; execution and the gate are unchanged.
+The native diagnostic predates this unrelated comment-only correction and is
+kept at its actual revision.
 
 ### Bounded cloud model comparison
 
@@ -56,12 +98,59 @@ request admission. Unknown or cancelled usage retains a conservative charge;
 this estimate does not replace the provider invoice. No credentials enter child
 arguments, captures or receipts.
 
-The complete 160-case cloud capture has not yet run. The production AI pipeline
+The complete 160-case cloud capture finishes on `f537999c`, with both 80-case
+scopes, successful owned cleanup and no remaining in-flight requests. Its
+conservative charge is USD 4.184175: USD 4.072119 of reported-usage estimates
+plus USD 0.112056 retained for one cancelled request with unknown usage.
+Together with the connectivity capture and technical probe, the estimate is
+USD 4.275738, within the operator-approved USD 20 limit. This does not replace
+the provider invoice. No further paid inference is needed for the observer
+correction described below. The production AI pipeline
 still matches all 133 frozen source entries used for the Gemma comparison.
+The rebuilt backend, both shared packages, corpus bytes and lockfile also match
+the frozen hashes exactly; `roadmap-claude-source-freeze-preflight-f537999c.json`
+records those checks. The first attempt was stopped before process spawn by
+automatic approval review. After the operator explicitly authorized sending the
+synthetic fixtures to the official API, connectivity and the complete capture
+ran. No working documents or production environment file were used.
 Production prompts, filters, scoring and corpus are unchanged. This corpus has
 already been observed, so another model's result is a fixed-pipeline regression
 comparison rather than independent blind evidence. Human annotations and the
-answer-quality acceptance gate remain pending.
+answer-quality acceptance gate remain pending. The database metric is 73/80:
+all 72 non-access cases pass, while seven access questions produce additional
+business-status filtering. One of those answers reaches the correct final
+number by combining separate status summaries, but still fails the unchanged
+whole-view tool-trace gate. The wording's possible ambiguity is documented; no
+case, oracle, score or human annotation is changed to improve the result.
+
+The original RAG observer incorrectly marks nine allowed, current sources as
+not transmitted. Three captured requests have successful HTTP 200 headers and
+`transmitted=true`, followed by a response-read `transportError`; their complete
+canonical excerpts and exact markers are present in the actual JSON reference
+frames. The observer discarded those requests solely because the response read
+failed. This is an observation error, not evidence of an ACL leak. Its generic
+transport correction and separate replay must preserve the raw capture,
+answers, scoring rules and human-review boundary.
+
+The corrected observer unconditionally requires `transmitted === true` and an
+integer HTTP status in the successful 2xx range. Unknown or failed delivery
+remains excluded; the exact text and marker must still share one reference
+frame. Its new RAG replay CLI validates corpus/configuration and provider
+references, refuses input/output collisions and preserves every other capture
+field. Independent targeted review closes the missing-status guard finding.
+The final public security gate passes all 47 cases, the adjacent observation
+and scoring suite passes 14, and all 119 release-contract/negative cases pass.
+Maintenance remains at 397 Knip findings and 16 duplicate blocks.
+
+Separate replay changes exactly nine transmission flags in three RAG records.
+The 80 original database records are copied byte-for-byte; original provider
+captures, answers, citations, corpus, both scorers and human fields retain their
+hashes. The original report with nine failed transmission flags is retained.
+The corrected 160-case report has recall 1.0, 173/173 valid citations, zero
+forbidden evidence or answers, database accuracy 73/80 and preparation p95
+1036 ms (1792 ms for RAG-only). Human review remains zero, factual support is
+unmeasured and `accepted=false`. No production AI logic, model prompt, filter,
+oracle, threshold or inference request changes during this correction.
 
 ### Latest database focus correction
 
