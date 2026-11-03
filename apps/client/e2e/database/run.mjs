@@ -1,9 +1,8 @@
 import { createServer } from "vite";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { createDatabaseFixtureApi } from "./synthetic-api.mjs";
 
 const require = createRequire(import.meta.url);
 const args = process.argv.slice(2);
@@ -20,6 +19,21 @@ const browsers =
       ? [browser]
       : [];
 const root = fileURLToPath(new URL("../..", import.meta.url));
+const contractRoot = path.resolve(root, "../../packages/api-contract");
+const contractRequire = createRequire(path.join(contractRoot, "package.json"));
+const contractBuild = spawnSync(
+  process.execPath,
+  [
+    contractRequire.resolve("typescript/bin/tsc"),
+    "-p",
+    path.join(contractRoot, "tsconfig.json"),
+  ],
+  { stdio: "inherit" },
+);
+if (contractBuild.error) throw contractBuild.error;
+if (contractBuild.status !== 0)
+  throw new Error("Database browser fixture API contract build failed");
+const { createDatabaseFixtureApi } = await import("./synthetic-api.mjs");
 process.chdir(root);
 process.env.APP_URL = "http://127.0.0.1:5195";
 const api = createDatabaseFixtureApi();
