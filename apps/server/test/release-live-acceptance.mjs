@@ -11,7 +11,8 @@ import { promisify } from 'node:util';
 import { sanitizeLogText } from '../../../scripts/sanitize-ci-log-stream.mjs';
 import {
   applicationAuditCommand,
-  applicationAuditEnvironment,
+  applicationAuditChildEnvironment,
+  applicationAuditRuntimeEnvironment,
   createApplicationLogScanService,
 } from '../../../scripts/ai-application-log-scan.mjs';
 import { request } from '../../client/e2e/database/api-context.mjs';
@@ -29,7 +30,8 @@ export async function runReleaseAcceptance({
   auditMode = 'release',
 }) {
   const command = applicationAuditCommand(auditMode);
-  const editorDiagnostic = auditMode === 'editor-browser-only';
+  const editorFull = auditMode === 'editor-browser-full';
+  const editorDiagnostic = auditMode === 'editor-browser-only' || editorFull;
   assert.equal(
     typeof scanApplicationLogs,
     'function',
@@ -82,30 +84,14 @@ export async function runReleaseAcceptance({
     output,
     auditMode === 'release'
       ? 'release'
-      : editorDiagnostic
-        ? 'editor-browser-diagnostic'
-        : 'ai-browser-diagnostic',
+      : editorFull
+        ? 'editor-browser-full-diagnostic'
+        : editorDiagnostic
+          ? 'editor-browser-diagnostic'
+          : 'ai-browser-diagnostic',
   );
   await mkdir(auditRoot, { recursive: true });
-  const env = Object.fromEntries(
-    [
-      'PATH',
-      'Path',
-      'SystemRoot',
-      'WINDIR',
-      'TEMP',
-      'TMP',
-      'USERPROFILE',
-      'COMSPEC',
-      'ComSpec',
-      'PATHEXT',
-      'ProgramFiles',
-      'ProgramFiles(x86)',
-      'HOME',
-    ]
-      .filter((key) => process.env[key])
-      .map((key) => [key, process.env[key]]),
-  );
+  const env = applicationAuditRuntimeEnvironment(process.env);
   const pathKey =
     Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
   env[pathKey] =
@@ -131,7 +117,6 @@ export async function runReleaseAcceptance({
     DOCMOST_AI_AGENT_AUDIT_ROOT: path.join(auditRoot, 'agent'),
     DOCMOST_EDITOR_AUDIT_ROOT: path.join(auditRoot, 'editor'),
     DOCMOST_AI_CONTEXT_AUDIT_ROOT: path.join(auditRoot, 'context'),
-    ...applicationAuditEnvironment(auditMode),
   });
   for (const name of [
     'DOCMOST_AI_AGENT_DEFAULT_SUBNET',
@@ -154,9 +139,11 @@ export async function runReleaseAcceptance({
   report[
     auditMode === 'release'
       ? 'release'
-      : editorDiagnostic
-        ? 'editorBrowserDiagnostic'
-        : 'aiBrowserDiagnostic'
+      : editorFull
+        ? 'editorBrowserFullDiagnostic'
+        : editorDiagnostic
+          ? 'editorBrowserDiagnostic'
+          : 'aiBrowserDiagnostic'
   ] = auditRecord;
   const scanService = await createApplicationLogScanService({
     scan: scanApplicationLogs,
@@ -164,6 +151,7 @@ export async function runReleaseAcceptance({
   exactSecrets.add(scanService.token);
   env.DOCMOST_AI_APPLICATION_LOG_SCAN_URL = scanService.url;
   env.DOCMOST_AI_APPLICATION_LOG_SCAN_TOKEN = scanService.token;
+  const childEnv = applicationAuditChildEnvironment(auditMode, env);
   try {
     const log = createWriteStream(path.join(output, 'verify-release.log'), {
       flags: 'wx',
@@ -176,7 +164,7 @@ export async function runReleaseAcceptance({
       process.platform === 'win32'
         ? ['/d', '/s', '/c', command]
         : command.split(' ').slice(1),
-      { cwd: repo, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      { cwd: repo, env: childEnv, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const relay = async (stream) => {
       for await (const line of createInterface({
@@ -206,9 +194,11 @@ export async function runReleaseAcceptance({
       name:
         auditMode === 'release'
           ? 'Full isolated verify:release'
-          : editorDiagnostic
-            ? 'Isolated Firefox synced-blocks diagnostic'
-            : 'Isolated AI browser diagnostic',
+          : editorFull
+            ? 'Full isolated editor browser audit and downloaded artifacts'
+            : editorDiagnostic
+              ? 'Isolated Firefox synced-blocks diagnostic'
+              : 'Isolated AI browser diagnostic',
       passed: code === 0,
     });
     assert.equal(

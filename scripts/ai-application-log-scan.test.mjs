@@ -3,12 +3,15 @@ import { createServer } from "node:http";
 import test from "node:test";
 import {
   applicationAuditCommand,
+  applicationAuditChildEnvironment,
   applicationAuditEnvironment,
   applicationAuditMode,
+  applicationAuditRuntimeEnvironment,
   applicationLogErrorSummary,
   applicationLogScanResult,
   createApplicationLogCapture,
   createApplicationLogScanService,
+  isolatedApplicationOutputName,
   nativeApplicationLogScanResult,
   requestApplicationLogScan,
   scanDockerApplicationLogs,
@@ -28,6 +31,19 @@ const cleanCapture = () => {
   capture.append("collaboration", "Collaboration ready\n");
   return capture;
 };
+
+test("parallel isolated runs at the same timestamp have distinct owned output directories", async () => {
+  const timestamp = new Date("2026-11-02T20:33:00.006Z");
+  const names = await Promise.all([
+    "6ea953b2-883e-4de0-99e7-e98d965f68c0",
+    "ae2214b4-0dab-4910-b75f-ab8228f96834",
+  ].map(async (runId) => isolatedApplicationOutputName(timestamp, runId)));
+  assert.deepEqual(names, [
+    "2026-11-02T20-33-00-006Z-6ea953b2",
+    "2026-11-02T20-33-00-006Z-ae2214b4",
+  ]);
+  assert.equal(new Set(names).size, 2);
+});
 
 test("joined error summaries redact known secrets reconstructed across source chunks", () => {
   const secret = "bare-known-secret-29741";
@@ -106,6 +122,7 @@ test("isolated diagnostic is a fixed AI-only preset and cannot shorten release a
   for (const flag of [
     "--release",
     "--editor-browser-only",
+    "--editor-browser-full",
     "--ai-quality",
     "--browser=all",
     "--grep=anything",
@@ -148,6 +165,7 @@ test("editor diagnostic fixes the Firefox synced-blocks selection and rejects su
   for (const flag of [
     "--release",
     "--ai-browser-only",
+    "--editor-browser-full",
     "--ai-quality",
     "--browser=firefox",
     "--grep=synced",
@@ -166,6 +184,58 @@ test("editor diagnostic fixes the Firefox synced-blocks selection and rejects su
     applicationAuditMode(["--editor-browser-only", "--subnet=a", "--subnet=b"]),
   );
   assert.throws(() => applicationAuditEnvironment("unknown"));
+});
+
+test("full editor diagnostic keeps the complete editor command without selection presets", () => {
+  assert.equal(applicationAuditMode(["--editor-browser-full"]), "editor-browser-full");
+  assert.equal(applicationAuditMode(["--editor-browser-full", "--subnet=10.241.245.0/28"]), "editor-browser-full");
+  assert.equal(applicationAuditCommand("editor-browser-full"), "corepack pnpm test:editor:e2e");
+  assert.deepEqual(applicationAuditEnvironment("editor-browser-full"), {});
+  const inherited = {
+    PATH: "synthetic-path",
+    DOCMOST_EDITOR_AUDIT_FILES: "one-spec.spec.ts",
+    DOCMOST_EDITOR_AUDIT_PROJECTS: "mobile-chromium",
+  };
+  assert.deepEqual(applicationAuditChildEnvironment("editor-browser-full", inherited), { PATH: "synthetic-path" });
+  assert.deepEqual(applicationAuditChildEnvironment("editor-browser-only", inherited), {
+    PATH: "synthetic-path",
+    DOCMOST_EDITOR_AUDIT_FILES: "synced-blocks.spec.ts",
+    DOCMOST_EDITOR_AUDIT_PROJECTS: "firefox-desktop",
+  });
+  assert.equal(inherited.DOCMOST_EDITOR_AUDIT_FILES, "one-spec.spec.ts");
+  assert.deepEqual(applicationAuditEnvironment("editor-browser-only"), {
+    DOCMOST_EDITOR_AUDIT_FILES: "synced-blocks.spec.ts",
+    DOCMOST_EDITOR_AUDIT_PROJECTS: "firefox-desktop",
+  });
+  for (const flag of [
+    "--release", "--ai-browser-only", "--editor-browser-only", "--editor-browser-full",
+    "--ai-quality", "--quality-scope=rag", "--browser=all", "--browser=chromium",
+    "--grep=anything", "--api-only", "--startup-only", "--postgres-only", "--skip-postgres",
+    "--templates-only", "--advanced-only", "--mcp-oauth-only", "--project=firefox-desktop",
+  ]) assert.throws(() => applicationAuditMode(["--editor-browser-full", flag]), flag);
+  assert.throws(() => applicationAuditMode(["--editor-browser-full", "--subnet=a", "--subnet=b"]));
+  assert.throws(() => applicationAuditMode(["--release", "--editor-browser-full"]));
+});
+
+test("isolated audit retains Python user-site context and explicit tool caches without inheriting selectors or secrets", () => {
+  const inherited = {
+    PATH: "synthetic-path",
+    APPDATA: "synthetic-roaming",
+    DOCMOST_PYTHON: "synthetic-python",
+    COREPACK_HOME: "synthetic-corepack-cache",
+    PLAYWRIGHT_BROWSERS_PATH: "synthetic-browser-cache",
+    DOCMOST_EDITOR_AUDIT_FILES: "one.spec.ts",
+    DOCMOST_EDITOR_AUDIT_PROJECTS: "mobile-chromium",
+    NODE_OPTIONS: "--require synthetic-code",
+    PRIVATE_PROVIDER_KEY: "synthetic-secret",
+  };
+  assert.deepEqual(applicationAuditRuntimeEnvironment(inherited), {
+    PATH: "synthetic-path",
+    APPDATA: "synthetic-roaming",
+    DOCMOST_PYTHON: "synthetic-python",
+    COREPACK_HOME: "synthetic-corepack-cache",
+    PLAYWRIGHT_BROWSERS_PATH: "synthetic-browser-cache",
+  });
 });
 
 test("native capture detects exact secrets across chunks and returns labels only", () => {

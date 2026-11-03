@@ -317,9 +317,11 @@ async function api(
   method = "GET",
   data?: unknown,
 ) {
-  const csrf = (await request.storageState()).cookies.find(
+  const cookiesBefore = (await request.storageState()).cookies;
+  const csrfCookiesBefore = cookiesBefore.filter(
     (cookie) => cookie.name === "csrfToken",
-  )?.value;
+  );
+  const csrf = csrfCookiesBefore[0]?.value;
   const response = await request.fetch(`/api${endpoint}`, {
     method,
     data,
@@ -329,6 +331,56 @@ async function api(
       ...(csrf ? { "x-csrf-token": csrf } : {}),
     },
   });
+  if (!response.ok()) {
+    const knownCsrfReasons = {
+      "CSRF origin validation failed": "csrf_origin_validation_failed",
+      "CSRF token validation failed": "csrf_token_validation_failed",
+    } as const;
+    const envelope = await response.json().catch(() => null);
+    const candidateMessage = envelope?.message;
+    const serverMessage = typeof candidateMessage === "string" &&
+      Object.hasOwn(knownCsrfReasons, candidateMessage)
+      ? candidateMessage as keyof typeof knownCsrfReasons : null;
+    const cookiesAfter = (await request.storageState()).cookies.filter(
+      (cookie) => cookie.name === "csrfToken",
+    );
+    const target = new URL(`/api${endpoint}`, process.env.DATABASE_LIVE_URL!);
+    const appliesToTarget = (cookie: (typeof csrfCookiesBefore)[number]) => {
+      const domain = cookie.domain.replace(/^\./, "");
+      const domainMatches = target.hostname === domain ||
+        (cookie.domain.startsWith(".") && target.hostname.endsWith(`.${domain}`));
+      const pathMatches = target.pathname === cookie.path ||
+        target.pathname.startsWith(cookie.path.endsWith("/") ? cookie.path : `${cookie.path}/`);
+      return domainMatches && pathMatches &&
+        (!cookie.secure || target.protocol === "https:") &&
+        (cookie.expires <= 0 || cookie.expires > Date.now() / 1000);
+    };
+    const applicable = csrfCookiesBefore.filter(appliesToTarget);
+    await test.info().attach("api-error-csrf-diagnostic", {
+      contentType: "application/json",
+      body: Buffer.from(JSON.stringify({
+        method, endpoint: endpoint.split("?")[0], status: response.status(),
+        reasonCode: serverMessage ? knownCsrfReasons[serverMessage] : "unclassified_http_error",
+        serverMessage,
+        configuredOriginMatchesTarget: new URL(process.env.DATABASE_LIVE_URL!).origin === target.origin,
+        totalCookieCountBefore: cookiesBefore.length,
+        csrfCookieCountBefore: csrfCookiesBefore.length,
+        csrfCookieCountAfter: cookiesAfter.length,
+        csrfHeaderPresent: Boolean(csrf),
+        applicableCsrfCookieCount: applicable.length,
+        selectedHeaderMatchesEveryApplicableCookie: applicable.length > 0 &&
+          applicable.every((cookie) => cookie.value === csrf),
+        csrfCookieValuesUnchangedAfterResponse: csrfCookiesBefore.length === cookiesAfter.length &&
+          csrfCookiesBefore.every((before) => cookiesAfter.some((after) =>
+            before.domain === after.domain && before.path === after.path && before.value === after.value)),
+        csrfCookies: csrfCookiesBefore.map((cookie, index) => ({
+          domain: cookie.domain, path: cookie.path, secure: cookie.secure,
+          httpOnly: cookie.httpOnly, sameSite: cookie.sameSite,
+          selectedForHeader: index === 0, appliesToTarget: appliesToTarget(cookie),
+        })),
+      })),
+    });
+  }
   expect(
     response.ok(),
     `${method} ${endpoint.split("?")[0]}: ${response.status()}`,
@@ -1157,7 +1209,7 @@ for (const recordMode of ["read", "edit"] as const) {
     const tablePath = new URL(page.url()).pathname;
     await page.getByRole("link", { name: "Row 0103", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`record=${fixture.ids[103]}`));
-    const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+    const drawer = page.getByRole("dialog", { name: /^Row /, exact: true });
     await expect(drawer).toBeVisible();
     await drawer
       .getByTestId("page-state-segmented-control")
@@ -1230,7 +1282,7 @@ for (const recordMode of ["read", "edit"] as const) {
         );
       await reader.goto(`${fixture.route}?record=${fixture.ids[103]}`);
       const readDrawer = reader.getByRole("dialog", {
-        name: "Record",
+        name: /^Row /,
         exact: true,
       });
       await expect(
@@ -1250,33 +1302,80 @@ for (const recordMode of ["read", "edit"] as const) {
 
 test("live record drawer preserves table context and supports direct links", async ({
   page,
-}) => {
+}, info) => {
   await open(page);
+  const geometry: unknown[] = [];
+  const observeGeometry = async (stage: string) => {
+    // Wait for finite overlay transitions, then sample without restoring scroll.
+    await page.evaluate(async () => {
+      await Promise.allSettled(document.getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished));
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    });
+    geometry.push({
+      stage,
+      route: new URL(page.url()).pathname,
+      record: new URL(page.url()).searchParams.get("record"),
+      view: await page.getByRole("textbox", {
+        name: "View", exact: true, includeHidden: true,
+      }).inputValue(),
+      ...(await gridViewport(page).evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        maxScrollLeft: Math.max(0, element.scrollWidth - element.clientWidth),
+        scrollLeft: element.scrollLeft,
+        scrollTop: element.scrollTop,
+        pageTop: window.scrollY,
+        mainScrollTop: document.querySelector("main")?.scrollTop,
+        selectedCells: Array.from(element.querySelectorAll('[data-selected="true"]'))
+          .map((cell) => cell.getAttribute("data-database-cell-key")),
+      }))),
+    });
+    await info.attach(`O001-${stage}`, {
+      body: Buffer.from(JSON.stringify(geometry.at(-1))),
+      contentType: "application/json",
+    });
+  };
+  await gridViewport(page).evaluate((element) => {
+    element.scrollLeft = Math.min(572, element.scrollWidth - element.clientWidth);
+  });
+  await observeGeometry("before-open");
   const title = page.getByRole("link", { name: "Row 0101", exact: true });
   await title.click();
-  const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+  const drawer = page.getByRole("dialog", { name: /^Row /, exact: true });
   await expect(drawer).toBeVisible();
   await expect(
     drawer.getByText("Synthetic row 101", { exact: true }),
   ).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`record=${fixture.ids[101]}`));
+  await observeGeometry("drawer-open");
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  await observeGeometry("drawer-closed");
+  await title.click();
+  await expect(drawer).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("dialog", { name: "Record", exact: true }),
+    page.getByRole("dialog", { name: /^Row /, exact: true }),
   ).toBeVisible();
+  await observeGeometry("reloaded-drawer-open");
   await page
-    .getByRole("dialog", { name: "Record", exact: true })
+    .getByRole("dialog", { name: /^Row /, exact: true })
     .getByRole("button", { name: "Close", exact: true })
     .click();
   await expect(page.getByText("Rows: 900", { exact: true })).toBeVisible();
   await expect(cell(page, 101)).toBeVisible();
+  await observeGeometry("reloaded-drawer-closed");
 });
 
 test("live direct record navigation seeks beyond loaded rows", async ({
   page,
 }) => {
   await page.goto(`${fixture.route}?record=${fixture.ids[800]}`);
-  const drawer = page.getByRole("dialog", { name: "Record", exact: true });
+  const drawer = page.getByRole("dialog", { name: /^Row /, exact: true });
   await expect(
     drawer.getByText("Synthetic row 800", { exact: true }),
   ).toBeVisible();
@@ -1671,8 +1770,84 @@ test("live TSV preserves blank rows and retries only the failed row", async ({
 test("live two clients preserve view conflicts and explicitly apply the draft", async ({
   page,
   browser,
-}) => {
+}, info) => {
   await open(page);
+  await selectShared(page);
+  // O003 originally followed a shared column width/order save and reload.
+  // Observe that single-tab phase before introducing the intentional peer conflict.
+  const ownSave: unknown[] = [];
+  const pendingResponses: Promise<void>[] = [];
+  const viewPath = `/api/databases/${fixture.databaseId}/views/${fixture.viewId}`;
+  const onResponse = (response: import("@playwright/test").Response) => {
+    if (new URL(response.url()).pathname !== viewPath ||
+      response.request().method() !== "PATCH") return;
+    pendingResponses.push((async () => {
+      const request = response.request().postDataJSON();
+      const envelope = await response.json();
+      const saved = envelope.data ?? envelope;
+      ownSave.push({
+        stage: "save-response",
+        status: response.status(),
+        baseRevision: request.expectedRevision,
+        serverRevision: saved.revision,
+        draft: { name: request.name, config: request.config },
+      });
+    })().catch((error) => {
+      ownSave.push({ stage: "response-observation-error", message: String(error) });
+    }));
+  };
+  const observeOwnSave = async (stage: string) => {
+    const server = (await api(page.request, `/databases/${fixture.databaseId}/views`))
+      .find((view: any) => view.id === fixture.viewId);
+    ownSave.push({
+      stage,
+      server: { revision: server.revision, name: server.name, config: server.config },
+      warningVisible: await page.getByText(
+        "This view changed in another session. Your draft is preserved.",
+        { exact: true },
+      ).isVisible(),
+      localDrafts: await page.evaluate((viewId) => Object.entries(localStorage)
+        .filter(([key]) => key.endsWith(`:draft:${viewId}`))
+        .map(([key, value]) => ({ key, value: JSON.parse(value) })), fixture.viewId),
+    });
+    await info.attach(`O003-${stage}`, {
+      body: Buffer.from(JSON.stringify(ownSave)),
+      contentType: "application/json",
+    });
+  };
+  page.on("response", onResponse);
+  try {
+    await observeOwnSave("before-own-save");
+    const property = fixture.properties[1];
+    const header = page.getByRole("columnheader").filter({
+      has: page.getByText(property.name, { exact: true }),
+    });
+    await header.getByRole("button", { name: "Property actions", exact: true }).click();
+    await page.getByRole("textbox", { name: "Column width", exact: true }).fill("300");
+    await page.getByRole("menuitem", { name: "Move ←", exact: true }).click();
+    const savedResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === viewPath &&
+      response.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "Save for everyone", exact: true }).click();
+    await savedResponse;
+    await Promise.all(pendingResponses);
+    await observeOwnSave("after-own-save");
+    await page.reload();
+    await expect(cell(page, 101)).toBeVisible();
+    await observeOwnSave("after-own-reload");
+    await expect(page.getByText(
+      "This view changed in another session. Your draft is preserved.",
+      { exact: true },
+    )).toBeHidden();
+  } finally {
+    page.off("response", onResponse);
+    await Promise.all(pendingResponses);
+    await info.attach("O003-own-save-revisions", {
+      body: Buffer.from(JSON.stringify(ownSave)),
+      contentType: "application/json",
+    });
+  }
   const otherContext = await browser.newContext({
     storageState: sessions.editor,
   });
@@ -1792,10 +1967,12 @@ for (const undo of [true, false])
       }
     });
     await open(page);
-    await cell(page, 104)
+    const checkbox = cell(page, 104)
       .locator("xpath=..")
-      .getByRole("checkbox", { name: "Select row", exact: true })
-      .check();
+      .getByRole("checkbox", { name: "Select row", exact: true });
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.click();
+    await expect(checkbox).toBeChecked({ timeout: 5000 });
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     const renderedCellsBefore = await page
       .locator("[data-database-cell-key]")
@@ -2322,6 +2499,9 @@ for (const mobileWidth of [0, 320, 390])
         files.getByRole("link", { name: uploadedName, exact: true }),
       ).toBeVisible();
       mark("file-uploaded");
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await page.getByRole("button", { name: /^View settings \(/ }).click();
+      }
       await page
         .getByRole("button", { name: "Add property", exact: true })
         .click();
@@ -2363,6 +2543,10 @@ for (const mobileWidth of [0, 320, 390])
       await modal.getByRole("button", { name: "Save", exact: true }).click();
       await expect(modal).toHaveCount(0);
       mark("formula-saved");
+      if ((page.viewportSize()?.width ?? 1440) < 768) {
+        await page.getByRole("dialog", { name: "View settings", exact: true })
+          .getByRole("button", { name: "Close", exact: true }).click();
+      }
       const properties = await api(
         page.request,
         `/databases/${advanced.databaseId}/properties`,

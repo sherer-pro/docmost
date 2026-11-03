@@ -97,16 +97,44 @@ for (const theme of ["light", "dark"])
         exact: true,
       });
       await expect(toolbar).toHaveAttribute("data-pinned", "true");
-      await toolbar
+      const pinControls =
+        width < 768
+          ? await (async () => {
+              await page
+                .getByRole("button", { name: /^View settings/ })
+                .click();
+              return page.getByRole("dialog", {
+                name: "View settings",
+                exact: true,
+              });
+            })()
+          : toolbar;
+      await pinControls
         .getByRole("button", { name: "Unpin toolbar", exact: true })
         .click();
+      if (width < 768)
+        await pinControls
+          .getByRole("button", { name: "Close", exact: true })
+          .click();
       await expect(toolbar).toHaveAttribute("data-pinned", "false");
       await page.reload();
       await expect(toolbar).toHaveAttribute("data-pinned", "false");
-      await toolbar
+      const propertyControls =
+        width < 768
+          ? await (async () => {
+              await page
+                .getByRole("button", { name: /^View settings/ })
+                .click();
+              return page.getByRole("dialog", {
+                name: "View settings",
+                exact: true,
+              });
+            })()
+          : toolbar;
+      await propertyControls
         .getByRole("button", { name: "Pin toolbar", exact: true })
         .click();
-      await toolbar
+      await propertyControls
         .getByRole("button", { name: "Add property", exact: true })
         .click();
       await expect(
@@ -119,6 +147,10 @@ for (const theme of ["light", "dark"])
       await expect(
         page.getByRole("textbox", { name: "New column name", exact: true }),
       ).toHaveCount(0);
+      if (width < 768)
+        await propertyControls
+          .getByRole("button", { name: "Close", exact: true })
+          .click();
       expect(failures).toEqual([]);
       await page.screenshot({
         path: testInfo.outputPath(`database-${theme}-${width}.png`),
@@ -620,9 +652,10 @@ test("pending cell focus preserves a newer cell choice before a blur save comple
     await expect(date).toBeFocused();
   } finally {
     const saved = saving
-      ? page.waitForResponse((response) =>
-          response.request().method() === "PATCH" &&
-          response.url().endsWith("/cells"),
+      ? page.waitForResponse(
+          (response) =>
+            response.request().method() === "PATCH" &&
+            response.url().endsWith("/cells"),
         )
       : undefined;
     release();

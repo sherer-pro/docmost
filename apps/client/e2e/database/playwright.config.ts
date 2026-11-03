@@ -4,7 +4,11 @@ const browsers =
   process.env.DATABASE_TABLES_BROWSERS?.split(",").filter(Boolean);
 export default defineConfig({
   testDir: ".",
-  testMatch: "database.spec.ts",
+  testMatch: [
+    "database.spec.ts",
+    "ui-remediation.spec.ts",
+    "layout-remediation.spec.ts",
+  ],
   workers: 1,
   projects: browsers?.length
     ? browsers.map((browser) => ({

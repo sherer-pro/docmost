@@ -3,40 +3,56 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createSmtpServer } from "node:net";
 import { createRequire } from "node:module";
 import { once } from "node:events";
-import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { verifyRedirectCredentialIsolation } from "./follow-redirects-acceptance.mjs";
-import StarterKit from "@tiptap/starter-kit";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 const serverRequire = createRequire(
   new URL("../apps/server/package.json", import.meta.url),
 );
-const { generateJSON } = serverRequire(
-  "./src/common/helpers/prosemirror/html/generateJSON.ts",
-);
-const { generateHTML } = serverRequire(
-  "./src/common/helpers/prosemirror/html/generateHTML.ts",
-);
-const { SmtpDriver } = serverRequire(
-  "./src/integrations/mail/drivers/smtp.driver.ts",
-);
-const { createAiPinnedDispatcher } = serverRequire(
-  "./src/core/ai/services/ai-pinned-http.util.ts",
-);
-const { Window } = await import(
-  pathToFileURL(serverRequire.resolve("happy-dom")).href
-);
-const multipartRequire = createRequire(
-  serverRequire.resolve("@fastify/multipart"),
-);
-const Busboy = multipartRequire("@fastify/busboy");
+let htmlDependencies;
+function loadHtmlDependencies() {
+  return (htmlDependencies ??= import("@tiptap/starter-kit").then(
+    ({ default: StarterKit }) => ({
+      StarterKit,
+      ...serverRequire("./src/common/helpers/prosemirror/html/generateJSON.ts"),
+      ...serverRequire("./src/common/helpers/prosemirror/html/generateHTML.ts"),
+    }),
+  ));
+}
+
+function loadServerWindow() {
+  // Match the production HTML helpers' require path and avoid a second ESM DOM graph.
+  const htmlRequire = createRequire(
+    new URL(
+      "../apps/server/src/common/helpers/prosemirror/html/generateJSON.ts",
+      import.meta.url,
+    ),
+  );
+  return htmlRequire("happy-dom").Window;
+}
+
+let mcpDependencies;
+function loadMcpDependencies() {
+  return (mcpDependencies ??= Promise.all([
+    import("@modelcontextprotocol/sdk/client/index.js"),
+    import("@modelcontextprotocol/sdk/client/streamableHttp.js"),
+    import("@modelcontextprotocol/sdk/server/index.js"),
+    import("@modelcontextprotocol/sdk/server/streamableHttp.js"),
+    import("@modelcontextprotocol/sdk/types.js"),
+  ]).then(([client, clientTransport, server, serverTransport, schemas]) => ({
+    Client: client.Client,
+    StreamableHTTPClientTransport:
+      clientTransport.StreamableHTTPClientTransport,
+    Server: server.Server,
+    StreamableHTTPServerTransport:
+      serverTransport.StreamableHTTPServerTransport,
+    ListToolsRequestSchema: schemas.ListToolsRequestSchema,
+  })));
+}
 
 test("real redirects isolate cross-realm custom credentials and preserve same-origin headers", async () => {
+  const { verifyRedirectCredentialIsolation } = await import(
+    "./follow-redirects-acceptance.mjs"
+  );
   const postmarkRequire = createRequire(serverRequire.resolve("postmark"));
   const axiosRequire = createRequire(postmarkRequire.resolve("axios"));
   await verifyRedirectCredentialIsolation(axiosRequire("follow-redirects"));
@@ -55,19 +71,8 @@ async function closeHttp(server) {
   );
 }
 
-test("real server HTML conversion round-trips through the upgraded DOM", () => {
-  const extensions = [StarterKit];
-  const document = generateJSON(
-    "<h2>Fixture</h2><p>Safe <strong>content</strong>.</p>",
-    extensions,
-  );
-  const html = generateHTML(document, extensions);
-  assert.match(html, /<h2[^>]*>Fixture<\/h2>/u);
-  assert.match(html, /<strong>content<\/strong>/u);
-  assert.deepEqual(generateJSON(html, extensions), document);
-});
-
 test("real DOM defaults do not fetch untrusted iframe or stylesheet URLs", async () => {
+  const Window = loadServerWindow();
   let requests = 0;
   const server = createHttpServer((_request, response) => {
     requests += 1;
@@ -88,7 +93,24 @@ test("real DOM defaults do not fetch untrusted iframe or stylesheet URLs", async
   }
 });
 
+test("real server HTML conversion round-trips through the upgraded DOM", async () => {
+  const { StarterKit, generateJSON, generateHTML } =
+    await loadHtmlDependencies();
+  const extensions = [StarterKit];
+  const document = generateJSON(
+    "<h2>Fixture</h2><p>Safe <strong>content</strong>.</p>",
+    extensions,
+  );
+  const html = generateHTML(document, extensions);
+  assert.match(html, /<h2[^>]*>Fixture<\/h2>/u);
+  assert.match(html, /<strong>content<\/strong>/u);
+  assert.deepEqual(generateJSON(html, extensions), document);
+});
+
 async function smtpFixture(rejectRecipient = false) {
+  const { SmtpDriver } = serverRequire(
+    "./src/integrations/mail/drivers/smtp.driver.ts",
+  );
   const sockets = new Set();
   const received = { authenticated: false, envelope: [], messages: [] };
   const server = createSmtpServer((socket) => {
@@ -195,6 +217,9 @@ test("real SMTP driver preserves recipient rejection as a failed delivery", asyn
 });
 
 test("upgraded HTTP agent connects only to its approved address", async () => {
+  const { createAiPinnedDispatcher } = serverRequire(
+    "./src/core/ai/services/ai-pinned-http.util.ts",
+  );
   let host;
   const server = createHttpServer((request, response) => {
     host = request.headers.host;
@@ -217,6 +242,10 @@ test("upgraded HTTP agent connects only to its approved address", async () => {
 });
 
 test("real multipart parser retains bounded file data and limit events", async () => {
+  const multipartRequire = createRequire(
+    serverRequire.resolve("@fastify/multipart"),
+  );
+  const Busboy = multipartRequire("@fastify/busboy");
   const parser = new Busboy({
     headers: {
       "content-type": "multipart/form-data; boundary=fixture-boundary",
@@ -243,6 +272,13 @@ test("real multipart parser retains bounded file data and limit events", async (
 });
 
 test("real stateless MCP transport accepts a client and bounds parsed batches", async () => {
+  const {
+    Client,
+    StreamableHTTPClientTransport,
+    Server,
+    StreamableHTTPServerTransport,
+    ListToolsRequestSchema,
+  } = await loadMcpDependencies();
   const server = createHttpServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);

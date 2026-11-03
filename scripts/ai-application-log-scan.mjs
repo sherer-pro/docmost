@@ -18,16 +18,23 @@ const REASONS = new Set([
 ]);
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 
+export function isolatedApplicationOutputName(timestamp, runId) {
+  return `${timestamp.toISOString().replace(/[:.]/g, "-")}-${runId.slice(0, 8)}`;
+}
+
 export function applicationAuditMode(args) {
   const release = args.includes("--release");
-  const editorDiagnostic = args.includes("--editor-browser-only");
+  const editorFull = args.includes("--editor-browser-full");
+  const editorDiagnostic = args.includes("--editor-browser-only") || editorFull;
   const diagnostic = args.includes("--ai-browser-only") || editorDiagnostic;
   if (!release && !diagnostic) return null;
   const flag = release
     ? "--release"
-    : editorDiagnostic
-      ? "--editor-browser-only"
-      : "--ai-browser-only";
+    : editorFull
+      ? "--editor-browser-full"
+      : editorDiagnostic
+        ? "--editor-browser-only"
+        : "--ai-browser-only";
   if (
     args.some((arg) => arg !== flag && !arg.startsWith("--subnet=")) ||
     (diagnostic &&
@@ -45,7 +52,8 @@ export function applicationAuditMode(args) {
 export function applicationAuditCommand(mode) {
   if (mode === "release") return "corepack pnpm verify:release";
   if (mode === "ai-browser-only") return "corepack pnpm test:ai:e2e";
-  if (mode === "editor-browser-only") return "corepack pnpm test:editor:e2e";
+  if (mode === "editor-browser-only" || mode === "editor-browser-full")
+    return "corepack pnpm test:editor:e2e";
   throw new Error("Invalid isolated application audit mode");
 }
 
@@ -57,6 +65,27 @@ export function applicationAuditEnvironment(mode) {
         DOCMOST_EDITOR_AUDIT_PROJECTS: "firefox-desktop",
       }
     : {};
+}
+
+export function applicationAuditChildEnvironment(mode, inherited) {
+  const env = { ...inherited };
+  if (mode === "editor-browser-full") {
+    delete env.DOCMOST_EDITOR_AUDIT_FILES;
+    delete env.DOCMOST_EDITOR_AUDIT_PROJECTS;
+  }
+  return { ...env, ...applicationAuditEnvironment(mode) };
+}
+
+export function applicationAuditRuntimeEnvironment(inherited) {
+  return Object.fromEntries(
+    [
+      "PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "USERPROFILE",
+      "COMSPEC", "ComSpec", "PATHEXT", "ProgramFiles", "ProgramFiles(x86)",
+      "HOME", "APPDATA", "COREPACK_HOME", "PLAYWRIGHT_BROWSERS_PATH", "DOCMOST_PYTHON",
+    ]
+      .filter((key) => inherited[key])
+      .map((key) => [key, inherited[key]]),
+  );
 }
 
 export function applicationLogErrorSummary(lines, redact) {

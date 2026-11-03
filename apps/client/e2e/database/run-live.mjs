@@ -12,6 +12,7 @@ const apiOnly = args.some((arg) =>
     "--release",
     "--ai-browser-only",
     "--editor-browser-only",
+    "--editor-browser-full",
   ].includes(arg),
 );
 // Each browser mutates its fixture through the real API and collaboration server.

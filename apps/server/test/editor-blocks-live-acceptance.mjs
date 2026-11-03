@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import { runUiExportAcceptance } from './ui-export-live-acceptance.mjs';
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
 const exec = promisify(execFile);
@@ -235,4 +236,5 @@ export async function runEditorBlocksAcceptance({
       content,
     };
   });
+  await runUiExportAcceptance({ api, fetchApi, actors, space, parent, fixture, test, output });
 }

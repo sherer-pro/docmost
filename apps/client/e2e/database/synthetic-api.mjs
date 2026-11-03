@@ -5,8 +5,10 @@ import {
 
 export function createDatabaseFixtureApi() {
   const databaseId = "10000000-0000-4000-8000-000000000001";
-  let views, rows, properties, requests, failRows, failNext;
-  const reset = () => {
+  const spaceId = "20000000-0000-4000-8000-000000000001";
+  const workspaceId = "40000000-0000-4000-8000-000000000001";
+  let views, rows, properties, requests, failRows, failNext, rowSequence;
+  const reset = (options = {}) => {
     const types = [
       "multiline_text",
       "number",
@@ -20,6 +22,12 @@ export function createDatabaseFixtureApi() {
     ];
     properties = Array.from({ length: 20 }, (_, index) => ({
       id: `50000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      databaseId,
+      workspaceId,
+      creatorId: null,
+      createdAt: "2026-11-02T00:00:00.000Z",
+      updatedAt: "2026-11-02T00:00:00.000Z",
+      deletedAt: null,
       name:
         index === 0
           ? "Notes"
@@ -41,7 +49,13 @@ export function createDatabaseFixtureApi() {
           }
         : null,
     }));
-    rows = Array.from({ length: 1000 }, (_, index) => {
+    const rowCount =
+      Number.isInteger(options.rowCount) &&
+      options.rowCount >= 0 &&
+      options.rowCount <= 1000
+        ? options.rowCount
+        : 1000;
+    rows = Array.from({ length: rowCount }, (_, index) => {
       const pageId = `60000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
       return {
         id: pageId,
@@ -84,6 +98,16 @@ export function createDatabaseFixtureApi() {
         config: normalizeDatabaseViewState({}),
       },
     ];
+    if (Array.isArray(options.views))
+      views = options.views.map((view, index) => ({
+        id: `70000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+        databaseId,
+        name: view.name,
+        type: "table",
+        revision: 1,
+        config: normalizeDatabaseViewState(view.config ?? {}),
+      }));
+    rowSequence = 1000;
     requests = [];
     failRows = [];
     failNext = false;
@@ -152,17 +176,22 @@ export function createDatabaseFixtureApi() {
       body = text ? JSON.parse(text) : {};
     }
     if (url.pathname === "/fixture/reset") {
-      reset();
+      reset(body);
       return reply({});
     }
     if (url.pathname === "/fixture/state")
-      return reply({ requests, rows, views });
+      return reply({ requests, rows, views, properties });
     if (url.pathname === "/fixture/fail") {
       failRows = body.rows ?? [];
       failNext = Boolean(body.next);
       return reply({});
     }
-    requests.push({ method: req.method, path: url.pathname, body });
+    requests.push({
+      method: req.method,
+      path: url.pathname,
+      query: Object.fromEntries(url.searchParams),
+      body,
+    });
     if (failNext && !url.pathname.startsWith("/fixture")) {
       failNext = false;
       return reply({}, 503);
@@ -174,6 +203,60 @@ export function createDatabaseFixtureApi() {
     );
     if (url.pathname.endsWith("/properties") && req.method === "GET")
       return reply(properties);
+    if (
+      url.pathname.match(/^\/databases\/[^/]+\/properties\/[^/]+$/) &&
+      req.method === "PATCH"
+    ) {
+      const property = properties.find((item) =>
+        url.pathname.endsWith(item.id),
+      );
+      if (!property) return reply({}, 404);
+      Object.assign(property, body);
+      return reply(property);
+    }
+    if (url.pathname.match(/^\/databases\/rows\/[^/]+\/context$/)) {
+      const pageId = url.pathname.split("/").at(-2);
+      const row = rows.find((item) => item.pageId === pageId);
+      return reply(
+        row
+          ? {
+              database: { id: databaseId, name: "Synthetic database" },
+              row: { databaseId, pageId },
+              properties,
+              cells: row.cells.filter((cell) => !cell.deletedAt),
+            }
+          : null,
+      );
+    }
+    if (url.pathname === "/pages/info") {
+      const row = rows.find(
+        (item) => item.pageId === url.searchParams.get("pageId"),
+      );
+      if (!row) return reply({}, 404);
+      return reply({
+        ...row.page,
+        workspaceId,
+        spaceId,
+        space: { id: spaceId, slug: "synthetic", settings: {} },
+        access: {
+          capabilities: { canRead: true, canWrite: row.canWrite !== false },
+        },
+      });
+    }
+    if (url.pathname.endsWith("/rows") && req.method === "POST") {
+      const pageId = `60000000-0000-4000-8000-${String(++rowSequence).padStart(12, "0")}`;
+      const row = {
+        id: pageId,
+        pageId,
+        databaseId,
+        workspaceId,
+        canWrite: true,
+        page: { id: pageId, title: body.title ?? "", slugId: pageId },
+        cells: [],
+      };
+      rows.push(row);
+      return reply({ ...row, slugId: pageId });
+    }
     if (url.pathname.endsWith("/views") && req.method === "GET")
       return reply(views);
     if (url.pathname.includes("/views/") && req.method === "PATCH") {
@@ -234,12 +317,10 @@ export function createDatabaseFixtureApi() {
       const offset = Number(url.searchParams.get("cursor") ?? 0);
       const limit = Number(url.searchParams.get("limit") ?? 100);
       return reply({
-        items: result
-          .slice(offset, offset + limit)
-          .map((row) => ({
-            ...row,
-            cells: row.cells.filter((cell) => !cell.deletedAt),
-          })),
+        items: result.slice(offset, offset + limit).map((row) => ({
+          ...row,
+          cells: row.cells.filter((cell) => !cell.deletedAt),
+        })),
         hasMore: offset + limit < result.length,
         nextCursor:
           offset + limit < result.length ? String(offset + limit) : null,

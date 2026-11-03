@@ -18,6 +18,7 @@ import {
   applicationAuditMode,
   applicationLogErrorSummary,
   createApplicationLogCapture,
+  isolatedApplicationOutputName,
 } from '../../../scripts/ai-application-log-scan.mjs';
 import {
   databaseQualityConfiguration,
@@ -38,7 +39,9 @@ const quality = databaseQualityConfiguration();
 const release = process.argv.includes('--release');
 const auditMode = applicationAuditMode(process.argv.slice(2));
 const aiBrowserOnly = auditMode === 'ai-browser-only';
-const editorBrowserOnly = auditMode === 'editor-browser-only';
+const editorBrowserFull = auditMode === 'editor-browser-full';
+const editorBrowserOnly =
+  auditMode === 'editor-browser-only' || editorBrowserFull;
 if (auditMode && process.versions.node.split('.')[0] !== '22')
   throw new Error('Isolated release acceptance requires Node 22');
 if (auditMode && quality)
@@ -50,7 +53,7 @@ const prefix = `docmost-tables-live-${runId.slice(0, 8)}`;
 const output = path.join(
   repo,
   'artifacts/database/live',
-  new Date().toISOString().replace(/[:.]/g, '-'),
+  isolatedApplicationOutputName(new Date(), runId),
 );
 const cwd = path.join(output, 'runtime/apps/server');
 const children = [];
@@ -69,7 +72,9 @@ const report = {
     : aiBrowserOnly
       ? 'diagnostic-ai-browser'
       : editorBrowserOnly
-        ? 'diagnostic-editor-browser'
+        ? editorBrowserFull
+          ? 'diagnostic-editor-browser-full'
+          : 'diagnostic-editor-browser'
         : release
           ? 'release'
           : process.argv.includes('--templates-only')
@@ -145,6 +150,13 @@ const wait = async (label, check, timeout = 120_000) => {
   throw new Error(`Readiness timeout: ${label}`);
 };
 
+await mkdir(path.dirname(output), { recursive: true });
+await mkdir(output);
+await writeFile(
+  path.join(output, 'runtime-owner.json'),
+  JSON.stringify({ runId, pid: process.pid, synthetic: true }, null, 2),
+  { flag: 'wx' },
+);
 await mkdir(cwd, { recursive: true });
 try {
   if (quality) {

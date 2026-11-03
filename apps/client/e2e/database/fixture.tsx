@@ -1,5 +1,6 @@
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
+import "@/features/editor/styles/table.css";
 import { createRoot } from "react-dom/client";
 import { MantineProvider, Button, Group } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
@@ -57,15 +58,27 @@ function Fixture() {
                     />
                   </div>
                 )}
-                {mounted && (
-                  <DatabaseTableView
-                    key={databaseId}
-                    databaseId={databaseId}
-                    spaceId={spaceId}
-                    spaceSlug="synthetic"
-                    isEditable={params.get("role") !== "reader"}
-                  />
-                )}
+                <div
+                  className={params.has("embedded") ? "ProseMirror" : undefined}
+                >
+                  {mounted && (
+                    <div
+                      data-type={
+                        params.has("embedded") ? "databaseEmbed" : undefined
+                      }
+                    >
+                      <DatabaseTableView
+                        key={databaseId}
+                        databaseId={databaseId}
+                        spaceId={spaceId}
+                        spaceSlug="synthetic"
+                        isEditable={params.get("role") !== "reader"}
+                        embedded={params.has("embedded")}
+                        initialViewId={params.get("view") ?? undefined}
+                      />
+                    </div>
+                  )}
+                </div>
               </main>
             </BrowserRouter>
           </QueryClientProvider>

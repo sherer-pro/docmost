@@ -31,7 +31,9 @@ const runDirectory = path.resolve(
 const server = await createServer({
   root,
   mode: "test",
-  server: { host: "127.0.0.1", port: 5195, strictPort: true },
+  cacheDir: path.resolve(root, "../../artifacts/database/vite-cache"),
+  optimizeDeps: { entries: ["e2e/database/fixture.html"] },
+  server: { host: "127.0.0.1", port: 5195, strictPort: true, watch: null },
   plugins: [
     {
       name: "database-acceptance-api",
@@ -42,7 +44,11 @@ const server = await createServer({
   ],
 });
 try {
+  const preparationStarted = Date.now();
   await server.listen();
+  await server.warmupRequest("/e2e/database/fixture.tsx");
+  await server.waitForRequestsIdle();
+  console.log(`Database browser fixture prepared in ${Date.now() - preparationStarted}ms`);
   const child = spawn(
     process.execPath,
     [
