@@ -1,26 +1,31 @@
 import {
-  Group,
   Text,
   useMantineColorScheme,
   Select,
   MantineColorScheme,
 } from "@mantine/core";
+import {
+  ResponsiveSettingsRow,
+  ResponsiveSettingsContent,
+  ResponsiveSettingsControl,
+} from "@/components/ui/responsive-settings-row";
 import { useTranslation } from "react-i18next";
 
 export default function AccountTheme() {
   const { t } = useTranslation();
 
   return (
-    <Group justify="space-between" wrap="nowrap" gap="xl">
-      <div>
+    <ResponsiveSettingsRow>
+      <ResponsiveSettingsContent>
         <Text size="md">{t("Theme")}</Text>
         <Text size="sm" c="dimmed">
           {t("Choose your preferred color scheme.")}
         </Text>
-      </div>
-
-      <ThemeSwitcher />
-    </Group>
+      </ResponsiveSettingsContent>
+      <ResponsiveSettingsControl>
+        <ThemeSwitcher />
+      </ResponsiveSettingsControl>
+    </ResponsiveSettingsRow>
   );
 }
 
@@ -34,6 +39,7 @@ function ThemeSwitcher() {
 
   return (
     <Select
+      w="100%"
       label={t("Select theme")}
       data={[
         { value: "light", label: t("Light") },

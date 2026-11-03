@@ -51,6 +51,11 @@ The older attribute-only draft encoding remains readable. Existing imported note
 text is preserved; the editor's new-note command and text field are bounded to
 10000 characters.
 
+Copy and paste close open slice boundaries around edge footnote atoms before
+ProseMirror fitting. This also accepts older clipboard HTML containing a single
+reference with an open slice. The persisted `text*` schema, unique-ID repair,
+explicit plain-text paste and code-block paste semantics remain unchanged.
+
 The client renders a reference and an ordered definition list. Both editable and
 read-only page renderers support navigation in both directions. Definition edits
 replace the node's child text in an ordinary transaction and therefore support
@@ -104,6 +109,13 @@ The isolated document-block browser fixture runs with
 Arabic and Hebrew paragraphs, lists and tables in both themes and sizes.
 
 ## Tabs
+
+Native editor table styles are scoped to their own `.tableWrapper > table` and
+owned rows/cells. Embedded databases keep their independent table layout.
+Wide/full native tables inside a tab stay within that tab and scroll internally;
+top-level wide/full tables retain their breakout layout. Shared image wrappers
+fit the available width while preserving their stored preferred width and aspect
+ratio, including in read-only presentation.
 
 `tabs` contains one or more `tabItem` blocks with stable IDs and a plain-text
 title. Each item holds ordinary document blocks. Creation and paste cannot nest

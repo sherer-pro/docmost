@@ -10,7 +10,6 @@ import type { BatchUpdateDatabaseRowOperation } from "@docmost/api-contract";
 import { batchUpdateDatabaseRows } from "../services/database-service";
 import { getFailedDatabaseOperations } from "../utils/database-editing";
 import { queryClient } from "@/lib/query-client";
-import { DATABASE_QUERY_KEYS } from "@/features/page/queries/query-keys";
 
 export function useDatabaseBatchOperations(databaseId: string) {
   const { t } = useTranslation();
@@ -32,14 +31,8 @@ export function useDatabaseBatchOperations(databaseId: string) {
           failed.push(...chunk);
         }
       }
-      invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
+      await invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
       invalidateSidebarTree({}, { client: queryClient });
-      await queryClient.invalidateQueries({
-        queryKey: DATABASE_QUERY_KEYS.rowsBase(databaseId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["database", databaseId, "summary"],
-      });
       if (failed.length)
         notifications.show({
           id: `database-batch-${databaseId}`,

@@ -4,9 +4,28 @@ import { describe, expect, it } from "vitest";
 import {
   isDuplicateTextHighlight,
   withSearchQuery,
+  getSearchPropertyTarget,
 } from "./search-result-utils";
 
 describe("isDuplicateTextHighlight", () => {
+  it("preserves exact structured property targets and encodes the search term", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const href = withSearchQuery(
+      "/s/s/p/row?record=abc#anchor",
+      "=SUM & 50%",
+      id,
+    );
+    const url = new URL(href, "https://docmost.invalid");
+    expect(url.searchParams.get("find")).toBe("=SUM & 50%");
+    expect(url.searchParams.get("findProperty")).toBe(id);
+    expect(url.searchParams.get("record")).toBe("abc");
+    expect(url.hash).toBe("#anchor");
+    expect(getSearchPropertyTarget(url.search)).toBe(id);
+    expect(getSearchPropertyTarget("?findProperty=property-1")).toBeNull();
+    expect(
+      getSearchPropertyTarget("?findProperty=%22%5D%5Bdata-secret%5D"),
+    ).toBeNull();
+  });
   it("preserves anchors and query parameters when linking to a search match", () => {
     expect(
       withSearchQuery("/s/space/p/page?record=123#tag-todo", " C++ & дата "),

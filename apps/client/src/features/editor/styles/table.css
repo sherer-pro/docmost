@@ -29,15 +29,15 @@
 }
 
 .ProseMirror {
-  table {
+  .tableWrapper > table {
     border-collapse: collapse;
     margin: 0;
     table-layout: fixed;
     width: 100%;
     min-width: 100%;
 
-    td,
-    th {
+    > :is(thead, tbody, tfoot) > tr > :is(td, th),
+    > tr > :is(td, th) {
       border: 1px solid #ced4da;
       box-sizing: border-box;
       min-width: 3rem;
@@ -70,7 +70,8 @@
       }
     }
 
-    th {
+    > :is(thead, tbody, tfoot) > tr > th,
+    > tr > th {
       background-color: light-dark(
         var(--mantine-color-gray-1),
         var(--mantine-color-dark-5)
@@ -79,21 +80,22 @@
       text-align: start;
     }
 
-    tbody > tr:nth-child(odd) > td:not([data-background-color]) {
+    > tbody > tr:nth-child(odd) > td:not([data-background-color]) {
       background-color: light-dark(
         var(--mantine-color-gray-0),
         var(--mantine-color-dark-6)
       );
     }
 
-    tbody > tr:nth-child(even) > td:not([data-background-color]) {
+    > tbody > tr:nth-child(even) > td:not([data-background-color]) {
       background-color: light-dark(
         var(--mantine-color-white),
         var(--mantine-color-dark-7)
       );
     }
 
-    .selectedCell:after {
+    > :is(thead, tbody, tfoot) > tr > .selectedCell:after,
+    > tr > .selectedCell:after {
       background: rgba(200, 200, 255, 0.4);
       content: "";
       left: 0;
@@ -122,54 +124,48 @@
     overflow-x: auto;
   }
 
-  .ProseMirror table {
+  .ProseMirror .tableWrapper > table {
     flex: 1 0 auto;
   }
 }
 
 /* Table cell background colors with dark mode support */
 .ProseMirror {
-  table {
+  .tableWrapper > table > :is(thead, tbody, tfoot) > tr,
+  .tableWrapper > table > tr {
     @mixin dark {
       /* Blue */
-      td[data-background-color="#b4d5ff"],
-      th[data-background-color="#b4d5ff"] {
+      > :is(td, th)[data-background-color="#b4d5ff"] {
         background-color: #1a3a5c !important;
       }
 
       /* Green */
-      td[data-background-color="#acf5d2"],
-      th[data-background-color="#acf5d2"] {
+      > :is(td, th)[data-background-color="#acf5d2"] {
         background-color: #1a4d3a !important;
       }
 
       /* Yellow */
-      td[data-background-color="#fef1b4"],
-      th[data-background-color="#fef1b4"] {
+      > :is(td, th)[data-background-color="#fef1b4"] {
         background-color: #7c5014 !important;
       }
 
       /* Red */
-      td[data-background-color="#ffbead"],
-      th[data-background-color="#ffbead"] {
+      > :is(td, th)[data-background-color="#ffbead"] {
         background-color: #5c2a23 !important;
       }
 
       /* Pink */
-      td[data-background-color="#ffc7fe"],
-      th[data-background-color="#ffc7fe"] {
+      > :is(td, th)[data-background-color="#ffc7fe"] {
         background-color: #4d2a4d !important;
       }
 
       /* Gray */
-      td[data-background-color="#eaecef"],
-      th[data-background-color="#eaecef"] {
+      > :is(td, th)[data-background-color="#eaecef"] {
         background-color: #2a2e33 !important;
       }
 
       /* Purple */
-      td[data-background-color="#c1b7f2"],
-      th[data-background-color="#c1b7f2"] {
+      > :is(td, th)[data-background-color="#c1b7f2"] {
         background-color: #3a2f5c !important;
       }
     }
@@ -187,28 +183,32 @@
    the editor (app shell header, page header, fixed toolbar). */
 
 .tableWrapper.tableWrapperNoOverflow,
-.tableWrapper.tableWrapperNoOverflow table {
+.tableWrapper.tableWrapperNoOverflow > table {
   overflow: visible;
 }
 
-.tableWrapper.tableHeaderPinned table tr:first-child {
+.tableWrapper.tableHeaderPinned > table > tbody > tr:first-child {
   z-index: 2;
 }
 
-.tableWrapper.tableWrapperNoOverflow.tableHeaderPinned table tr:first-child {
+.tableWrapper.tableWrapperNoOverflow.tableHeaderPinned
+  > table
+  > tbody
+  > tr:first-child {
   position: sticky;
   top: var(--editor-pin-offset, 90px);
 }
 
 .tableWrapper.tableHeaderPinned:not(.tableWrapperNoOverflow)
-  table
-  tr:first-child {
+  > table
+  > tbody
+  > tr:first-child {
   position: relative;
   transform: translateY(var(--table-pin-offset, 0px));
 }
 
 @media print {
-  .tableWrapper.tableHeaderPinned table tr:first-child {
+  .tableWrapper.tableHeaderPinned > table > tbody > tr:first-child {
     position: static;
     transform: none;
   }
@@ -242,12 +242,23 @@
     color 120ms ease;
 }
 
-.ProseMirror table th:hover .tableReadonlySortChevron,
+.ProseMirror
+  .tableWrapper
+  > table
+  > :is(thead, tbody, tfoot)
+  > tr
+  > th:hover
+  > .tableReadonlySortChevron,
 .tableReadonlySortChevron[data-sort] {
   opacity: 1;
 }
 
-.ProseMirror table th:has(.tableReadonlySortChevron) {
+.ProseMirror
+  .tableWrapper
+  > table
+  > :is(thead, tbody, tfoot)
+  > tr
+  > th:has(> .tableReadonlySortChevron) {
   padding-right: 30px;
 }
 

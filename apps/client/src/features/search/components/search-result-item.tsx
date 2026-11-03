@@ -45,7 +45,8 @@ const CONTENT_KIND_LABELS: Record<IPageSearch["contentKind"], string> = {
 
 function buildResultUrl(result: IPageSearch, anchorId?: string) {
   const spaceSlug = result.space.slug as string;
-  return result.contentKind === "database" || result.databaseId != null
+  return result.contentKind === "database" ||
+    (result.contentKind !== "databaseRow" && result.databaseId != null)
     ? buildDatabaseUrl(spaceSlug, result.slugId, result.title, anchorId)
     : buildPageUrl(spaceSlug, result.slugId, result.title, anchorId);
 }
@@ -171,7 +172,13 @@ export function SearchResultItem({
     };
 
     return (
-      <Group wrap="nowrap" w="100%" gap={4} style={{ userSelect: "none" }}>
+      <Group
+        className={classes.attachmentResult}
+        wrap="nowrap"
+        w="100%"
+        gap={4}
+        style={{ userSelect: "none" }}
+      >
         <Spotlight.Action
           component={Link}
           //@ts-ignore
@@ -226,13 +233,22 @@ export function SearchResultItem({
   }
 
   const pageResult = result as IPageSearch;
-  const pageUrl = withSearchQuery(buildResultUrl(pageResult), query);
+  const databaseMatches = pageResult.databaseMatches ?? [];
+  const snippets = pageResult.tagSnippets ?? [];
+  const fieldOnlyMatch =
+    databaseMatches.length > 0 &&
+    snippets.length === 0 &&
+    (!pageResult.highlight ||
+      isDuplicateTextHighlight(pageResult.highlight, databaseMatches));
+  const pageUrl = withSearchQuery(
+    buildResultUrl(pageResult),
+    query,
+    fieldOnlyMatch ? databaseMatches[0].propertyId : undefined,
+  );
   const breadcrumbsText = pageResult.breadcrumbs?.length
     ? pageResult.breadcrumbs.map((crumb) => crumb.title).join(" / ")
     : null;
   const labels = pageResult.labels ?? [];
-  const snippets = pageResult.tagSnippets ?? [];
-  const databaseMatches = pageResult.databaseMatches ?? [];
   const shownMatchCount = snippets.reduce(
     (count, snippet) => count + snippet.matches.length,
     0,
@@ -299,7 +315,11 @@ export function SearchResultItem({
             <DatabaseMatch
               key={match.propertyId}
               match={match}
-              href={pageUrl}
+              href={withSearchQuery(
+                buildResultUrl(pageResult),
+                query,
+                match.propertyId,
+              )}
             />
           ))}
         </div>

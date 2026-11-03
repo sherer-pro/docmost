@@ -1,4 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Anchor,
   Alert,
@@ -132,10 +138,39 @@ export function Footnotes({ editor: provided }: { editor?: Editor | null }) {
     draft: string;
   } | null>(null);
   const [conflict, setConflict] = useState(false);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const pendingFocus = useRef<{
+    editor: Editor;
+    id: string;
+    origin: Element | null;
+  } | null>(null);
   const begin = (entry: FootnoteEntry) => {
+    if (!editor?.isEditable || editor.isDestroyed) return;
+    pendingFocus.current = {
+      editor,
+      id: entry.id,
+      origin: document.activeElement,
+    };
     setConflict(false);
     setEditing({ id: entry.id, base: entry.text, draft: entry.text });
   };
+  useLayoutEffect(() => {
+    const request = pendingFocus.current;
+    if (!request) return;
+    pendingFocus.current = null;
+    if (
+      request.editor !== editor ||
+      editor?.isDestroyed ||
+      !state?.editable ||
+      editing?.id !== request.id ||
+      !state.entries.some((entry) => entry.id === request.id) ||
+      (document.activeElement !== request.origin &&
+        (request.origin?.isConnected ||
+          document.activeElement !== document.body))
+    )
+      return;
+    textarea.current?.focus();
+  }, [editor, editing, state]);
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -246,6 +281,7 @@ export function Footnotes({ editor: provided }: { editor?: Editor | null }) {
             {state.editable && editing?.id === entry.id ? (
               <Stack gap="xs">
                 <Textarea
+                  ref={textarea}
                   label={t("docBlocks.footnoteReference", {
                     number: entry.number,
                   })}

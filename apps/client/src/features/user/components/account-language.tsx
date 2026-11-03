@@ -1,4 +1,9 @@
-import { Group, Text, Select } from "@mantine/core";
+import { Text, Select } from "@mantine/core";
+import {
+  ResponsiveSettingsRow,
+  ResponsiveSettingsContent,
+  ResponsiveSettingsControl,
+} from "@/components/ui/responsive-settings-row";
 import { useTranslation } from "react-i18next";
 import { updateUser } from "../services/user-service";
 import { useAtom } from "jotai";
@@ -10,15 +15,17 @@ export default function AccountLanguage() {
   const { t } = useTranslation();
 
   return (
-    <Group justify="space-between" wrap="nowrap" gap="xl">
-      <div>
+    <ResponsiveSettingsRow>
+      <ResponsiveSettingsContent>
         <Text size="md">{t("Language")}</Text>
         <Text size="sm" c="dimmed">
           {t("Choose your preferred interface language.")}
         </Text>
-      </div>
-      <LanguageSwitcher />
-    </Group>
+      </ResponsiveSettingsContent>
+      <ResponsiveSettingsControl>
+        <LanguageSwitcher />
+      </ResponsiveSettingsControl>
+    </ResponsiveSettingsRow>
   );
 }
 
@@ -54,6 +61,7 @@ function LanguageSwitcher() {
 
   return (
     <Select
+      w="100%"
       label={t("Select language")}
       data={[
         { value: "en-US", label: t("accountLanguage.locale.enUS") },

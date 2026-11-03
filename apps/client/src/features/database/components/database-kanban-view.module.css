@@ -1,0 +1,16 @@
+.board {
+  container-type: inline-size;
+  min-inline-size: 0;
+}
+
+.controls > * {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.column {
+  inline-size: min(290px, 100cqi);
+  min-inline-size: 0;
+  flex: 0 0 min(290px, 100cqi);
+  overflow-wrap: anywhere;
+}

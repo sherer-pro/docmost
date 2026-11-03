@@ -36,6 +36,7 @@ import {
 import { getRowTitle } from "../utils/database-markdown";
 import { DatabaseCellRenderer } from "./database-cell-renderer";
 import api from "@/lib/api-client";
+import classes from "./database-kanban-view.module.css";
 
 type Props = {
   databaseId: string;
@@ -98,11 +99,11 @@ export function DatabaseKanbanView(props: Props) {
       kanban: { ...layout, ...next },
     });
   return (
-    <Stack>
-      <Group align="flex-start">
+    <Stack className={classes.board}>
+      <Group align="flex-start" className={classes.controls}>
         <Select
           w={220}
-          label={t("Group by")}
+          label={t("dbTable.groupBy")}
           value={property?.id ?? null}
           data={props.properties
             .filter((p) => p.type === "select")
@@ -143,7 +144,7 @@ export function DatabaseKanbanView(props: Props) {
           title={t("dbBoard.selectRequired")}
         />
       ) : (
-        <ScrollArea type="auto" offsetScrollbars>
+        <ScrollArea type="auto" scrollbars="x" offsetScrollbars="x">
           <Group
             align="flex-start"
             wrap="nowrap"
@@ -160,7 +161,7 @@ export function DatabaseKanbanView(props: Props) {
                   role="group"
                   aria-label={column.label}
                   gap="sm"
-                  style={{ width: 290, minWidth: 290 }}
+                  className={classes.column}
                 >
                   <Group justify="space-between">
                     <Group gap="xs">
@@ -380,7 +381,7 @@ function KanbanColumn(
                       textAlign: "start",
                       color: "var(--mantine-color-text)",
                     },
-                    root: { height: "auto", flex: 1 },
+                    root: { height: "auto", flex: 1, minWidth: 0 },
                   }}
                   onClick={() =>
                     props.onOpen(

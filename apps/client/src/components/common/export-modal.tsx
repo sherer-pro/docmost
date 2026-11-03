@@ -27,6 +27,8 @@ interface ExportModalProps {
   type: "space" | "page" | "database";
   open: boolean;
   onClose: () => void;
+  returnFocus?: boolean;
+  onExitTransitionEnd?: () => void;
   onExportDatabase?: (
     format: DatabaseExportFormat,
     options?: { includeChildren?: boolean; includeAttachments?: boolean },
@@ -39,6 +41,8 @@ export default function ExportModal({
   open,
   onClose,
   onExportDatabase,
+  returnFocus,
+  onExitTransitionEnd,
 }: ExportModalProps) {
   const [format, setFormat] = useState<string>(ExportFormat.Docmost);
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
@@ -140,6 +144,8 @@ export default function ExportModal({
     <Modal.Root
       opened={open}
       onClose={onClose}
+      returnFocus={returnFocus}
+      onExitTransitionEnd={onExitTransitionEnd}
       size={500}
       padding="xl"
       yOffset="10vh"
@@ -259,6 +265,7 @@ function ExportFormatSelection({
 
   return (
     <Select
+      data-autofocus
       data={options}
       value={format}
       onChange={onChange}

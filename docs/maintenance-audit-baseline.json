@@ -95,7 +95,6 @@
       "exports|apps/client/src/features/notification/notification.utils.ts|getTimeGroup",
       "exports|apps/client/src/features/page-template/components/page-template-picker.tsx|PAGE_TEMPLATE_PICKER_EVENT",
       "exports|apps/client/src/features/page/components/document-fields/assignee-space-member-select.tsx|default",
-      "exports|apps/client/src/features/page/components/document-fields/document-fields-panel.tsx|DocumentFieldsPanel",
       "exports|apps/client/src/features/page/components/document-fields/space-member-select-utils.tsx|normalizeSpaceMemberValue",
       "exports|apps/client/src/features/page/components/document-fields/stakeholders-space-member-multiselect.tsx|default",
       "exports|apps/client/src/features/page/components/reading-time/reading-time.ts|GREEN_READING_TIME_MINUTES",
@@ -451,9 +450,9 @@
         "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
       },
       {
-        "fingerprint": "css|features/editor/components/image/image-view.module.css|features/editor/components/video/video-view.module.css|29|214",
+        "fingerprint": "css|features/editor/components/image/image-view.module.css|features/editor/components/video/video-view.module.css|38|213",
         "classification": "editor-node-variant",
-        "rationale": "Behavior-specific variants require characterization coverage before shared extraction."
+        "rationale": "Existing image/video placeholder animation retained. The responsive image bounds shift the matching CSS block; editor-blocks regressions cover image geometry and resizing before any shared extraction."
       },
       {
         "fingerprint": "tsx|features/editor/components/bubble-menu/node-selector.tsx|features/editor/components/bubble-menu/text-alignment-selector.tsx|33|186",

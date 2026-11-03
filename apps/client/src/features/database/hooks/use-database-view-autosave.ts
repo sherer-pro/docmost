@@ -65,12 +65,16 @@ export function useDatabaseViewAutosave({
             localStorage.getItem(`${storageKey}:${view.id}`) ?? "null",
           );
           if (local) {
-            apply({
-              ...view,
-              ...local.draft,
-              type: local.draft.config?.kanban ? "kanban" : "table",
-            });
-            if (local.revision !== view.revision) setStatus("conflict");
+            if (JSON.stringify(local.draft) === JSON.stringify(initialized))
+              localStorage.removeItem(`${storageKey}:${view.id}`);
+            else {
+              apply({
+                ...view,
+                ...local.draft,
+                type: local.draft.config?.kanban ? "kanban" : "table",
+              });
+              if (local.revision !== view.revision) setStatus("conflict");
+            }
           }
         } catch {
           /* Unavailable or outdated local drafts do not prevent reading. */
@@ -104,13 +108,21 @@ export function useDatabaseViewAutosave({
       return;
     }
     try {
-      if (signature === applied.current.signature)
-        localStorage.removeItem(`${storageKey}:${view.id}`);
-      else
+      const local = JSON.parse(
+        localStorage.getItem(`${storageKey}:${view.id}`) ?? "null",
+      );
+      if (signature === applied.current.signature) {
+        if (!local || JSON.stringify(local.draft) === signature)
+          localStorage.removeItem(`${storageKey}:${view.id}`);
+      } else {
         localStorage.setItem(
           `${storageKey}:${view.id}`,
-          JSON.stringify({ revision: applied.current.revision, draft }),
+          JSON.stringify({
+            revision: local?.revision ?? applied.current.revision,
+            draft,
+          }),
         );
+      }
     } catch {
       /* Storage quotas must not discard the in-memory draft. */
     }
@@ -147,6 +159,20 @@ export function useDatabaseViewAutosave({
           revision: updated.revision ?? 1,
           signature,
         };
+        if (
+          manual &&
+          storageKey &&
+          JSON.stringify(latest.current.draft) === signature
+        ) {
+          try {
+            const key = `${storageKey}:${view.id}`;
+            const local = JSON.parse(localStorage.getItem(key) ?? "null");
+            if (!local || JSON.stringify(local.draft) === signature)
+              localStorage.removeItem(key);
+          } catch {
+            /* Browser storage failure does not undo a successful server save. */
+          }
+        }
         setStatus("saved");
       } catch (error) {
         if (mounted.current && latest.current.view?.id === view.id)

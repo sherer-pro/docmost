@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   alpha,
   Badge,
-  Checkbox,
   Group,
   Paper,
   Select,
@@ -44,16 +43,13 @@ import { sortDatabasePropertiesByPosition } from "@/features/database/utils/data
 import {
   buildDatabaseCellPayloadValue,
   extractCurrentDatabaseCellValue,
-  getDatabaseSelectOption,
-  normalizeDatabaseCheckboxValue,
   normalizeDatabasePageReferenceValue,
   normalizeDatabaseSelectValue,
-  normalizeDatabaseStringValue,
-  normalizeDatabaseUserId,
 } from "@/features/database/utils/database-cell-value.ts";
 import { DatabasePropertyType } from "@docmost/api-contract";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
-import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { getSearchPropertyTarget } from "@/features/search/components/search-result-utils";
 import { PAGE_QUERY_KEYS } from "@/features/page/queries/query-keys.ts";
 import { getAllSidebarPages } from "@/features/page/services/page-service.ts";
 import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
@@ -110,6 +106,9 @@ export function DocumentFieldsPanel({
   readOnly,
 }: DocumentFieldsPanelProps) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const findProperty = getSearchPropertyTarget(location.search);
   const theme = useMantineTheme();
   const emit = useQueryEmit();
   const currentUser = useAtomValue(currentUserAtom);
@@ -219,7 +218,9 @@ export function DocumentFieldsPanel({
           name: contextProperty.name,
           type: contextProperty.type as DatabasePropertyType,
           position: contextProperty.position ?? contextIndex,
-          settings: {},
+          settings: ("settings" in contextProperty
+            ? contextProperty.settings
+            : {}) as IDatabaseProperty["settings"],
           creatorId: null,
           createdAt: "",
           updatedAt: "",
@@ -253,48 +254,6 @@ export function DocumentFieldsPanel({
     enabled: Boolean(page.spaceId && hasDbPageReferenceField),
   });
 
-  const databaseUserIds = useMemo(() => {
-    const ids: string[] = [];
-
-    dbProperties.forEach((property) => {
-      if (property.type !== "user") {
-        return;
-      }
-
-      const propertyValue = dbFieldValues.get(property.id);
-      if (typeof propertyValue === "string") {
-        const normalizedUserId =
-          normalizeDatabaseStringValue(propertyValue).trim();
-        if (normalizedUserId) {
-          ids.push(normalizedUserId);
-        }
-        return;
-      }
-
-      if (
-        propertyValue &&
-        typeof propertyValue === "object" &&
-        "id" in propertyValue
-      ) {
-        const maybeId = (propertyValue as { id?: unknown }).id;
-        if (typeof maybeId === "string") {
-          const normalizedUserId = normalizeDatabaseStringValue(maybeId).trim();
-          if (normalizedUserId) {
-            ids.push(normalizedUserId);
-          }
-        }
-      }
-    });
-
-    return ids;
-  }, [dbFieldValues, dbProperties]);
-
-  const { knownUsersById: knownDbUsersById } = useSpaceMemberSelectOptions(
-    page.spaceId,
-    databaseUserIds,
-    { pageId: page.id },
-  );
-
   const allPageNodes = useMemo(
     () =>
       allPagesQuery.data?.pages.flatMap((queryPage) => queryPage.items) ?? [],
@@ -325,20 +284,6 @@ export function DocumentFieldsPanel({
     [allPageNodes, page.space.slug, t],
   );
 
-  const pageReferenceMetaById = useMemo(
-    () =>
-      new Map(
-        pageReferenceOptions.map((option) => [
-          option.value,
-          {
-            label: option.label,
-            url: pageReferenceUrlById.get(option.value) ?? null,
-          },
-        ]),
-      ),
-    [pageReferenceOptions, pageReferenceUrlById],
-  );
-
   const [editingDbPropertyId, setEditingDbPropertyId] = useState<string | null>(
     null,
   );
@@ -361,131 +306,49 @@ export function DocumentFieldsPanel({
     return buildDatabaseCellPayloadValue(property, value);
   };
 
-  const renderReadOnlyDbValue = (property: IDatabaseProperty) => {
-    const value = dbFieldValues.get(property.id);
+  const renderReadOnlyDbValue = (property: IDatabaseProperty) => (
+    <DatabaseCellRenderer
+      property={property}
+      value={extractCurrentDatabaseCellValue(dbFieldValues.get(property.id))}
+      isEditable={false}
+      isEditing={false}
+      editingValue={null}
+      spaceId={page.spaceId}
+      pageId={page.id}
+      pageOptions={pageReferenceOptions}
+      pageReferenceUrlById={pageReferenceUrlById}
+      cellLabel={property.name}
+      onStartEdit={() => undefined}
+      onChange={() => undefined}
+      onSave={() => undefined}
+    />
+  );
+
+  useEffect(() => {
     if (
-      ["formula", "file", "created_at", "updated_at", "updated_by"].includes(
-        property.type,
-      ) ||
-      (property.type === "user" && Array.isArray(value))
+      !findProperty ||
+      !dbProperties.some((property) => property.id === findProperty)
     )
-      return (
-        <DatabaseCellRenderer
-          property={property}
-          value={value}
-          isEditable={false}
-          isEditing={false}
-          editingValue={null}
-          spaceId={page.spaceId}
-          pageId={page.id}
-          onStartEdit={() => undefined}
-          onChange={() => undefined}
-          onSave={() => undefined}
-        />
-      );
-
-    if (property.type === "page_reference") {
-      const refId = normalizeDatabasePageReferenceValue(value);
-      if (!refId) {
-        return (
-          <Text size="sm" c="dimmed" my={8}>
-            {t("no data")}
-          </Text>
-        );
-      }
-
-      const target = pageReferenceMetaById.get(refId);
-      if (target?.url) {
-        return (
-          <Text size="sm" component={Link} to={target.url} my={8}>
-            {target.label}
-          </Text>
-        );
-      }
-
-      return (
-        <Text size="sm" my={8}>
-          {target?.label ?? refId}
-        </Text>
-      );
-    }
-
-    if (property.type === "select") {
-      const selectValue = normalizeDatabaseSelectValue(value);
-      if (!selectValue) {
-        return (
-          <Text size="sm" c="dimmed" my={8}>
-            {t("no data")}
-          </Text>
-        );
-      }
-
-      const selectedOption = getDatabaseSelectOption(property, selectValue);
-
-      return (
-        <Badge color={selectedOption?.color || "gray"} variant="light" my={8}>
-          {selectedOption?.label || selectValue}
-        </Badge>
-      );
-    }
-
-    if (property.type === "user") {
-      const userId = normalizeDatabaseUserId(value) ?? "";
-
-      if (!userId) {
-        return (
-          <Text size="sm" c="dimmed" my={8}>
-            {t("no data")}
-          </Text>
-        );
-      }
-
-      const user = knownDbUsersById[userId];
-
-      return (
-        <Group gap="xs" wrap="nowrap" my={7.5}>
-          <CustomAvatar
-            avatarUrl={user?.avatarUrl}
-            size={18}
-            name={user?.label ?? t("Unknown")}
-          />
-          <Text size="sm">{user?.label ?? t("Unknown")}</Text>
-        </Group>
-      );
-    }
-
-    if (property.type === "checkbox") {
-      return (
-        <Checkbox
-          checked={normalizeDatabaseCheckboxValue(value)}
-          disabled
-          readOnly
-          my={8}
-        />
-      );
-    }
-
-    const textValue = normalizeDatabaseStringValue(value);
-
-    if (textValue) {
-      return (
-        <Text
-          size="sm"
-          my={8}
-          ff={property.type === "code" ? "monospace" : undefined}
-          style={{ whiteSpace: "pre-wrap" }}
-        >
-          {textValue}
-        </Text>
-      );
-    }
-
-    return (
-      <Text size="sm" c="dimmed" my={8}>
-        {t("no data")}
-      </Text>
-    );
-  };
+      return;
+    const reveal = () => {
+      const target = Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          "[data-database-property-id]",
+        ) ?? [],
+      ).find((element) => element.dataset.databasePropertyId === findProperty);
+      target?.scrollIntoView?.({ block: "center", behavior: "instant" });
+    };
+    const onReveal = (event: Event) => {
+      if (
+        (event as CustomEvent<{ pageId?: string }>).detail?.pageId === page.id
+      )
+        reveal();
+    };
+    reveal();
+    document.addEventListener("docmost:reveal-search-property", onReveal);
+    return () =>
+      document.removeEventListener("docmost:reveal-search-property", onReveal);
+  }, [findProperty, dbProperties, location.key, page.id]);
 
   useEffect(() => {
     setFields(normalizeCustomFields(page.customFields));
@@ -660,7 +523,11 @@ export function DocumentFieldsPanel({
   }
 
   return (
-    <div className={classes.fullWidthContainer}>
+    <div
+      ref={panelRef}
+      className={classes.fullWidthContainer}
+      data-document-fields-page-id={page.id}
+    >
       <Group mx={0}>
         <Paper withBorder radius="md" my="md" mx={0}>
           <Table
@@ -875,7 +742,18 @@ export function DocumentFieldsPanel({
               )}
 
               {dbProperties.map((property) => (
-                <Table.Tr key={`db-field-${property.id}`}>
+                <Table.Tr
+                  key={`db-field-${property.id}`}
+                  data-database-property-id={property.id}
+                  data-search-property-target={
+                    findProperty === property.id || undefined
+                  }
+                  className={
+                    findProperty === property.id
+                      ? classes.searchPropertyTarget
+                      : undefined
+                  }
+                >
                   <Table.Td visibleFrom="sm">
                     <Text size="sm" fw={600}>
                       {property.name}

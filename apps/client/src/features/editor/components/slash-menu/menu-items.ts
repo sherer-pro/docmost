@@ -136,13 +136,19 @@ const CommandGroups: SlashMenuGroupedItemsType = {
           .getState(editor.state)
           ?.entries.find((entry) => !before.has(entry.id));
         if (created)
-          requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (
+              editor.isDestroyed ||
+              !editor.isEditable ||
+              !editor.view.hasFocus()
+            )
+              return;
             window.dispatchEvent(
               new CustomEvent("docmost:edit-footnote", {
                 detail: { editor, id: created.id },
               }),
-            ),
-          );
+            );
+          });
       },
     },
     {

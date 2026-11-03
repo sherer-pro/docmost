@@ -1,9 +1,27 @@
 .filtersContainer {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filterChips {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   padding: 8px 0;
   scrollbar-width: thin;
+}
+
+.advancedControls {
+  align-items: flex-end;
+  min-width: 0;
+  max-width: 100%;
+  padding-block: 8px;
+}
+
+.authorSelect {
+  width: 220px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .filterButton {

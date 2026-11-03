@@ -21,18 +21,27 @@ import type {
 import { databaseComparableType } from "@docmost/api-contract";
 import type { IDatabaseProperty } from "../types/database.types";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
-import { IconArrowDown, IconArrowUp, IconTrash } from "@tabler/icons-react";
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconSettings,
+  IconTrash,
+} from "@tabler/icons-react";
 
 export function DatabaseViewControls({
   state,
   properties,
   onChange,
   children,
+  nestedOverlayOpened = false,
+  onClose,
 }: {
   state: DatabaseViewState;
   properties: IDatabaseProperty[];
   onChange: (state: DatabaseViewState) => void;
   children?: ReactNode;
+  nestedOverlayOpened?: boolean;
+  onClose?: () => void;
 }) {
   const { t } = useTranslation();
   const [opened, setOpened] = useState(false);
@@ -53,7 +62,7 @@ export function DatabaseViewControls({
   const content = (
     <Stack gap="md">
       {children}
-      <Text fw={600}>{t("Filters")}</Text>
+      <Text fw={600}>{t("dbTable.filters")}</Text>
       <FilterGroupEditor
         group={filter}
         properties={properties}
@@ -219,12 +228,27 @@ export function DatabaseViewControls({
   );
   return (
     <>
-      <Button variant="default" onClick={() => setOpened(true)}>
-        {t("dbTable.viewSettings")} ({countRules(filter) + state.sorts.length})
-      </Button>
+      {mobile ? (
+        <AccessibleActionIcon
+          variant="default"
+          label={`${t("dbTable.viewSettings")} (${countRules(filter) + state.sorts.length})`}
+          onClick={() => setOpened(true)}
+        >
+          <IconSettings size={18} />
+        </AccessibleActionIcon>
+      ) : (
+        <Button variant="default" onClick={() => setOpened(true)}>
+          {t("dbTable.viewSettings")} ({countRules(filter) + state.sorts.length}
+          )
+        </Button>
+      )}
       <Drawer
         opened={opened}
-        onClose={() => setOpened(false)}
+        onClose={() => {
+          setOpened(false);
+          onClose?.();
+        }}
+        closeOnEscape={!nestedOverlayOpened}
         title={t("dbTable.viewSettings")}
         closeButtonProps={{ "aria-label": t("Close") }}
         position={mobile ? "bottom" : "right"}
@@ -323,7 +347,7 @@ function FilterGroupEditor({
               })
             }
           >
-            {t("Add filter")}
+            {t("dbTable.addFilter")}
           </Button>
           {depth < 2 && (
             <Button
@@ -450,7 +474,7 @@ function FilterRuleEditor({
           }
         />
         <Select
-          aria-label={t("dbTable.operator")}
+          aria-label={t("Filter operator")}
           data={operators.map((value) => ({
             value,
             label: t(`dbTable.${value}`),

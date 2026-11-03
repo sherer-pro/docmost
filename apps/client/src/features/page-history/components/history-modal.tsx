@@ -5,6 +5,7 @@ import HistoryModalBody from "@/features/page-history/components/history-modal-b
 import HistoryModalMobile from "@/features/page-history/components/history-modal-mobile";
 import { useTranslation } from "react-i18next";
 import { useMediaQuery } from "@mantine/hooks";
+import classes from "./css/history.module.css";
 
 interface Props {
   pageId: string;
@@ -58,8 +59,8 @@ export default function HistoryModal({
   return (
     <Modal.Root size={1400} opened={isModalOpen} onClose={close}>
       <Modal.Overlay />
-      <Modal.Content style={{ overflow: "hidden" }}>
-        <Modal.Header>
+      <Modal.Content className={classes.modalContent}>
+        <Modal.Header className={classes.modalHeader}>
           <Modal.Title>
             <Text size="md" fw={500}>
               {t("Page history")}
@@ -67,7 +68,7 @@ export default function HistoryModal({
           </Modal.Title>
           <Modal.CloseButton aria-label={t("Close")} />
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className={classes.modalBody}>
           <HistoryModalBody pageId={pageId} readOnly={readOnly} />
         </Modal.Body>
       </Modal.Content>

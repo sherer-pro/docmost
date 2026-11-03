@@ -25,14 +25,17 @@
   transform: translateX(-50%);
 }
 
-[data-page-full-width="true"]
-  .blockWidthWrapper[data-block-width-mode="wide"],
-[data-page-full-width="true"]
-  .blockWidthWrapper[data-block-width-mode="full"],
-[data-page-full-width="true"]
-  .tableWrapper[data-table-width-mode="wide"],
-[data-page-full-width="true"]
-  .tableWrapper[data-table-width-mode="full"] {
+[data-page-full-width="true"] .blockWidthWrapper[data-block-width-mode="wide"],
+[data-page-full-width="true"] .blockWidthWrapper[data-block-width-mode="full"],
+[data-page-full-width="true"] .tableWrapper[data-table-width-mode="wide"],
+[data-page-full-width="true"] .tableWrapper[data-table-width-mode="full"] {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  transform: none;
+}
+
+.ProseMirror :is([data-type="tabs"], [data-type="tabItem"]) .tableWrapper {
   width: 100%;
   max-width: 100%;
   margin-left: 0;

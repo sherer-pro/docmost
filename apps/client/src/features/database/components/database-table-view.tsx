@@ -13,6 +13,14 @@ import {
 } from "@docmost/api-contract";
 import { DatabaseViewControls } from "./database-view-controls";
 import { DatabaseKanbanView } from "./database-kanban-view";
+import { DatabaseCellConflictDialog } from "./database-cell-conflict-dialog";
+import { DatabasePropertyMenu } from "./database-property-menu";
+import { formatDatabaseAggregate } from "../utils/database-aggregate-value";
+import {
+  isDatabaseCellConflict,
+  type DatabaseCellConflict,
+  type DatabaseCellReview,
+} from "../utils/database-cell-conflict";
 import { useDatabaseViewAutosave } from "../hooks/use-database-view-autosave";
 import { useDatabaseBatchOperations } from "../hooks/use-database-batch-operations";
 import {
@@ -174,7 +182,10 @@ import classes from "./database-table-view.module.css";
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
 import { PageOperationMenuItems } from "@/features/page/components/page-operation-menu-items.tsx";
-import { invalidateSidebarTree } from "@/features/page/queries/cache-invalidation.ts";
+import {
+  invalidateDatabaseRowContext,
+  invalidateSidebarTree,
+} from "@/features/page/queries/cache-invalidation.ts";
 import { DatabaseFilterEditor } from "./database-filter-editor";
 import { AccessibleActionIcon } from "@/components/ui/accessible-action-icon";
 
@@ -273,7 +284,7 @@ export function DatabaseTableView({
   initialViewId,
   embedded = false,
 }: DatabaseTableViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toolbarUser = useAtomValue(currentUserAtom);
   const [toolbarPinned, setToolbarPinned] = useLocalStorage({
     key: `database-toolbar:${toolbarUser?.user?.id ?? "anonymous"}:${databaseId}`,
@@ -372,6 +383,10 @@ export function DatabaseTableView({
   const [cellSaveState, setCellSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  const [cellConflicts, setCellConflicts] = useState<
+    Record<string, DatabaseCellConflict>
+  >({});
+  const [reviewedCellKey, setReviewedCellKey] = useState<string | null>(null);
   const batchOperations = useDatabaseBatchOperations(databaseId);
   const viewState = useMemo(
     () => ({ ...viewStateDraft, visibleColumns }),
@@ -427,7 +442,7 @@ export function DatabaseTableView({
     [queryViewState],
   );
   const summaryQuery = useQuery({
-    queryKey: ["database", databaseId, "summary", serializedViewState],
+    queryKey: DATABASE_QUERY_KEYS.summary(databaseId, serializedViewState),
     queryFn: () => getDatabaseSummary(databaseId, serializedViewState),
     enabled: arePropertiesLoaded,
   });
@@ -469,9 +484,6 @@ export function DatabaseTableView({
     useState<IDatabaseProperty | null>(null);
   const [settingsProperty, setSettingsProperty] =
     useState<IDatabaseProperty | null>(null);
-  const [propertyNameDrafts, setPropertyNameDrafts] = useState<
-    Record<string, string>
-  >({});
   const [renamingRowPageId, setRenamingRowPageId] = useState<string | null>(
     null,
   );
@@ -513,6 +525,7 @@ export function DatabaseTableView({
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const isMobileViewport = useMediaQuery("(max-width: 767px)");
+  useEffect(() => setPropertyCreatorOpened(false), [isMobileViewport]);
   const setTableExportState = useSetAtom(databaseTableExportStateAtom);
   const setAiDatabaseContext = useSetAtom(databaseAiContextAtom);
   useEffect(() => {
@@ -606,6 +619,11 @@ export function DatabaseTableView({
         spaceId,
         entity: [...DATABASE_QUERY_KEYS.rowsBase(databaseId)],
       });
+      emit({
+        operation: "invalidate",
+        spaceId,
+        entity: [...DATABASE_QUERY_KEYS.summaryBase(databaseId)],
+      });
     }
 
     if (invalidateRowContext) {
@@ -651,6 +669,8 @@ export function DatabaseTableView({
     setRenamingRowPageId(null);
     setRenamingRowInitialTitle("");
     setRenamingRowTitleDraft("");
+    setCellConflicts({});
+    setReviewedCellKey(null);
     draggedPropertyIdRef.current = null;
     setDraggedPropertyId(null);
     setDragOverPropertyId(null);
@@ -1011,17 +1031,6 @@ export function DatabaseTableView({
   ]);
 
   useEffect(() => {
-    setPropertyNameDrafts((prev) => {
-      const next: Record<string, string> = {};
-      for (const property of properties) {
-        next[property.id] = prev[property.id] ?? property.name;
-      }
-
-      return next;
-    });
-  }, [properties]);
-
-  useEffect(() => {
     if (!renamingRowPageId) {
       return;
     }
@@ -1357,6 +1366,7 @@ export function DatabaseTableView({
         ),
     [activeProperties, visibleColumns, viewState.columnOrder],
   );
+  const sparseTable = displayedProperties.length === 0;
 
   const moveProperty = async (
     movedPropertyId: string,
@@ -1610,14 +1620,46 @@ export function DatabaseTableView({
     editingSession.current += 1;
     setEditingCellKey(key);
     setEditingValue(
-      extractCurrentDatabaseCellValue(getRawCellValue(row, property.id)),
+      cellConflicts[key]
+        ? cellConflicts[key].draftValue
+        : extractCurrentDatabaseCellValue(getRawCellValue(row, property.id)),
     );
+  };
+
+  const resolveCellConflict = (
+    conflict: DatabaseCellConflict,
+    current: DatabaseCellReview,
+  ) => {
+    cellRevisions.current.set(conflict.key, current.revision);
+    setRows((previous) =>
+      previous.map((row) =>
+        row.pageId === current.row.pageId
+          ? { ...row, cells: current.row.cells }
+          : row,
+      ),
+    );
+    setCellConflicts((previous) => {
+      if (previous[conflict.key] !== conflict) return previous;
+      const next = { ...previous };
+      delete next[conflict.key];
+      return next;
+    });
+    setReviewedCellKey((key) => (key === conflict.key ? null : key));
+    if (
+      editingSession.current === conflict.session &&
+      editingCellKeyRef.current === conflict.key
+    ) {
+      setEditingCellKey(null);
+      setEditingValue("");
+    }
+    void invalidateDatabaseRowContext({ databaseId }, { client: queryClient });
   };
 
   const saveEditing = async (
     row: IDatabaseRowWithCells,
     property: IDatabaseProperty,
     nextValue?: unknown,
+    recovery?: { conflict: DatabaseCellConflict; current: DatabaseCellReview },
   ) => {
     const key = `${row.pageId}:${property.id}`;
     /**
@@ -1626,6 +1668,7 @@ export function DatabaseTableView({
      */
     if (
       !isEditable ||
+      row.canWrite === false ||
       isDatabaseComputedProperty(property.type) ||
       (typeof nextValue === "undefined" && editingCellKeyRef.current !== key)
     ) {
@@ -1634,6 +1677,23 @@ export function DatabaseTableView({
 
     const sourceValue =
       typeof nextValue === "undefined" ? editingValue : nextValue;
+    if (cellConflicts[key] && !recovery) {
+      setCellConflicts((previous) =>
+        previous[key]
+          ? {
+              ...previous,
+              [key]: {
+                ...previous[key],
+                draftValue: structuredClone(sourceValue),
+                session: editingSession.current,
+              },
+            }
+          : previous,
+      );
+      setCellSaveState("error");
+      return false;
+    }
+    if (recovery && cellConflicts[key] !== recovery.conflict) return false;
     let nextCellChange: ReturnType<typeof hasEffectiveCellValueChange>;
     try {
       nextCellChange = hasEffectiveCellValueChange(row, property, sourceValue);
@@ -1643,11 +1703,12 @@ export function DatabaseTableView({
       return false;
     }
     if (!nextCellChange) {
+      if (recovery) resolveCellConflict(recovery.conflict, recovery.current);
       if (editingCellKeyRef.current === key) {
         setEditingCellKey(null);
         setEditingValue("");
       }
-      return;
+      return true;
     }
 
     const session = editingSession.current;
@@ -1667,6 +1728,7 @@ export function DatabaseTableView({
                     : nextCellChange.normalizedValue,
                   operation: nextCellChange.shouldDelete ? "delete" : "upsert",
                   expectedRevision:
+                    recovery?.current.revision ??
                     cellRevisions.current.get(key) ??
                     row.cells?.find((cell) => cell.propertyId === property.id)
                       ?.revision ??
@@ -1704,7 +1766,6 @@ export function DatabaseTableView({
         invalidateRows: true,
         invalidateRowContext: true,
       });
-      void summaryQuery.refetch();
       if (
         session === editingSession.current &&
         editingCellKeyRef.current === key
@@ -1713,10 +1774,45 @@ export function DatabaseTableView({
         setEditingValue("");
       }
       setCellSaveState("saved");
+      if (recovery) {
+        setCellConflicts((previous) => {
+          if (previous[key] !== recovery.conflict) return previous;
+          const next = { ...previous };
+          delete next[key];
+          return next;
+        });
+        setReviewedCellKey((current) => (current === key ? null : current));
+      }
       return true;
-    } catch {
+    } catch (error) {
       setCellSaveState("error");
-      notifications.show({ color: "red", message: t("Failed to update data") });
+      if (isDatabaseCellConflict(error)) {
+        const conflict: DatabaseCellConflict = {
+          key,
+          row,
+          property,
+          session,
+          originalValue: extractCurrentDatabaseCellValue(
+            getRawCellValue(row, property.id),
+          ),
+          draftValue: structuredClone(sourceValue),
+        };
+        setCellConflicts((previous) =>
+          previous[key]?.session > session
+            ? previous
+            : { ...previous, [key]: conflict },
+        );
+        notifications.show({
+          id: `database-cell-conflict-${key}`,
+          color: "orange",
+          message: t("dbTable.cellConflictToast"),
+        });
+      } else {
+        notifications.show({
+          color: "red",
+          message: t("Failed to update data"),
+        });
+      }
       return false;
     }
   };
@@ -1885,23 +1981,13 @@ export function DatabaseTableView({
     setSelectedRowPageIds(Object.fromEntries(failed.map((id) => [id, true])));
   };
 
-  const updatePropertyNameDraft = (propertyId: string, value: string) => {
-    setPropertyNameDrafts((prev) => ({
-      ...prev,
-      [propertyId]: value,
-    }));
-  };
-
-  const resetPropertyNameDraft = (property: IDatabaseProperty) => {
-    updatePropertyNameDraft(property.id, property.name);
-  };
-
-  const savePropertyRename = async (property: IDatabaseProperty) => {
-    const draftName = propertyNameDrafts[property.id] ?? property.name;
+  const savePropertyRename = async (
+    property: IDatabaseProperty,
+    draftName: string,
+  ) => {
     const nextName = resolveDatabasePropertyRename(property.name, draftName);
 
     if (!nextName) {
-      resetPropertyNameDraft(property);
       return;
     }
 
@@ -1917,9 +2003,6 @@ export function DatabaseTableView({
       invalidateRows: true,
       invalidateRowContext: true,
     });
-    resetRowsPagination();
-
-    updatePropertyNameDraft(property.id, nextName);
   };
 
   const startRowRename = (row: IDatabaseRowWithCells) => {
@@ -2515,6 +2598,120 @@ export function DatabaseTableView({
     confirmDeleteRows(selectedRowIds);
   };
 
+  const propertyCreator = (
+    <Popover
+      opened={propertyCreatorOpened}
+      onChange={setPropertyCreatorOpened}
+      position="bottom-start"
+      width={300}
+      withinPortal
+    >
+      <Popover.Target>
+        <Button
+          variant="default"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => setPropertyCreatorOpened((opened) => !opened)}
+          aria-expanded={propertyCreatorOpened}
+        >
+          {t("dbTable.addProperty")}
+        </Button>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Stack gap="sm">
+          <TextInput
+            aria-label={t("New column name")}
+            placeholder={t("New column")}
+            value={newPropertyName}
+            onChange={(event) => setNewPropertyName(event.currentTarget.value)}
+          />
+          <Select
+            aria-label={t("Property type")}
+            comboboxProps={{ withinPortal: false }}
+            value={newPropertyType}
+            data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
+              value: propertyType,
+              label: propertyTypeLabels[propertyType],
+            }))}
+            onChange={(value) => {
+              if (!value) {
+                return;
+              }
+
+              setNewPropertyType(value as DatabasePropertyType);
+            }}
+            allowDeselect={false}
+            renderOption={renderPropertyTypeOption}
+            leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
+          />
+          <Button
+            leftSection={<IconPlus size={14} />}
+            onClick={handleCreateProperty}
+            loading={createPropertyMutation.isPending}
+            disabled={!newPropertyName.trim()}
+          >
+            {t("Property")}
+          </Button>
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  );
+  const secondaryViewControls = (
+    <>
+      <Select
+        aria-label={t("dbBoard.layout")}
+        disabled={!arePropertiesLoaded}
+        w={125}
+        value={viewState.kanban ? "kanban" : "table"}
+        allowDeselect={false}
+        data={[
+          { value: "table", label: t("Table") },
+          { value: "kanban", label: t("dbBoard.board") },
+        ]}
+        onChange={(type) => {
+          setActiveGroupKey(undefined);
+          if (type === "kanban")
+            setViewStateDraft((current) => ({
+              ...current,
+              version: 3,
+              groupBy:
+                activeProperties.find((p) => p.type === "select")?.id ?? null,
+              kanban: {
+                columnOrder: [],
+                hiddenColumns: [],
+                cardProperties: [],
+              },
+            }));
+          else
+            setViewStateDraft(({ kanban, ...current }) => ({
+              ...current,
+              version: 3,
+            }));
+        }}
+      />
+      {selectedViewId && isEditable && (
+        <Button
+          variant="default"
+          onClick={() => viewAutosave.save()}
+          disabled={viewAutosave.status !== "dirty"}
+          loading={viewAutosave.status === "saving"}
+        >
+          {t("dbBoard.saveShared")}
+        </Button>
+      )}
+      {!embedded && (
+        <AccessibleActionIcon
+          label={t(
+            toolbarPinned ? "dbTable.unpinToolbar" : "dbTable.pinToolbar",
+          )}
+          aria-pressed={toolbarPinned}
+          onClick={() => setToolbarPinned((pinned) => !pinned)}
+        >
+          {toolbarPinned ? <IconPinnedOff size={18} /> : <IconPin size={18} />}
+        </AccessibleActionIcon>
+      )}
+    </>
+  );
+
   return (
     <Paper withBorder radius="md" p="md">
       <Group
@@ -2528,66 +2725,12 @@ export function DatabaseTableView({
         wrap="wrap"
       >
         {isEditable && (
-          <Group gap="xs" wrap="wrap">
-            <Popover
-              opened={propertyCreatorOpened}
-              onChange={setPropertyCreatorOpened}
-              position="bottom-start"
-              width={300}
-              withinPortal
-            >
-              <Popover.Target>
-                <Button
-                  variant="default"
-                  leftSection={<IconPlus size={14} />}
-                  onClick={() => setPropertyCreatorOpened((opened) => !opened)}
-                  aria-expanded={propertyCreatorOpened}
-                >
-                  {t("dbTable.addProperty")}
-                </Button>
-              </Popover.Target>
-              <Popover.Dropdown>
-                <Stack gap="sm">
-                  <TextInput
-                    aria-label={t("New column name")}
-                    placeholder={t("New column")}
-                    value={newPropertyName}
-                    onChange={(event) =>
-                      setNewPropertyName(event.currentTarget.value)
-                    }
-                  />
-                  <Select
-                    aria-label={t("Property type")}
-                    comboboxProps={{ withinPortal: false }}
-                    value={newPropertyType}
-                    data={DATABASE_PROPERTY_TYPES.map((propertyType) => ({
-                      value: propertyType,
-                      label: propertyTypeLabels[propertyType],
-                    }))}
-                    onChange={(value) => {
-                      if (!value) {
-                        return;
-                      }
-
-                      setNewPropertyType(value as DatabasePropertyType);
-                    }}
-                    allowDeselect={false}
-                    renderOption={renderPropertyTypeOption}
-                    leftSection={renderPropertyTypeIcon(newPropertyType, 16)}
-                  />
-                  <Button
-                    leftSection={<IconPlus size={14} />}
-                    onClick={handleCreateProperty}
-                    loading={createPropertyMutation.isPending}
-                    disabled={!newPropertyName.trim()}
-                  >
-                    {t("Property")}
-                  </Button>
-                </Stack>
-              </Popover.Dropdown>
-            </Popover>
+          <Group gap="xs" wrap="wrap" className={classes.createControls}>
+            {!isMobileViewport && propertyCreator}
 
             <Button
+              className={classes.createRowButton}
+              aria-label={t("Row")}
               variant="light"
               leftSection={<IconPlus size={14} />}
               onClick={() => void handleCreateRow()}
@@ -2596,17 +2739,21 @@ export function DatabaseTableView({
                 createRowMutation.isPending || Boolean(pinnedCreatedRow)
               }
             >
-              {t("Row")}
+              <span className={classes.createRowLabel}>{t("Row")}</span>
             </Button>
           </Group>
         )}
 
-        <Group wrap="wrap">
-          <Group gap="xs" wrap="wrap">
+        <Group
+          wrap={isMobileViewport ? "nowrap" : "wrap"}
+          className={classes.primaryViewControls}
+        >
+          <Group gap="xs" wrap="wrap" className={classes.viewSelectorGroup}>
             <Select
               aria-label={t("View")}
               placeholder={t("View")}
-              w={200}
+              w={isMobileViewport ? undefined : 200}
+              className={classes.viewSelector}
               data={databaseViews.map((view) => ({
                 value: view.id,
                 label: view.name,
@@ -2623,48 +2770,13 @@ export function DatabaseTableView({
             />
           </Group>
 
-          <Select
-            aria-label={t("dbBoard.layout")}
-            w={125}
-            value={viewState.kanban ? "kanban" : "table"}
-            allowDeselect={false}
-            data={[
-              { value: "table", label: t("Table") },
-              { value: "kanban", label: t("dbBoard.board") },
-            ]}
-            onChange={(type) => {
-              setActiveGroupKey(undefined);
-              if (type === "kanban")
-                setViewStateDraft((current) => ({
-                  ...current,
-                  version: 3,
-                  groupBy:
-                    activeProperties.find((p) => p.type === "select")?.id ??
-                    null,
-                  kanban: {
-                    columnOrder: [],
-                    hiddenColumns: [],
-                    cardProperties: [],
-                  },
-                }));
-              else
-                setViewStateDraft(({ kanban, ...current }) => ({
-                  ...current,
-                  version: 3,
-                }));
-            }}
-          />
-          {selectedViewId && isEditable && (
-            <Button
-              variant="default"
-              onClick={() => viewAutosave.save()}
-              disabled={viewAutosave.status !== "dirty"}
-              loading={viewAutosave.status === "saving"}
-            >
-              {t("dbBoard.saveShared")}
-            </Button>
-          )}
+          {!isMobileViewport && secondaryViewControls}
           <DatabaseViewControls
+            nestedOverlayOpened={
+              propertyCreatorOpened ||
+              Boolean(formulaDraftName || formulaSettingsProperty)
+            }
+            onClose={() => setPropertyCreatorOpened(false)}
             state={viewState}
             properties={activeProperties}
             onChange={(state) => {
@@ -2673,6 +2785,12 @@ export function DatabaseTableView({
               setActiveGroupKey(undefined);
             }}
           >
+            {isMobileViewport && (
+              <Group wrap="wrap">
+                {isEditable && propertyCreator}
+                {secondaryViewControls}
+              </Group>
+            )}
             {isEditable && (
               <Group align="flex-end">
                 <TextInput
@@ -2704,23 +2822,59 @@ export function DatabaseTableView({
               </Group>
             )}
           </DatabaseViewControls>
-          {!embedded && (
-            <AccessibleActionIcon
-              label={t(
-                toolbarPinned ? "dbTable.unpinToolbar" : "dbTable.pinToolbar",
-              )}
-              aria-pressed={toolbarPinned}
-              onClick={() => setToolbarPinned((pinned) => !pinned)}
-            >
-              {toolbarPinned ? (
-                <IconPinnedOff size={18} />
-              ) : (
-                <IconPin size={18} />
-              )}
-            </AccessibleActionIcon>
-          )}
         </Group>
       </Group>
+      {Object.values(cellConflicts).map((conflict) => (
+        <Alert
+          key={conflict.key}
+          id={`database-cell-conflict-${conflict.key}`}
+          color="orange"
+          mb="sm"
+          role="alert"
+        >
+          <Group justify="space-between">
+            <Text size="sm">
+              {t("dbTable.cellConflictNotice", {
+                row: getRowTitle(conflict.row, t("Untitled")),
+                property: conflict.property.name,
+              })}
+            </Text>
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => setReviewedCellKey(conflict.key)}
+            >
+              {t("dbTable.cellConflictReview")}
+            </Button>
+          </Group>
+        </Alert>
+      ))}
+      <DatabaseCellConflictDialog
+        conflict={
+          reviewedCellKey ? (cellConflicts[reviewedCellKey] ?? null) : null
+        }
+        databaseId={databaseId}
+        spaceId={spaceId}
+        onClose={() => setReviewedCellKey(null)}
+        onUseCurrent={resolveCellConflict}
+        onApply={(conflict, current) =>
+          saveEditing(current.row, current.property, conflict.draftValue, {
+            conflict,
+            current,
+          }).then((saved) => saved === true)
+        }
+        onReturnFocus={(conflict) => {
+          if (editingSession.current !== conflict.session) return;
+          const cell = Array.from(
+            tableViewportRef.current?.querySelectorAll<HTMLElement>(
+              "[data-database-cell-key]",
+            ) ?? [],
+          ).find((element) => element.dataset.databaseCellKey === conflict.key);
+          const active = document.activeElement;
+          if (!active || active === document.body || cell?.contains(active))
+            cell?.focus({ preventScroll: true });
+        }}
+      />
       <Group mb="sm">
         {selectedViewId && (
           <Text size="sm" role="status">
@@ -2912,7 +3066,7 @@ export function DatabaseTableView({
           canCreate={dictionaryEnabled && canManageDictionary}
           enableSelectionCreate
         >
-          {isMobileViewport && (
+          {isMobileViewport && !sparseTable && (
             <Text className={classes.scrollHint}>
               {t("Scroll horizontally to see all columns")}
             </Text>
@@ -2926,6 +3080,7 @@ export function DatabaseTableView({
             mah={isMobileViewport ? 520 : 620}
             onScrollPositionChange={(position) => setTableScrollTop(position.y)}
             className={classes.databaseScroll}
+            data-sparse={sparseTable}
             style={
               {
                 "--database-title-column-left": isEditable
@@ -2940,10 +3095,19 @@ export function DatabaseTableView({
               stickyHeader
               withTableBorder
               withColumnBorders
-              miw={isMobileViewport ? 760 : 900}
-              layout="auto"
+              miw={sparseTable ? undefined : isMobileViewport ? 760 : 900}
+              layout={sparseTable ? "fixed" : "auto"}
               className={classes.databaseTable}
+              data-sparse={sparseTable}
             >
+              {sparseTable && (
+                <colgroup>
+                  {isEditable && (
+                    <col style={{ width: isMobileViewport ? 40 : 52 }} />
+                  )}
+                  <col />
+                </colgroup>
+              )}
               <Table.Thead>
                 <Table.Tr>
                   {isEditable && (
@@ -2978,6 +3142,11 @@ export function DatabaseTableView({
                       miw={viewState.columnWidths?.[property.id] ?? 220}
                       w={viewState.columnWidths?.[property.id] ?? 220}
                       className={classes.propertyHeader}
+                      style={
+                        {
+                          "--database-property-width": `${viewState.columnWidths?.[property.id] ?? 220}px`,
+                        } as CSSProperties
+                      }
                       data-database-property-id={property.id}
                       data-dragging={draggedPropertyId === property.id}
                       data-drop-target={
@@ -3017,7 +3186,12 @@ export function DatabaseTableView({
                         }
                       }}
                     >
-                      <Group justify="space-between" gap="xs" wrap="nowrap">
+                      <Group
+                        className={classes.propertyHeaderContent}
+                        justify="space-between"
+                        gap={4}
+                        wrap="nowrap"
+                      >
                         {isEditable ? (
                           <>
                             <AccessibleActionIcon
@@ -3117,197 +3291,171 @@ export function DatabaseTableView({
                             >
                               <IconGripVertical size={14} />
                             </AccessibleActionIcon>
-                            <div className={classes.propertyName}>
-                              <TextInput
-                                aria-label={t("Property name")}
-                                value={
-                                  propertyNameDrafts[property.id] ??
-                                  property.name
-                                }
-                                my={4}
-                                onChange={(event) =>
-                                  updatePropertyNameDraft(
-                                    property.id,
-                                    event.currentTarget.value,
-                                  )
-                                }
-                                onBlur={() => void savePropertyRename(property)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    event.currentTarget.blur();
-                                  }
-
-                                  if (event.key === "Escape") {
-                                    event.preventDefault();
-                                    resetPropertyNameDraft(property);
-                                  }
-                                }}
-                                onClick={(event) => event.stopPropagation()}
-                                onMouseDown={(event) => event.stopPropagation()}
-                              />
-                            </div>
+                            <Text
+                              className={classes.propertyName}
+                              size="sm"
+                              fw="bold"
+                              title={property.name}
+                            >
+                              {property.name}
+                            </Text>
                           </>
                         ) : (
-                          <Text size="sm" fw="bold">
+                          <Text
+                            className={classes.propertyName}
+                            size="sm"
+                            fw="bold"
+                            title={property.name}
+                          >
                             {property.name}
                           </Text>
                         )}
                         {isEditable && (
-                          <Menu position="bottom-end" shadow="md" withinPortal>
-                            <Menu.Target>
-                              <AccessibleActionIcon
-                                variant="subtle"
-                                label={t("Property actions")}
-                                tooltip={false}
-                              >
-                                <IconDotsVertical size={14} />
-                              </AccessibleActionIcon>
-                            </Menu.Target>
-
-                            <Menu.Dropdown>
-                              <Menu.Item
-                                leftSection={<IconArrowLeft size={14} />}
-                                disabled={
-                                  propertyIndex === 0 ||
-                                  updatePropertyMutation.isPending
-                                }
-                                onClick={() =>
-                                  movePropertyByVisibleOffset(property.id, -1)
-                                }
-                              >
-                                {`${t("Move")} ←`}
-                              </Menu.Item>
-                              <Menu.Item
-                                leftSection={<IconArrowRight size={14} />}
-                                disabled={
-                                  propertyIndex ===
-                                    displayedProperties.length - 1 ||
-                                  updatePropertyMutation.isPending
-                                }
-                                onClick={() =>
-                                  movePropertyByVisibleOffset(property.id, 1)
-                                }
-                              >
-                                {`${t("Move")} →`}
-                              </Menu.Item>
-                              <Menu.Label>
-                                {t("dbBoard.columnWidth")}
-                              </Menu.Label>
-                              <NumberInput
-                                aria-label={t("dbBoard.columnWidth")}
-                                min={80}
-                                max={1200}
-                                value={
-                                  viewState.columnWidths?.[property.id] ?? 220
-                                }
-                                onChange={(width) => {
-                                  if (
-                                    typeof width === "number" &&
-                                    width >= 80 &&
-                                    width <= 1200
-                                  )
-                                    setViewStateDraft((current) => ({
-                                      ...current,
-                                      version: 3,
-                                      columnWidths: {
-                                        ...current.columnWidths,
-                                        [property.id]: width,
-                                      },
-                                    }));
-                                }}
-                              />
-                              <Menu.Divider />
-                              <Menu.Sub>
-                                <Menu.Sub.Target>
-                                  <Menu.Sub.Item
-                                    disabled={
-                                      isDatabaseComputedProperty(
-                                        property.type,
-                                      ) || property.type === "file"
-                                    }
-                                    leftSection={
-                                      <IconSwitchHorizontal size={14} />
+                          <DatabasePropertyMenu
+                            property={property}
+                            disabled={updatePropertyMutation.isPending}
+                            onRename={(name) =>
+                              savePropertyRename(property, name)
+                            }
+                          >
+                            <Menu.Item
+                              leftSection={<IconArrowLeft size={14} />}
+                              disabled={
+                                propertyIndex === 0 ||
+                                updatePropertyMutation.isPending
+                              }
+                              onClick={() =>
+                                movePropertyByVisibleOffset(property.id, -1)
+                              }
+                            >
+                              {`${t("Move")} ←`}
+                            </Menu.Item>
+                            <Menu.Item
+                              leftSection={<IconArrowRight size={14} />}
+                              disabled={
+                                propertyIndex ===
+                                  displayedProperties.length - 1 ||
+                                updatePropertyMutation.isPending
+                              }
+                              onClick={() =>
+                                movePropertyByVisibleOffset(property.id, 1)
+                              }
+                            >
+                              {`${t("Move")} →`}
+                            </Menu.Item>
+                            <Menu.Label>{t("dbBoard.columnWidth")}</Menu.Label>
+                            <NumberInput
+                              aria-label={t("dbBoard.columnWidth")}
+                              min={80}
+                              max={1200}
+                              value={
+                                viewState.columnWidths?.[property.id] ?? 220
+                              }
+                              onChange={(width) => {
+                                if (
+                                  typeof width === "number" &&
+                                  width >= 80 &&
+                                  width <= 1200
+                                )
+                                  setViewStateDraft((current) => ({
+                                    ...current,
+                                    version: 3,
+                                    columnWidths: {
+                                      ...current.columnWidths,
+                                      [property.id]: width,
+                                    },
+                                  }));
+                              }}
+                            />
+                            <Menu.Divider />
+                            <Menu.Sub>
+                              <Menu.Sub.Target>
+                                <Menu.Sub.Item
+                                  disabled={
+                                    isDatabaseComputedProperty(property.type) ||
+                                    property.type === "file"
+                                  }
+                                  leftSection={
+                                    <IconSwitchHorizontal size={14} />
+                                  }
+                                >
+                                  {t("Type")}
+                                </Menu.Sub.Item>
+                              </Menu.Sub.Target>
+                              <Menu.Sub.Dropdown>
+                                {DATABASE_PROPERTY_TYPES.filter(
+                                  (type) =>
+                                    !isDatabaseComputedProperty(type) &&
+                                    type !== "file",
+                                ).map((propertyType) => (
+                                  <Menu.Item
+                                    key={`${property.id}-${propertyType}`}
+                                    leftSection={renderPropertyTypeIcon(
+                                      propertyType,
+                                      14,
+                                    )}
+                                    disabled={propertyType === property.type}
+                                    onClick={() =>
+                                      updatePropertyMutation.mutate(
+                                        {
+                                          propertyId: property.id,
+                                          payload: { type: propertyType },
+                                        },
+                                        {
+                                          onSuccess: () => {
+                                            emitDatabaseInvalidation({
+                                              invalidateProperties: true,
+                                              invalidateRows: true,
+                                              invalidateRowContext: true,
+                                            });
+                                            resetRowsPagination();
+                                          },
+                                        },
+                                      )
                                     }
                                   >
-                                    {t("Type")}
-                                  </Menu.Sub.Item>
-                                </Menu.Sub.Target>
-                                <Menu.Sub.Dropdown>
-                                  {DATABASE_PROPERTY_TYPES.filter(
-                                    (type) =>
-                                      !isDatabaseComputedProperty(type) &&
-                                      type !== "file",
-                                  ).map((propertyType) => (
-                                    <Menu.Item
-                                      key={`${property.id}-${propertyType}`}
-                                      leftSection={renderPropertyTypeIcon(
-                                        propertyType,
-                                        14,
-                                      )}
-                                      disabled={propertyType === property.type}
-                                      onClick={() =>
-                                        updatePropertyMutation.mutate(
-                                          {
-                                            propertyId: property.id,
-                                            payload: { type: propertyType },
-                                          },
-                                          {
-                                            onSuccess: () => {
-                                              emitDatabaseInvalidation({
-                                                invalidateProperties: true,
-                                                invalidateRows: true,
-                                                invalidateRowContext: true,
-                                              });
-                                              resetRowsPagination();
-                                            },
-                                          },
-                                        )
-                                      }
-                                    >
-                                      {propertyTypeLabels[propertyType]}
-                                    </Menu.Item>
-                                  ))}
-                                </Menu.Sub.Dropdown>
-                              </Menu.Sub>
-                              {property.type === "number" && (
-                                <Menu.Item
-                                  onClick={() =>
-                                    setNumberSettingsProperty(property)
-                                  }
-                                >
-                                  {t("dbTable.numberFormat")}
-                                </Menu.Item>
-                              )}
-                              {property.type === "formula" && (
-                                <Menu.Item
-                                  onClick={() =>
-                                    setFormulaSettingsProperty(property)
-                                  }
-                                >
-                                  {t("dbTable.formula")}
-                                </Menu.Item>
-                              )}
-                              {(property.type === "select" ||
-                                property.type === "multi_select") && (
-                                <Menu.Item
-                                  leftSection={<IconSettings size={14} />}
-                                  onClick={() => setSettingsProperty(property)}
-                                >
-                                  {t("Select settings")}
-                                </Menu.Item>
-                              )}
+                                    {propertyTypeLabels[propertyType]}
+                                  </Menu.Item>
+                                ))}
+                              </Menu.Sub.Dropdown>
+                            </Menu.Sub>
+                            {property.type === "number" && (
                               <Menu.Item
-                                color="red"
-                                leftSection={<IconTrash size={14} />}
-                                onClick={() => confirmDeleteProperty(property)}
+                                onClick={() =>
+                                  setNumberSettingsProperty(property)
+                                }
                               >
-                                {t("Delete property with name", {
-                                  name: property.name,
-                                })}
+                                {t("dbTable.numberFormat")}
                               </Menu.Item>
-                            </Menu.Dropdown>
-                          </Menu>
+                            )}
+                            {property.type === "formula" && (
+                              <Menu.Item
+                                onClick={() =>
+                                  setFormulaSettingsProperty(property)
+                                }
+                              >
+                                {t("dbTable.formula")}
+                              </Menu.Item>
+                            )}
+                            {(property.type === "select" ||
+                              property.type === "multi_select") && (
+                              <Menu.Item
+                                leftSection={<IconSettings size={14} />}
+                                onClick={() => setSettingsProperty(property)}
+                              >
+                                {t("Select settings")}
+                              </Menu.Item>
+                            )}
+                            <Menu.Item
+                              color="red"
+                              leftSection={<IconTrash size={14} />}
+                              onClick={() => confirmDeleteProperty(property)}
+                            >
+                              {t("Delete property with name", {
+                                name: property.name,
+                              })}
+                            </Menu.Item>
+                          </DatabasePropertyMenu>
                         )}
                       </Group>
                     </Table.Th>
@@ -3475,6 +3623,11 @@ export function DatabaseTableView({
                             miw={viewState.columnWidths?.[property.id] ?? 220}
                             w={viewState.columnWidths?.[property.id] ?? 220}
                             data-database-cell-key={key}
+                            aria-describedby={
+                              cellConflicts[key]
+                                ? `database-cell-conflict-${key}`
+                                : undefined
+                            }
                             tabIndex={0}
                             aria-label={`${property.name}: ${getRowTitle(row, t("untitled"))}`}
                             className={classes.editableCell}
@@ -3525,7 +3678,10 @@ export function DatabaseTableView({
                                   document.activeElement?.closest(
                                     "[data-database-cell-key]",
                                   );
-                                if (focusedCell && focusedCell !== navigationCell)
+                                if (
+                                  focusedCell &&
+                                  focusedCell !== navigationCell
+                                )
                                   return;
                                 const nextCell = navigateEditingCell(
                                   rowIndex,
@@ -3637,7 +3793,12 @@ export function DatabaseTableView({
           ).map(([id, value]) => (
             <Text key={id} size="sm">
               {properties.find((property) => property.id === id)?.name}:{" "}
-              {value ?? t("Empty value")}
+              {formatDatabaseAggregate(
+                properties.find((property) => property.id === id),
+                viewState.calculations[id],
+                value,
+                i18n.resolvedLanguage ?? i18n.language,
+              ) || t("Empty value")}
               {((activeGroupKey
                 ? summaryQuery.data.groups.find(
                     (group) => group.key === activeGroupKey,

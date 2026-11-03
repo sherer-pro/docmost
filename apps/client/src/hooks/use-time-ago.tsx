@@ -1,16 +1,19 @@
 import { timeAgo } from "@/lib/time.ts";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export function useTimeAgo(date: Date | string) {
-  const [value, setValue] = useState(() => timeAgo(new Date(date)));
+  const { i18n } = useTranslation();
+  const language = i18n.language;
+  const [value, setValue] = useState(() => timeAgo(new Date(date), language));
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setValue(timeAgo(new Date(date)));
-    }, 5 * 1000);
+    const update = () => setValue(timeAgo(new Date(date), language));
+    update();
+    const interval = setInterval(update, 5 * 1000);
 
     return () => clearInterval(interval);
-  }, [date]);
+  }, [date, language]);
 
   return value;
 }

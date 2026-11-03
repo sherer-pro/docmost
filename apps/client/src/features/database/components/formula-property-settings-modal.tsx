@@ -16,6 +16,10 @@ import {
   type DatabaseFormulaSettings,
 } from "@docmost/api-contract";
 import type { IDatabaseProperty } from "../types/database.types";
+import {
+  classifyFormulaValidationError,
+  formulaValidationKeys,
+} from "../utils/formula-validation-error";
 
 export function FormulaPropertySettingsModal({
   opened,
@@ -61,13 +65,14 @@ export function FormulaPropertySettingsModal({
         ...properties.filter((property) => property.id !== propertyId),
         { id: propertyId ?? draftId, type: "formula", settings },
       ]);
-      return "";
+      return null;
     } catch (error) {
-      return error instanceof Error
-        ? error.message
-        : t("dbTable.formulaInvalid");
+      return classifyFormulaValidationError(error);
     }
-  }, [properties, propertyId, draftId, settings, t]);
+  }, [properties, propertyId, draftId, settings]);
+  const invalidMessage = invalid
+    ? t(formulaValidationKeys[invalid.code], invalid.params)
+    : undefined;
   return (
     <Modal
       opened={opened}
@@ -138,14 +143,9 @@ export function FormulaPropertySettingsModal({
           onChange={(event) =>
             setSettings({ ...settings, expression: event.currentTarget.value })
           }
-          error={invalid ? t("dbTable.formulaInvalid") : undefined}
+          error={invalidMessage}
           styles={{ input: { fontFamily: "monospace" } }}
         />
-        {invalid && (
-          <Text size="xs" c="red" role="status">
-            {invalid}
-          </Text>
-        )}
         <Text size="sm" c="dimmed">
           {t("dbTable.formulaHelp")}
         </Text>

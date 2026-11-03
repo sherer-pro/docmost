@@ -1,9 +1,25 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { generateNodeId } from '../utils';
 
 export const FOOTNOTE_TEXT_LIMIT = 10000;
+/** Keep clipboard fitting outside the non-leaf inline atom's definition. */
+export function closeFootnoteSliceEdges(slice: Slice): Slice {
+  const safeDepth = (open: number, first: boolean) => {
+    let node = first ? slice.content.firstChild : slice.content.lastChild;
+    for (let depth = 0; node && depth < open; depth++) {
+      if (node.type.name === 'footnote') return depth;
+      node = first ? node.firstChild : node.lastChild;
+    }
+    return open;
+  };
+  const openStart = safeDepth(slice.openStart, true);
+  const openEnd = safeDepth(slice.openEnd, false);
+  return openStart === slice.openStart && openEnd === slice.openEnd
+    ? slice
+    : new Slice(slice.content, openStart, openEnd);
+}
 export const footnoteText = (value: unknown): string =>
   typeof value === 'string' ? value.replace(/\u0000/g, '') : '';
 export function footnoteNodeText(node: any): string {
@@ -154,6 +170,13 @@ export const Footnote = Node.create<{ view: any }>({
     return [
       new Plugin({
         key: footnotePluginKey,
+        props: {
+          transformCopied: closeFootnoteSliceEdges,
+          transformPasted: (slice, view, plain) =>
+            plain || view.state.selection.$from.parent.type.spec.code
+              ? slice
+              : closeFootnoteSliceEdges(slice),
+        },
         state: {
           init: (_, state) => footnoteState(state.doc),
           apply: (transaction, previous) =>

@@ -87,6 +87,13 @@ Grouping supports one select, multi-select, checkbox, or user property. The tabl
 
 View changes remain personal drafts until an editor selects Save for everyone. Drafts are stored separately for each user/database/view in this browser. Creating a new view remains explicit. Readers may adjust local filters and sorts without persisting shared changes. A stale revision returns HTTP 409 and preserves the draft; users can load the latest settings or explicitly apply their changes against the latest revision.
 
+A successful manual save removes its acknowledged browser draft. A newer draft
+entered while that request is pending retains its content and original base
+revision; acknowledgement also preserves a different draft stored by another tab.
+On reload, a stored draft already identical to the initialized server
+settings is discarded without a conflict; a differing stale draft still requires
+explicit conflict resolution.
+
 ## Kanban, record preview, and linked views
 
 Kanban groups by one single-select property, including a separate empty-value
@@ -140,6 +147,14 @@ The compact toolbar groups view selection, layout, shared save and view settings
 Property creation opens separately; view names and deletion live in settings.
 Readers can use personal filters and choose whether to pin the toolbar; the
 preference is local to the user and database. Embedded toolbars are not sticky.
+
+Below 48em the toolbar keeps row creation, the view selector and an accessible
+settings button. Layout, property creation, shared save and pin controls live in
+the settings drawer. Below 360px row creation uses its labeled plus button to
+leave enough space for the view selector. A title-only table uses a fluid title
+column without the normal rich-table minimum width; restoring a property restores
+its saved width. Property names are text until Rename is chosen explicitly.
+Name-only renames preserve loaded rows and pagination.
 Long descriptions collapse in reading mode while their editor remains mounted.
 Editing and a revealed search match expand the description.
 
@@ -163,6 +178,15 @@ attachments.
 ## Mutation and recovery
 
 Cells and views carry integer revisions. A new client sends `expectedRevision`; a missing active cell uses revision 0. Legacy callers may omit the revision. Batches are atomic per row and return `updatedRows`, `deletedRows`, `failedRows`, and optional failure codes. Successful rows are not resent when retrying partial failures. A conflict is never silently rebased onto another user's value.
+
+An inline cell conflict keeps the draft in the open table session. Review reads
+the current row context, property schema and page capabilities again, then shows
+original, current and draft values. Use current explicitly discards that draft;
+Apply my draft sends the reviewed revision through the ordinary mutation API.
+A second conflict requires a new review. Read denial or a deleted/retyped property
+does not permit applying the draft. Closing a review does not retry a write, and
+late responses do not move focus from another cell. These local drafts are not
+durable across a page reload.
 
 TSV insertion preserves internal empty rows and cells. An oversized area is rejected before mutation and asks the user to load additional rows or reduce the area. It does not create rows automatically. Pending deletion retains the original database and its six-second undo window across component unmounts.
 
@@ -201,6 +225,7 @@ for limits, policy controls, transaction recovery and MCP boundaries.
 - PostgreSQL diagnostic with managed local services: `node apps/client/e2e/database/run-live.mjs --postgres-only` runs only that suite against its own containers. It does not establish HTTP or browser acceptance.
 - Advanced value diagnostic: build first, then run `node apps/client/e2e/database/run-live.mjs --advanced-only --api-only` for live values, CSV, history retention, import and duplication. Remove `--api-only` and add `--grep="live advanced database" --browser=all` for the desktop/light and mobile/dark browser matrix. A full default run includes these scenarios.
 - `--browser=all` runs Chromium, Firefox and WebKit sequentially with a fresh isolated application and database for each browser. PostgreSQL, HTTP and browser assertions run unchanged; a failed browser does not seed or prevent the other browser runs. API-only, startup-only, PostgreSQL-only and model-quality diagnostics start a single runtime.
+- Complete isolated editor acceptance: after building, run `node apps/client/e2e/database/run-live.mjs --editor-browser-full` under Node 22. The synthetic PostgreSQL/Redis/API/collaboration runtime passes in-memory authentication to the complete unchanged `test:editor:e2e` command and verifies its downloaded artifacts without running AI browser suites. Its report scope is `diagnostic-editor-browser-full`, not a full release receipt. The compatible `--editor-browser-only` flag still selects only the Firefox synced-blocks diagnostic. Each editor mode accepts one optional `--subnet=10.x.x.0/28` and rejects release, AI, quality, browser and subset flags. Neither mode replaces `--release`; child processes retain explicit Corepack and Playwright cache paths, the optional `DOCMOST_PYTHON` interpreter override, and Windows `APPDATA` for installed user-site Python dependencies. Full editor mode removes inherited file/project selectors before starting the audit.
 - Service Workers stay enabled for ordinary browser scenarios. Only the four
   scenarios that inject network faults block them in their isolated browser
   context, because a worker-controlled request bypasses Playwright routing.
@@ -223,7 +248,7 @@ for limits, policy controls, transaction recovery and MCP boundaries.
   its draft, while a new empty title and ordinary Enter/Tab/dropdown navigation
   still work. CI and `verify:release` require this suite. The synthetic runner
   accepts `--browser=chromium|firefox|webkit|all`; its default remains Chromium.
-- Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>/`. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
+- Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>-<runId-prefix>/`; exclusive directory creation and `runtime-owner.json` prevent concurrent runs from sharing a runtime. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
 
 The live runner also accepts `--subnet=10.x.x.0/28` for an unused private
 Docker subnet when the daemon's default address pools are exhausted. Check

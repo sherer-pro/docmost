@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
 import {
   breadcrumbsKey,
   databaseKey,
@@ -64,6 +65,39 @@ function keyTrace(calls: InvalidatePayload[]) {
 }
 
 describe("cache invalidation scenarios", () => {
+  it("invalidates all summaries of changed rows without affecting another database", async () => {
+    const client = new QueryClient();
+    const firstView = ["database", "db-1", "summary", "all"];
+    const secondView = ["database", "db-1", "summary", "filtered"];
+    const otherDatabase = ["database", "db-2", "summary", "all"];
+    const receipt = ["ai-database-results", "private-result"];
+    for (const key of [firstView, secondView, otherDatabase, receipt]) {
+      client.setQueryData(key, { count: 0 });
+    }
+
+    await invalidateDatabaseRowContext({ databaseId: "db-1" }, { client });
+
+    assert.equal(client.getQueryState(firstView)?.isInvalidated, true);
+    assert.equal(client.getQueryState(secondView)?.isInvalidated, true);
+    assert.equal(client.getQueryState(otherDatabase)?.isInvalidated, false);
+    assert.equal(client.getQueryState(receipt)?.isInvalidated, false);
+    client.clear();
+  });
+
+  it("keeps summaries fresh only when rows are invalidated", async () => {
+    const client = new QueryClient();
+    const summary = ["database", "db-1", "summary", "all"];
+    client.setQueryData(summary, { count: 1 });
+    await invalidateDatabaseRowContext(
+      { databaseId: "db-1", includeRows: false },
+      { client },
+    );
+    assert.equal(client.getQueryState(summary)?.isInvalidated, false);
+    await invalidateDatabaseRowContext({}, { client });
+    assert.equal(client.getQueryState(summary)?.isInvalidated, true);
+    client.clear();
+  });
+
   it("query key factories stay aligned between hooks and invalidation layer", () => {
     assert.deepEqual(PAGE_QUERY_KEYS.page("page-1"), pageKey("page-1"));
     assert.deepEqual(
@@ -148,6 +182,7 @@ describe("cache invalidation scenarios", () => {
       JSON.stringify(["database", "db-1"]),
       JSON.stringify(["databases"]),
       JSON.stringify(["database", "db-1", "rows"]),
+      JSON.stringify(["database", "db-1", "summary"]),
       JSON.stringify(["database", "row-context"]),
     ]);
   });
@@ -205,6 +240,7 @@ describe("cache invalidation scenarios", () => {
       JSON.stringify(["root-sidebar-pages", "space-1"]),
       JSON.stringify(["sidebar-pages"]),
       JSON.stringify(["database", "db-1", "rows"]),
+      JSON.stringify(["database", "db-1", "summary"]),
       JSON.stringify(["database", "row-context"]),
       JSON.stringify(["pages", "page-1"]),
       JSON.stringify(["pages", "page-slug-1"]),

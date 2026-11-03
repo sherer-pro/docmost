@@ -76,6 +76,10 @@ import { canExportDocument } from "@/features/space/permissions/export-access.ts
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 import { usePageTemplateCapabilitiesQuery } from "@/features/page-template/queries/page-template-query";
 import { usePageTemplateProvenanceQuery } from "@/features/page/queries/page-details-query";
+import {
+  useMenuModalHandoff,
+  type MenuModalHandoff,
+} from "@/components/common/use-menu-modal-handoff";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
@@ -93,6 +97,11 @@ export default function PageHeaderMenu({
   });
   const assistantIdentity = useAiAssistantIdentity(page?.spaceId, page?.id);
   const isMobileViewport = Boolean(useMediaQuery("(max-width: 48em)"));
+  const detailsTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuHandoff = useMenuModalHandoff<"details" | "export">(
+    page?.id,
+    (modal) => (modal === "details" ? detailsTriggerRef.current : null),
+  );
   const pageCapabilities = page?.access?.capabilities;
   const canWritePage = !readOnly && (pageCapabilities?.canWrite ?? true);
   const canMoveDeleteSharePage =
@@ -180,13 +189,37 @@ export default function PageHeaderMenu({
 
       <ShareModal readOnly={!canMoveDeleteSharePage} />
 
-      {!isMobileViewport && <PageDetailsAction readOnly={isReadOnly} />}
+      {!isMobileViewport && page?.id && (
+        <Tooltip label={t("Page details")} openDelay={250} withArrow>
+          <AccessibleActionIcon
+            ref={detailsTriggerRef}
+            label={t("Page details")}
+            tooltip={false}
+            variant="subtle"
+            color="dark"
+            data-page-header-action="details"
+            onClick={() => menuHandoff.openModal("details")}
+          >
+            <IconInfoCircle size={20} stroke={2} />
+          </AccessibleActionIcon>
+        </Tooltip>
+      )}
 
       <PageActionMenu
         readOnly={isReadOnly}
         canMoveDeleteShare={canMoveDeleteSharePage}
         mobile={isMobileViewport}
+        handoff={menuHandoff}
       />
+
+      {page?.id && (
+        <PageDetailsModal
+          pageId={page.id}
+          page={page}
+          readOnly={isReadOnly}
+          {...menuHandoff.getModalProps("details")}
+        />
+      )}
     </>
   );
 }
@@ -213,44 +246,6 @@ function PageFavoriteAction({
       spaceId={page.spaceId}
       presentation={presentation}
     />
-  );
-}
-
-function PageDetailsAction({ readOnly }: PageHeaderMenuProps) {
-  const { t } = useTranslation();
-  const { pageSlug } = useParams();
-  const { data: page } = usePageQuery({
-    pageId: extractPageSlugId(pageSlug),
-  });
-  const [opened, { open, close }] = useDisclosure(false);
-
-  if (!page?.id) {
-    return null;
-  }
-
-  return (
-    <>
-      <Tooltip label={t("Page details")} openDelay={250} withArrow>
-        <AccessibleActionIcon
-          label={t("Page details")}
-          tooltip={false}
-          variant="subtle"
-          color="dark"
-          data-page-header-action="details"
-          onClick={open}
-        >
-          <IconInfoCircle size={20} stroke={2} />
-        </AccessibleActionIcon>
-      </Tooltip>
-
-      <PageDetailsModal
-        pageId={page.id}
-        page={page}
-        open={opened}
-        onClose={close}
-        readOnly={readOnly}
-      />
-    </>
   );
 }
 
@@ -285,6 +280,7 @@ interface PageActionMenuProps {
   readOnly?: boolean;
   canMoveDeleteShare?: boolean;
   mobile?: boolean;
+  handoff: MenuModalHandoff<"details" | "export">;
 }
 const PresentationModal = React.lazy(
   () => import("@/features/editor/components/presentation/presentation-modal"),
@@ -294,6 +290,7 @@ function PageActionMenu({
   readOnly,
   canMoveDeleteShare,
   mobile = false,
+  handoff,
 }: PageActionMenuProps) {
   const { t } = useTranslation();
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
@@ -312,10 +309,6 @@ function PageActionMenu({
   const templateProvenance = templateProvenanceQuery.data;
   const { openDeleteModal } = useDeletePageModal();
   const [tree] = useAtom(treeApiAtom);
-  const [exportOpened, { open: openExportModal, close: closeExportModal }] =
-    useDisclosure(false);
-  const [detailsOpened, { open: openDetails, close: closeDetails }] =
-    useDisclosure(false);
   const [
     movePageModalOpened,
     { open: openMovePageModal, close: closeMoveSpaceModal },
@@ -588,6 +581,7 @@ function PageActionMenu({
   return (
     <>
       <Menu
+        {...handoff.menuProps}
         shadow="xl"
         position="bottom-end"
         offset={20}
@@ -597,6 +591,7 @@ function PageActionMenu({
       >
         <Menu.Target>
           <AccessibleActionIcon
+            ref={handoff.triggerRef}
             label={t("Open menu")}
             variant="subtle"
             color="dark"
@@ -615,7 +610,7 @@ function PageActionMenu({
               />
               <Menu.Item
                 leftSection={<IconInfoCircle size={16} />}
-                onClick={openDetails}
+                onClick={() => handoff.openModal("details")}
                 data-page-header-menu-action="details"
               >
                 {t("Page details")}
@@ -649,7 +644,9 @@ function PageActionMenu({
               isWorkspaceAdmin ? handleCopyMarkdownWithComments : undefined
             }
             onOpenHistory={openHistoryModal}
-            onOpenExport={canExportPage ? openExportModal : undefined}
+            onOpenExport={
+              canExportPage ? () => handoff.openModal("export") : undefined
+            }
             onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
             onPrint={handlePrint}
             pageId={page?.id}
@@ -789,8 +786,7 @@ function PageActionMenu({
       <ExportModal
         type="page"
         id={page.id}
-        open={exportOpened}
-        onClose={closeExportModal}
+        {...handoff.getModalProps("export")}
       />
 
       <MovePageModal
@@ -813,16 +809,6 @@ function PageActionMenu({
           pageId={page.id}
           open={accessModalOpened}
           onClose={closeAccessModal}
-        />
-      )}
-
-      {mobile && page?.id && (
-        <PageDetailsModal
-          pageId={page.id}
-          page={page}
-          open={detailsOpened}
-          onClose={closeDetails}
-          readOnly={readOnly}
         />
       )}
     </>

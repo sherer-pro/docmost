@@ -52,9 +52,11 @@ export default function HistoryModalBody({ pageId, readOnly }: Props) {
       </nav>
 
       <div className={classes.historyPreview} data-page-full-width="true">
-        <HistoryComparisonSelect pageId={pageId} />
+        <div className={classes.comparisonControls}>
+          <HistoryComparisonSelect pageId={pageId} />
+        </div>
         <ScrollArea
-          h={580}
+          className={classes.previewScroll}
           w="100%"
           scrollbarSize={5}
           viewportRef={scrollViewportRef}
@@ -70,14 +72,9 @@ export default function HistoryModalBody({ pageId, readOnly }: Props) {
             radius="xl"
             px="md"
             py="xs"
-            style={{
-              position: "absolute",
-              bottom: 16,
-              left: "50%",
-              transform: "translateX(-50%)",
-            }}
+            className={classes.diffControls}
           >
-            <Group gap="md" wrap="nowrap">
+            <Group gap="md" justify="center">
               <Switch
                 label={t("Highlight changes")}
                 checked={highlightChanges}
@@ -87,18 +84,23 @@ export default function HistoryModalBody({ pageId, readOnly }: Props) {
               {highlightChanges && diffCounts && diffCounts.total > 0 && (
                 <Group gap="xs" wrap="nowrap">
                   <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                    {currentChangeIndex} of {diffCounts.total}
+                    {t("history.changePosition", {
+                      current: currentChangeIndex,
+                      total: diffCounts.total,
+                    })}
                   </Text>
                   <ActionIcon
                     variant="subtle"
-                    size="sm"
+                    size={32}
+                    aria-label={t("history.previousChange")}
                     onClick={handlePrevChange}
                   >
                     <IconChevronUp size={16} />
                   </ActionIcon>
                   <ActionIcon
                     variant="subtle"
-                    size="sm"
+                    size={32}
+                    aria-label={t("history.nextChange")}
                     onClick={handleNextChange}
                   >
                     <IconChevronDown size={16} />

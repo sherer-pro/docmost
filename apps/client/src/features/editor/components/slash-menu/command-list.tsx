@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   SlashMenuGroupedItemsType,
   SlashMenuItemType,
@@ -15,17 +23,17 @@ import classes from "./slash-menu.module.css";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 
-const CommandList = ({
-  items,
-  command,
-  editor,
-  range,
-}: {
+type CommandListProps = {
   items: SlashMenuGroupedItemsType;
   command: any;
   editor: any;
   range: any;
-}) => {
+};
+
+const CommandList = forwardRef<
+  { onKeyDown: (props: { event: KeyboardEvent }) => boolean },
+  CommandListProps
+>(({ items, command, editor, range }, ref) => {
   const { t } = useTranslation();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeParent, setActiveParent] = useState<SlashMenuItemType | null>(
@@ -105,43 +113,44 @@ const CommandList = ({
     [command, flatItems, resolveChildren],
   );
 
-  useEffect(() => {
-    const navigationKeys = ["ArrowUp", "ArrowDown", "Enter"];
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" && activeParent) {
-        e.preventDefault();
-        setActiveParent(null);
-        setSelectedIndex(0);
-        return true;
-      }
-
-      if (navigationKeys.includes(e.key) && flatItems.length > 0) {
-        e.preventDefault();
-
-        if (e.key === "ArrowUp") {
-          setSelectedIndex(
-            (selectedIndex + flatItems.length - 1) % flatItems.length,
-          );
+  useImperativeHandle(
+    ref,
+    () => ({
+      onKeyDown: ({ event: e }) => {
+        const navigationKeys = ["ArrowUp", "ArrowDown", "Enter"];
+        if (e.key === "ArrowLeft" && activeParent) {
+          e.preventDefault();
+          setActiveParent(null);
+          setSelectedIndex(0);
           return true;
         }
 
-        if (e.key === "ArrowDown") {
-          setSelectedIndex((selectedIndex + 1) % flatItems.length);
-          return true;
-        }
+        if (navigationKeys.includes(e.key) && flatItems.length > 0) {
+          e.preventDefault();
 
-        if (e.key === "Enter") {
-          selectItem(selectedIndex);
-          return true;
+          if (e.key === "ArrowUp") {
+            setSelectedIndex(
+              (selectedIndex + flatItems.length - 1) % flatItems.length,
+            );
+            return true;
+          }
+
+          if (e.key === "ArrowDown") {
+            setSelectedIndex((selectedIndex + 1) % flatItems.length);
+            return true;
+          }
+
+          if (e.key === "Enter") {
+            selectItem(selectedIndex);
+            return true;
+          }
+          return false;
         }
         return false;
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [activeParent, flatItems, selectedIndex, setSelectedIndex, selectItem]);
+      },
+    }),
+    [activeParent, flatItems, selectedIndex, selectItem],
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -196,6 +205,8 @@ const CommandList = ({
       </ScrollArea>
     </Paper>
   ) : null;
-};
+});
+
+CommandList.displayName = "CommandList";
 
 export default CommandList;

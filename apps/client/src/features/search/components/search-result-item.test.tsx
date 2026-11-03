@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SearchResultItem } from "./search-result-item";
@@ -303,10 +304,16 @@ describe("SearchResultItem", () => {
       tagSnippets: [],
       databaseMatches: [
         {
-          propertyId: "property-1",
+          propertyId: "11111111-1111-4111-8111-111111111111",
           propertyName: "Customer",
           text: "Acme alpha account",
           matches: [{ start: 5, end: 10, value: "alpha" }],
+        },
+        {
+          propertyId: "22222222-2222-4222-8222-222222222222",
+          propertyName: "Notes",
+          text: "alpha in another field",
+          matches: [{ start: 0, end: 5, value: "alpha" }],
         },
       ],
       space: {
@@ -319,12 +326,45 @@ describe("SearchResultItem", () => {
     const element = SearchResultItem({
       result,
       isAttachmentResult: false,
+      query: "alpha",
     });
     const children = React.Children.toArray(element.props.children) as any[];
     const databaseMatchElement = React.Children.toArray(
       children[1].props.children,
     )[0] as any;
     const databaseMatch = databaseMatchElement.type(databaseMatchElement.props);
+    const target = new URL(databaseMatch.props.to, "https://docmost.invalid");
+    expect(target.pathname).toBe(
+      buildPageUrl("engineering", "customer-row", "Customer row"),
+    );
+    expect(target.searchParams.get("findProperty")).toBe(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(target.searchParams.get("find")).toBe("alpha");
+    expect(getHeaderAction(element).props.to).toBe(databaseMatch.props.to);
+    const secondMatch = React.Children.toArray(
+      children[1].props.children,
+    )[1] as any;
+    expect(
+      new URL(
+        secondMatch.props.href,
+        "https://docmost.invalid",
+      ).searchParams.get("findProperty"),
+    ).toBe("22222222-2222-4222-8222-222222222222");
+    const bodyResult = SearchResultItem({
+      result: {
+        ...result,
+        highlight: "A body <mark>alpha</mark> match with separate context",
+      },
+      isAttachmentResult: false,
+      query: "alpha",
+    });
+    expect(
+      new URL(
+        getHeaderAction(bodyResult).props.to,
+        "https://docmost.invalid",
+      ).searchParams.has("findProperty"),
+    ).toBe(false);
     const matchChildren = React.Children.toArray(
       databaseMatch.props.children,
     ) as any[];

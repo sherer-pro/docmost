@@ -5,6 +5,7 @@ import {
   databasePropertiesKey,
   databaseRowContextKey,
   databaseRowsKey,
+  databaseSummaryBaseKey,
   databasesBySpaceKey,
   pageKey,
   QUERY_KEY_SPACE,
@@ -135,23 +136,37 @@ export function invalidateDatabaseRowContext(
   } = {},
   { client }: InvalidateOptions,
 ) {
+  const pending: Promise<void>[] = [];
   if (includeRows && databaseId) {
-    client.invalidateQueries({
-      queryKey: [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows],
-    });
+    pending.push(
+      client.invalidateQueries({
+        queryKey: [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows],
+      }),
+    );
+    pending.push(
+      client.invalidateQueries({
+        queryKey: databaseSummaryBaseKey(databaseId),
+      }),
+    );
   }
 
   if (includeRows && !databaseId) {
-    client.invalidateQueries({
-      predicate: (item) =>
-        item.queryKey[0] === QUERY_KEY_SPACE.database &&
-        item.queryKey[2] === QUERY_KEY_SPACE.rows,
-    });
+    pending.push(
+      client.invalidateQueries({
+        predicate: (item) =>
+          item.queryKey[0] === QUERY_KEY_SPACE.database &&
+          (item.queryKey[2] === QUERY_KEY_SPACE.rows ||
+            item.queryKey[2] === QUERY_KEY_SPACE.databaseSummary),
+      }),
+    );
   }
 
-  client.invalidateQueries({
-    queryKey: databaseRowContextKey(),
-  });
+  pending.push(
+    client.invalidateQueries({
+      queryKey: databaseRowContextKey(),
+    }),
+  );
+  return Promise.all(pending).then(() => undefined);
 }
 
 export function invalidateRecentChanges(

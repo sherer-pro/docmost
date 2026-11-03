@@ -28,6 +28,12 @@ requests reauthorize the attachment through the existing file endpoint.
 
 ## Removal and history
 
+Gallery metadata columns have local bounds: type and size stay readable, size
+does not split across lines, and long file names and action labels wrap within
+the available space. Page details keep the same gallery instance when resized;
+the selected tab, search and loaded pages survive breakpoint changes. The details
+tab list becomes a two-by-two grid below 48em.
+
 `GET /api/pages/:pageId/attachments` accepts `query`, `limit` and `cursor`.
 `POST /api/pages/:pageId/attachments/:attachmentId/actions/remove` requires both
 space administration and current page write access. It only removes files owned

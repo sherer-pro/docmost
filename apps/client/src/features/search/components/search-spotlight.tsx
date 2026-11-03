@@ -121,11 +121,23 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     section: (typeof allSearch)[number],
   ) => (
     <section className={classes.searchSection} aria-label={title}>
-      <Group justify="space-between" px="sm" py={6}>
-        <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+      <Group
+        className={classes.sectionHeader}
+        justify="space-between"
+        px="sm"
+        py={6}
+      >
+        <Text
+          className={classes.sectionTitle}
+          size="xs"
+          fw={700}
+          tt="uppercase"
+          c="dimmed"
+        >
           {title}
         </Text>
         <Button
+          className={classes.showAll}
           variant="subtle"
           size="compact-xs"
           onClick={() => showAllOfType(type)}
@@ -189,7 +201,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
         />
       </div>
 
-      <Spotlight.ActionsList>
+      <Spotlight.ActionsList className={classes.actionsList}>
         {!hasSearchInput && (
           <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
         )}

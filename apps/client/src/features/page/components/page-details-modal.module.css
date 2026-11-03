@@ -1,0 +1,23 @@
+.tab {
+  min-width: 0;
+  min-height: rem(36px);
+  padding-inline: rem(6px);
+}
+
+@media (max-width: 48em) {
+  .tabList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tab {
+    min-height: rem(44px);
+    white-space: normal;
+  }
+
+  .tabLabel {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+}

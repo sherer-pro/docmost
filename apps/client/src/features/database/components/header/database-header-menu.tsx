@@ -74,6 +74,8 @@ import { useNavigate } from "react-router-dom";
 import { canExportDocument } from "@/features/space/permissions/export-access.ts";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 import FavoriteButton from "@/features/favorite/components/favorite-button";
+import { useRef } from "react";
+import { useMenuModalHandoff } from "@/components/common/use-menu-modal-handoff";
 
 interface DatabaseHeaderMenuProps {
   databaseId: string;
@@ -120,6 +122,11 @@ export default function DatabaseHeaderMenu({
   const { data: database } = useGetDatabaseQuery(databaseId);
   const resolvedDatabasePageId =
     databasePageId ?? databaseContext.databasePageId;
+  const detailsTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuHandoff = useMenuModalHandoff<"details" | "export">(
+    resolvedDatabasePageId ?? databaseId,
+    (modal) => (modal === "details" ? detailsTriggerRef.current : null),
+  );
   const assistantIdentity = useAiAssistantIdentity(
     database?.spaceId ?? space?.id,
     resolvedDatabasePageId,
@@ -145,8 +152,6 @@ export default function DatabaseHeaderMenu({
   const { openDeleteModal } = useDeletePageModal();
   const { mutateAsync: removePageMutationAsync } = useRemovePageMutation();
   const dropTreeNode = useSetAtom(dropTreeNodeAtom);
-  const [exportOpened, { open: openExportModal, close: closeExportModal }] =
-    useDisclosure(false);
   const [
     movePageModalOpened,
     { open: openMovePageModal, close: closeMovePageModal },
@@ -158,10 +163,6 @@ export default function DatabaseHeaderMenu({
   const [
     accessModalOpened,
     { open: openAccessModal, close: closeAccessModal },
-  ] = useDisclosure(false);
-  const [
-    detailsModalOpened,
-    { open: openDetailsModal, close: closeDetailsModal },
   ] = useDisclosure(false);
   const {
     mutateAsync: convertDatabaseToPageAsync,
@@ -490,11 +491,12 @@ export default function DatabaseHeaderMenu({
         <Tooltip label={t("Page details")} openDelay={250} withArrow>
           <AccessibleActionIcon
             label={t("Page details")}
+            ref={detailsTriggerRef}
             tooltip={false}
             variant="subtle"
             color="dark"
             data-page-header-action="details"
-            onClick={openDetailsModal}
+            onClick={() => menuHandoff.openModal("details")}
           >
             <IconInfoCircle size={20} stroke={2} />
           </AccessibleActionIcon>
@@ -502,6 +504,7 @@ export default function DatabaseHeaderMenu({
       )}
 
       <Menu
+        {...menuHandoff.menuProps}
         shadow="xl"
         position="bottom-end"
         offset={20}
@@ -512,6 +515,7 @@ export default function DatabaseHeaderMenu({
         <Menu.Target>
           <AccessibleActionIcon
             label={t("Open menu")}
+            ref={menuHandoff.triggerRef}
             variant="subtle"
             color="dark"
             data-page-header-action="menu"
@@ -535,7 +539,7 @@ export default function DatabaseHeaderMenu({
                 )}
               <Menu.Item
                 leftSection={<IconInfoCircle size={16} />}
-                onClick={openDetailsModal}
+                onClick={() => menuHandoff.openModal("details")}
                 data-page-header-menu-action="details"
               >
                 {t("Page details")}
@@ -550,7 +554,9 @@ export default function DatabaseHeaderMenu({
             onCopyAsMarkdown={handleCopyAsMarkdown}
             onOpenHistory={hasDatabasePage ? openHistoryModal : undefined}
             onOpenExport={
-              canExportCurrentDatabase ? openExportModal : undefined
+              canExportCurrentDatabase
+                ? () => menuHandoff.openModal("export")
+                : undefined
             }
             onOpenAccess={canOpenAccessModal ? openAccessModal : undefined}
             onPrint={canExportCurrentDatabase ? handlePrint : undefined}
@@ -610,8 +616,7 @@ export default function DatabaseHeaderMenu({
       <ExportModal
         type="database"
         id={databaseId}
-        open={exportOpened}
-        onClose={closeExportModal}
+        {...menuHandoff.getModalProps("export")}
         onExportDatabase={handleExport}
       />
 
@@ -648,8 +653,7 @@ export default function DatabaseHeaderMenu({
         <PageDetailsModal
           pageId={resolvedDatabasePageId}
           page={databaseContext.pageByRoute}
-          open={detailsModalOpened}
-          onClose={closeDetailsModal}
+          {...menuHandoff.getModalProps("details")}
           readOnly={readOnly}
         />
       )}

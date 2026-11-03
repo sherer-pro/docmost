@@ -25,6 +25,7 @@ import api from "@/lib/api-client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MediaLightbox, type PreviewAttachment } from "./media-lightbox";
 import classes from "@/components/ui/responsive-table.module.css";
+import galleryClasses from "./page-attachments-gallery.module.css";
 
 interface GalleryAttachment extends PreviewAttachment {
   fileSize: number;
@@ -123,13 +124,22 @@ export function PageAttachmentsGallery({
       ) : !files.length ? (
         <EmptyState icon={IconPaperclip} title={t("No results")} />
       ) : (
-        <Table className={classes.responsiveTable} withTableBorder>
+        <Table
+          className={`${classes.responsiveTable} ${galleryClasses.table}`}
+          withTableBorder
+        >
+          <colgroup>
+            <col />
+            <col className={galleryClasses.typeColumn} />
+            <col className={galleryClasses.sizeColumn} />
+            <col className={galleryClasses.actionsColumn} />
+          </colgroup>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("Name")}</Table.Th>
               <Table.Th>{t("Type")}</Table.Th>
-              <Table.Th>{t("Size")}</Table.Th>
-              <Table.Th>{t("Actions")}</Table.Th>
+              <Table.Th>{t("attachmentGallery.size")}</Table.Th>
+              <Table.Th>{t("attachmentGallery.actions")}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -154,25 +164,32 @@ export function PageAttachmentsGallery({
                     {file.fileName}
                   </Button>
                 </Table.Td>
-                <Table.Td data-label={t("Type")}>
+                <Table.Td
+                  data-label={t("Type")}
+                  className={galleryClasses.type}
+                >
                   <Badge>
                     {file.fileExt?.replace(/^\./, "").toUpperCase() ?? "FILE"}
                   </Badge>
                 </Table.Td>
-                <Table.Td data-label={t("Size")}>
-                  {size(file.fileSize)}
+                <Table.Td data-label={t("attachmentGallery.size")}>
+                  <Text span className={galleryClasses.size}>
+                    {size(file.fileSize)}
+                  </Text>
                 </Table.Td>
-                <Table.Td data-label={t("Actions")}>
-                  <Group gap="xs">
+                <Table.Td data-label={t("attachmentGallery.actions")}>
+                  <Group gap="xs" className={galleryClasses.actions}>
                     <Anchor
                       href={buildAttachmentFileUrl(file.id, file.fileName)}
                       download={file.fileName}
+                      className={galleryClasses.download}
                     >
-                      {t("Download")}
+                      {t("attachmentGallery.download")}
                     </Anchor>
                     {file.usages.length ? (
                       <Button
                         size="compact-sm"
+                        mih={32}
                         variant="subtle"
                         onClick={() => onGoToUsage(file)}
                       >
@@ -187,6 +204,7 @@ export function PageAttachmentsGallery({
                       <Button
                         color="red"
                         size="compact-sm"
+                        mih={32}
                         variant="subtle"
                         loading={
                           remove.isPending && remove.variables === file.id

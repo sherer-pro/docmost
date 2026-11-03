@@ -94,14 +94,13 @@ export function getSearchSuggestionQueryKey(params: SearchSuggestionParams) {
 }
 
 export function useSearchSuggestionsQuery(
-  params: SearchSuggestionParams & { preload?: boolean },
+  params: SearchSuggestionParams,
 ): UseQueryResult<ISuggestionResult, Error> {
-  const { preload, ...queryParams } = params;
   return useQuery({
-    queryKey: getSearchSuggestionQueryKey(queryParams),
+    queryKey: getSearchSuggestionQueryKey(params),
     staleTime: 60 * 1000, // 1min
-    queryFn: () => searchSuggestions(queryParams),
-    enabled: preload || !!params.query,
+    queryFn: () => searchSuggestions(params),
+    enabled: hasNonWhitespaceSearchQuery(params.query),
   });
 }
 

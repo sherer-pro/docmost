@@ -334,168 +334,89 @@ export function SearchSpotlightFilters({
 
   return (
     <div className={classes.filtersContainer}>
-      <Menu
-        shadow="md"
-        width={250}
-        position="bottom-start"
-        zIndex={getDefaultZIndex("max")}
-      >
-        <Menu.Target>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconBuilding size={16} />}
-            className={classes.filterButton}
-            fw={500}
-          >
-            {selectedSpaceId
-              ? `${t("Space")}: ${selectedSpaceData?.name || t("Unknown")}`
-              : `${t("Space")}: ${t("All spaces")}`}
-          </Button>
-        </Menu.Target>
-        <Menu.Dropdown>
-          <TextInput
-            placeholder={t("Find a space")}
-            data-autofocus
-            leftSection={<IconSearch size={16} />}
-            value={spaceSearchQuery}
-            onChange={(event) => setSpaceSearchQuery(event.target.value)}
-            size="sm"
-            variant="filled"
-            radius="sm"
-            styles={{ input: { marginBottom: 8 } }}
-          />
-          <ScrollArea.Autosize mah={280}>
-            <Menu.Item onClick={() => handleSpaceSelect(null)}>
-              <Group flex="1" gap="xs">
-                <Avatar
-                  color="initials"
-                  variant="filled"
-                  name={t("All spaces")}
-                  size={20}
-                />
-                <div style={{ flex: 1 }}>
-                  <Text size="sm" fw={500}>
-                    {t("All spaces")}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {t("Search in all your spaces")}
-                  </Text>
-                </div>
-                {!selectedSpaceId && <IconCheck size={20} />}
-              </Group>
-            </Menu.Item>
-            <Divider my="xs" />
-            {availableSpaces.map((space) => (
-              <Menu.Item
-                key={space.id}
-                onClick={() => handleSpaceSelect(space.id)}
-              >
+      <div className={classes.filterChips}>
+        <Menu
+          shadow="md"
+          width={250}
+          position="bottom-start"
+          zIndex={getDefaultZIndex("max")}
+        >
+          <Menu.Target>
+            <Button
+              variant="subtle"
+              color="gray"
+              size="sm"
+              rightSection={<IconChevronDown size={14} />}
+              leftSection={<IconBuilding size={16} />}
+              className={classes.filterButton}
+              fw={500}
+            >
+              {selectedSpaceId
+                ? `${t("Space")}: ${selectedSpaceData?.name || t("Unknown")}`
+                : `${t("Space")}: ${t("All spaces")}`}
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <TextInput
+              placeholder={t("Find a space")}
+              data-autofocus
+              leftSection={<IconSearch size={16} />}
+              value={spaceSearchQuery}
+              onChange={(event) => setSpaceSearchQuery(event.target.value)}
+              size="sm"
+              variant="filled"
+              radius="sm"
+              styles={{ input: { marginBottom: 8 } }}
+            />
+            <ScrollArea.Autosize mah={280}>
+              <Menu.Item onClick={() => handleSpaceSelect(null)}>
                 <Group flex="1" gap="xs">
                   <Avatar
                     color="initials"
                     variant="filled"
-                    name={space.name}
+                    name={t("All spaces")}
                     size={20}
                   />
-                  <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
-                    {space.name}
-                  </Text>
-                  {selectedSpaceId === space.id && <IconCheck size={20} />}
+                  <div style={{ flex: 1 }}>
+                    <Text size="sm" fw={500}>
+                      {t("All spaces")}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {t("Search in all your spaces")}
+                    </Text>
+                  </div>
+                  {!selectedSpaceId && <IconCheck size={20} />}
                 </Group>
               </Menu.Item>
-            ))}
-          </ScrollArea.Autosize>
-        </Menu.Dropdown>
-      </Menu>
-
-      <Menu
-        shadow="md"
-        width={250}
-        position="bottom-start"
-        zIndex={getDefaultZIndex("max")}
-      >
-        <Menu.Target>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconTag size={16} />}
-            className={classes.filterButton}
-            fw={500}
-            disabled={isLabelFilterDisabled}
-          >
-            {selectedLabels.length > 1
-              ? `${t("Labels")}: ${selectedLabels.length}`
-              : selectedLabel
-                ? `${t("Label")}: ${selectedLabel.name}`
-                : t("Label")}
-          </Button>
-        </Menu.Target>
-        <Menu.Dropdown>
-          <TextInput
-            placeholder={t("Search...")}
-            data-autofocus
-            leftSection={<IconSearch size={16} />}
-            value={labelSearchQuery}
-            onChange={(event) => setLabelSearchQuery(event.target.value)}
-            size="sm"
-            variant="filled"
-            radius="sm"
-            styles={{ input: { marginBottom: 8 } }}
-          />
-          <ScrollArea.Autosize mah={280}>
-            <Text size="xs" c="dimmed" px="sm" py="xs">
-              {t("searchEnhancements.labelsAny")}
-            </Text>
-            {selectedLabel && (
-              <>
-                <Menu.Item onClick={() => handleLabelSelect(null)}>
-                  <Text size="sm" fw={500}>
-                    {t("No labels")}
-                  </Text>
-                </Menu.Item>
-                <Divider my="xs" />
-              </>
-            )}
-            {availableLabels.length === 0 ? (
-              <Text size="sm" c="dimmed" px="sm" py="xs">
-                {t("No labels")}
-              </Text>
-            ) : (
-              availableLabels.map((label) => (
+              <Divider my="xs" />
+              {availableSpaces.map((space) => (
                 <Menu.Item
-                  key={label.id}
-                  closeMenuOnClick={false}
-                  onClick={() =>
-                    handleLabelSelect({ id: label.id, name: label.name })
-                  }
+                  key={space.id}
+                  onClick={() => handleSpaceSelect(space.id)}
                 >
                   <Group flex="1" gap="xs">
+                    <Avatar
+                      color="initials"
+                      variant="filled"
+                      name={space.name}
+                      size={20}
+                    />
                     <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
-                      {label.name}
+                      {space.name}
                     </Text>
-                    {selectedLabels.some(
-                      (selected) => selected.id === label.id,
-                    ) && <IconCheck size={20} />}
+                    {selectedSpaceId === space.id && <IconCheck size={20} />}
                   </Group>
                 </Menu.Item>
-              ))
-            )}
-          </ScrollArea.Autosize>
-        </Menu.Dropdown>
-      </Menu>
+              ))}
+            </ScrollArea.Autosize>
+          </Menu.Dropdown>
+        </Menu>
 
-      {showTagFilter && (
         <Menu
           shadow="md"
-          width={220}
+          width={250}
           position="bottom-start"
           zIndex={getDefaultZIndex("max")}
-          closeOnItemClick={false}
         >
           <Menu.Target>
             <Button
@@ -506,95 +427,180 @@ export function SearchSpotlightFilters({
               leftSection={<IconTag size={16} />}
               className={classes.filterButton}
               fw={500}
+              disabled={isLabelFilterDisabled}
             >
-              {tagButtonLabel}
+              {selectedLabels.length > 1
+                ? `${t("Labels")}: ${selectedLabels.length}`
+                : selectedLabel
+                  ? `${t("Label")}: ${selectedLabel.name}`
+                  : t("Label")}
             </Button>
           </Menu.Target>
           <Menu.Dropdown>
-            <Menu.Item onClick={() => handleTagsSelect([])}>
-              <Group flex="1" gap="xs">
-                <Text size="sm" style={{ flex: 1 }}>
-                  {t("Clear tags")}
-                </Text>
-                {selectedTags.length === 0 && <IconCheck size={20} />}
-              </Group>
-            </Menu.Item>
-            <Divider my="xs" />
-            <Menu.Item onClick={() => handleTagsSelect([...builtInTagValues])}>
-              <Group flex="1" gap="xs">
-                <Text size="sm" style={{ flex: 1 }}>
-                  {t("All")}
-                </Text>
-                {sameSearchTags(selectedTags, builtInTagValues) && (
-                  <IconCheck size={20} />
-                )}
-              </Group>
-            </Menu.Item>
-            <Menu.Item onClick={() => handleTagsSelect(OPEN_TAGS)}>
-              <Group flex="1" gap="xs">
-                <Text size="sm" style={{ flex: 1 }}>
-                  {t("Open")}
-                </Text>
-                {sameSearchTags(selectedTags, OPEN_TAGS) && (
-                  <IconCheck size={20} />
-                )}
-              </Group>
-            </Menu.Item>
-            <Divider my="xs" />
-            {visibleTagDefinitions.map((tag) => (
-              <Menu.Item key={tag.value} onClick={() => toggleTag(tag.value)}>
-                <Group flex="1" gap="xs">
-                  <Text size="sm" fw={500} style={{ flex: 1 }}>
-                    {tag.label}
-                  </Text>
-                  {facetCounts.has(tag.value) && (
-                    <Text size="xs" c="dimmed">
-                      {facetCounts.get(tag.value)}
+            <TextInput
+              placeholder={t("Search...")}
+              data-autofocus
+              leftSection={<IconSearch size={16} />}
+              value={labelSearchQuery}
+              onChange={(event) => setLabelSearchQuery(event.target.value)}
+              size="sm"
+              variant="filled"
+              radius="sm"
+              styles={{ input: { marginBottom: 8 } }}
+            />
+            <ScrollArea.Autosize mah={280}>
+              <Text size="xs" c="dimmed" px="sm" py="xs">
+                {t("searchEnhancements.labelsAny")}
+              </Text>
+              {selectedLabel && (
+                <>
+                  <Menu.Item onClick={() => handleLabelSelect(null)}>
+                    <Text size="sm" fw={500}>
+                      {t("No labels")}
                     </Text>
+                  </Menu.Item>
+                  <Divider my="xs" />
+                </>
+              )}
+              {availableLabels.length === 0 ? (
+                <Text size="sm" c="dimmed" px="sm" py="xs">
+                  {t("No labels")}
+                </Text>
+              ) : (
+                availableLabels.map((label) => (
+                  <Menu.Item
+                    key={label.id}
+                    closeMenuOnClick={false}
+                    onClick={() =>
+                      handleLabelSelect({ id: label.id, name: label.name })
+                    }
+                  >
+                    <Group flex="1" gap="xs">
+                      <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
+                        {label.name}
+                      </Text>
+                      {selectedLabels.some(
+                        (selected) => selected.id === label.id,
+                      ) && <IconCheck size={20} />}
+                    </Group>
+                  </Menu.Item>
+                ))
+              )}
+            </ScrollArea.Autosize>
+          </Menu.Dropdown>
+        </Menu>
+
+        {showTagFilter && (
+          <Menu
+            shadow="md"
+            width={220}
+            position="bottom-start"
+            zIndex={getDefaultZIndex("max")}
+            closeOnItemClick={false}
+          >
+            <Menu.Target>
+              <Button
+                variant="subtle"
+                color="gray"
+                size="sm"
+                rightSection={<IconChevronDown size={14} />}
+                leftSection={<IconTag size={16} />}
+                className={classes.filterButton}
+                fw={500}
+              >
+                {tagButtonLabel}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => handleTagsSelect([])}>
+                <Group flex="1" gap="xs">
+                  <Text size="sm" style={{ flex: 1 }}>
+                    {t("Clear tags")}
+                  </Text>
+                  {selectedTags.length === 0 && <IconCheck size={20} />}
+                </Group>
+              </Menu.Item>
+              <Divider my="xs" />
+              <Menu.Item
+                onClick={() => handleTagsSelect([...builtInTagValues])}
+              >
+                <Group flex="1" gap="xs">
+                  <Text size="sm" style={{ flex: 1 }}>
+                    {t("All")}
+                  </Text>
+                  {sameSearchTags(selectedTags, builtInTagValues) && (
+                    <IconCheck size={20} />
                   )}
-                  {selectedTags.includes(tag.value) && <IconCheck size={20} />}
+                </Group>
+              </Menu.Item>
+              <Menu.Item onClick={() => handleTagsSelect(OPEN_TAGS)}>
+                <Group flex="1" gap="xs">
+                  <Text size="sm" style={{ flex: 1 }}>
+                    {t("Open")}
+                  </Text>
+                  {sameSearchTags(selectedTags, OPEN_TAGS) && (
+                    <IconCheck size={20} />
+                  )}
+                </Group>
+              </Menu.Item>
+              <Divider my="xs" />
+              {visibleTagDefinitions.map((tag) => (
+                <Menu.Item key={tag.value} onClick={() => toggleTag(tag.value)}>
+                  <Group flex="1" gap="xs">
+                    <Text size="sm" fw={500} style={{ flex: 1 }}>
+                      {tag.label}
+                    </Text>
+                    {facetCounts.has(tag.value) && (
+                      <Text size="xs" c="dimmed">
+                        {facetCounts.get(tag.value)}
+                      </Text>
+                    )}
+                    {selectedTags.includes(tag.value) && (
+                      <IconCheck size={20} />
+                    )}
+                  </Group>
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+        )}
+
+        <Menu
+          shadow="md"
+          width={220}
+          position="bottom-start"
+          zIndex={getDefaultZIndex("max")}
+        >
+          <Menu.Target>
+            <Button
+              variant="subtle"
+              color="gray"
+              size="sm"
+              rightSection={<IconChevronDown size={14} />}
+              leftSection={<IconFileDescription size={16} />}
+              className={classes.filterButton}
+              fw={500}
+            >
+              {contentType
+                ? `${t("Type")}: ${contentTypeOptions.find((option) => option.value === contentType)?.label || t("All")}`
+                : t("Type")}
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            {contentTypeOptions.map((option) => (
+              <Menu.Item
+                key={option.value}
+                onClick={() => handleContentTypeSelect(option.value)}
+              >
+                <Group flex="1" gap="xs">
+                  <Text size="sm">{option.label}</Text>
+                  {contentType === option.value && <IconCheck size={20} />}
                 </Group>
               </Menu.Item>
             ))}
           </Menu.Dropdown>
         </Menu>
-      )}
-
-      <Menu
-        shadow="md"
-        width={220}
-        position="bottom-start"
-        zIndex={getDefaultZIndex("max")}
-      >
-        <Menu.Target>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconFileDescription size={16} />}
-            className={classes.filterButton}
-            fw={500}
-          >
-            {contentType
-              ? `${t("Type")}: ${contentTypeOptions.find((option) => option.value === contentType)?.label || t("All")}`
-              : t("Type")}
-          </Button>
-        </Menu.Target>
-        <Menu.Dropdown>
-          {contentTypeOptions.map((option) => (
-            <Menu.Item
-              key={option.value}
-              onClick={() => handleContentTypeSelect(option.value)}
-            >
-              <Group flex="1" gap="xs">
-                <Text size="sm">{option.label}</Text>
-                {contentType === option.value && <IconCheck size={20} />}
-              </Group>
-            </Menu.Item>
-          ))}
-        </Menu.Dropdown>
-      </Menu>
+      </div>
       {!arePageFiltersDisabled && (
         <AdvancedSearchControls
           spaceId={selectedSpaceId ?? undefined}

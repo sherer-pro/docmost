@@ -1,5 +1,5 @@
 import { jsonToNode } from '../../collaboration/collaboration.util';
-import { Logger } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ExportFormat } from './dto/export-dto';
 import { Node } from '@tiptap/pm/model';
 import { validate as isValidUUID } from 'uuid';
@@ -7,8 +7,56 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { Page } from '@docmost/db/types/entity.types';
 import { isAttachmentNode } from '../../common/helpers/prosemirror/utils';
+import { sanitizeLinkHref } from '@docmost/editor-ext/server';
+import * as cheerio from 'cheerio';
 
 export type PageExportTree = Record<string, Page[]>;
+
+export interface ArchivePageLinkContext {
+  currentPagePath: string;
+  pagePaths: readonly string[];
+}
+
+export function restoreArchivePageLinkUrls(
+  html: string,
+  context: ArchivePageLinkContext,
+): string {
+  // The renderer has already applied the shared link policy. Only restore
+  // targets from the authorized archive path plan; never infer new targets.
+  const $ = cheerio.load(html, null, false);
+  const links = $('a[href]');
+  if (!links.length) return html;
+  assertSafeExportPath(context.currentPagePath);
+  const encodedByRenderedHref = new Map<string, string>();
+  const ambiguousHrefs = new Set<string>();
+  for (const targetPath of context.pagePaths) {
+    assertSafeExportPath(targetPath);
+    const encoded = computeRelativePath(context.currentPagePath, targetPath);
+    const rendered = sanitizeLinkHref(encoded);
+    if (!rendered) continue;
+    const previous = encodedByRenderedHref.get(rendered);
+    if (previous && previous !== encoded) {
+      ambiguousHrefs.add(rendered);
+    }
+    encodedByRenderedHref.set(rendered, encoded);
+  }
+  let changed = false;
+  links.each((_, element) => {
+    const link = $(element);
+    const href = link.attr('href');
+    if (ambiguousHrefs.has(href ?? '')) {
+      throw new BadRequestException(
+        'Archive page links are ambiguous after sanitization',
+      );
+    }
+    const encoded = encodedByRenderedHref.get(href ?? '');
+    if (encoded && encoded !== href) {
+      link.attr('href', encoded);
+      changed = true;
+    }
+  });
+  return changed ? ($.root().html() ?? html) : html;
+}
 
 /**
  * We only support canonical internal links format
@@ -38,30 +86,55 @@ export function getPageTitle(title: string) {
   return title ? title : 'untitled';
 }
 
-export function updateAttachmentUrlsToLocalPaths(prosemirrorJson: any) {
+export interface ExportedAttachmentPath {
+  attachmentId: string;
+  archivePath: string;
+}
+
+export function updateAttachmentUrlsToLocalPaths(
+  prosemirrorJson: any,
+  attachments: readonly ExportedAttachmentPath[],
+  currentPagePath: string,
+  appUrl: string,
+) {
   const doc = jsonToNode(prosemirrorJson);
   if (!doc) return null;
-
-  // Helper function to replace specific URL prefixes
-  const replacePrefix = (url: string): string => {
-    const prefixes = ['/files', '/api/files'];
-    for (const prefix of prefixes) {
-      if (url.startsWith(prefix)) {
-        return url.replace(prefix, 'files');
-      }
+  const paths = new Map(
+    attachments.map((attachment) => [
+      attachment.attachmentId.toLowerCase(),
+      attachment.archivePath,
+    ]),
+  );
+  const sourceOrigin = new URL(appUrl).origin;
+  const localPath = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    let url: URL;
+    try {
+      if (!value.startsWith('/') && !/^https?:\/\//i.test(value)) return value;
+      url = new URL(value, appUrl);
+    } catch {
+      return value;
     }
-    return url;
+    if (url.origin !== sourceOrigin || url.username || url.password)
+      return value;
+    const match = url.pathname.match(
+      /^\/(?:api\/attachments\/files|api\/files|files)\/(?:public\/)?([0-9a-f-]{36})\/[^/]+$/i,
+    );
+    if (!match || !isValidUUID(match[1])) return value;
+    const archivePath = paths.get(match[1].toLowerCase());
+    if (!archivePath) return value;
+    return computeRelativePath(currentPagePath, archivePath);
   };
 
   doc?.descendants((node: Node) => {
     if (isAttachmentNode(node.type.name)) {
       if (node.attrs.src) {
         // @ts-ignore
-        node.attrs.src = replacePrefix(node.attrs.src);
+        node.attrs.src = localPath(node.attrs.src);
       }
       if (node.attrs.url) {
         // @ts-ignore
-        node.attrs.url = replacePrefix(node.attrs.url);
+        node.attrs.url = localPath(node.attrs.url);
       }
     }
   });

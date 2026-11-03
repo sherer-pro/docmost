@@ -38,10 +38,24 @@ export function isDuplicateTextHighlight(
     );
   });
 }
-export function withSearchQuery(href: string, query?: string) {
+const PROPERTY_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function getSearchPropertyTarget(search: string) {
+  const value = new URLSearchParams(search).get("findProperty");
+  return value && PROPERTY_ID.test(value) ? value.toLowerCase() : null;
+}
+
+export function withSearchQuery(
+  href: string,
+  query?: string,
+  propertyId?: string,
+) {
   const term = query?.trim().slice(0, 512);
-  if (!term) return href;
+  if (!term && !propertyId) return href;
   const url = new URL(href, "https://docmost.invalid");
-  url.searchParams.set("find", term);
+  if (term) url.searchParams.set("find", term);
+  if (propertyId && PROPERTY_ID.test(propertyId))
+    url.searchParams.set("findProperty", propertyId.toLowerCase());
   return `${url.pathname}${url.search}${url.hash}`;
 }

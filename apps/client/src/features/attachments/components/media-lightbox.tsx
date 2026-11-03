@@ -76,7 +76,7 @@ export function MediaLightbox({
         <Group justify="space-between" mb="sm">
           <Group>
             <AccessibleActionIcon
-              label={t("Previous")}
+              label={t("dbBoard.previous")}
               disabled={index === 0}
               onClick={() => onChange(index - 1)}
             >
@@ -94,7 +94,7 @@ export function MediaLightbox({
             </AccessibleActionIcon>
           </Group>
           <Anchor href={url} download={file.fileName}>
-            {t("Download")}
+            {t("attachmentGallery.download")}
           </Anchor>
         </Group>
       }

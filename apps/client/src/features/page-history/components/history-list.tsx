@@ -23,6 +23,7 @@ import {
   useHistoryDelete,
   useHistoryRestore,
 } from "@/features/page-history/hooks";
+import classes from "./css/history.module.css";
 
 const PREFETCH_DELAY_MS = 150;
 
@@ -132,8 +133,13 @@ function HistoryList({ pageId, readOnly }: Props) {
   }
 
   return (
-    <div>
-      <ScrollArea h={620} w="100%" type="scroll" scrollbarSize={5}>
+    <div className={classes.historyList}>
+      <ScrollArea
+        className={classes.historyScroll}
+        w="100%"
+        type="scroll"
+        scrollbarSize={5}
+      >
         {historyItems.map((historyItem, index) => (
           <HistoryItem
             key={historyItem.id}
@@ -158,15 +164,16 @@ function HistoryList({ pageId, readOnly }: Props) {
       {!readOnly && canRestore && (
         <>
           <Divider />
-          <Group p="xs" wrap="nowrap">
+          <Group p="xs" className={classes.historyActions}>
             <Button
               variant="default"
               size="compact-md"
+              mih={32}
               onClick={() => setHistoryModalOpen(false)}
             >
               {t("Cancel")}
             </Button>
-            <Button size="compact-md" onClick={confirmRestore}>
+            <Button size="compact-md" mih={32} onClick={confirmRestore}>
               {t("Restore")}
             </Button>
           </Group>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Anchor,
   Button,
@@ -8,7 +8,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { usePageQuery } from "@/features/page/queries/page-query";
 import DocumentFieldsPanel from "@/features/page/components/document-fields/document-fields-panel";
@@ -59,9 +59,33 @@ type RecordDrawerProps = {
 };
 
 export function DatabaseRecordDrawer(props: RecordDrawerProps) {
+  const [propertiesOpened, setPropertiesOpened] = useState(true);
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const findProperty = params.get("findProperty");
+  useEffect(() => {
+    if (!props.pageId) setPropertiesOpened(true);
+    else if (findProperty && /^[0-9a-f-]{36}$/i.test(findProperty))
+      setPropertiesOpened(true);
+  }, [props.pageId, findProperty, location.key]);
+  useEffect(() => {
+    if (!props.pageId || !propertiesOpened) return;
+    const frame = requestAnimationFrame(() =>
+      document.dispatchEvent(
+        new CustomEvent("docmost:reveal-search-property", {
+          detail: { pageId: props.pageId },
+        }),
+      ),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [props.pageId, propertiesOpened, findProperty, location.key]);
   return props.pageId ? (
     <IsolatedEditorScope key={props.pageId}>
-      <ScopedRecordDrawer {...props} />
+      <ScopedRecordDrawer
+        {...props}
+        propertiesOpened={propertiesOpened}
+        onToggleProperties={() => setPropertiesOpened((opened) => !opened)}
+      />
     </IsolatedEditorScope>
   ) : null;
 }
@@ -73,8 +97,14 @@ function ScopedRecordDrawer({
   isEditable,
   onNavigate,
   onClose,
-}: RecordDrawerProps) {
+  propertiesOpened,
+  onToggleProperties,
+}: RecordDrawerProps & {
+  propertiesOpened: boolean;
+  onToggleProperties: () => void;
+}) {
   const { t } = useTranslation();
+  const { data: drawerPage } = usePageQuery({ pageId: pageId ?? undefined });
   const content = useRef<HTMLDivElement>(null);
   const editor = useAtomValue(pageEditorAtom);
   const [find, setFind] = useAtom(searchAndReplaceStateAtom);
@@ -86,7 +116,16 @@ function ScopedRecordDrawer({
       onClose={onClose}
       position="right"
       size="xl"
-      title={t("dbBoard.record")}
+      title={
+        <Text
+          component="span"
+          fw={600}
+          lineClamp={2}
+          title={drawerPage?.title || t("dbBoard.record")}
+        >
+          {drawerPage?.title || t("dbBoard.record")}
+        </Text>
+      }
       closeButtonProps={{ "aria-label": t("Close") }}
       closeOnEscape={false}
       closeOnClickOutside={false}
@@ -137,6 +176,8 @@ function ScopedRecordDrawer({
             spaceSlug={spaceSlug}
             isEditable={isEditable}
             onNavigate={onNavigate}
+            propertiesOpened={propertiesOpened}
+            onToggleProperties={onToggleProperties}
           />
         )}
       </div>
@@ -150,12 +191,16 @@ function Record({
   spaceSlug,
   isEditable,
   onNavigate,
+  propertiesOpened,
+  onToggleProperties,
 }: {
   pageId: string;
   scope: RecordScope;
   spaceSlug: string;
   isEditable: boolean;
   onNavigate: (id: string) => void;
+  propertiesOpened: boolean;
+  onToggleProperties: () => void;
 }) {
   const { t } = useTranslation();
   const { data: page, isPending, isError, refetch } = usePageQuery({ pageId });
@@ -228,7 +273,7 @@ function Record({
             disabled={!neighbors.data?.[0]}
             onClick={() => onNavigate(neighbors.data![0]!)}
           >
-            {t("Previous")}
+            {t("dbBoard.previous")}
           </Button>
           <Button
             variant="default"
@@ -275,7 +320,21 @@ function Record({
           {t("Retry")}
         </Button>
       )}
-      <DocumentFieldsPanel page={page} readOnly={!canWrite} />
+      <Button
+        variant="subtle"
+        onClick={onToggleProperties}
+        aria-expanded={propertiesOpened}
+        aria-controls={`record-properties-${page.id}`}
+      >
+        {t(
+          propertiesOpened
+            ? "dbBoard.hideProperties"
+            : "dbBoard.showProperties",
+        )}
+      </Button>
+      <div hidden={!propertiesOpened} id={`record-properties-${page.id}`}>
+        <DocumentFieldsPanel page={page} readOnly={!canWrite} />
+      </div>
       <Text size="xs" c="dimmed">
         {t("docBlocks.recordContent")}
       </Text>

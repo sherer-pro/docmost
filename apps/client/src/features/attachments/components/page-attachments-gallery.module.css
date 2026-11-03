@@ -1,0 +1,57 @@
+.table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.typeColumn {
+  width: 5rem;
+}
+
+.sizeColumn {
+  width: 6.5rem;
+}
+
+.actionsColumn {
+  width: 36%;
+}
+
+.type {
+  min-width: 4rem;
+}
+
+.size {
+  white-space: nowrap;
+}
+
+.actions {
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.actions :global(.mantine-Button-root) {
+  height: auto;
+  min-height: rem(32px);
+  max-inline-size: 100%;
+}
+
+.actions :global(.mantine-Button-label) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.download {
+  display: inline-flex;
+  align-items: center;
+  min-height: rem(32px);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 48em) {
+  .table colgroup {
+    display: none;
+  }
+}

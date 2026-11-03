@@ -228,6 +228,7 @@ function SearchAndReplaceDialog({
   useEffect(() => {
     if (isolated) return;
     closeDialog();
+    if (new URLSearchParams(location.search).has("findProperty")) return;
     const term = new URLSearchParams(location.search)
       .get("find")
       ?.trim()

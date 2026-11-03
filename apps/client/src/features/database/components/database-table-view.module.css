@@ -59,6 +59,15 @@
     opacity 120ms ease;
 }
 
+.propertyHeaderContent {
+  inline-size: calc(
+    var(--database-property-width) - 2 *
+      var(--table-horizontal-spacing, var(--mantine-spacing-xs))
+  );
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
 .propertyHeader[data-dragging="true"] {
   opacity: 0.55;
 }
@@ -80,13 +89,53 @@
 .propertyName {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.propertyName :global(.mantine-TextInput-root) {
-  width: 100%;
+.databaseScroll[data-sparse="true"] :global(.mantine-ScrollArea-viewport) {
+  scroll-padding-inline-start: 0;
+}
+
+.databaseTable[data-sparse="true"] {
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+.databaseTable[data-sparse="true"] .titleColumn {
+  position: static;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.databaseTable[data-sparse="true"] .selectColumn {
+  position: static;
 }
 
 @media (max-width: 48em) {
+  .viewToolbar {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--mantine-spacing-xs);
+  }
+
+  .createControls {
+    flex: 0 0 auto;
+  }
+
+  .primaryViewControls,
+  .viewSelectorGroup {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .viewSelector {
+    width: 100%;
+    min-width: 0;
+  }
+
   .scrollHint {
     display: block;
   }
@@ -96,10 +145,6 @@
     border: rem(1px) solid
       light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
     border-radius: var(--mantine-radius-sm);
-  }
-
-  .databaseTable {
-    min-width: rem(760px) !important;
   }
 
   .selectColumn {
@@ -125,5 +170,20 @@
 
   .editableCell {
     min-width: rem(180px);
+  }
+}
+
+@media (max-width: 22.5em) {
+  .createRowButton {
+    min-inline-size: rem(36px);
+    padding-inline: var(--mantine-spacing-xs);
+  }
+
+  .createRowButton :global(.mantine-Button-section[data-position="left"]) {
+    margin-inline-end: 0;
+  }
+
+  .createRowLabel {
+    display: none;
   }
 }

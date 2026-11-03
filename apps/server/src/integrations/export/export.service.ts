@@ -28,6 +28,9 @@ import {
   PageExportTree,
   replaceInternalLinks,
   updateAttachmentUrlsToLocalPaths,
+  restoreArchivePageLinkUrls,
+  type ArchivePageLinkContext,
+  type ExportedAttachmentPath,
 } from './utils';
 import {
   ExportMetadata,
@@ -659,6 +662,7 @@ export class ExportService {
     spaceAiRoleEnabled?: boolean,
     authorizedUser?: User,
     preMaterializedAttachmentPageIds?: ReadonlySet<string>,
+    archivePageLinks?: ArchivePageLinkContext,
   ) {
     if (format === ExportFormat.DOCX && !authorizedUser) {
       throw new BadRequestException(
@@ -679,6 +683,12 @@ export class ExportService {
       preMaterializedAttachmentPageIds,
     );
 
+    const portableHtml =
+      archivePageLinks &&
+      (format === ExportFormat.HTML || format === ExportFormat.Markdown)
+        ? restoreArchivePageLinkUrls(pageHtml, archivePageLinks)
+        : pageHtml;
+
     if (format === ExportFormat.HTML) {
       return `<!DOCTYPE html>
       <html>
@@ -691,12 +701,12 @@ export class ExportService {
            ${BLOCK_DIRECTION_EXPORT_STYLES}
          </style>
         </head>
-        <body>${pageHtml}</body>
+        <body>${portableHtml}</body>
       </html>`;
     }
 
     if (format === ExportFormat.Markdown) {
-      return htmlToMarkdown(pageHtml, {
+      return htmlToMarkdown(portableHtml, {
         transclusion: this.resolveTransclusionPresentationStrings(locale),
       });
     }
@@ -3289,7 +3299,7 @@ export class ExportService {
         const currentPagePath = slugIdToPath[page.slugId];
 
         let updatedJsonContent =
-          format === ExportFormat.DOCX
+          format === ExportFormat.DOCX || format === ExportFormat.PDF
             ? prosemirrorJson
             : replaceInternalLinks(
                 prosemirrorJson,
@@ -3298,7 +3308,7 @@ export class ExportService {
               );
 
         if (includeAttachments) {
-          await this.zipAttachments(
+          const attachments = await this.zipAttachments(
             updatedJsonContent,
             page.spaceId,
             page.workspaceId,
@@ -3306,8 +3316,12 @@ export class ExportService {
             materialized.attachmentPageIds,
           );
           if (format !== ExportFormat.PDF && format !== ExportFormat.DOCX) {
-            updatedJsonContent =
-              updateAttachmentUrlsToLocalPaths(updatedJsonContent);
+            updatedJsonContent = updateAttachmentUrlsToLocalPaths(
+              updatedJsonContent,
+              attachments,
+              currentPagePath,
+              this.environmentService.getAppUrl(),
+            );
           }
         }
 
@@ -3332,6 +3346,9 @@ export class ExportService {
           spaceAiRoleEnabled,
           authorizedUser,
           materialized.attachmentPageIds,
+          format === ExportFormat.HTML || format === ExportFormat.Markdown
+            ? { currentPagePath, pagePaths: Object.values(slugIdToPath) }
+            : undefined,
         );
 
         zip.file(plannedPath.zipPath, pageExportContent);
@@ -3380,8 +3397,9 @@ export class ExportService {
     workspaceId: string,
     zip: JSZip,
     allowedAttachmentPageIds = new Set<string>(),
-  ) {
+  ): Promise<ExportedAttachmentPath[]> {
     const attachmentIds = getAttachmentIds(prosemirrorJson);
+    const included: ExportedAttachmentPath[] = [];
 
     if (attachmentIds.length > 0) {
       const attachments = await this.db
@@ -3404,8 +3422,15 @@ export class ExportService {
               const fileBuffer = await this.storageService.read(
                 attachment.filePath,
               );
-              const filePath = `files/${attachment.id}/${attachment.fileName}`;
+              const filePath = `files/${attachment.id}/${
+                sanitize(attachment.fileName) || attachment.id
+              }`;
+              assertSafeExportPath(filePath);
               zip.file(filePath, fileBuffer);
+              included.push({
+                attachmentId: attachment.id,
+                archivePath: zip.file(filePath)!.name,
+              });
             } catch (err) {
               this.logger.debug(
                 `Attachment export error ${attachment.id}`,
@@ -3415,6 +3440,7 @@ export class ExportService {
           }),
       );
     }
+    return included;
   }
 
   async turnPageMentionsToLinks(

@@ -65,7 +65,6 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
     includePages: true,
     spaceId: space?.id,
     limit: 10,
-    preload: shouldSearchSuggestions,
   });
 
   const createPageItem = (label: string): MentionSuggestionItem => {

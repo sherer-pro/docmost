@@ -43,6 +43,7 @@ import { formattedDate } from "@/lib/time";
 import { useSearchLabelsQuery } from "@/features/search/queries/search-query";
 import { getPageIcon } from "@/lib/utils";
 import { PageAttachmentsGallery } from "@/features/attachments/components/page-attachments-gallery";
+import classes from "./page-details-modal.module.css";
 
 interface PageDetailsModalProps {
   pageId: string;
@@ -50,6 +51,8 @@ interface PageDetailsModalProps {
   open: boolean;
   onClose: () => void;
   readOnly?: boolean;
+  returnFocus?: boolean;
+  onExitTransitionEnd?: () => void;
 }
 
 function normalizeLabelInput(value: string): string {
@@ -119,15 +122,22 @@ function getPageTextStats(content: unknown) {
   };
 }
 
-export default function PageDetailsModal({
+export default function PageDetailsModal(props: PageDetailsModalProps) {
+  return <PageDetailsModalContent key={props.pageId} {...props} />;
+}
+
+function PageDetailsModalContent({
   pageId,
   page,
   open,
   onClose,
   readOnly,
+  returnFocus,
+  onExitTransitionEnd,
 }: PageDetailsModalProps) {
   const { t } = useTranslation();
   const [attachmentOverlayOpen, setAttachmentOverlayOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>("overview");
   const { data: labels, isLoading: labelsLoading } = usePageLabelsQuery(
     pageId,
     open,
@@ -162,6 +172,9 @@ export default function PageDetailsModal({
       closeButtonProps={{ "aria-label": t("Close") }}
       closeOnEscape={!attachmentOverlayOpen}
       closeOnClickOutside={!attachmentOverlayOpen}
+      keepMounted
+      returnFocus={returnFocus}
+      onExitTransitionEnd={onExitTransitionEnd}
     >
       <Stack gap="md">
         <Paper withBorder radius="md" p="md">
@@ -249,9 +262,13 @@ export default function PageDetailsModal({
         </SimpleGrid>
 
         <Tabs
-          defaultValue="overview"
-          keepMounted={false}
-          styles={{ tab: { minWidth: 0, paddingInline: 6 } }}
+          value={activeTab}
+          onChange={setActiveTab}
+          classNames={{
+            list: classes.tabList,
+            tab: classes.tab,
+            tabLabel: classes.tabLabel,
+          }}
         >
           <Tabs.List grow>
             <Tabs.Tab value="overview">{t("Overview")}</Tabs.Tab>
@@ -363,6 +380,7 @@ export default function PageDetailsModal({
                     <LabelPicker
                       pageId={pageId}
                       spaceId={page?.spaceId}
+                      enabled={open && activeTab === "overview"}
                       existingLabelNames={(labels?.items ?? []).map(
                         (label) => label.name,
                       )}
@@ -374,15 +392,23 @@ export default function PageDetailsModal({
           </Tabs.Panel>
 
           <Tabs.Panel value="incoming" pt="md">
-            <BacklinkList pageId={pageId} direction="incoming" open={open} />
+            <BacklinkList
+              pageId={pageId}
+              direction="incoming"
+              open={open && activeTab === "incoming"}
+            />
           </Tabs.Panel>
           <Tabs.Panel value="outgoing" pt="md">
-            <BacklinkList pageId={pageId} direction="outgoing" open={open} />
+            <BacklinkList
+              pageId={pageId}
+              direction="outgoing"
+              open={open && activeTab === "outgoing"}
+            />
           </Tabs.Panel>
           <Tabs.Panel value="attachments" pt="md">
             <PageAttachmentsGallery
               pageId={pageId}
-              opened={open}
+              opened={open && activeTab === "attachments"}
               onOverlayOpenChange={setAttachmentOverlayOpen}
               onGoToUsage={(file) => {
                 onClose();
@@ -530,10 +556,12 @@ function Stat({
 function LabelPicker({
   pageId,
   spaceId,
+  enabled,
   existingLabelNames,
 }: {
   pageId: string;
   spaceId?: string;
+  enabled: boolean;
   existingLabelNames: string[];
 }) {
   const { t } = useTranslation();
@@ -542,7 +570,7 @@ function LabelPicker({
   const addLabels = useAddPageLabelsMutation(pageId);
   const { data: suggestedLabels = [] } = useSearchLabelsQuery(
     { query: search, limit: 20, spaceId },
-    Boolean(spaceId),
+    enabled && Boolean(spaceId),
   );
   const existing = new Set(existingLabelNames.map(normalizeLabelInput));
   const labelOptions = suggestedLabels

@@ -35,6 +35,7 @@ vi.mock("@mantine/notifications", () => ({
 }));
 
 vi.mock("@mantine/core", () => ({
+  Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Group: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Text: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
   Select: ({

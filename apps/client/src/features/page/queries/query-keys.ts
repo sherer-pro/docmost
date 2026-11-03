@@ -8,6 +8,7 @@ export const QUERY_KEY_SPACE = {
   database: "database",
   databaseProperties: "properties",
   databaseViews: "views",
+  databaseSummary: "summary",
   rows: "rows",
   rowContext: "row-context",
   pages: "pages",
@@ -98,6 +99,18 @@ export function databaseRowsBaseKey(databaseId?: string) {
   return [QUERY_KEY_SPACE.database, databaseId, QUERY_KEY_SPACE.rows] as const;
 }
 
+export function databaseSummaryBaseKey(databaseId?: string) {
+  return [
+    QUERY_KEY_SPACE.database,
+    databaseId,
+    QUERY_KEY_SPACE.databaseSummary,
+  ] as const;
+}
+
+function databaseSummaryKey(databaseId?: string, viewState?: string) {
+  return [...databaseSummaryBaseKey(databaseId), viewState] as const;
+}
+
 export function databaseRowContextKey(pageId?: string) {
   if (pageId) {
     return [
@@ -127,5 +140,7 @@ export const DATABASE_QUERY_KEYS = {
   views: databaseViewsKey,
   rowsBase: databaseRowsBaseKey,
   rows: databaseRowsKey,
+  summaryBase: databaseSummaryBaseKey,
+  summary: databaseSummaryKey,
   rowContext: databaseRowContextKey,
 };
