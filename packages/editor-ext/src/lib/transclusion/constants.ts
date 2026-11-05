@@ -44,3 +44,15 @@ const UUID_PATTERN =
 export function isValidTransclusionIdentifier(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }
+
+// Block IDs use generateNodeId's 12-letter format or legacy UUIDs.
+const GENERATED_BLOCK_ID_PATTERN = /^[a-z]{12}$/;
+
+export function isValidTransclusionBlockIdentifier(
+  value: unknown,
+): value is string {
+  return (
+    isValidTransclusionIdentifier(value) ||
+    (typeof value === 'string' && GENERATED_BLOCK_ID_PATTERN.test(value))
+  );
+}

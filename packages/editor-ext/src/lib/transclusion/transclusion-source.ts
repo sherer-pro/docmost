@@ -1,6 +1,6 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import {
-  isValidTransclusionIdentifier,
+  isValidTransclusionBlockIdentifier,
   TRANSCLUSION_SOURCE_CONTENT_EXPRESSION,
 } from './constants';
 import {
@@ -62,7 +62,7 @@ export const TransclusionSource = Node.create<TransclusionSourceOptions>({
       {
         tag: `div[data-type="${this.name}"]`,
         getAttrs: (element) =>
-          isValidTransclusionIdentifier(element.getAttribute('data-id'))
+          isValidTransclusionBlockIdentifier(element.getAttribute('data-id'))
             ? null
             : false,
         contentElement: (element) => {

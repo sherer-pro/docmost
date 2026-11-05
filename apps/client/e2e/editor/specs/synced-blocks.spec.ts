@@ -183,6 +183,127 @@ function collectNodeTypes(
   return result;
 }
 
+test("copies a newly created synced block and reloads its updated reference", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const api = await createAdminApi();
+  const state = await loadAuditState();
+  const text = `Generated synced source ${testInfo.project.name}-${Date.now()}`;
+  const updatedText = `${text} updated`;
+
+  try {
+    const source = await createPage(api, state.spaceId, text, {
+      type: "doc",
+      content: [paragraph(text), paragraph()],
+    });
+    const consumer = await createPage(api, state.spaceId, `${text} consumer`);
+    await page.goto(pageUrl(state, source));
+    await makeEditable(page);
+    await mainEditor(page).focus();
+    await mainEditor(page).getByText(text, { exact: true }).selectText();
+    await page.getByRole("button", { name: "Create synced block" }).click();
+
+    const sourceBlock = page.locator('[data-type="transclusionSource"]');
+    await expect(sourceBlock).toHaveCount(1);
+    await expect(sourceBlock).toHaveAttribute("data-id", /^[a-z]{12}$/);
+    const blockId = await sourceBlock.getAttribute("data-id");
+    await expect
+      .poll(
+        async () => {
+          const saved = await apiGet<PageInfo>(
+            api,
+            `/api/pages/info?pageId=${source.id}`,
+          );
+          return saved.content.content;
+        },
+        { timeout: 60_000 },
+      )
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "transclusionSource",
+            attrs: expect.objectContaining({ id: blockId }),
+          }),
+        ]),
+      );
+    await installClipboardCapture(page);
+    await sourceBlock.hover();
+    await sourceBlock.getByRole("button", { name: "Copy synced block" }).click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__syncedClipboard))
+      .not.toBeNull();
+    const clipboard = await page.evaluate(
+      () => (window as any).__syncedClipboard as { html: string; text: string },
+    );
+    expect(clipboard.html).toContain(`data-transclusion-id="${blockId}"`);
+    expect(clipboard.html).toContain(`data-source-page-id="${source.id}"`);
+
+    await page.goto(pageUrl(state, consumer));
+    await makeEditable(page);
+    await mainEditor(page).locator("p").last().click();
+    await page.evaluate((payload) => {
+      const data = new DataTransfer();
+      data.setData("text/html", payload.html);
+      data.setData("text/plain", payload.text);
+      const event = new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, "clipboardData", { value: data });
+      document.activeElement?.dispatchEvent(event);
+    }, clipboard);
+    const reference = page.locator('[data-type="transclusionReference"]');
+    await expect(reference).toHaveCount(1);
+    await expect(reference).toContainText(text);
+
+    await page.goto(pageUrl(state, source));
+    await makeEditable(page);
+    await mainEditor(page).focus();
+    await sourceBlock.locator("p").first().selectText();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.type(" updated");
+    await expect(sourceBlock).toContainText(updatedText);
+    await expect
+      .poll(
+        async () => {
+          const saved = await apiGet<PageInfo>(
+            api,
+            `/api/pages/info?pageId=${source.id}`,
+          );
+          return JSON.stringify(saved.content);
+        },
+        { timeout: 60_000 },
+      )
+      .toContain(updatedText);
+
+    await page.goto(pageUrl(state, consumer));
+    await expect(reference).toHaveCount(1);
+    await expect(reference).toContainText(updatedText);
+    await page.reload();
+    await expect(reference).toHaveCount(1);
+    await expect(reference).toContainText(updatedText);
+    const savedConsumer = await apiGet<PageInfo>(
+      api,
+      `/api/pages/info?pageId=${consumer.id}`,
+    );
+    expect(savedConsumer.content.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "transclusionReference",
+          attrs: expect.objectContaining({
+            sourcePageId: source.id,
+            transclusionId: blockId,
+          }),
+        }),
+      ]),
+    );
+    await captureStep(page, testInfo, "generated-synced-block-updated-reference");
+  } finally {
+    await api.dispose();
+  }
+});
+
 test("audits synced block creation, lookup recovery, ACL, clipboard and unsync", async ({
   page,
   browser,

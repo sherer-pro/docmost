@@ -146,4 +146,110 @@ describe('transclusion node schema', () => {
 
     editor.destroy();
   });
+
+  it.each([transclusionId, 'abcdefghijkl'])(
+    'round-trips source and reference HTML for block ID %s',
+    (blockId) => {
+      const TestTransclusionSource = TransclusionSource.extend({
+        content: 'paragraph+',
+      });
+      const editor = new Editor({
+        extensions: [
+          Document,
+          Paragraph,
+          Text,
+          TestTransclusionSource,
+          TransclusionReference,
+        ],
+      });
+
+      editor.commands.setContent(
+        `<div data-type="transclusionSource" data-id="${blockId}"><p>Synced text</p></div>`,
+      );
+      const source = {
+        type: 'transclusionSource',
+        attrs: { id: blockId },
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'Synced text' }] },
+        ],
+      };
+      expect(editor.getJSON().content?.[0]).toMatchObject(source);
+      editor.commands.setContent(editor.getHTML());
+      expect(editor.getJSON().content?.[0]).toMatchObject(source);
+
+      editor.commands.setContent(
+        `<div data-type="transclusionReference" data-source-page-id="${sourcePageId}" data-transclusion-id="${blockId}"></div>`,
+      );
+      const reference = {
+        type: 'transclusionReference',
+        attrs: { sourcePageId, transclusionId: blockId },
+      };
+      expect(editor.getJSON().content?.[0]).toMatchObject(reference);
+      editor.commands.setContent(editor.getHTML());
+      expect(editor.getJSON().content?.[0]).toMatchObject(reference);
+
+      editor.destroy();
+    },
+  );
+
+  it.each([
+    '',
+    'abcdefghijk',
+    'abcdefghijklm',
+    'Abcdefghijkl',
+    'abcdefghi123',
+    'abcdef-ghijk',
+    'not-a-uuid',
+  ])('rejects malformed block ID %s for sources and references', (blockId) => {
+    const TestTransclusionSource = TransclusionSource.extend({
+      content: 'paragraph+',
+    });
+    const editor = new Editor({
+      extensions: [
+        Document,
+        Paragraph,
+        Text,
+        TestTransclusionSource,
+        TransclusionReference,
+      ],
+    });
+    const ordinaryContent = [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Ordinary content' }],
+      },
+    ];
+
+    editor.commands.setContent(
+      `<div data-type="transclusionSource" data-id="${blockId}"><p>Ordinary content</p></div>`,
+    );
+    expect(editor.getJSON().content).toEqual(ordinaryContent);
+    editor.commands.setContent(
+      `<div data-type="transclusionReference" data-source-page-id="${sourcePageId}" data-transclusion-id="${blockId}"></div><p>Ordinary content</p>`,
+    );
+    expect(editor.getJSON().content).toEqual(ordinaryContent);
+
+    editor.destroy();
+  });
+
+  it.each(['abcdefghijkl', 'not-a-uuid', ''])(
+    'rejects reference page ID %s even when the block ID is valid',
+    (pageId) => {
+      const editor = new Editor({
+        extensions: [Document, Paragraph, Text, TransclusionReference],
+      });
+
+      editor.commands.setContent(
+        `<div data-type="transclusionReference" data-source-page-id="${pageId}" data-transclusion-id="abcdefghijkl"></div><p>Ordinary content</p>`,
+      );
+      expect(editor.getJSON().content).toEqual([
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Ordinary content' }],
+        },
+      ]);
+
+      editor.destroy();
+    },
+  );
 });

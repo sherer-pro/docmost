@@ -1,6 +1,9 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import { getTransclusionPresentationAttributes } from './transclusion-presentation';
-import { isValidTransclusionIdentifier } from './constants';
+import {
+  isValidTransclusionBlockIdentifier,
+  isValidTransclusionIdentifier,
+} from './constants';
 
 export interface TransclusionReferenceOptions {
   HTMLAttributes: Record<string, any>;
@@ -71,7 +74,7 @@ export const TransclusionReference = Node.create<TransclusionReferenceOptions>({
           isValidTransclusionIdentifier(
             element.getAttribute('data-source-page-id'),
           ) &&
-          isValidTransclusionIdentifier(
+          isValidTransclusionBlockIdentifier(
             element.getAttribute('data-transclusion-id'),
           )
             ? null
