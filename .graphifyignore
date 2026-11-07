@@ -32,6 +32,8 @@ CVS/
 # ---------------------------------------------------------------------
 
 graphify-out/
+graphify-out.next/
+graphify-out.previous/
 .graphify/
 .graphify-cache/
 
@@ -43,6 +45,7 @@ graphify-out/
 # ---------------------------------------------------------------------
 
 output/
+artifacts/
 data/
 
 

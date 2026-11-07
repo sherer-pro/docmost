@@ -532,13 +532,13 @@ Local commands:
 
 - `pnpm context:memory:start` / `pnpm context:memory:stop` manage the loopback-only AgentMemory service.
 - `pnpm context:memory:status` and `pnpm context:memory:doctor` inspect it without changing application runtime dependencies.
-- `pnpm context:memory:smoke` compares the pinned MCP shim's autonomous and server-backed tool surfaces.
+- `pnpm context:memory:smoke` checks the authenticated shared proxy's live MCP tools without opening a fallback store.
 - `pnpm context:memory:selftest` round-trips one uniquely marked memory and removes it.
-- `pnpm context:graph-import` imports the current Graphify graph; add `-- --assert-idempotent` to require a zero-new-entity repeated import.
+- `pnpm context:graph-import` requires the strict Graphify gate, imports the complete v2 snapshot and checks canonical full readback and same-generation idempotency.
 - `pnpm context:refresh` runs the existing `graphify update .` workflow and imports only after a successful, valid update.
 - `pnpm context:verify` performs the read-only health, profile, listener, MCP, hook, smoke, and graph contract checks.
 
-AgentMemory is a shared machine service: one database, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository. Merge shared user configuration with read -> merge -> atomic write, preserve unrelated entries, and create a backup only when content changes. This repository registers the pinned `@agentmemory/mcp@0.9.28` shim once through `.codex/config.toml`; do not enable a duplicate AgentMemory plugin. Preserve the project `.codex/hooks.json` Graphify hook and never bypass hook trust.
+AgentMemory is a shared machine service: one data store, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository; coordinate service ownership and keep test records in an isolated store. Preserve unrelated entries when merging configuration. The installed CLI is `0.9.32`, qualified runtime `0.9.32-my-context.2`, and iii-engine `0.25.0`. A single user-level MCP registration uses `~/.agentmemory/bin/codex-mcp.mjs`; the project config does not override it. Preserve the existing `AgentMemory Startup` task, qualified launcher, project Graphify hook and hook trust. Full Graphify v2 imports require canonical full readback and generation idempotency; zero-new-object legacy imports are insufficient.
 
 ## RAG evidence quality verification
 
