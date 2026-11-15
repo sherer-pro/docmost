@@ -160,7 +160,16 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
   },
   {
     anchor: "inbound-mcp",
-    stepKeys: ["step1", "step2", "step3", "step4", "step5", "step6", "step7"],
+    stepKeys: [
+      "step1",
+      "step2",
+      "step3",
+      "step4",
+      "step5",
+      "step6",
+      "step7",
+      "step8",
+    ],
     titleKey: "ai.integrations.mcpTitle",
     contentKey: "ai.adminGuide.scenario.inboundMcp",
     settingsPath: "/settings/keys/mcp",

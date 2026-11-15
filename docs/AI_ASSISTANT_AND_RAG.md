@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 45 -->
+<!-- ai-admin-guide-contract-version: 46 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -1723,6 +1723,18 @@ Existing comment/history/attachment metadata and database-row reads use opaque v
 name and target resource. Replaying a cursor for another page, database, or
 tool, or supplying a malformed or oversized cursor, returns `400`; cursors do
 not encode a caller-controlled SQL offset.
+
+`diffPageVersion` protects API liveness with a computation budget before structural
+JSON patching and word diffing. An unchanged document returns an exact empty diff.
+Changed documents use the precise path only within all limits: 1024 JSON values
+and 16000 string characters per document, 128 entries per array, a JSON-value
+count product of 65536, and a text-length product of 4000000. Larger comparisons
+use the existing linear block-summary fallback and return `precise=false`;
+changes and inserted/deleted character counts are approximate block summaries.
+The result still obeys its byte budget and indicates truncated change previews.
+For an exact text comparison, read the complete source text with `getPageVersion`
+and `getPage`, following their continuations. This fallback does not grant access
+to either source and does not change capability, page ACL or AI exclusion checks.
 
 `listDatabaseRows` intersects row ACL and AI content exclusions in SQL before
 pagination. Its cursor and continuation flag depend only on eligible rows.

@@ -87,6 +87,39 @@ function fallbackChanges(oldNode: Node, newNode: Node): DocumentDiffChange[] {
   ];
 }
 
+// Structural JSON patching and word diffing can allocate a quadratic matrix.
+// Keep the synchronous path small enough to preserve API liveness under load.
+function preciseDiffCost(node: Node): number | null {
+  const pending: unknown[] = [node.toJSON()];
+  let values = 0;
+  let characters = 0;
+  while (pending.length) {
+    const value = pending.pop();
+    if (++values > 1024) return null;
+    if (typeof value === 'string') {
+      characters += value.length;
+      if (characters > 16000) return null;
+    } else if (Array.isArray(value)) {
+      if (value.length > 128) return null;
+      pending.push(...value);
+    } else if (value && typeof value === 'object') {
+      pending.push(...Object.values(value));
+    }
+  }
+  return values;
+}
+
+function withinPreciseDiffBudget(oldNode: Node, newNode: Node): boolean {
+  const oldCost = preciseDiffCost(oldNode);
+  const newCost = preciseDiffCost(newNode);
+  return (
+    oldCost !== null &&
+    newCost !== null &&
+    oldCost * newCost <= 65536 &&
+    oldNode.textContent.length * newNode.textContent.length <= 4000000
+  );
+}
+
 /**
  * Canonical structural diff used by both the history UI and server-side AI
  * history tools. Keeping these options in one place prevents the two surfaces
@@ -129,7 +162,14 @@ export function diffProseMirrorDocuments(
   let changes: DocumentDiffChange[] = [];
   let precise = true;
   try {
-    for (const change of getProseMirrorChanges(oldNode, newNode)) {
+    const identical = oldNode.eq(newNode);
+    if (!identical && !withinPreciseDiffBudget(oldNode, newNode)) {
+      precise = false;
+      changes = fallbackChanges(oldNode, newNode);
+    }
+    for (const change of identical || !precise
+      ? []
+      : getProseMirrorChanges(oldNode, newNode)) {
       if (change.toA > change.fromA) {
         const text = oldNode.textBetween(change.fromA, change.toA, '\n', ' ');
         if (text) {

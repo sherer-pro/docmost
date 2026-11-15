@@ -1722,7 +1722,8 @@
             "step4": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
             "step5": "Erlauben Sie Kommentare, Verlauf, Metadaten und benötigte Anhänge ausdrücklich in den Richtlinien für Workspace, Bereich und Schlüssel. Bestehende Schlüssel und OAuth-Verbindungen erhalten keine neuen Rechte automatisch.",
             "step6": "Übergeben Sie nextCursor, bis der Wert null ist. Beginnen Sie bei MCP_SOURCE_CHANGED erneut mit dem geänderten Inhalt.",
-            "step7": "Lesen Sie bereits extrahierten Text mit getAttachmentText. Erlauben Sie getAttachmentFileChunk separat und setzen Sie Originaldateien aus Base64-Blöcken mit höchstens 16 KiB zusammen."
+            "step7": "Lesen Sie bereits extrahierten Text mit getAttachmentText. Erlauben Sie getAttachmentFileChunk separat und setzen Sie Originaldateien aus Base64-Blöcken mit höchstens 16 KiB zusammen.",
+            "step8": "Bei einem Vergleich großer gespeicherter Versionen bedeutet precise=false, dass Änderungen und Zeichenzahlen ungefähre Blockzusammenfassungen sind. Lesen Sie für einen exakten Textvergleich den vollständigen Text mit getPageVersion und getPage."
           },
           "success": "Erlaubte Daten sind über Fortsetzungen vollständig lesbar; gesperrte Funktionen und fremde Bereiche bleiben unzugänglich.",
           "rollback": "Widerrufen Sie Schlüssel oder OAuth-Verbindung. Abmelden beendet auch den sitzungsgebundenen OAuth-Zugriff.",

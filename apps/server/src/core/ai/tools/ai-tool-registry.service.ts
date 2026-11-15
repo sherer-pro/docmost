@@ -751,7 +751,7 @@ export class AiToolRegistryService {
       {
         name: 'diffPageVersion',
         description:
-          'Compare one saved page version with the current live Yjs document. Returns a bounded semantic diff, not either full document.',
+          'Compare one saved page version with the current live Yjs document. Returns a bounded semantic diff. Large comparisons use approximate block summaries and counts with precise=false; read full text with getPageVersion and getPage for an exact text comparison.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,

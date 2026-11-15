@@ -478,6 +478,31 @@ export async function runMcpReadAcceptance({
       );
     });
 
+    await test('MCP large saved-version comparisons preserve API liveness through a semantic fallback', async () => {
+      const { token } = await key();
+      const largeHistoryId = randomUUID();
+      const historical = {
+        type: 'doc',
+        content: Array.from({ length: 600 }, (_, i) =>
+          paragraph(`Historical block ${i}: ${'previous text '.repeat(25)}`),
+        ),
+      };
+      await sql`insert into page_history(id,page_id,space_id,workspace_id,title,version,content) values (${largeHistoryId},${page.id},${space.id},${workspaceId},'Large saved source',778,${sql.json(historical)})`;
+      const started = Date.now();
+      const difference = await read(token, 'diffPageVersion', {
+        pageId: page.id,
+        historyId: largeHistoryId,
+      });
+      assert.equal(difference.precise, false);
+      assert(difference.summary.deleted > 100000);
+      assert(
+        Date.now() - started < 10000,
+        'Semantic diff exceeded the API liveness budget',
+      );
+      const healthy = await fetch(`${baseURL}/api/health`);
+      assert.equal(healthy.status, 200);
+    });
+
     const files = [];
     const storageRoot = path.join(output, 'runtime', 'data', 'storage');
     for (const extension of [

@@ -1722,7 +1722,8 @@
             "step4": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang.",
             "step5": "Sta reacties, geschiedenis, metadata en benodigde bijlagen expliciet toe in het beleid voor workspace, ruimte en sleutel. Bestaande sleutels en OAuth-verbindingen krijgen geen nieuwe rechten automatisch.",
             "step6": "Geef nextCursor door totdat de waarde null is. Begin bij MCP_SOURCE_CHANGED opnieuw met het lezen van de gewijzigde bron.",
-            "step7": "Gebruik getAttachmentText voor al geëxtraheerde tekst. Sta getAttachmentFileChunk apart toe en stel het origineel samen uit Base64-blokken van maximaal 16 KiB."
+            "step7": "Gebruik getAttachmentText voor al geëxtraheerde tekst. Sta getAttachmentFileChunk apart toe en stel het origineel samen uit Base64-blokken van maximaal 16 KiB.",
+            "step8": "Bij het vergelijken van een grote opgeslagen versie betekent precise=false dat wijzigingen en aantallen tekens benaderende samenvattingen per blok zijn. Lees voor een exacte tekstvergelijking de volledige tekst met getPageVersion en getPage."
           },
           "success": "Toegestane gegevens zijn volledig leesbaar via vervolgverzoeken; geweigerde functies en andere ruimtes blijven ontoegankelijk.",
           "rollback": "Trek de sleutel of OAuth-verbinding in. Uitloggen beëindigt ook de sessiegebonden OAuth-toegang.",

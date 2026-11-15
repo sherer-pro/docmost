@@ -1722,7 +1722,8 @@
             "step4": "L’accès est lié à votre session actuelle. La déconnexion, la révocation de la session ou celle de l’application met fin à l’accès.",
             "step5": "Autorisez explicitement commentaires, historique, métadonnées et pièces jointes nécessaires dans les politiques du workspace, de l’espace et de la clé. Les clés et connexions OAuth existantes ne reçoivent pas de nouveaux droits automatiquement.",
             "step6": "Transmettez nextCursor jusqu’à ce que sa valeur soit null. En cas de MCP_SOURCE_CHANGED, recommencez la lecture de la source modifiée.",
-            "step7": "Utilisez getAttachmentText pour le texte déjà extrait. Autorisez séparément getAttachmentFileChunk et reconstituez le fichier original à partir de blocs Base64 de 16 KiB maximum."
+            "step7": "Utilisez getAttachmentText pour le texte déjà extrait. Autorisez séparément getAttachmentFileChunk et reconstituez le fichier original à partir de blocs Base64 de 16 KiB maximum.",
+            "step8": "Lors de la comparaison d’une grande version enregistrée, precise=false indique que les modifications et le nombre de caractères sont des résumés approximatifs par bloc. Pour comparer exactement le texte, lisez le texte complet avec getPageVersion et getPage."
           },
           "success": "Les données autorisées sont lues intégralement par continuation ; les capacités refusées et les autres espaces restent inaccessibles.",
           "rollback": "Révoquez la clé ou la connexion OAuth. La déconnexion met aussi fin à l’accès OAuth lié à la session.",

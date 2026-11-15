@@ -1,5 +1,5 @@
 {
-  "version": 45,
+  "version": 46,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,15 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "bounded-version-comparison",
+      "key": "scenario.inboundMcp.steps.step8",
+      "needles": [
+        "precise=false",
+        "getPageVersion",
+        "getPage"
+      ]
+    },
     {
       "id": "database-ambiguous-exclusion-default",
       "key": "scenario.assistant.steps.step16",
@@ -475,6 +484,7 @@
     "scenario.assistant.steps.step16",
     "scenario.inboundMcp.steps.step5",
     "scenario.inboundMcp.steps.step6",
-    "scenario.inboundMcp.steps.step7"
+    "scenario.inboundMcp.steps.step7",
+    "scenario.inboundMcp.steps.step8"
   ]
 }
