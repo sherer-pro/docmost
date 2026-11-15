@@ -1012,3 +1012,379 @@ describe('extended built-in AI read tools', () => {
     });
   });
 });
+
+describe('complete bounded MCP reads', () => {
+  const paragraph = (text: string) => ({
+    type: 'paragraph',
+    content: [{ type: 'text', text }],
+  });
+  function fixture(document: any) {
+    const built = buildRegistry({ page: { ...PAGE, content: document } });
+    (built.registry as any).projectPageDocumentFields = async () => ({
+      customFields: { status: 'draft' },
+    });
+    return built;
+  }
+  it.each([
+    { type: 'doc', content: [paragraph('x'.repeat(18000))] },
+    {
+      type: 'doc',
+      content: Array.from({ length: 100 }, () =>
+        paragraph('\u0416\ud83d\ude42'.repeat(200)),
+      ),
+    },
+  ])(
+    'reads all page text instead of failing on the combined response size',
+    async (document) => {
+      const { registry } = fixture(document);
+      let cursor: string | undefined;
+      let text = '';
+      let count = 0;
+      do {
+        const result = await registry.execute(
+          'getPage',
+          { pageId: PAGE.id, ...(cursor ? { cursor } : {}) },
+          { ...CONTEXT, source: 'mcp' },
+        );
+        const page = result.content as any;
+        expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(
+          32768,
+        );
+        text += page.text;
+        cursor = page.nextCursor ?? undefined;
+        expect(++count).toBeLessThan(100);
+      } while (cursor);
+      expect(text).toBe(
+        document.content.map((node: any) => node.content[0].text).join('\n'),
+      );
+    },
+  );
+
+  it('reads all 600 outline items with explicit continuation', async () => {
+    const { registry } = fixture({
+      type: 'doc',
+      content: Array.from({ length: 600 }, (_, i) => paragraph(String(i))),
+    });
+    const ids: number[] = [];
+    let cursor: string | undefined;
+    do {
+      const content = (
+        await registry.execute(
+          'getOutline',
+          { pageId: PAGE.id, ...(cursor ? { cursor } : {}) },
+          CONTEXT,
+        )
+      ).content as any;
+      ids.push(...content.items.map((item: any) => item.index));
+      expect(Buffer.byteLength(JSON.stringify(content))).toBeLessThanOrEqual(
+        32768,
+      );
+      cursor = content.nextCursor ?? undefined;
+    } while (cursor);
+    expect(ids).toEqual(Array.from({ length: 600 }, (_, i) => i));
+  });
+
+  it('reassembles a large node as exact serialized JSON', async () => {
+    const node = paragraph('\u0416\ud83d\ude42'.repeat(20000));
+    const { registry } = fixture({ type: 'doc', content: [node] });
+    let cursor: string | undefined;
+    let serialized = '';
+    do {
+      const content = (
+        await registry.execute(
+          'getNode',
+          { pageId: PAGE.id, nodeId: '#0', ...(cursor ? { cursor } : {}) },
+          CONTEXT,
+        )
+      ).content as any;
+      expect(content.node).toBeNull();
+      expect(Buffer.byteLength(JSON.stringify(content))).toBeLessThanOrEqual(
+        32768,
+      );
+      serialized += content.nodeJsonChunk;
+      cursor = content.nextCursor ?? undefined;
+    } while (cursor);
+    expect(JSON.parse(serialized)).toEqual(node);
+  });
+
+  it('invalidates continuation after the document changes', async () => {
+    const document = { type: 'doc', content: [paragraph('x'.repeat(80000))] };
+    const { registry } = fixture(document);
+    const first = (
+      await registry.execute('getPage', { pageId: PAGE.id }, CONTEXT)
+    ).content as any;
+    document.content[0].content[0].text = 'changed';
+    await expect(
+      registry.execute(
+        'getPage',
+        { pageId: PAGE.id, cursor: first.nextCursor },
+        CONTEXT,
+      ),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('uses the outline index for tables after nested containers and for nested tables', async () => {
+    for (const nested of [false, true]) {
+      const table = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [{ type: 'tableCell', content: [paragraph('cell')] }],
+          },
+        ],
+      };
+      const document = {
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            content: [{ type: 'listItem', content: [paragraph('before')] }],
+          },
+          nested ? { type: 'blockquote', content: [table] } : table,
+        ],
+      };
+      const { registry } = fixture(document);
+      const outline = (
+        await registry.execute('getOutline', { pageId: PAGE.id }, CONTEXT)
+      ).content as any;
+      const ref = outline.items.find((item: any) => item.type === 'table');
+      const result = (
+        await registry.execute(
+          'getTable',
+          { pageId: PAGE.id, tableRef: `#${ref.index}` },
+          CONTEXT,
+        )
+      ).content as any;
+      expect(result.cells).toEqual([['cell']]);
+      expect(result.rows).toBe(1);
+      expect(result.cellRefs[0][0]).toMatch(/^#/);
+    }
+  });
+
+  it('pages a large tree without losing entries beyond the old 500-candidate limit', async () => {
+    const rows = Array.from({ length: 601 }, (_, i) => ({
+      id: `page-${String(i).padStart(4, '0')}`,
+      parentPageId: null,
+      title: 'x'.repeat(200),
+      slugId: String(i),
+      position: String(i),
+      updatedAt: new Date(0),
+    }));
+    const { registry } = buildRegistry({
+      readablePageIds: rows.map((row) => row.id),
+      rows: { pages: rows, spaces: [{ slug: 'space' }] },
+    });
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const content = (
+        await registry.execute(
+          'getTree',
+          { limit: 100, ...(cursor ? { cursor } : {}) },
+          CONTEXT,
+        )
+      ).content as any;
+      ids.push(...content.items.map((item: any) => item.id));
+      expect(Buffer.byteLength(JSON.stringify(content))).toBeLessThanOrEqual(
+        32768,
+      );
+      cursor = content.nextCursor ?? undefined;
+    } while (cursor);
+    expect(ids).toEqual(rows.map((row) => row.id));
+  });
+
+  it('returns an oversized database row before advancing its cursor', async () => {
+    const root = {
+      id: 'database-1',
+      pageId: PAGE.id,
+      workspaceId: CONTEXT.workspaceId,
+      spaceId: CONTEXT.spaceId,
+    };
+    const row = {
+      id: 'row-1',
+      pageId: 'row-page-1',
+      title: 'Large row',
+      updatedAt: new Date(),
+      settings: {},
+    };
+    const { registry } = buildRegistry({
+      readablePageIds: [PAGE.id, row.pageId],
+      rows: {
+        databases: [root],
+        'databaseRows as row': [row],
+        databaseRows: [row],
+        databaseProperties: [
+          { id: 'prop-1', name: 'Notes', type: 'multiline_text' },
+        ],
+        databaseCells: [
+          {
+            id: 'cell-1',
+            pageId: row.pageId,
+            propertyId: 'prop-1',
+            value: 'x'.repeat(60000),
+          },
+        ],
+        pages: [PAGE, { id: row.pageId, title: row.title }],
+        spaces: [{ slug: 'space' }],
+      },
+    });
+    const content = (
+      await registry.execute(
+        'listDatabaseRows',
+        { databaseId: root.id },
+        CONTEXT,
+      )
+    ).content as any;
+    expect(content.items).toHaveLength(1);
+    expect(content.items[0].pageId).toBe(row.pageId);
+    expect(content.items[0].cells[0]).toMatchObject({
+      value: null,
+      valueTruncated: true,
+      valueRef: {
+        tool: 'getDatabaseCellContent',
+        pageId: row.pageId,
+        propertyId: 'prop-1',
+      },
+    });
+    expect(content.nextCursor).toBeNull();
+  });
+
+  it('exposes safe named metadata without raw settings or user email', async () => {
+    const page = {
+      ...PAGE,
+      creatorId: 'author',
+      lastUpdatedById: 'editor',
+      contributorIds: ['author'],
+      settings: {
+        status: 'draft',
+        assigneeId: 'author',
+        secret: 'HIDDEN_SETTING',
+      },
+    };
+    const { registry } = buildRegistry({
+      page,
+      readablePageIds: [PAGE.id],
+      rows: {
+        spaces: [
+          { settings: { documentFields: { status: true, assignee: true } } },
+        ],
+        users: [
+          {
+            id: 'author',
+            name: 'Author',
+            email: 'HIDDEN_EMAIL',
+            avatarUrl: null,
+          },
+          { id: 'editor', name: 'Editor' },
+        ],
+        labels: [{ id: 'label1', name: 'Label', type: 'page' }],
+      },
+    });
+    const content = (
+      await registry.execute(
+        'getPageMetadata',
+        { pageId: PAGE.id },
+        { ...CONTEXT, source: 'mcp' },
+      )
+    ).content as any;
+    const metadata = JSON.parse(content.metadataJsonChunk);
+    expect(metadata.creator).toMatchObject({ id: 'author', name: 'Author' });
+    expect(metadata.assignee).toMatchObject({ id: 'author', name: 'Author' });
+    expect(metadata.labels[0].name).toBe('Label');
+    expect(content.metadataJsonChunk).not.toMatch(
+      /HIDDEN_SETTING|HIDDEN_EMAIL/,
+    );
+  });
+});
+
+describe('complete comment metadata and table fragments', () => {
+  it('preserves a large inline selection together with the full comment', async () => {
+    const selection = 's'.repeat(50000);
+    const { registry } = buildRegistry({
+      rows: {
+        'comments as comment': [
+          {
+            id: 'comment-1',
+            selection,
+            content: {
+              type: 'doc',
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Complete comment' }],
+                },
+              ],
+            },
+          },
+        ],
+        spaces: [{ slug: 'space' }],
+      },
+    });
+    let cursor: string | undefined;
+    let json = '';
+    do {
+      const content = (
+        await registry.execute(
+          'getComment',
+          {
+            pageId: PAGE.id,
+            commentId: 'comment-1',
+            ...(cursor ? { cursor } : {}),
+          },
+          { ...CONTEXT, source: 'mcp' },
+        )
+      ).content as any;
+      json += content.commentJsonChunk;
+      cursor = content.nextCursor ?? undefined;
+      expect(Buffer.byteLength(JSON.stringify(content))).toBeLessThanOrEqual(
+        32768,
+      );
+    } while (cursor);
+    expect(JSON.parse(json)).toMatchObject({
+      selection,
+      content: 'Complete comment',
+    });
+  });
+
+  it('preserves every cell reference of a wide table through column fragments', async () => {
+    const cells = Array.from({ length: 150 }, (_, index) => ({
+      type: 'tableCell',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: String(index) }] },
+      ],
+    }));
+    const { registry } = buildRegistry({
+      page: {
+        ...PAGE,
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'table', content: [{ type: 'tableRow', content: cells }] },
+          ],
+        },
+      },
+    });
+    const collected: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const content = (
+        await registry.execute(
+          'getTable',
+          { pageId: PAGE.id, tableRef: '#0', ...(cursor ? { cursor } : {}) },
+          CONTEXT,
+        )
+      ).content as any;
+      content.cells.forEach((row: string[], index: number) => {
+        expect(content.rowIndices[index]).toBe(0);
+        row.forEach((value, column) => {
+          collected[content.columnOffsets[index] + column] = value;
+        });
+      });
+      cursor = content.nextCursor ?? undefined;
+    } while (cursor);
+    expect(collected).toEqual(
+      Array.from({ length: 150 }, (_, index) => String(index)),
+    );
+  });
+});

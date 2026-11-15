@@ -2,6 +2,7 @@ import * as fs from 'fs-extra';
 import { join } from 'path';
 import { dir, DirectoryResult } from 'tmp-promise';
 import { LocalDriver } from './local.driver';
+import { StorageObjectChangedError } from '../interfaces/storage-driver.interface';
 
 describe('LocalDriver', () => {
   let tmpDir: DirectoryResult;
@@ -94,5 +95,49 @@ describe('LocalDriver', () => {
     await expect(
       fs.pathExists(join(tmpDir.path, '..', escapedName)),
     ).resolves.toBe(false);
+  });
+
+  it('reads bounded original bytes with a stable version and rejects overwrite', async () => {
+    const source = Buffer.from(
+      Array.from({ length: 50001 }, (_, i) => i % 251),
+    );
+    await driver.upload('original.bin', source);
+    const chunks: Buffer[] = [];
+    let offset = 0;
+    let version: string | undefined;
+    while (offset < source.length) {
+      const part = await driver.readVersionedRange(
+        'original.bin',
+        offset,
+        16384,
+        version,
+      );
+      expect(part.data.length).toBeLessThanOrEqual(16384);
+      expect(part.size).toBe(source.length);
+      version ??= part.version;
+      chunks.push(part.data);
+      offset += part.data.length;
+    }
+    expect(Buffer.concat(chunks)).toEqual(source);
+    await driver.upload('original.bin', Buffer.from('changed'));
+    await expect(
+      driver.readVersionedRange('original.bin', 0, 16384, version),
+    ).rejects.toThrow(StorageObjectChangedError);
+  });
+
+  it('handles an empty file and rejects oversized or invalid ranges', async () => {
+    await driver.upload('empty.bin', Buffer.alloc(0));
+    expect(
+      (await driver.readVersionedRange('empty.bin', 0, 16384)).data,
+    ).toHaveLength(0);
+    for (const [offset, length] of [
+      [-1, 1],
+      [0, 16385],
+      [1, 1],
+    ]) {
+      await expect(
+        driver.readVersionedRange('empty.bin', offset, length),
+      ).rejects.toThrow(RangeError);
+    }
   });
 });

@@ -1719,11 +1719,14 @@
             "step1": "관리자로 사용자 OAuth를 켜거나 공간별 MCP API 키를 만드세요.",
             "step2": "OAuth는 클라이언트를 등록한 후 동의 화면에서 접근 가능한 한 공간을 승인하세요.",
             "step3": "initialize, tools/list 및 허용된 읽기를 확인하세요. OAuth 연결은 계정 설정에서 관리하세요.",
-            "step4": "접근은 현재 로그인 세션에 연결됩니다. 로그아웃, 세션 취소 또는 앱 연결 해제 시 접근이 종료됩니다."
+            "step4": "접근은 현재 로그인 세션에 연결됩니다. 로그아웃, 세션 취소 또는 앱 연결 해제 시 접근이 종료됩니다.",
+            "step5": "워크스페이스, 공간 및 키 정책에서 댓글, 기록, 메타데이터와 필요한 첨부 파일 읽기를 명시적으로 허용하세요. 기존 키와 OAuth 연결에 새 권한이 자동으로 추가되지는 않습니다.",
+            "step6": "nextCursor가 null이 될 때까지 다음 요청에 전달하세요. MCP_SOURCE_CHANGED가 반환되면 변경된 소스를 처음부터 다시 읽으세요.",
+            "step7": "이미 추출된 텍스트는 getAttachmentText로 읽습니다. 원본은 getAttachmentFileChunk를 별도로 허용하고 최대 16 KiB의 Base64 블록을 모아 복원하세요."
           },
-          "success": "허용된 도구는 작동합니다. 거부된 기능 및 바이너리 첨부 파일 읽기는 계속 사용할 수 없습니다.",
+          "success": "허용된 데이터는 후속 요청으로 끝까지 읽을 수 있습니다. 거부된 기능과 다른 공간은 접근할 수 없습니다.",
           "rollback": "키 또는 OAuth 연결을 취소하세요. 로그아웃해도 세션에 연결된 OAuth 접근이 종료됩니다.",
-          "technical": "/mcp는 MCP API 키 또는 OAuth 토큰을 허용하며 일반 로그인 토큰과 RAG 키는 거부합니다. /api/rag/*는 RAG 키만 허용합니다. workspace, 사용자, 공간 멤버십, 페이지 ACL 및 기능 권한을 매번 확인합니다. OAuth는 PKCE S256과 resource /mcp를 사용하며 한 공간을 선택합니다. 코드는 5분, 접근 토큰은 15분, 권한은 최대 30일이며 승인 세션의 유효 기간을 넘지 않습니다. refresh token 재사용 시 전체 연결이 취소됩니다. OAuth를 끄면 권한이 취소되고 기록은 보존됩니다. 100개가 넘는 JSON-RPC 배치는 HTTP 400을 반환합니다. OAuth: refresh_token."
+          "technical": "/mcp는 MCP API 키 또는 OAuth 토큰을 허용하며 일반 로그인 토큰과 RAG 키는 거부합니다. /api/rag/*는 RAG 키만 허용합니다. workspace, 사용자, 공간 멤버십, 페이지 ACL 및 기능 권한을 매번 확인합니다. OAuth는 PKCE S256과 resource /mcp를 사용하며 한 공간을 선택합니다. 코드는 5분, 접근 토큰은 15분, 권한은 최대 30일이며 승인 세션의 유효 기간을 넘지 않습니다. refresh token 재사용 시 전체 연결이 취소됩니다. OAuth를 끄면 권한이 취소되고 기록은 보존됩니다. 100개가 넘는 JSON-RPC 배치는 HTTP 400을 반환합니다. OAuth: refresh_token.\n\n각 결과는 32 KiB로 제한되며 후속 요청은 소스 버전에 연결됩니다. 추출된 텍스트와 원본 파일은 별도 권한이 필요합니다. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Docmost 에이전트는 승인된 원격 MCP 서버의 도구를 호출할 수 있습니다.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "현재 페이지에서 블록 삭제",
         "queryDatabaseView": "데이터베이스 보기 조회",
         "summarizeDatabaseView": "데이터베이스 합계 계산",
-        "proposeDatabaseCells": "셀 변경 제안"
+        "proposeDatabaseCells": "셀 변경 제안",
+        "getDatabaseCellContent": "셀의 전체 값 읽기",
+        "getComment": "댓글 전체 읽기",
+        "getPageVersion": "저장된 페이지 버전 읽기",
+        "getAttachmentText": "첨부 파일 텍스트 읽기",
+        "getAttachmentFileChunk": "첨부 파일 원본 읽기",
+        "getPageMetadata": "페이지 전체 메타데이터 읽기"
       },
       "category": {
         "search": "검색",

@@ -8,10 +8,17 @@ import { McpOAuthRateLimitGuard } from './oauth/mcp-oauth-rate-limit.guard';
 import { McpOAuthPublicController } from './oauth/mcp-oauth.controller';
 import { McpOAuthMetadataController } from './oauth/mcp-oauth-metadata.controller';
 import { McpOAuthAccountController } from './oauth/mcp-oauth-account.controller';
+import { ApiKeyValidationModule } from '../api-key/api-key-validation.module';
+import { TokenModule } from '../auth/token.module';
 
 @Module({
-  imports: [AiModule, ApiKeyTrafficModule],
-  controllers: [McpController, McpOAuthMetadataController, McpOAuthPublicController, McpOAuthAccountController],
+  imports: [AiModule, ApiKeyTrafficModule, ApiKeyValidationModule, TokenModule],
+  controllers: [
+    McpController,
+    McpOAuthMetadataController,
+    McpOAuthPublicController,
+    McpOAuthAccountController,
+  ],
   providers: [McpApiKeyAuthGuard, McpOAuthService, McpOAuthRateLimitGuard],
 })
 export class McpModule {}

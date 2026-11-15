@@ -37,7 +37,10 @@ import {
 import { hashCanonicalJson } from '../../../common/helpers/canonical-json.util';
 import { postgresJsonb } from '../utils/postgres-jsonb.util';
 
-export type McpToolPrincipal = Pick<ApiKey, 'workspaceId' | 'spaceId' | 'allowedCapabilities'>;
+export type McpToolPrincipal = Pick<
+  ApiKey,
+  'workspaceId' | 'spaceId' | 'allowedCapabilities'
+>;
 
 @Injectable()
 export class AiBuiltinToolPolicyService {
@@ -116,20 +119,18 @@ export class AiBuiltinToolPolicyService {
   ): Promise<AiBuiltinToolWorkspacePolicyView> {
     this.assertWorkspaceAdmin(user);
     const policy = await this.readWorkspacePolicy(workspace.id);
-    const maximumCapabilities = this.systemCapabilities('agent');
+    const maximumCapabilities = this.systemCapabilities('catalog');
     const maximum = new Set(maximumCapabilities);
     const effectiveCapabilities = policy.enabled
       ? policy.allowedCapabilities.filter(
           (capability) =>
             maximum.has(capability) &&
             (!policy.readOnly ||
-              this.registry
-                .list('agent')
-                .some(
-                  (tool) =>
-                    tool.capability === capability &&
-                    tool.writeClass === 'read_only',
-                )),
+              this.definitions('catalog').some(
+                (tool) =>
+                  tool.capability === capability &&
+                  tool.writeClass === 'read_only',
+              )),
         )
       : [];
     return {
@@ -154,7 +155,7 @@ export class AiBuiltinToolPolicyService {
     };
     const allowedCapabilities = this.validateCapabilities(
       dto.allowedCapabilities,
-      'agent',
+      'catalog',
     );
     await this.db
       .insertInto('aiBuiltinToolWorkspacePolicies')
@@ -185,7 +186,7 @@ export class AiBuiltinToolPolicyService {
     workspace: Workspace,
   ): Promise<AiBuiltinToolSpacePolicyView> {
     await this.assertCanManageSpace(user, spaceId);
-    const resolved = await this.resolve(workspace.id, spaceId, 'agent');
+    const resolved = await this.resolve(workspace.id, spaceId, 'catalog');
     return {
       spaceId,
       inherited: resolved.spaceAllowedCapabilities === null,
@@ -219,7 +220,7 @@ export class AiBuiltinToolPolicyService {
     const requested =
       dto.allowedCapabilities === null
         ? null
-        : this.validateCapabilities(dto.allowedCapabilities, 'agent');
+        : this.validateCapabilities(dto.allowedCapabilities, 'catalog');
     if (requested) {
       const workspaceAllowed = new Set(workspacePolicy.allowedCapabilities);
       if (requested.some((capability) => !workspaceAllowed.has(capability))) {
@@ -279,7 +280,10 @@ export class AiBuiltinToolPolicyService {
     };
   }
 
-  async assertMcpToolAllowed(apiKey: McpToolPrincipal, toolName: string): Promise<void> {
+  async assertMcpToolAllowed(
+    apiKey: McpToolPrincipal,
+    toolName: string,
+  ): Promise<void> {
     const tools = await this.listForMcp(apiKey);
     if (!tools.some((tool) => tool.name === toolName)) {
       throw new ForbiddenException('MCP tool is not allowed by API key policy');
@@ -416,7 +420,7 @@ export class AiBuiltinToolPolicyService {
   private async resolve(
     workspaceId: string,
     spaceId: string,
-    exposure: AiToolExposure,
+    exposure: AiToolExposure | 'catalog',
     keyCapabilities?: AiBuiltinToolCapability[],
     db: KyselyDB | KyselyTransaction = this.db,
   ) {
@@ -459,8 +463,7 @@ export class AiBuiltinToolPolicyService {
       workspace.knowledgeOnly || Boolean(space?.knowledgeOnly);
     if (readOnly) {
       const reads = new Set(
-        this.registry
-          .list(exposure)
+        this.definitions(exposure)
           .filter((tool) => tool.writeClass === 'read_only')
           .map((tool) => tool.capability),
       );
@@ -509,10 +512,23 @@ export class AiBuiltinToolPolicyService {
     };
   }
 
+  private definitions(
+    exposure: AiToolExposure | 'catalog',
+  ): AiToolDefinition[] {
+    if (exposure !== 'catalog') return this.registry.list(exposure);
+    return [
+      ...new Map(
+        [...this.registry.list('agent'), ...this.registry.list('mcp')].map(
+          (tool) => [tool.name, tool],
+        ),
+      ).values(),
+    ];
+  }
+
   private systemCapabilities(
-    exposure: AiToolExposure,
+    exposure: AiToolExposure | 'catalog',
   ): AiBuiltinToolCapability[] {
-    const definitions = this.registry.list(exposure);
+    const definitions = this.definitions(exposure);
     if (this.environment.isAiBuiltinToolExtensionsEnabled()) {
       return definitions.map((tool) => tool.capability);
     }
@@ -538,10 +554,10 @@ export class AiBuiltinToolPolicyService {
 
   private validateCapabilities(
     values: readonly string[],
-    exposure: AiToolExposure,
+    exposure: AiToolExposure | 'catalog',
   ): AiBuiltinToolCapability[] {
     const known = new Set(
-      this.registry.list(exposure).map((tool) => tool.capability),
+      this.definitions(exposure).map((tool) => tool.capability),
     );
     const invalid = values.find(
       (value) => !known.has(value as AiBuiltinToolCapability),

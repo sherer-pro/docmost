@@ -87,6 +87,7 @@ type NodeLocation = {
   parent: ProseMirrorJson | null;
   position: number;
   index: number;
+  path: number[];
 };
 
 export function hashProseMirrorJson(document: ProseMirrorJson): string {
@@ -148,6 +149,15 @@ export function getAiPageNode(
     throw new Error('agent_node_not_found');
   }
   return structuredClone(location.node);
+}
+
+export function getAiPageNodePath(
+  document: ProseMirrorJson,
+  nodeId: string,
+): number[] {
+  const location = findNode(document, nodeId);
+  if (!location) throw new Error('agent_node_not_found');
+  return [...location.path];
 }
 
 export function buildAiApprovalPreview(
@@ -386,6 +396,7 @@ function findNode(
     node: ProseMirrorJson,
     parent: ProseMirrorJson | null,
     position: number,
+    path: number[],
   ) => {
     if (isOutlineNode(node)) {
       const nodeIdentifier =
@@ -400,16 +411,17 @@ function findNode(
           parent,
           position,
           index: currentIndex,
+          path,
         });
       }
       currentIndex += 1;
     }
     (node.content ?? []).forEach((child, childPosition) =>
-      visit(child, node, childPosition),
+      visit(child, node, childPosition, [...path, childPosition]),
     );
   };
 
-  visit(document, null, 0);
+  visit(document, null, 0, []);
   if (requestedIndex === undefined && matches.length > 1) {
     throw new Error('agent_ambiguous_node_id');
   }

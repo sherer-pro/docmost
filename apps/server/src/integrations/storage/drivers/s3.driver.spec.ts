@@ -1,6 +1,7 @@
-import { NoSuchKey, NotFound } from '@aws-sdk/client-s3';
+import { NoSuchKey, NotFound, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'node:stream';
 import { S3Driver } from './s3.driver';
+import { StorageObjectChangedError } from '../interfaces/storage-driver.interface';
 
 function createDriver(): S3Driver {
   return new S3Driver({
@@ -15,6 +16,55 @@ function createDriver(): S3Driver {
 }
 
 describe('S3Driver', () => {
+  it('uses conditional bounded reads and rechecks the current object identity', async () => {
+    const driver = createDriver();
+    const head = { ETag: 'etag-1', ContentLength: 10, VersionId: 'version-1' };
+    const send = jest.fn(async (command: any) =>
+      command instanceof HeadObjectCommand
+        ? head
+        : { Body: Readable.from([Buffer.from('3456')]) },
+    );
+    (driver.getDriver() as any).send = send;
+    const part = await driver.readVersionedRange('attachment.bin', 3, 4);
+    expect(part.data).toEqual(Buffer.from('3456'));
+    expect(send.mock.calls[1][0].input).toMatchObject({
+      Range: 'bytes=3-6',
+      IfMatch: 'etag-1',
+      VersionId: 'version-1',
+    });
+    head.ETag = 'etag-2';
+    await expect(
+      driver.readVersionedRange('attachment.bin', 3, 4, part.version),
+    ).rejects.toThrow(StorageObjectChangedError);
+    driver.getDriver().destroy();
+  });
+
+  it('discards bytes when the object changes during a range read', async () => {
+    const driver = createDriver();
+    let reads = 0;
+    (driver.getDriver() as any).send = jest.fn(async (command: any) =>
+      command instanceof HeadObjectCommand
+        ? { ETag: ++reads === 1 ? 'before' : 'after', ContentLength: 4 }
+        : { Body: Readable.from([Buffer.from('data')]) },
+    );
+    await expect(
+      driver.readVersionedRange('attachment.bin', 0, 4),
+    ).rejects.toThrow(StorageObjectChangedError);
+    driver.getDriver().destroy();
+  });
+
+  it('rejects a storage backend that ignores the requested range limit', async () => {
+    const driver = createDriver();
+    (driver.getDriver() as any).send = jest.fn(async (command: any) =>
+      command instanceof HeadObjectCommand
+        ? { ETag: 'etag', ContentLength: 40000 }
+        : { Body: Readable.from([Buffer.alloc(40000)]) },
+    );
+    await expect(
+      driver.readVersionedRange('attachment.bin', 0, 16384),
+    ).rejects.toThrow(/exceeds its limit/);
+    driver.getDriver().destroy();
+  });
   it('passes the abort signal to S3 while acquiring a read stream', async () => {
     const driver = createDriver();
     const controller = new AbortController();

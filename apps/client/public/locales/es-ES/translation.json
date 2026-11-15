@@ -1719,11 +1719,14 @@
             "step1": "Active OAuth de usuario como administrador o cree una clave API MCP limitada a un espacio.",
             "step2": "Para OAuth, registre el cliente y apruebe un único espacio accesible en la pantalla de consentimiento.",
             "step3": "Pruebe initialize, tools/list y una lectura permitida. Gestione las conexiones OAuth en los ajustes de su cuenta.",
-            "step4": "El acceso está vinculado a su sesión actual. Cerrar sesión, revocarla o desconectar la aplicación termina el acceso."
+            "step4": "El acceso está vinculado a su sesión actual. Cerrar sesión, revocarla o desconectar la aplicación termina el acceso.",
+            "step5": "Autorice expresamente comentarios, historial, metadatos y los adjuntos necesarios en las políticas del espacio de trabajo, espacio y clave. Las claves y conexiones OAuth existentes no reciben permisos nuevos automáticamente.",
+            "step6": "Envíe nextCursor hasta que sea null. Si recibe MCP_SOURCE_CHANGED, reinicie la lectura de la fuente modificada.",
+            "step7": "Use getAttachmentText para texto ya extraído. Autorice getAttachmentFileChunk por separado y reconstruya el original con bloques Base64 de hasta 16 KiB."
           },
-          "success": "Las herramientas permitidas funcionan; Las capacidades denegadas y las lecturas de archivos adjuntos binarios siguen no disponibles.",
+          "success": "Los datos autorizados se leen completos mediante continuaciones; las capacidades denegadas y otros espacios siguen inaccesibles.",
           "rollback": "Revoque la clave o conexión OAuth. Cerrar sesión también termina el acceso OAuth vinculado a ella.",
-          "technical": "/mcp acepta claves API MCP o tokens OAuth; rechaza tokens de inicio de sesión y claves RAG. /api/rag/* solo acepta claves RAG. Se comprueban workspace, usuario, pertenencia, ACL y capacidades actuales. OAuth usa PKCE S256 y resource /mcp para un espacio elegido. Los códigos duran 5 minutos, los tokens de acceso 15 minutos y los permisos hasta 30 días, limitados por la sesión autorizante. Reutilizar un refresh token revoca la conexión. Desactivar OAuth revoca permisos y conserva registros. Los lotes JSON-RPC de más de 100 mensajes devuelven HTTP 400. OAuth: refresh_token."
+          "technical": "/mcp acepta claves API MCP o tokens OAuth; rechaza tokens de inicio de sesión y claves RAG. /api/rag/* solo acepta claves RAG. Se comprueban workspace, usuario, pertenencia, ACL y capacidades actuales. OAuth usa PKCE S256 y resource /mcp para un espacio elegido. Los códigos duran 5 minutos, los tokens de acceso 15 minutos y los permisos hasta 30 días, limitados por la sesión autorizante. Reutilizar un refresh token revoca la conexión. Desactivar OAuth revoca permisos y conserva registros. Los lotes JSON-RPC de más de 100 mensajes devuelven HTTP 400. OAuth: refresh_token.\n\nCada resultado está limitado a 32 KiB; la continuación está vinculada a la versión de la fuente. El texto extraído y los originales requieren permisos separados. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Docmost Agent puede invocar herramientas en servidores MCP remotos aprobados.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Eliminar un bloque de la página actual",
         "queryDatabaseView": "Consultar vista de la base",
         "summarizeDatabaseView": "Calcular totales de la base",
-        "proposeDatabaseCells": "Proponer cambios de celdas"
+        "proposeDatabaseCells": "Proponer cambios de celdas",
+        "getDatabaseCellContent": "Leer valor completo de celda",
+        "getComment": "Leer comentario completo",
+        "getPageVersion": "Leer versión guardada",
+        "getAttachmentText": "Leer texto del archivo adjunto",
+        "getAttachmentFileChunk": "Leer archivo adjunto original",
+        "getPageMetadata": "Leer metadatos completos de página"
       },
       "category": {
         "search": "Búsqueda",

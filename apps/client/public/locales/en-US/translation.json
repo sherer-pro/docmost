@@ -1719,11 +1719,14 @@
             "step1": "Enable user OAuth as an administrator, or create a scoped MCP API key.",
             "step2": "For OAuth, register the client and approve exactly one accessible space on the consent screen.",
             "step3": "Test initialize, tools/list and an allowed read. Manage OAuth connections in your account settings.",
-            "step4": "Access is bound to your current login session. Signing out, revoking the session or disconnecting the application ends access."
+            "step4": "Access is bound to your current login session. Signing out, revoking the session or disconnecting the application ends access.",
+            "step5": "Explicitly allow comments, history, metadata and required attachment reads in the workspace, space and key policies. Existing keys and OAuth grants gain no new permissions automatically.",
+            "step6": "Follow nextCursor until it is null. If MCP_SOURCE_CHANGED is returned, restart reading the changed source.",
+            "step7": "Use getAttachmentText for already-extracted text. To obtain an original file, explicitly allow getAttachmentFileChunk and reassemble its Base64 chunks of at most 16 KiB."
           },
-          "success": "Allowed tools work; denied capabilities and binary attachment reads remain unavailable",
+          "success": "Allowed reads return complete data through continuation; forbidden capabilities and other spaces remain inaccessible.",
           "rollback": "Revoke the key or OAuth connection. Logging out also invalidates session-bound OAuth access.",
-          "technical": "Inbound /mcp accepts its own MCP API keys or OAuth access tokens; ordinary login tokens and RAG keys are rejected. /api/rag/* continues to accept only RAG keys. Current workspace, user, space membership, page ACL and capability policies are checked. OAuth uses PKCE S256 and resource /mcp; the user chooses one space. Codes last 5 minutes, access tokens 15 minutes, grants at most 30 days and never beyond the authorizing session. Refresh token reuse revokes the entire connection. Disabling OAuth revokes its grants without deleting saved records. JSON-RPC batches over 100 messages return HTTP 400. OAuth: refresh_token."
+          "technical": "Inbound /mcp accepts its own MCP API keys or OAuth access tokens; ordinary login tokens and RAG keys are rejected. /api/rag/* continues to accept only RAG keys. Current workspace, user, space membership, page ACL and capability policies are checked. OAuth uses PKCE S256 and resource /mcp; the user chooses one space. Codes last 5 minutes, access tokens 15 minutes, grants at most 30 days and never beyond the authorizing session. Refresh token reuse revokes the entire connection. Disabling OAuth revokes its grants without deleting saved records. JSON-RPC batches over 100 messages return HTTP 400. OAuth: refresh_token.\n\nComplete reads stay within 32 KiB per result and use version-bound continuation. Separate permissions protect extracted text and original file bytes. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "The Docmost Agent can call tools on approved remote MCP servers.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Delete a block from the current page",
         "queryDatabaseView": "Query database view",
         "summarizeDatabaseView": "Calculate database totals",
-        "proposeDatabaseCells": "Propose cell changes"
+        "proposeDatabaseCells": "Propose cell changes",
+        "getDatabaseCellContent": "Read complete database cell",
+        "getComment": "Read complete comment",
+        "getPageVersion": "Read saved page version",
+        "getAttachmentText": "Read attachment text",
+        "getAttachmentFileChunk": "Read original attachment",
+        "getPageMetadata": "Read complete page metadata"
       },
       "category": {
         "search": "Search",

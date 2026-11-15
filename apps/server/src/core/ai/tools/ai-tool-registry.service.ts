@@ -18,7 +18,12 @@ import {
 } from '../../../collaboration/collaboration.util';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { resolveComputedDatabaseRows } from '@docmost/db/utils/database-resolved-cells';
-import { User } from '@docmost/db/types/entity.types';
+import type {
+  AiToolExposure,
+  AiToolWriteClass,
+  AiToolExecutionContext,
+  AiToolExecutionResult,
+} from './ai-tool-execution.types';
 import {
   AI_BUILTIN_TOOL_CATEGORIES,
   AI_BUILTIN_TOOL_CAPABILITIES,
@@ -27,8 +32,6 @@ import {
   AiBuiltinToolCapability,
   AiBuiltinToolCategory,
   AiBuiltinToolTargetScope,
-  AiDatabaseContext,
-  AiDatabaseCellOperation,
 } from '@docmost/api-contract';
 import { PageAccessService } from '../../page-access/page-access.service';
 import { SearchService } from '../../search/search.service';
@@ -45,6 +48,7 @@ import {
   assertSafeAiPageOperation,
   buildAiApprovalPreview,
   getAiPageNode,
+  getAiPageNodePath,
   getAiPageOutline,
   getProseMirrorText,
   hashProseMirrorJson,
@@ -71,6 +75,15 @@ import {
   AI_DATABASE_CALCULATIONS,
 } from '../services/ai-database.service';
 import {
+  AI_READ_CURSOR_SCHEMA,
+  AI_READ_RESULT_BYTES,
+  hashReadVersion,
+  paginateReadItems,
+  paginateReadText,
+  readResultFits,
+} from './ai-tool-read-pagination';
+import { AiAttachmentReadService } from './ai-attachment-read.service';
+import {
   AI_DATABASE_SELECTION_GUIDANCE,
   AI_DATABASE_VIEW_INPUT_SCHEMA,
 } from './ai-database-view-input-schema';
@@ -82,12 +95,15 @@ export const AI_AGENT_MAX_MODEL_STEPS = 8;
 export const AI_AGENT_MAX_TOOL_CALLS = 16;
 export const AI_AGENT_MAX_RUN_MODEL_STEPS = 32;
 export const AI_AGENT_MAX_RUN_TOOL_CALLS = 64;
-export const AI_TOOL_RESULT_MAX_BYTES = 32 * 1024;
+export const AI_TOOL_RESULT_MAX_BYTES = AI_READ_RESULT_BYTES;
 export const AI_TOOL_RESULTS_TOTAL_MAX_BYTES = 128 * 1024;
 
-export class AiToolResultLimitError extends Error {
+export class AiToolResultLimitError extends BadRequestException {
   constructor() {
-    super('AI tool result exceeds its configured limit');
+    super({
+      code: 'MCP_RESULT_TOO_LARGE',
+      message: 'AI tool result exceeds its configured limit',
+    });
     this.name = 'AiToolResultLimitError';
   }
 }
@@ -128,31 +144,13 @@ export function fitAiToolItems<T>(
   return { items: items.slice(0, low), truncated: true };
 }
 
-export type AiToolExposure = 'agent' | 'mcp';
-export type AiToolWriteClass = 'read_only' | 'write';
-
-export type AiToolExecutionContext = {
-  user: User;
-  workspaceId: string;
-  spaceId: string;
-  currentPageId?: string;
-  databaseContext?: AiDatabaseContext;
-  source: AiToolExposure;
-};
-
-export type AiToolWriteProposal = {
-  pageId: string;
-  baseContentHash: string | null;
-  expectedAfterHash: string | null;
-  operation: AiPageOperation | AiDatabaseCellOperation;
-};
-
-export type AiToolExecutionResult = {
-  dependencyPageIds?: string[];
-  content: unknown;
-  writeProposal?: AiToolWriteProposal;
-  citations?: Array<Omit<AiCitationCandidate, 'marker'>>;
-};
+export type {
+  AiToolExposure,
+  AiToolWriteClass,
+  AiToolExecutionContext,
+  AiToolWriteProposal,
+  AiToolExecutionResult,
+} from './ai-tool-execution.types';
 
 export type AiCallableToolDefinition = {
   name: string;
@@ -249,6 +247,7 @@ export class AiToolRegistryService {
       db,
     ),
     @Optional() private readonly databases?: AiDatabaseService,
+    @Optional() private readonly attachmentReads?: AiAttachmentReadService,
   ) {
     this.tools = this.createTools();
     // The mcp__ prefix is reserved for outbound external MCP tools. Reusing it
@@ -377,6 +376,7 @@ export class AiToolRegistryService {
   private createTools(): InternalAiToolDefinition[] {
     return [
       ...this.createDatabaseTools(),
+      ...this.createAdditionalReadTools(),
       {
         name: 'search',
         description:
@@ -401,11 +401,14 @@ export class AiToolRegistryService {
       {
         name: 'getTree',
         description:
-          'List the readable page tree for the current space without page content.',
+          'List readable page metadata in stable, version-bound pages. Continue with nextCursor until null.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
-          properties: {},
+          properties: {
+            cursor: AI_READ_CURSOR_SCHEMA,
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+          },
         },
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
@@ -413,7 +416,12 @@ export class AiToolRegistryService {
         category: 'page_read',
         targetScope: 'current_space',
         ...READ_TOOL_POLICY,
-        execute: (_args, context) => this.getTree(context),
+        execute: (args, context) =>
+          this.getTree(
+            context,
+            this.optionalString(args, 'cursor', 2048),
+            this.optionalInteger(args, 'limit', 100, 1, 100),
+          ),
       },
       {
         name: 'getPageContext',
@@ -423,7 +431,7 @@ export class AiToolRegistryService {
           type: 'object',
           additionalProperties: false,
           required: ['pageId'],
-          properties: { pageId: PAGE_ID_SCHEMA },
+          properties: { pageId: PAGE_ID_SCHEMA, cursor: AI_READ_CURSOR_SCHEMA },
         },
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
@@ -435,17 +443,18 @@ export class AiToolRegistryService {
           this.getPageContext(
             this.requireString(args, 'pageId', false, 64),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
         name: 'getPage',
         description:
-          'Read a page. Large documents return compact text and outline instead of oversized JSON.',
+          'Read a complete page. Large documents return text fragments and nextCursor instead of oversized JSON; continue until nextCursor is null.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
           required: ['pageId'],
-          properties: { pageId: PAGE_ID_SCHEMA },
+          properties: { pageId: PAGE_ID_SCHEMA, cursor: AI_READ_CURSOR_SCHEMA },
         },
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
@@ -454,7 +463,11 @@ export class AiToolRegistryService {
         targetScope: 'readable_page',
         ...READ_TOOL_POLICY,
         execute: (args, context) =>
-          this.getPage(this.requireString(args, 'pageId', false, 64), context),
+          this.getPage(
+            this.requireString(args, 'pageId', false, 64),
+            context,
+            this.optionalString(args, 'cursor', 2048),
+          ),
       },
       {
         name: 'getOutline',
@@ -464,7 +477,7 @@ export class AiToolRegistryService {
           type: 'object',
           additionalProperties: false,
           required: ['pageId'],
-          properties: { pageId: PAGE_ID_SCHEMA },
+          properties: { pageId: PAGE_ID_SCHEMA, cursor: AI_READ_CURSOR_SCHEMA },
         },
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
@@ -476,12 +489,13 @@ export class AiToolRegistryService {
           this.getOutline(
             this.requireString(args, 'pageId', false, 64),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
         name: 'getNode',
         description:
-          'Read one ProseMirror node by its stable ID or by a #index returned from getOutline.',
+          'Read a ProseMirror node by stable ID or #index from getOutline. Large nodes return nodeJsonChunk; concatenate all chunks and parse JSON.',
         inputSchema: {
           type: 'object',
           additionalProperties: false,
@@ -489,6 +503,7 @@ export class AiToolRegistryService {
           properties: {
             pageId: PAGE_ID_SCHEMA,
             nodeId: { type: 'string', minLength: 1, maxLength: 128 },
+            cursor: AI_READ_CURSOR_SCHEMA,
           },
         },
         writeClass: 'read_only',
@@ -502,6 +517,7 @@ export class AiToolRegistryService {
             this.requireString(args, 'pageId', false, 64),
             this.requireString(args, 'nodeId', false, 128),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
@@ -577,6 +593,7 @@ export class AiToolRegistryService {
           required: ['databaseId'],
           properties: {
             databaseId: { type: 'string', format: 'uuid' },
+            cursor: AI_READ_CURSOR_SCHEMA,
           },
         },
         writeClass: 'read_only',
@@ -590,6 +607,7 @@ export class AiToolRegistryService {
           this.getDatabaseContext(
             this.requireString(args, 'databaseId', false, 64),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
@@ -628,7 +646,7 @@ export class AiToolRegistryService {
           type: 'object',
           additionalProperties: false,
           required: ['pageId'],
-          properties: { pageId: PAGE_ID_SCHEMA },
+          properties: { pageId: PAGE_ID_SCHEMA, cursor: AI_READ_CURSOR_SCHEMA },
         },
         writeClass: 'read_only',
         exposures: ['agent', 'mcp'],
@@ -641,6 +659,7 @@ export class AiToolRegistryService {
           this.getDatabaseRowContext(
             this.requireString(args, 'pageId', false, 64),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
@@ -653,6 +672,7 @@ export class AiToolRegistryService {
           required: ['pageId', 'tableRef'],
           properties: {
             pageId: PAGE_ID_SCHEMA,
+            cursor: AI_READ_CURSOR_SCHEMA,
             tableRef: { type: 'string', minLength: 1, maxLength: 128 },
           },
         },
@@ -667,6 +687,7 @@ export class AiToolRegistryService {
             this.requireString(args, 'pageId', false, 64),
             this.requireString(args, 'tableRef', false, 128),
             context,
+            this.optionalString(args, 'cursor', 2048),
           ),
       },
       {
@@ -1058,6 +1079,135 @@ export class AiToolRegistryService {
     ];
   }
 
+  private createAdditionalReadTools(): InternalAiToolDefinition[] {
+    const specs: Array<{
+      name: string;
+      capability: AiBuiltinToolCapability;
+      category: AiBuiltinToolCategory;
+      description: string;
+      required: string[];
+      properties: Record<string, unknown>;
+      execute: InternalAiToolDefinition['execute'];
+    }> = [
+      {
+        name: 'getDatabaseCellContent',
+        capability: 'database.cell_content.read',
+        category: 'database',
+        description:
+          'Read the complete serialized value of one database cell in version-bound JSON chunks.',
+        required: ['pageId', 'propertyId'],
+        properties: { pageId: PAGE_ID_SCHEMA, propertyId: PAGE_ID_SCHEMA },
+        execute: (args, context) =>
+          this.getDatabaseCellContent(
+            this.requireString(args, 'pageId', false, 64),
+            this.requireString(args, 'propertyId', false, 64),
+            context,
+            this.optionalString(args, 'cursor', 2048),
+          ),
+      },
+      {
+        name: 'getComment',
+        capability: 'page.comment.read',
+        category: 'collaboration',
+        description:
+          'Read one active comment, its thread/resolution metadata and complete text in version-bound chunks.',
+        required: ['pageId', 'commentId'],
+        properties: { pageId: PAGE_ID_SCHEMA, commentId: PAGE_ID_SCHEMA },
+        execute: (args, context) =>
+          this.getComment(
+            this.requireString(args, 'pageId', false, 64),
+            this.requireString(args, 'commentId', false, 64),
+            context,
+            this.optionalString(args, 'cursor', 2048),
+          ),
+      },
+      {
+        name: 'getPageVersion',
+        capability: 'page.history.content.read',
+        category: 'history',
+        description:
+          'Read the complete text of one saved page version, under current page permissions.',
+        required: ['pageId', 'historyId'],
+        properties: { pageId: PAGE_ID_SCHEMA, historyId: PAGE_ID_SCHEMA },
+        execute: (args, context) =>
+          this.getPageVersion(
+            this.requireString(args, 'pageId', false, 64),
+            this.requireString(args, 'historyId', false, 64),
+            context,
+            this.optionalString(args, 'cursor', 2048),
+          ),
+      },
+      {
+        name: 'getAttachmentText',
+        capability: 'page.attachments.text.read',
+        category: 'attachments',
+        description:
+          'Read already-extracted PDF/DOCX/TXT/MD attachment text and processing status. Does not start extraction.',
+        required: ['attachmentId'],
+        properties: { attachmentId: PAGE_ID_SCHEMA },
+        execute: (args, context) => {
+          if (!this.attachmentReads)
+            throw new ServiceUnavailableException(
+              'Attachment reads are unavailable',
+            );
+          return this.attachmentReads.text(
+            this.requireString(args, 'attachmentId', false, 64),
+            this.optionalString(args, 'cursor', 2048),
+            context,
+          );
+        },
+      },
+      {
+        name: 'getAttachmentFileChunk',
+        capability: 'page.attachments.file.read',
+        category: 'attachments',
+        description:
+          'Read original attachment bytes as base64 chunks up to 16 KiB. Reassemble in offset order; restart on a changed source.',
+        required: ['attachmentId'],
+        properties: { attachmentId: PAGE_ID_SCHEMA },
+        execute: (args, context) => {
+          if (!this.attachmentReads)
+            throw new ServiceUnavailableException(
+              'Attachment reads are unavailable',
+            );
+          return this.attachmentReads.file(
+            this.requireString(args, 'attachmentId', false, 64),
+            this.optionalString(args, 'cursor', 2048),
+            context,
+          );
+        },
+      },
+      {
+        name: 'getPageMetadata',
+        capability: 'page.metadata.read',
+        category: 'page_read',
+        description:
+          'Read complete safe document metadata as version-bound JSON chunks, including labels, actors and enabled document fields.',
+        required: ['pageId'],
+        properties: { pageId: PAGE_ID_SCHEMA },
+        execute: (args, context) =>
+          this.getPageMetadata(
+            this.requireString(args, 'pageId', false, 64),
+            context,
+            this.optionalString(args, 'cursor', 2048),
+          ),
+      },
+    ];
+    return specs.map(({ required, properties, ...spec }) => ({
+      ...spec,
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required,
+        properties: { ...properties, cursor: AI_READ_CURSOR_SCHEMA },
+      },
+      writeClass: 'read_only',
+      exposures: ['mcp'],
+      targetScope: 'readable_page',
+      ...READ_TOOL_POLICY,
+    }));
+  }
+
   private createDatabaseTools(): InternalAiToolDefinition[] {
     const databaseId = { type: 'string', format: 'uuid' };
     const tools: InternalAiToolDefinition[] = [false, true].map((summary) => ({
@@ -1309,6 +1459,8 @@ export class AiToolRegistryService {
 
   private async getTree(
     context: AiToolExecutionContext,
+    cursor?: string,
+    limit = 100,
   ): Promise<AiToolExecutionResult> {
     const snapshot = await this.pageAccess.getSidebarAccessSnapshot(
       context.user,
@@ -1318,53 +1470,73 @@ export class AiToolRegistryService {
       context.spaceId,
       context.workspaceId,
     );
-    const readablePageIds = [...snapshot.readablePageIds].filter(
-      (pageId) => !excluded.has(pageId),
+    const readable = [...snapshot.readablePageIds].filter(
+      (id) => !excluded.has(id),
     );
-    if (readablePageIds.length === 0) {
-      return { content: { items: [] } };
-    }
-    const rows = await this.db
-      .selectFrom('pages')
-      .select([
-        'id',
-        'parentPageId',
-        'title',
-        'slugId',
-        'position',
-        'updatedAt',
-      ])
-      .where('workspaceId', '=', context.workspaceId)
-      .where('spaceId', '=', context.spaceId)
-      .where('deletedAt', 'is', null)
-      .where('id', 'in', readablePageIds)
-      .orderBy('parentPageId', 'asc')
-      .orderBy('position', 'asc')
-      .limit(500)
-      .execute();
-    const content = fitAiToolItems(
-      rows.map((row) => ({
-        ...row,
-        parentPageId:
-          row.parentPageId &&
-          snapshot.readablePageIds.has(row.parentPageId) &&
-          !excluded.has(row.parentPageId)
-            ? row.parentPageId
-            : null,
-      })),
+    const rows = readable.length
+      ? await this.db
+          .selectFrom('pages')
+          .select([
+            'id',
+            'parentPageId',
+            'title',
+            'slugId',
+            'position',
+            'updatedAt',
+          ])
+          .select((eb) =>
+            eb
+              .selectFrom('databases')
+              .select('databases.id')
+              .whereRef('databases.pageId', '=', 'pages.id')
+              .where('databases.workspaceId', '=', context.workspaceId)
+              .where('databases.spaceId', '=', context.spaceId)
+              .where('databases.deletedAt', 'is', null)
+              .as('databaseId'),
+          )
+          .where('workspaceId', '=', context.workspaceId)
+          .where('spaceId', '=', context.spaceId)
+          .where('deletedAt', 'is', null)
+          .where('id', 'in', readable)
+          .orderBy('id', 'asc')
+          .execute()
+      : [];
+    const items = rows.map((row) => ({
+      ...row,
+      type: row.databaseId ? 'database' : 'page',
+      parentPageId:
+        row.parentPageId &&
+        snapshot.readablePageIds.has(row.parentPageId) &&
+        !excluded.has(row.parentPageId)
+          ? row.parentPageId
+          : null,
+    }));
+    const content = paginateReadItems(
+      items,
+      {},
+      {
+        tool: 'getTree',
+        resource: context.spaceId,
+        version: hashReadVersion(items),
+        cursor,
+        limit,
+      },
     );
-    return {
-      content,
-      citations: await this.pageRootCitations(
-        content.items.map((item: any) => ({ pageId: item.id, type: 'page' })),
-        context,
-      ),
-    };
+    const citations = await this.pageRootCitations(
+      content.items.map((item: any) => ({ pageId: item.id, type: 'page' })),
+      context,
+    );
+    await this.assertReadResults(
+      content.items.map((item: any) => item.id),
+      context,
+    );
+    return { content, citations };
   }
 
   private async getPageContext(
     pageId: string,
     context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
     const snapshot = await this.pageAccess.getSidebarAccessSnapshot(
@@ -1375,122 +1547,177 @@ export class AiToolRegistryService {
       context.spaceId,
       context.workspaceId,
     );
-    const readableChildIds = [...snapshot.readablePageIds].filter(
-      (childId) => !excluded.has(childId),
+    const readable = [...snapshot.readablePageIds].filter(
+      (id) => !excluded.has(id),
     );
-    const [breadcrumbs, children] = await Promise.all([
+    const [breadcrumbs, children, fields] = await Promise.all([
       this.pages.getPageBreadCrumbs(pageId),
-      readableChildIds.length === 0
-        ? Promise.resolve([])
-        : this.db
+      readable.length
+        ? this.db
             .selectFrom('pages')
             .select(['id', 'title', 'slugId', 'position', 'updatedAt'])
             .where('workspaceId', '=', context.workspaceId)
             .where('spaceId', '=', context.spaceId)
             .where('parentPageId', '=', pageId)
             .where('deletedAt', 'is', null)
-            .where('id', 'in', readableChildIds)
+            .where('id', 'in', readable)
             .orderBy('position', 'asc')
-            .limit(50)
-            .execute(),
+            .orderBy('id', 'asc')
+            .execute()
+        : [],
+      this.projectPageDocumentFields(page, context),
     ]);
-    const projectedFields = await this.projectPageDocumentFields(page, context);
-    return {
-      content: {
-        page: {
-          id: page.id,
-          title: page.title,
-          slugId: page.slugId,
-          updatedAt: page.updatedAt,
-          ...projectedFields,
-        },
-        breadcrumbs: breadcrumbs
-          .filter(
-            (item) =>
-              snapshot.visiblePageIds.has(item.id) && !excluded.has(item.id),
-          )
-          .map((item) => ({ id: item.id, title: item.title })),
-        children,
+    const base = {
+      page: {
+        id: page.id,
+        title: page.title,
+        slugId: page.slugId,
+        updatedAt: page.updatedAt,
+        ...fields,
       },
-      citations: [
-        ...(await this.pageCitations(page, undefined, context)),
-        ...(await this.pageRootCitations(
-          children.map((child) => ({ pageId: child.id, type: 'page' })),
-          context,
-        )),
-      ],
+      breadcrumbs: breadcrumbs
+        .filter(
+          (item) =>
+            snapshot.readablePageIds.has(item.id) && !excluded.has(item.id),
+        )
+        .map((item) => ({ id: item.id, title: item.title })),
     };
+    const content = paginateReadItems(children, base, {
+      tool: 'getPageContext',
+      resource: pageId,
+      version: hashReadVersion(children),
+      cursor,
+      limit: 50,
+      field: 'children',
+    });
+    const citations = [
+      ...(await this.pageCitations(page, undefined, context)),
+      ...(await this.pageRootCitations(
+        content.children.map((child: any) => ({
+          pageId: child.id,
+          type: 'page',
+        })),
+        context,
+      )),
+    ];
+    await this.getReadablePage(pageId, context);
+    await this.assertReadResults(
+      content.children.map((child: any) => child.id),
+      context,
+    );
+    return { content, citations };
   }
 
   private async getPage(
     pageId: string,
     context: AiToolExecutionContext,
-  ): Promise<AiToolExecutionResult> {
-    const page = await this.getReadablePage(pageId, context);
-    const document = (page.content ?? { type: 'doc', content: [] }) as
-      | ProseMirrorJson
-      | undefined;
-    const serializedContent = JSON.stringify(document);
-    const fits = Buffer.byteLength(serializedContent, 'utf8') <= 24 * 1024;
-    const projectedFields = await this.projectPageDocumentFields(page, context);
-    return {
-      content: {
-        id: page.id,
-        title: page.title,
-        slugId: page.slugId,
-        updatedAt: page.updatedAt,
-        ...projectedFields,
-        content: fits ? document : null,
-        text: getProseMirrorText(document ?? {}).slice(0, 16000),
-        outline: fits
-          ? undefined
-          : getAiPageOutline(document ?? {}).slice(0, 80),
-        truncated: !fits,
-      },
-      citations: await this.pageCitations(page, document, context),
-    };
-  }
-
-  private async getOutline(
-    pageId: string,
-    context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
     const document =
       context.source === 'agent' && context.currentPageId === pageId
         ? await this.getLivePageContent(pageId, context, 'read')
         : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
-    const outline = getAiPageOutline(document);
-    return {
-      content: {
-        pageId,
-        contentHash: hashProseMirrorJson(document),
-        items: outline.slice(0, 300),
-      },
-      citations: await this.pageCitations(page, document, context),
+    const contentHash = hashProseMirrorJson(document);
+    const text = getProseMirrorText(document);
+    const fields = await this.projectPageDocumentFields(page, context);
+    const base = {
+      id: page.id,
+      title: page.title,
+      slugId: page.slugId,
+      updatedAt: page.updatedAt,
+      ...fields,
+      contentHash,
     };
+    let content: Record<string, any> = {
+      ...base,
+      content: document,
+      text,
+      truncated: false,
+      nextCursor: null,
+    };
+    if (cursor || !readResultFits(content)) {
+      const outline = getAiPageOutline(document).slice(0, 8);
+      content = paginateReadText(
+        text,
+        { ...base, content: null, outline },
+        { tool: 'getPage', resource: pageId, version: contentHash, cursor },
+      );
+      // Missing editor JSON is also an explicit truncation, even when all text fits.
+      content.truncated = true;
+    }
+    const citations = await this.pageCitations(page, document, context);
+    await this.revalidateReadDocument(pageId, contentHash, context);
+    return { content, citations };
+  }
+
+  private async getOutline(
+    pageId: string,
+    context: AiToolExecutionContext,
+    cursor?: string,
+  ): Promise<AiToolExecutionResult> {
+    const page = await this.getReadablePage(pageId, context);
+    const document =
+      context.source === 'agent' && context.currentPageId === pageId
+        ? await this.getLivePageContent(pageId, context, 'read')
+        : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
+    const contentHash = hashProseMirrorJson(document);
+    const content = paginateReadItems(
+      getAiPageOutline(document),
+      { pageId, contentHash },
+      {
+        tool: 'getOutline',
+        resource: pageId,
+        version: contentHash,
+        cursor,
+        limit: 300,
+      },
+    );
+    const citations = await this.pageCitations(page, document, context);
+    await this.revalidateReadDocument(pageId, contentHash, context);
+    return { content, citations };
   }
 
   private async getNode(
     pageId: string,
     nodeId: string,
     context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
     const document =
       context.source === 'agent' && context.currentPageId === pageId
         ? await this.getLivePageContent(pageId, context, 'read')
         : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
-    const node = getAiPageNode(document, nodeId);
-    return {
-      content: {
-        pageId,
-        nodeId,
-        contentHash: hashProseMirrorJson(document),
-        node,
-      },
-      citations: await this.pageCitations(page, document, context, nodeId),
+    const contentHash = hashProseMirrorJson(document);
+    let node: ProseMirrorJson;
+    try {
+      node = getAiPageNode(document, nodeId);
+    } catch {
+      throw new NotFoundException('Page node not found or ambiguous');
+    }
+    const base = { pageId, nodeId, contentHash };
+    let content: Record<string, any> = {
+      ...base,
+      node,
+      truncated: false,
+      nextCursor: null,
     };
+    if (cursor || !readResultFits(content))
+      content = paginateReadText(
+        JSON.stringify(node),
+        { ...base, node: null, encoding: 'json' },
+        {
+          tool: 'getNode',
+          resource: `${pageId}:${nodeId}`,
+          version: contentHash,
+          cursor,
+          field: 'nodeJsonChunk',
+        },
+      );
+    const citations = await this.pageCitations(page, document, context, nodeId);
+    await this.revalidateReadDocument(pageId, contentHash, context);
+    return { content, citations };
   }
 
   private async searchInPage(
@@ -1523,6 +1750,294 @@ export class AiToolRegistryService {
       content: { pageId, items },
       citations: await this.pageCitations(page, undefined, context),
     };
+  }
+
+  private async getComment(
+    pageId: string,
+    commentId: string,
+    context: AiToolExecutionContext,
+    cursor?: string,
+  ): Promise<AiToolExecutionResult> {
+    const page = await this.getReadablePage(pageId, context);
+    const load = () =>
+      this.db
+        .selectFrom('comments as comment')
+        .leftJoin('users as creator', 'creator.id', 'comment.creatorId')
+        .leftJoin('users as resolver', 'resolver.id', 'comment.resolvedById')
+        .select([
+          'comment.id',
+          'comment.parentCommentId',
+          'comment.type',
+          'comment.selection',
+          'comment.content',
+          'comment.createdAt',
+          'comment.updatedAt',
+          'comment.editedAt',
+          'comment.resolvedAt',
+          'creator.id as creatorId',
+          'creator.name as creatorName',
+          'resolver.id as resolvedById',
+          'resolver.name as resolvedByName',
+        ])
+        .where('comment.id', '=', commentId)
+        .where('comment.pageId', '=', pageId)
+        .where('comment.workspaceId', '=', context.workspaceId)
+        .where('comment.spaceId', '=', context.spaceId)
+        .where('comment.deletedAt', 'is', null)
+        .executeTakeFirst();
+    const row = await load();
+    if (!row) throw new NotFoundException('Comment not found');
+    const { content: document, selection, ...metadata } = row;
+    const version = hashReadVersion(row);
+    const text = getProseMirrorText((document ?? {}) as ProseMirrorJson);
+    const base = {
+      pageId,
+      ...metadata,
+      selection: typeof selection === 'string' ? selection : null,
+      version,
+    };
+    const options = {
+      tool: 'getComment',
+      resource: `${pageId}:${commentId}`,
+      version,
+      cursor,
+    };
+    const content = readResultFits(base, 8 * 1024)
+      ? paginateReadText(text, base, options)
+      : paginateReadText(
+          JSON.stringify({ ...base, content: text }),
+          { pageId, commentId, version, encoding: 'json' },
+          { ...options, field: 'commentJsonChunk' },
+        );
+    const citations = await this.pageCitations(page, undefined, context);
+    await this.getReadablePage(pageId, context);
+    if (hashReadVersion(await load()) !== version)
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Comment changed; restart reading',
+      });
+    return { content, citations };
+  }
+
+  private async getPageVersion(
+    pageId: string,
+    historyId: string,
+    context: AiToolExecutionContext,
+    cursor?: string,
+  ): Promise<AiToolExecutionResult> {
+    const page = await this.getReadablePage(pageId, context);
+    const load = () =>
+      this.db
+        .selectFrom('pageHistory')
+        .select([
+          'id',
+          'pageId',
+          'workspaceId',
+          'spaceId',
+          'title',
+          'version',
+          'content',
+          'createdAt',
+          'updatedAt',
+        ])
+        .where('id', '=', historyId)
+        .where('pageId', '=', pageId)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('spaceId', '=', context.spaceId)
+        .executeTakeFirst();
+    const row = await load();
+    if (!row?.content) throw new NotFoundException('Page history not found');
+    const version = hashReadVersion(row);
+    const content = paginateReadText(
+      getProseMirrorText(row.content as ProseMirrorJson),
+      {
+        pageId,
+        historyId,
+        title: row.title,
+        historyVersion: row.version,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        version,
+      },
+      {
+        tool: 'getPageVersion',
+        resource: `${pageId}:${historyId}`,
+        version,
+        cursor,
+      },
+    );
+    const citations = await this.pageCitations(page, undefined, context);
+    await this.getReadablePage(pageId, context);
+    if (hashReadVersion(await load()) !== version)
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Page history changed; restart reading',
+      });
+    return { content, citations };
+  }
+
+  private async getDatabaseCellContent(
+    pageId: string,
+    propertyId: string,
+    context: AiToolExecutionContext,
+    cursor?: string,
+  ): Promise<AiToolExecutionResult> {
+    const load = async () => {
+      const page = await this.getReadablePage(pageId, context);
+      const row = await this.db
+        .selectFrom('databaseRows')
+        .select(['id', 'databaseId', 'pageId', 'createdAt', 'updatedAt'])
+        .where('pageId', '=', pageId)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('archivedAt', 'is', null)
+        .executeTakeFirst();
+      if (!row) throw new NotFoundException('Database row not found');
+      const database = await this.getReadableDatabase(row.databaseId, context);
+      const properties = await this.db
+        .selectFrom('databaseProperties')
+        .select(['id', 'name', 'type', 'settings'])
+        .where('databaseId', '=', database.id)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('deletedAt', 'is', null)
+        .execute();
+      const property = properties.find((item) => item.id === propertyId);
+      if (!property) throw new NotFoundException('Database property not found');
+      const cells = await this.db
+        .selectFrom('databaseCells')
+        .select(['id', 'pageId', 'propertyId', 'value', 'attachmentId'])
+        .where('databaseId', '=', database.id)
+        .where('pageId', '=', pageId)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('deletedAt', 'is', null)
+        .execute();
+      const resolved = (
+        await resolveComputedDatabaseRows(
+          this.db,
+          [{ ...row, cells }],
+          properties,
+          database.id,
+          context.workspaceId,
+        )
+      )[0];
+      if (!resolved) throw new ConflictException('Database row access changed');
+      const cell = resolved.cells.find(
+        (item) => item.propertyId === propertyId,
+      );
+      return {
+        page,
+        database,
+        property,
+        value: cell ? this.curatedDatabaseCell(cell).value : null,
+        schema: properties,
+      };
+    };
+    const row = await load();
+    const version = hashReadVersion([row.database.id, row.schema, row.value]);
+    const content = paginateReadText(
+      JSON.stringify(row.value),
+      {
+        pageId,
+        databaseId: row.database.id,
+        propertyId,
+        propertyName: row.property.name,
+        propertyType: row.property.type,
+        encoding: 'json',
+        version,
+      },
+      {
+        tool: 'getDatabaseCellContent',
+        resource: `${pageId}:${propertyId}`,
+        version,
+        cursor,
+        field: 'valueJsonChunk',
+      },
+    );
+    const citations = await this.pageRootCitations(
+      [
+        { pageId, type: 'database_row' },
+        { pageId: row.database.pageId, type: 'page' },
+      ],
+      context,
+    );
+    const current = await load();
+    if (
+      hashReadVersion([current.database.id, current.schema, current.value]) !==
+      version
+    )
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Database cell changed; restart reading',
+      });
+    return { content, citations };
+  }
+
+  private async getPageMetadata(
+    pageId: string,
+    context: AiToolExecutionContext,
+    cursor?: string,
+  ): Promise<AiToolExecutionResult> {
+    const page = await this.getReadablePage(pageId, context);
+    const metadata = await this.resolvePageMetadata(page, context);
+    const version = hashReadVersion(metadata);
+    const content = paginateReadText(
+      JSON.stringify(metadata),
+      { pageId, encoding: 'json', version },
+      {
+        tool: 'getPageMetadata',
+        resource: pageId,
+        version,
+        cursor,
+        field: 'metadataJsonChunk',
+      },
+    );
+    const citations = await this.pageCitations(page, undefined, context);
+    const current = await this.getReadablePage(pageId, context);
+    if (
+      hashReadVersion(await this.resolvePageMetadata(current, context)) !==
+      version
+    )
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Page metadata changed; restart reading',
+      });
+    return { content, citations };
+  }
+
+  private async revalidateReadDocument(
+    pageId: string,
+    contentHash: string,
+    context: AiToolExecutionContext,
+  ) {
+    const page = await this.getReadablePage(pageId, context);
+    const document =
+      context.source === 'agent' && context.currentPageId === pageId
+        ? await this.getLivePageContent(pageId, context, 'read')
+        : ((page.content ?? { type: 'doc', content: [] }) as ProseMirrorJson);
+    if (hashProseMirrorJson(document) !== contentHash)
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Document changed; restart reading',
+      });
+  }
+
+  private async assertReadResults(
+    ids: string[],
+    context: AiToolExecutionContext,
+  ) {
+    if (!ids.length) return;
+    const snapshot = await this.pageAccess.getSidebarAccessSnapshot(
+      context.user,
+      context.spaceId,
+    );
+    const excluded = await this.contentPolicy.getExcludedPageIds(
+      context.spaceId,
+      context.workspaceId,
+    );
+    if (ids.some((id) => !snapshot.readablePageIds.has(id) || excluded.has(id)))
+      throw new ConflictException({
+        code: 'MCP_SOURCE_CHANGED',
+        message: 'Source access changed; restart reading',
+      });
   }
 
   private async getWorkspaceContext(
@@ -1594,6 +2109,7 @@ export class AiToolRegistryService {
   private async getDatabaseContext(
     databaseId: string,
     context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const database = await this.getReadableDatabase(databaseId, context);
     const databasePage = await this.getReadablePage(database.pageId, context);
@@ -1620,13 +2136,19 @@ export class AiToolRegistryService {
       context,
     );
     return {
-      content: {
-        database: { ...this.curatedDatabase(database), ...projectedFields },
-        properties: properties.map((property) =>
-          this.curatedDatabaseProperty(property),
-        ),
-        views,
-      },
+      content: this.boundReadContext(
+        'getDatabaseContext',
+        databaseId,
+        {
+          database: { ...this.curatedDatabase(database), ...projectedFields },
+          properties: properties.map((property) =>
+            this.curatedDatabaseProperty(property),
+          ),
+          views,
+        },
+        cursor,
+        24 * 1024,
+      ),
       citations: await this.pageRootCitations(
         [{ pageId: database.pageId, type: 'page' }],
         context,
@@ -1762,10 +2284,22 @@ export class AiToolRegistryService {
           customFields,
           memberNames,
         ),
-        cells: rendered.cells,
+        cells: this.compactReadCells(rendered.cells, row.pageId),
       };
     });
-    const fitted = fitAiToolItems(items, 28 * 1024);
+    for (let index = 0; index < items.length; index++) {
+      if (!readResultFits(items[index], 24 * 1024)) {
+        items[index] = {
+          ...items[index],
+          cells: [],
+          cellsTruncated: true,
+          cellContentTool: 'getDatabaseCellContent',
+        } as (typeof items)[number];
+      }
+    }
+    const fitted = fitAiToolItems(items, 27 * 1024);
+    if (fitted.truncated && !fitted.items.length)
+      throw new AiToolResultLimitError();
     const consumedRows = fitted.truncated
       ? Math.max(
           1,
@@ -1828,6 +2362,7 @@ export class AiToolRegistryService {
   private async getDatabaseRowContext(
     pageId: string,
     context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
     const row = await this.db
@@ -1873,20 +2408,26 @@ export class AiToolRegistryService {
       cells,
     );
     return {
-      content: {
-        database: this.curatedDatabase(database),
-        row: {
-          ...row,
-          title: page.title,
-          slugId: page.slugId,
-          icon: page.icon,
-          ...projectedFields,
+      content: this.boundReadContext(
+        'getDatabaseRowContext',
+        pageId,
+        {
+          database: this.curatedDatabase(database),
+          row: {
+            ...row,
+            title: page.title,
+            slugId: page.slugId,
+            icon: page.icon,
+            ...projectedFields,
+          },
+          properties: properties.map((property) =>
+            this.curatedDatabaseProperty(property),
+          ),
+          cells: this.compactReadCells(renderedCells.cells, pageId),
         },
-        properties: properties.map((property) =>
-          this.curatedDatabaseProperty(property),
-        ),
-        cells: renderedCells.cells,
-      },
+        cursor,
+        24 * 1024,
+      ),
       citations: await this.pageRootCitations(
         [
           { pageId: page.id, type: 'database_row' },
@@ -1901,48 +2442,98 @@ export class AiToolRegistryService {
     pageId: string,
     tableRef: string,
     context: AiToolExecutionContext,
+    cursor?: string,
   ): Promise<AiToolExecutionResult> {
     const page = await this.getReadablePage(pageId, context);
     const document = (page.content ?? {
       type: 'doc',
       content: [],
     }) as ProseMirrorJson;
+    const contentHash = hashProseMirrorJson(document);
     const resolved = this.findTable(document, tableRef);
     if (!resolved) throw new NotFoundException('Table not found');
-    const rows = Array.isArray(resolved.table.content)
-      ? resolved.table.content.filter((node) => node?.type === 'tableRow')
-      : [];
-    const cells = rows.map((row) =>
-      (row.content ?? []).map((cell) =>
-        getProseMirrorText(cell).slice(0, 2000),
-      ),
-    );
-    const cellIds = rows.map((row) =>
-      (row.content ?? []).map((cell) => {
-        const paragraph = Array.isArray(cell?.content) ? cell.content[0] : null;
-        return typeof paragraph?.attrs?.id === 'string'
-          ? paragraph.attrs.id
-          : null;
-      }),
-    );
-    const rowItems = cells.map((row, index) => ({
-      cells: row,
-      cellIds: cellIds[index],
-    }));
-    const fitted = fitAiToolItems(rowItems, 28 * 1024);
-    return {
-      content: {
-        pageId,
-        tableRef,
-        path: resolved.path,
-        rows: rows.length,
-        cols: cells[0]?.length ?? 0,
-        cells: fitted.items.map((row) => row.cells),
-        cellIds: fitted.items.map((row) => row.cellIds),
-        truncated: fitted.truncated,
-      },
-      citations: await this.pageCitations(page, document, context, tableRef),
+    const nodes = new Map<ProseMirrorJson, string>();
+    let index = 0;
+    // Indexes advance for every structural node, including nodes with stable IDs.
+    index = 0;
+    const indexNodes = (node: ProseMirrorJson) => {
+      if (node.type !== 'doc' && node.type !== 'text') {
+        nodes.set(
+          node,
+          typeof node.attrs?.id === 'string' ? node.attrs.id : `#${index}`,
+        );
+        index++;
+      }
+      for (const child of node.content ?? []) indexNodes(child);
     };
+    indexNodes(document);
+    const rows = (resolved.table.content ?? []).filter(
+      (node) => node.type === 'tableRow',
+    );
+    const items = rows.flatMap((row, rowIndex) => {
+      const cells = row.content ?? [];
+      return Array.from(
+        { length: Math.max(1, Math.ceil(cells.length / 50)) },
+        (_, fragment) => {
+          const selected = cells.slice(fragment * 50, (fragment + 1) * 50);
+          return {
+            rowIndex,
+            columnOffset: fragment * 50,
+            cells: selected.map((cell) =>
+              getProseMirrorText(cell).slice(0, 1000),
+            ),
+            cellIds: selected.map((cell) =>
+              typeof cell.content?.[0]?.attrs?.id === 'string'
+                ? cell.content[0].attrs.id
+                : null,
+            ),
+            cellRefs: selected.map((cell) => nodes.get(cell) ?? null),
+            cellTruncated: selected.map(
+              (cell) => getProseMirrorText(cell).length > 1000,
+            ),
+          };
+        },
+      );
+    });
+    // A wide row still has a readable reference for each cell.
+    for (let i = 0; i < items.length; i++)
+      if (!readResultFits(items[i], 12 * 1024)) {
+        items[i].cells = items[i].cells.map(() => '');
+        items[i].cellTruncated = items[i].cellTruncated.map(() => true);
+      }
+    const base = {
+      pageId,
+      tableRef,
+      contentHash,
+      path: resolved.path,
+      rows: rows.length,
+      cols: rows[0]?.content?.length ?? 0,
+    };
+    const fitted = paginateReadItems(items, base, {
+      tool: 'getTable',
+      resource: `${pageId}:${tableRef}`,
+      version: contentHash,
+      cursor,
+      maxBytes: 30 * 1024,
+    });
+    const { items: selected, ...rest } = fitted;
+    const content = {
+      ...rest,
+      cells: selected.map((row: any) => row.cells),
+      cellIds: selected.map((row: any) => row.cellIds),
+      rowIndices: selected.map((row: any) => row.rowIndex),
+      columnOffsets: selected.map((row: any) => row.columnOffset),
+      cellRefs: selected.map((row: any) => row.cellRefs),
+      cellTruncated: selected.map((row: any) => row.cellTruncated),
+    };
+    const citations = await this.pageCitations(
+      page,
+      document,
+      context,
+      tableRef,
+    );
+    await this.revalidateReadDocument(pageId, contentHash, context);
+    return { content, citations };
   }
 
   private async listComments(
@@ -2552,6 +3143,58 @@ export class AiToolRegistryService {
     return database;
   }
 
+  private compactReadCells<T extends { propertyId: string; value: unknown }>(
+    cells: T[],
+    pageId: string,
+  ) {
+    return cells.map((cell) =>
+      readResultFits(cell, 2048)
+        ? cell
+        : {
+            ...cell,
+            value: null,
+            valueTruncated: true,
+            valueRef: {
+              tool: 'getDatabaseCellContent',
+              pageId,
+              propertyId: cell.propertyId,
+            },
+          },
+    );
+  }
+
+  private boundReadContext(
+    tool: string,
+    resource: string,
+    full: Record<string, any>,
+    cursor: string | undefined,
+    maxBytes: number,
+  ) {
+    if (!cursor && readResultFits(full, maxBytes)) return full;
+    const version = hashReadVersion(full);
+    return paginateReadText(
+      JSON.stringify(full),
+      {
+        database: full.database
+          ? {
+              id: full.database.id,
+              pageId: full.database.pageId,
+              name: full.database.name,
+            }
+          : undefined,
+        row: full.row
+          ? { id: full.row.id, pageId: full.row.pageId, title: full.row.title }
+          : undefined,
+        properties: [],
+        cells: [],
+        views: [],
+        encoding: 'json',
+        version,
+      },
+      { tool, resource, version, cursor, maxBytes, field: 'contextJsonChunk' },
+    );
+  }
+
   private curatedDatabase(database: any) {
     return {
       id: database.id,
@@ -2615,41 +3258,20 @@ export class AiToolRegistryService {
     document: ProseMirrorJson,
     tableRef: string,
   ): { table: ProseMirrorJson; path: number[] } | null {
-    const targetIndex = /^#(\d+)$/.exec(tableRef);
-    if (targetIndex) {
-      const index = Number(targetIndex[1]);
-      const node = document.content?.[index];
-      if (!node) return null;
-      if (node.type === 'table') return { table: node, path: [index] };
-      return this.findTableContaining(node, tableRef, [index]);
-    }
-    return this.findTableContaining(document, tableRef, []);
-  }
-
-  private findTableContaining(
-    node: ProseMirrorJson,
-    tableRef: string,
-    path: number[],
-  ): { table: ProseMirrorJson; path: number[] } | null {
-    if (node.type === 'table') {
-      if (this.containsNodeId(node, tableRef)) return { table: node, path };
+    let target: number[];
+    try {
+      target = getAiPageNodePath(document, tableRef);
+    } catch {
       return null;
     }
-    for (let index = 0; index < (node.content?.length ?? 0); index += 1) {
-      const result = this.findTableContaining(node.content![index], tableRef, [
-        ...path,
-        index,
-      ]);
-      if (result) return result;
+    let node = document;
+    let table: { table: ProseMirrorJson; path: number[] } | null = null;
+    for (let index = 0; index < target.length; index++) {
+      node = node.content![target[index]];
+      if (node.type === 'table')
+        table = { table: node, path: target.slice(0, index + 1) };
     }
-    return null;
-  }
-
-  private containsNodeId(node: ProseMirrorJson, nodeId: string): boolean {
-    if (node.attrs?.id === nodeId) return true;
-    return (node.content ?? []).some((child) =>
-      this.containsNodeId(child, nodeId),
-    );
+    return table;
   }
 
   private encodeCursor(
@@ -2958,7 +3580,33 @@ export class AiToolRegistryService {
   }
 
   private async projectPageDocumentFields(
-    page: { settings?: unknown },
+    page: any,
+    context: AiToolExecutionContext,
+  ) {
+    const { id: _pageId, ...metadata } = await this.resolvePageMetadata(
+      page,
+      context,
+    );
+    if (readResultFits(metadata, 8 * 1024)) return metadata;
+    return {
+      ...metadata,
+      contributors: metadata.contributors.slice(0, 5),
+      labels: metadata.labels.slice(0, 5),
+      stakeholders: metadata.stakeholders.slice(0, 5),
+      customFields: metadata.customFields
+        ? {
+            ...metadata.customFields,
+            stakeholderIds: metadata.customFields.stakeholderIds?.slice(0, 20),
+          }
+        : undefined,
+      documentFieldsMarkdown: metadata.documentFieldsMarkdown.slice(0, 1000),
+      metadataTruncated: true,
+      metadataRef: { tool: 'getPageMetadata', pageId: page.id },
+    };
+  }
+
+  private async resolvePageMetadata(
+    page: any,
     context: AiToolExecutionContext,
   ) {
     const space = await this.db
@@ -2967,17 +3615,120 @@ export class AiToolRegistryService {
       .where('id', '=', context.spaceId)
       .where('workspaceId', '=', context.workspaceId)
       .executeTakeFirstOrThrow();
-    const config = this.knowledgeProjection.getDocumentFieldsConfig(space);
     const customFields = this.knowledgeProjection.buildCustomFields(
       page.settings,
-      config,
+      this.knowledgeProjection.getDocumentFieldsConfig(space),
     );
     const members = await this.knowledgeProjection.resolveMembers(
       context.workspaceId,
       [customFields],
     );
+    const contributorIds = Array.isArray(page.contributorIds)
+      ? page.contributorIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const ids = [
+      ...new Set(
+        [
+          page.creatorId,
+          page.lastUpdatedById,
+          ...contributorIds,
+          customFields?.assigneeId,
+          ...(customFields?.stakeholderIds ?? []),
+        ].filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+    const users = ids.length
+      ? await this.db
+          .selectFrom('users')
+          .select(['id', 'name', 'avatarUrl'])
+          .where('workspaceId', '=', context.workspaceId)
+          .where('id', 'in', ids)
+          .execute()
+      : [];
+    const actors = new Map(
+      users.map((user) => [
+        user.id,
+        { id: user.id, name: user.name, avatarUrl: user.avatarUrl },
+      ]),
+    );
+    const actor = (id: string | undefined | null) =>
+      id
+        ? (actors.get(id) ?? {
+            id,
+            name: members.get(id)?.name ?? null,
+            avatarUrl: null,
+          })
+        : null;
+    const [labels, root, row, snapshot, excluded] = await Promise.all([
+      this.db
+        .selectFrom('labels')
+        .innerJoin('pageLabels', 'pageLabels.labelId', 'labels.id')
+        .select(['labels.id', 'labels.name', 'labels.type'])
+        .where('pageLabels.pageId', '=', page.id)
+        .where('labels.workspaceId', '=', context.workspaceId)
+        .where('labels.spaceId', '=', context.spaceId)
+        .orderBy('labels.id', 'asc')
+        .execute(),
+      this.db
+        .selectFrom('databases')
+        .select(['id', 'pageId'])
+        .where('pageId', '=', page.id)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('spaceId', '=', context.spaceId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('databaseRows')
+        .select(['databaseId'])
+        .where('pageId', '=', page.id)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('archivedAt', 'is', null)
+        .executeTakeFirst(),
+      this.pageAccess.getSidebarAccessSnapshot(context.user, context.spaceId),
+      this.contentPolicy.getExcludedPageIds(
+        context.spaceId,
+        context.workspaceId,
+      ),
+    ]);
+    let databaseId = root?.id ?? null;
+    if (!databaseId && row) {
+      const database = await this.db
+        .selectFrom('databases')
+        .select(['id', 'pageId'])
+        .where('id', '=', row.databaseId)
+        .where('workspaceId', '=', context.workspaceId)
+        .where('spaceId', '=', context.spaceId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst();
+      if (
+        database &&
+        snapshot.readablePageIds.has(database.pageId) &&
+        !excluded.has(database.pageId)
+      )
+        databaseId = database.id;
+    }
     return {
+      id: page.id,
+      spaceId: context.spaceId,
+      type: root ? 'database' : row ? 'database_row' : 'page',
+      databaseId,
+      parentPageId:
+        page.parentPageId &&
+        snapshot.readablePageIds.has(page.parentPageId) &&
+        !excluded.has(page.parentPageId)
+          ? page.parentPageId
+          : null,
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
+      icon: page.icon ?? null,
+      isLocked: Boolean(page.isLocked),
+      creator: actor(page.creatorId),
+      lastUpdatedBy: actor(page.lastUpdatedById),
+      contributors: contributorIds.map(actor),
+      labels,
       customFields,
+      assignee: actor(customFields?.assigneeId),
+      stakeholders: (customFields?.stakeholderIds ?? []).map(actor),
       documentFieldsMarkdown: this.knowledgeProjection.renderDocumentFields(
         customFields,
         this.knowledgeProjection.memberNames(members),

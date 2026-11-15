@@ -2,7 +2,9 @@ import {
   All,
   Body,
   Controller,
+  ConflictException,
   HttpException,
+  Optional,
   Req,
   Res,
   UseGuards,
@@ -32,6 +34,9 @@ import {
   type McpToolPrincipal,
 } from '../ai/tools/ai-builtin-tool-policy.service';
 import { McpOAuthService } from './oauth/mcp-oauth.service';
+import { ApiKeyValidationService } from '../api-key/api-key-validation.service';
+import { TokenService } from '../auth/services/token.service';
+import { JwtType } from '../auth/dto/jwt-payload';
 
 /*
  * The shared tool-registry approach and Streamable HTTP adapter were adapted
@@ -47,6 +52,8 @@ export class McpController {
     private readonly traffic: ApiKeyTrafficService,
     private readonly toolPolicy: AiBuiltinToolPolicyService,
     private readonly oauth: McpOAuthService,
+    @Optional() private readonly apiKeys?: ApiKeyValidationService,
+    @Optional() private readonly tokens?: TokenService,
   ) {}
 
   @All()
@@ -101,7 +108,21 @@ export class McpController {
             source: 'mcp',
           },
         );
-        await this.revalidateOAuth(request, workspace);
+        const current = await this.revalidateOAuth(request, workspace);
+        if (
+          actor &&
+          current &&
+          (actor.user.id !== current.user.id ||
+            actor.user.role !== current.user.role)
+        )
+          throw new ConflictException({
+            code: 'MCP_SOURCE_CHANGED',
+            message: 'Source access changed; restart reading',
+          });
+        await this.toolPolicy.assertMcpToolAllowed(
+          current?.mcpScope ?? principal,
+          call.params.name,
+        );
         const text = JSON.stringify(result.content);
         this.traffic.observeMcpTool(
           'success',
@@ -125,6 +146,7 @@ export class McpController {
         );
         return {
           isError: true,
+          structuredContent: this.safeErrorDetails(error, text),
           content: [
             {
               type: 'text' as const,
@@ -148,12 +170,45 @@ export class McpController {
   }
 
   private async revalidateOAuth(request: FastifyRequest, workspace: Workspace) {
-    if ((request as any).user?.authType !== 'mcp_oauth') return null;
     const token = /^Bearer (\S+)$/i.exec(
       String(request.headers?.authorization ?? ''),
     )?.[1];
+    if ((request as any).user?.authType === 'mcp_oauth') {
+      if (!token) throw new HttpException('MCP authorization is invalid', 401);
+      return this.oauth.authenticate(workspace, token);
+    }
+    if ((request as any).user?.authType !== 'api_key') return null;
+    if (!this.apiKeys || !this.tokens) {
+      if ((request as any).user?.authType === 'api_key')
+        throw new HttpException('MCP authorization is unavailable', 503);
+      return null;
+    }
     if (!token) throw new HttpException('MCP authorization is invalid', 401);
-    return this.oauth.authenticate(workspace, token);
+    const payload = await this.tokens.verifyJwt(token, JwtType.API_KEY);
+    const actor = await this.apiKeys.validateApiKey(payload, 'mcp');
+    if (actor.workspace.id !== workspace.id)
+      throw new HttpException('MCP authorization is invalid', 401);
+    return { user: actor.user, mcpScope: actor.apiKey };
+  }
+
+  private safeErrorDetails(error: unknown, message: string) {
+    const response =
+      error instanceof HttpException ? error.getResponse() : null;
+    const code =
+      response &&
+      typeof response === 'object' &&
+      typeof (response as any).code === 'string'
+        ? String((response as any).code).slice(0, 64)
+        : error instanceof HttpException
+          ? `MCP_HTTP_${error.getStatus()}`
+          : 'MCP_INTERNAL_ERROR';
+    return {
+      code,
+      message,
+      retryable:
+        error instanceof HttpException &&
+        [409, 429, 503].includes(error.getStatus()),
+    };
   }
 
   private safeError(error: unknown): string {

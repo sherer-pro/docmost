@@ -1,5 +1,5 @@
 {
-  "version": 44,
+  "version": 45,
   "anchors": [
     "assistant",
     "retrieval",
@@ -261,6 +261,19 @@
         "50 MiB",
         "1000000"
       ]
+    },
+    {
+      "id": "bounded-complete-mcp-reads",
+      "key": "scenario.inboundMcp.technical",
+      "needles": [
+        "getPageMetadata",
+        "getAttachmentText",
+        "getAttachmentFileChunk",
+        "nextCursor",
+        "MCP_SOURCE_CHANGED",
+        "32 KiB",
+        "16 KiB"
+      ]
     }
   ],
   "requiredKeys": [
@@ -459,6 +472,9 @@
     "scenario.retrieval.steps.step7",
     "scenario.assistant.steps.step14",
     "scenario.assistant.steps.step15",
-    "scenario.assistant.steps.step16"
+    "scenario.assistant.steps.step16",
+    "scenario.inboundMcp.steps.step5",
+    "scenario.inboundMcp.steps.step6",
+    "scenario.inboundMcp.steps.step7"
   ]
 }

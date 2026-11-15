@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { STORAGE_DRIVER_TOKEN } from './constants/storage.constants';
-import { StorageDriver } from './interfaces';
+import { StorageDriver, VersionedStorageRange } from './interfaces';
 import { Readable } from 'stream';
 
 @Injectable()
@@ -46,6 +46,20 @@ export class StorageService {
 
   async exists(filePath: string): Promise<boolean> {
     return this.storageDriver.exists(filePath);
+  }
+
+  async readVersionedRange(
+    filePath: string,
+    offset: number,
+    maxBytes: number,
+    expectedVersion?: string,
+  ): Promise<VersionedStorageRange> {
+    return this.storageDriver.readVersionedRange(
+      filePath,
+      offset,
+      maxBytes,
+      expectedVersion,
+    );
   }
 
   async getSignedUrl(path: string, expireIn: number): Promise<string> {

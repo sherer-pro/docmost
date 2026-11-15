@@ -35,6 +35,7 @@ import { AiAuxRunService } from './services/ai-aux-run.service';
 import { AiAuxRunExecutionService } from './services/ai-aux-run-execution.service';
 import { AiAuxRunEventService } from './services/ai-aux-run-event.service';
 import { AiToolRegistryService } from './tools/ai-tool-registry.service';
+import { AiAttachmentReadService } from './tools/ai-attachment-read.service';
 import { AiDatabaseService } from './services/ai-database.service';
 import { AiDatabaseResultService } from './services/ai-database-result.service';
 import { AiDatabaseResultController } from './controllers/ai-database-result.controller';
@@ -127,6 +128,7 @@ import { StorageModule } from '../../integrations/storage/storage.module';
     AiAuxRunExecutionService,
     AiAuxRunEventService,
     AiToolRegistryService,
+    AiAttachmentReadService,
     AiDatabaseService,
     AiDatabaseResultService,
     AiBuiltinToolPolicyService,

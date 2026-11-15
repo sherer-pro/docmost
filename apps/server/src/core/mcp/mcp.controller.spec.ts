@@ -13,8 +13,25 @@ describe('McpController protocol', () => {
   let httpServer: HttpServer;
   let client: Client;
   let oauthRequest = false;
-  const oauthActor = { user: { id: 'user-1' }, mcpScope: { workspaceId: 'workspace-1', spaceId: 'space-1', allowedCapabilities: [] } };
+  let apiKeyRequest = false;
+  const oauthActor = {
+    user: { id: 'user-1', role: 'admin' },
+    mcpScope: {
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      allowedCapabilities: [],
+    },
+  };
   const oauth = { authenticate: jest.fn().mockResolvedValue(oauthActor) };
+  const keyActor = {
+    user: { id: 'user-1', role: 'admin' },
+    workspace: { id: 'workspace-1' },
+    apiKey: { id: 'key-1' },
+  };
+  const apiKeys = { validateApiKey: jest.fn().mockResolvedValue(keyActor) };
+  const tokens = {
+    verifyJwt: jest.fn().mockResolvedValue({ apiKeyId: 'key-1' }),
+  };
   const execute = jest.fn(async () => ({ content: { title: 'Allowed' } }));
   const tools = {
     list: jest.fn(() => [
@@ -48,6 +65,8 @@ describe('McpController protocol', () => {
       traffic as any,
       toolPolicy as any,
       oauth as any,
+      apiKeys as any,
+      tokens as any,
     );
     httpServer = createServer(async (request, response) => {
       try {
@@ -58,7 +77,22 @@ describe('McpController protocol', () => {
         const raw = Buffer.concat(chunks).toString('utf8');
         const body = raw ? JSON.parse(raw) : undefined;
         await controller.handle(
-          { raw: request, headers: { ...request.headers, ...(oauthRequest ? { authorization: 'Bearer dmoa_synthetic' } : {}) }, user: oauthRequest ? { authType: 'mcp_oauth' } : undefined } as any,
+          {
+            raw: request,
+            headers: {
+              ...request.headers,
+              ...(oauthRequest
+                ? { authorization: 'Bearer dmoa_synthetic' }
+                : apiKeyRequest
+                  ? { authorization: 'Bearer synthetic-api-key' }
+                  : {}),
+            },
+            user: oauthRequest
+              ? { authType: 'mcp_oauth' }
+              : apiKeyRequest
+                ? { authType: 'api_key' }
+                : undefined,
+          } as any,
           { raw: response, hijack: () => undefined } as any,
           body,
           { id: 'user-1' } as any,
@@ -92,6 +126,9 @@ describe('McpController protocol', () => {
 
   beforeEach(() => {
     oauthRequest = false;
+    apiKeyRequest = false;
+    apiKeys.validateApiKey.mockReset().mockResolvedValue(keyActor);
+    tokens.verifyJwt.mockReset().mockResolvedValue({ apiKeyId: 'key-1' });
     oauth.authenticate.mockReset().mockResolvedValue(oauthActor);
     execute.mockClear();
     toolPolicy.assertMcpToolAllowed.mockReset();
@@ -101,13 +138,93 @@ describe('McpController protocol', () => {
   it('discards a read result when OAuth is revoked before publication', async () => {
     oauthRequest = true;
     execute.mockImplementationOnce(async () => {
-      oauth.authenticate.mockRejectedValueOnce(new UnauthorizedException('Authorization revoked'));
+      oauth.authenticate.mockRejectedValueOnce(
+        new UnauthorizedException('Authorization revoked'),
+      );
       return { content: { title: 'OAUTH_RESULT_MUST_NOT_LEAK' } };
     });
-    const response = await client.callTool({ name: 'getPage', arguments: { pageId: 'page-1' } });
+    const response = await client.callTool({
+      name: 'getPage',
+      arguments: { pageId: 'page-1' },
+    });
     expect(response.isError).toBe(true);
-    expect(JSON.stringify(response)).not.toContain('OAUTH_RESULT_MUST_NOT_LEAK');
+    expect(JSON.stringify(response)).not.toContain(
+      'OAUTH_RESULT_MUST_NOT_LEAK',
+    );
     expect(oauth.authenticate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['api_key', 'mcp_oauth'])(
+    'discards a result when the %s actor loses their workspace role during a read',
+    async (authType) => {
+      apiKeyRequest = authType === 'api_key';
+      oauthRequest = authType === 'mcp_oauth';
+      execute.mockImplementationOnce(async () => {
+        if (apiKeyRequest)
+          apiKeys.validateApiKey.mockResolvedValueOnce({
+            ...keyActor,
+            user: { ...keyActor.user, role: 'user' },
+          });
+        else
+          oauth.authenticate.mockResolvedValueOnce({
+            ...oauthActor,
+            user: { ...oauthActor.user, role: 'user' },
+          });
+        return { content: { title: 'STALE_ADMIN_CONTENT_MUST_NOT_LEAK' } };
+      });
+      const result = await client.callTool({
+        name: 'getPage',
+        arguments: { pageId: 'page-1' },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        code: 'MCP_SOURCE_CHANGED',
+        retryable: true,
+      });
+      expect(JSON.stringify(result)).not.toContain(
+        'STALE_ADMIN_CONTENT_MUST_NOT_LEAK',
+      );
+    },
+  );
+
+  it('discards a result when the API key is revoked during a read', async () => {
+    apiKeyRequest = true;
+    execute.mockImplementationOnce(async () => {
+      apiKeys.validateApiKey.mockRejectedValueOnce(
+        new UnauthorizedException('Key revoked'),
+      );
+      return { content: { title: 'REVOKED_KEY_CONTENT_MUST_NOT_LEAK' } };
+    });
+    const result = await client.callTool({
+      name: 'getPage',
+      arguments: { pageId: 'page-1' },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(
+      'REVOKED_KEY_CONTENT_MUST_NOT_LEAK',
+    );
+    expect(result.structuredContent).toMatchObject({
+      code: 'MCP_HTTP_401',
+      retryable: false,
+    });
+    expect(apiKeys.validateApiKey).toHaveBeenCalledTimes(2);
+  });
+
+  it('discards a result when its live capability is removed before publication', async () => {
+    execute.mockImplementationOnce(async () => {
+      toolPolicy.assertMcpToolAllowed.mockRejectedValueOnce(
+        new ForbiddenException('Capability revoked'),
+      );
+      return { content: { title: 'REVOKED_CAPABILITY_CONTENT_MUST_NOT_LEAK' } };
+    });
+    const result = await client.callTool({
+      name: 'getPage',
+      arguments: { pageId: 'page-1' },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(
+      'REVOKED_CAPABILITY_CONTENT_MUST_NOT_LEAK',
+    );
   });
 
   it('lists only read-only MCP tools with safety annotations', async () => {

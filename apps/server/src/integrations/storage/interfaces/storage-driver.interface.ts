@@ -1,5 +1,17 @@
 import { Readable } from 'stream';
 
+export class StorageObjectChangedError extends Error {
+  constructor() {
+    super('Storage object changed');
+  }
+}
+
+export interface VersionedStorageRange {
+  data: Buffer;
+  size: number;
+  version: string;
+}
+
 export interface StorageDriver {
   upload(filePath: string, file: Buffer | Readable): Promise<void>;
 
@@ -19,6 +31,13 @@ export interface StorageDriver {
     filePath: string,
     range: { start: number; end: number },
   ): Promise<Readable>;
+
+  readVersionedRange(
+    filePath: string,
+    offset: number,
+    maxBytes: number,
+    expectedVersion?: string,
+  ): Promise<VersionedStorageRange>;
 
   exists(filePath: string): Promise<boolean>;
 

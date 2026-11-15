@@ -1719,11 +1719,14 @@
             "step1": "Activez OAuth utilisateur en tant qu’administrateur ou créez une clé API MCP limitée à un espace.",
             "step2": "Pour OAuth, enregistrez le client et approuvez un seul espace accessible dans l’écran de consentement.",
             "step3": "Testez initialize, tools/list et une lecture autorisée. Gérez les connexions OAuth dans les paramètres du compte.",
-            "step4": "L’accès est lié à votre session actuelle. La déconnexion, la révocation de la session ou celle de l’application met fin à l’accès."
+            "step4": "L’accès est lié à votre session actuelle. La déconnexion, la révocation de la session ou celle de l’application met fin à l’accès.",
+            "step5": "Autorisez explicitement commentaires, historique, métadonnées et pièces jointes nécessaires dans les politiques du workspace, de l’espace et de la clé. Les clés et connexions OAuth existantes ne reçoivent pas de nouveaux droits automatiquement.",
+            "step6": "Transmettez nextCursor jusqu’à ce que sa valeur soit null. En cas de MCP_SOURCE_CHANGED, recommencez la lecture de la source modifiée.",
+            "step7": "Utilisez getAttachmentText pour le texte déjà extrait. Autorisez séparément getAttachmentFileChunk et reconstituez le fichier original à partir de blocs Base64 de 16 KiB maximum."
           },
-          "success": "Les outils autorisés fonctionnent ; les capacités refusées et les lectures de pièces jointes binaires restent indisponibles",
+          "success": "Les données autorisées sont lues intégralement par continuation ; les capacités refusées et les autres espaces restent inaccessibles.",
           "rollback": "Révoquez la clé ou la connexion OAuth. La déconnexion met aussi fin à l’accès OAuth lié à la session.",
-          "technical": "/mcp accepte les clés API MCP ou les jetons OAuth, et refuse les jetons de connexion ordinaires et les clés RAG. /api/rag/* accepte uniquement les clés RAG. Workspace, utilisateur, appartenance, ACL et capacités sont revérifiés. OAuth utilise PKCE S256 et resource /mcp pour un espace choisi. Les codes durent 5 minutes, les jetons d’accès 15 minutes et les autorisations au plus 30 jours, dans la limite de la session ayant autorisé l’accès. Réutiliser un refresh token révoque la connexion. Désactiver OAuth révoque les accès et conserve les enregistrements. Les lots JSON-RPC de plus de 100 messages renvoient HTTP 400. OAuth: refresh_token."
+          "technical": "/mcp accepte les clés API MCP ou les jetons OAuth, et refuse les jetons de connexion ordinaires et les clés RAG. /api/rag/* accepte uniquement les clés RAG. Workspace, utilisateur, appartenance, ACL et capacités sont revérifiés. OAuth utilise PKCE S256 et resource /mcp pour un espace choisi. Les codes durent 5 minutes, les jetons d’accès 15 minutes et les autorisations au plus 30 jours, dans la limite de la session ayant autorisé l’accès. Réutiliser un refresh token révoque la connexion. Désactiver OAuth révoque les accès et conserve les enregistrements. Les lots JSON-RPC de plus de 100 messages renvoient HTTP 400. OAuth: refresh_token.\n\nChaque résultat est limité à 32 KiB et la continuation est liée à la version de la source. Le texte extrait et les fichiers originaux exigent des droits distincts. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Docmost Agent peut appeler des outils sur des serveurs MCP distants approuvés.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Supprimer un bloc de la page actuelle",
         "queryDatabaseView": "Interroger la vue de base",
         "summarizeDatabaseView": "Calculer les totaux de la base",
-        "proposeDatabaseCells": "Proposer des modifications de cellules"
+        "proposeDatabaseCells": "Proposer des modifications de cellules",
+        "getDatabaseCellContent": "Lire la valeur complète de cellule",
+        "getComment": "Lire le commentaire complet",
+        "getPageVersion": "Lire une version enregistrée",
+        "getAttachmentText": "Lire le texte de la pièce jointe",
+        "getAttachmentFileChunk": "Lire la pièce jointe originale",
+        "getPageMetadata": "Lire les métadonnées complètes"
       },
       "category": {
         "search": "Recherche",

@@ -1719,11 +1719,14 @@
             "step1": "Schakel gebruikers-OAuth als beheerder in of maak een ruimtegebonden MCP-API-sleutel.",
             "step2": "Registreer voor OAuth de client en keur precies één toegankelijke ruimte goed op het toestemmingsscherm.",
             "step3": "Test initialize, tools/list en een toegestane leesactie. Beheer OAuth-verbindingen in uw accountinstellingen.",
-            "step4": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang."
+            "step4": "Toegang is gekoppeld aan uw huidige sessie. Uitloggen, de sessie intrekken of de applicatie ontkoppelen beëindigt de toegang.",
+            "step5": "Sta reacties, geschiedenis, metadata en benodigde bijlagen expliciet toe in het beleid voor workspace, ruimte en sleutel. Bestaande sleutels en OAuth-verbindingen krijgen geen nieuwe rechten automatisch.",
+            "step6": "Geef nextCursor door totdat de waarde null is. Begin bij MCP_SOURCE_CHANGED opnieuw met het lezen van de gewijzigde bron.",
+            "step7": "Gebruik getAttachmentText voor al geëxtraheerde tekst. Sta getAttachmentFileChunk apart toe en stel het origineel samen uit Base64-blokken van maximaal 16 KiB."
           },
-          "success": "Toegestane tools werken; geweigerde mogelijkheden en het lezen van binaire bijlagen blijven niet beschikbaar",
+          "success": "Toegestane gegevens zijn volledig leesbaar via vervolgverzoeken; geweigerde functies en andere ruimtes blijven ontoegankelijk.",
           "rollback": "Trek de sleutel of OAuth-verbinding in. Uitloggen beëindigt ook de sessiegebonden OAuth-toegang.",
-          "technical": "/mcp accepteert MCP-API-sleutels of OAuth-tokens; gewone inlogtokens en RAG-sleutels worden geweigerd. /api/rag/* accepteert alleen RAG-sleutels. Workspace, gebruiker, lidmaatschap, pagina-ACL en mogelijkheden worden opnieuw gecontroleerd. OAuth gebruikt PKCE S256 en resource /mcp voor één gekozen ruimte. Codes gelden 5 minuten, toegangstokens 15 minuten, machtigingen maximaal 30 dagen en niet langer dan de autoriserende sessie. Hergebruik van een refresh token trekt de verbinding in. Uitschakelen trekt toegang in en behoudt gegevens. JSON-RPC-batches boven 100 berichten geven HTTP 400. OAuth: refresh_token."
+          "technical": "/mcp accepteert MCP-API-sleutels of OAuth-tokens; gewone inlogtokens en RAG-sleutels worden geweigerd. /api/rag/* accepteert alleen RAG-sleutels. Workspace, gebruiker, lidmaatschap, pagina-ACL en mogelijkheden worden opnieuw gecontroleerd. OAuth gebruikt PKCE S256 en resource /mcp voor één gekozen ruimte. Codes gelden 5 minuten, toegangstokens 15 minuten, machtigingen maximaal 30 dagen en niet langer dan de autoriserende sessie. Hergebruik van een refresh token trekt de verbinding in. Uitschakelen trekt toegang in en behoudt gegevens. JSON-RPC-batches boven 100 berichten geven HTTP 400. OAuth: refresh_token.\n\nElk resultaat is beperkt tot 32 KiB; vervolgverzoeken zijn gekoppeld aan de bronversie. Geëxtraheerde tekst en originele bestanden vereisen aparte rechten. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "De Docmost Agent kan tools op goedgekeurde externe MCP-servers aanroepen.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Een blok van de huidige pagina verwijderen",
         "queryDatabaseView": "Databaseweergave opvragen",
         "summarizeDatabaseView": "Databasetotalen berekenen",
-        "proposeDatabaseCells": "Celwijzigingen voorstellen"
+        "proposeDatabaseCells": "Celwijzigingen voorstellen",
+        "getDatabaseCellContent": "Volledige celwaarde lezen",
+        "getComment": "Volledige reactie lezen",
+        "getPageVersion": "Opgeslagen paginaversie lezen",
+        "getAttachmentText": "Bijlagetekst lezen",
+        "getAttachmentFileChunk": "Originele bijlage lezen",
+        "getPageMetadata": "Volledige paginametadata lezen"
       },
       "category": {
         "search": "Zoeken",

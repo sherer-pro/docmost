@@ -3,6 +3,7 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  GetObjectCommandOutput,
   HeadObjectCommand,
   NoSuchKey,
   NotFound,
@@ -15,6 +16,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getMimeType } from '../../../common/helpers';
 import { Upload } from '@aws-sdk/lib-storage';
 import { Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { StorageObjectChangedError } from '../interfaces/storage-driver.interface';
 
 export class S3Driver implements StorageDriver {
   private readonly s3Client: S3Client;
@@ -168,6 +171,99 @@ export class S3Driver implements StorageDriver {
       }
       throw err;
     }
+  }
+
+  async readVersionedRange(
+    filePath: string,
+    offset: number,
+    maxBytes: number,
+    expectedVersion?: string,
+  ) {
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isInteger(maxBytes) ||
+      maxBytes < 1 ||
+      maxBytes > 16 * 1024
+    )
+      throw new RangeError('Invalid file range');
+    const signal = AbortSignal.timeout(10000);
+    const head = () =>
+      this.s3Client.send(
+        new HeadObjectCommand({ Bucket: this.config.bucket, Key: filePath }),
+        { abortSignal: signal },
+      );
+    const fingerprint = (value: Awaited<ReturnType<typeof head>>) =>
+      createHash('sha256')
+        .update(
+          JSON.stringify([
+            value.ETag,
+            value.VersionId,
+            value.ContentLength,
+            value.LastModified,
+          ]),
+        )
+        .digest('hex');
+    const before = await head();
+    const size = before.ContentLength;
+    if (!before.ETag || !Number.isSafeInteger(size) || offset > size!)
+      throw new RangeError('Invalid storage object');
+    const version = fingerprint(before);
+    if (expectedVersion && expectedVersion !== version)
+      throw new StorageObjectChangedError();
+    let data = Buffer.alloc(0);
+    if (offset < size!) {
+      let response: GetObjectCommandOutput;
+      try {
+        response = await this.s3Client.send(
+          new GetObjectCommand({
+            Bucket: this.config.bucket,
+            Key: filePath,
+            Range: `bytes=${offset}-${Math.min(size! - 1, offset + maxBytes - 1)}`,
+            IfMatch: before.ETag,
+            VersionId: before.VersionId,
+          }),
+          { abortSignal: signal },
+        );
+      } catch (error) {
+        if (
+          (error as any)?.$metadata?.httpStatusCode === 412 ||
+          isMissingS3ObjectError(error)
+        )
+          throw new StorageObjectChangedError();
+        throw error;
+      }
+      const body = (response as any).Body as Readable;
+      const abort = () => body.destroy(new Error('Storage read timed out'));
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+      const chunks: Buffer[] = [];
+      let received = 0;
+      try {
+        for await (const chunk of body) {
+          const bytes = Buffer.from(chunk);
+          received += bytes.length;
+          if (received > maxBytes)
+            throw new Error('Storage range exceeds its limit');
+          chunks.push(bytes);
+        }
+      } finally {
+        signal.removeEventListener('abort', abort);
+        body.destroy();
+      }
+      if (received !== Math.min(maxBytes, size! - offset))
+        throw new StorageObjectChangedError();
+      data = Buffer.concat(chunks);
+    }
+    let current: Awaited<ReturnType<typeof head>>;
+    try {
+      current = await head();
+    } catch (error) {
+      if (isMissingS3ObjectError(error)) throw new StorageObjectChangedError();
+      throw error;
+    }
+    if (fingerprint(current) !== version) throw new StorageObjectChangedError();
+    return { data, size: size!, version };
   }
   getUrl(filePath: string): string {
     return `${this.config.baseUrl ?? this.config.endpoint}/${this.config.bucket}/${filePath}`;

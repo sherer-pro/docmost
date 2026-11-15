@@ -460,6 +460,7 @@ try {
     !process.argv.includes('--api-only') &&
     !process.argv.includes('--skip-postgres') &&
     !process.argv.includes('--mcp-oauth-only') &&
+    !process.argv.includes('--mcp-read-only') &&
     !process.argv.includes('--integration-previews-only') &&
     !process.argv.includes('--upstream-repairs-only') &&
     !process.argv.includes('--templates-only') &&

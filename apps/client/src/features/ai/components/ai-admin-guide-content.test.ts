@@ -13,9 +13,13 @@ import {
 
 describe("AI administrator guide contract", () => {
   it("keeps stable anchors and context-sensitive routes", () => {
-    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(44);
+    expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(45);
     expect(AI_ADMIN_GUIDE_CONTRACT_VERSION).toBe(guideContract.version);
     expect(AI_ADMIN_GUIDE_ANCHORS).toEqual(guideContract.anchors);
+    expect(
+      AI_ADMIN_GUIDE_SCENARIOS.find((item) => item.anchor === "inbound-mcp")
+        ?.stepKeys,
+    ).toEqual(["step1", "step2", "step3", "step4", "step5", "step6", "step7"]);
     expect(getAiAdminGuideAnchorFromHash("#rag-api")).toBe("rag-api");
     expect(getAiAdminGuideAnchorFromHash("#missing")).toBeNull();
     expect(getAiAdminGuidePanelFromHash("")).toBe("overview");
@@ -46,7 +50,10 @@ describe("AI administrator guide contract", () => {
       "step15",
       "step16",
     ]);
-    expect(AI_ADMIN_GUIDE_SCENARIOS.find((item) => item.anchor === "retrieval")?.stepKeys).toEqual(["step1", "step2", "step3", "step4", "step5", "step6", "step7"]);
+    expect(
+      AI_ADMIN_GUIDE_SCENARIOS.find((item) => item.anchor === "retrieval")
+        ?.stepKeys,
+    ).toEqual(["step1", "step2", "step3", "step4", "step5", "step6", "step7"]);
   });
 
   it("escapes localized Mermaid labels without losing readable text", () => {
@@ -68,9 +75,11 @@ describe("AI administrator guide contract", () => {
       );
     }
     expect(diagrams.rag.source).toContain("/api/rag/*");
-    expect(diagrams.rag.source).toContain("ai.adminGuide.diagram.rag.nodes.localSearch");
+    expect(diagrams.rag.source).toContain(
+      "ai.adminGuide.diagram.rag.nodes.localSearch",
+    );
     expect(diagrams.rag.source).toContain("Local --> Checks");
     expect(diagrams.mcp.source).toContain("/mcp");
-    expect(diagrams.mcp.source).toContain('OAuth --> Inbound');
+    expect(diagrams.mcp.source).toContain("OAuth --> Inbound");
   });
 });

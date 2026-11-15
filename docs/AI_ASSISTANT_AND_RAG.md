@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 44 -->
+<!-- ai-admin-guide-contract-version: 45 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -129,7 +129,7 @@ answer-time search adapter, `/api/rag/*` is an API-key-only export surface for
 external indexers, and built-in RAG Sync reads through internal Docmost services
 and never calls that public API. The RAG API may stream an attachment only after
 repeating its access and policy checks; inbound `/mcp` exposes attachment
-metadata tools but never returns binary attachment bodies.
+metadata tools, with separately authorized tools for extracted text and bounded original-file chunks.
 
 ## 1. System components and boundaries
 
@@ -1533,7 +1533,7 @@ user. It does not replace query-time retrieval or the synchronization API:
 | ----------------------- | --------------------------------- | -------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | query-time retrieval    | the Docmost AI worker             | add ranked external context to one answer                | provider-side                     | validated excerpts returned by the configured retrieval adapter                                           |
 | `/api/rag/*`            | an external indexer               | bulk/delta synchronization and export                    | `keyType=rag`                     | pages, databases, comments, exports, and allowed attachment data                                          |
-| `/mcp` (inbound)        | an external MCP-capable assistant | interactive search and targeted document reading         | `keyType=mcp` or user OAuth        | seven baseline reads plus explicitly selected opt-in reads; no attachment body extraction                 |
+| `/mcp` (inbound)        | an external MCP-capable assistant | interactive search and targeted document reading         | `keyType=mcp` or user OAuth        | seven baseline reads plus explicitly selected opt-in document and attachment reads                 |
 | external MCP (outbound) | the Docmost AI worker             | call approved read-only remote tools during an agent run | per-server encrypted HTTP headers | the prompt, selected context, and page text are sent outward; the remote result returns as untrusted data |
 
 MCP calls do not create Docmost conversations, messages, citations, or
@@ -1685,10 +1685,10 @@ described in JSON Schema.
 | Tool                         | Main inputs                                           | Result and bounds                                                                                                            |
 | ---------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `search`                     | `query`, optional `limit`                             | accessible pages/database rows enriched with document fields plus enabled dictionary terms; shared default 10, maximum 20    |
-| `getTree`                    | none                                                  | readable hierarchy metadata, size-truncated within the 32 KiB tool limit; a hidden parent is returned as `parentPageId=null` |
-| `getPageContext`             | `pageId`                                              | page metadata and server-resolved document fields, visible allowed breadcrumbs, and up to 50 readable direct children        |
+| `getTree`                    | optional `limit`, `cursor`                                                  | version-bound paginated hierarchy metadata; default/max 100 per response; a hidden parent is returned as `parentPageId=null` |
+| `getPageContext`             | `pageId`                                              | page metadata and server-resolved document fields, visible allowed breadcrumbs, and paginated readable direct children (up to 50 per response)        |
 | `getPage`                    | `pageId`                                              | title, document fields, text, editor JSON when compact, outline fallback, update time, and a `truncated` flag                |
-| `getOutline`                 | `pageId`                                              | up to 300 structural nodes with index, optional stable ID, type, nesting level, and compact text                             |
+| `getOutline`                 | `pageId`                                              | up to 300 structural nodes per response with stable index, optional ID, nesting level, compact text and continuation                             |
 | `getNode`                    | `pageId`, `nodeId`                                    | one ProseMirror node selected by stable ID or a fallback such as `#12` from the outline index                                |
 | `searchInPage`               | `pageId`, `query`, optional `limit`                   | case-insensitive matches with character offsets and bounded excerpts; default 20, maximum 50                                 |
 | `getWorkspaceContext`        | none                                                  | curated workspace identity and actor role; never raw workspace settings                                                      |
@@ -1719,7 +1719,7 @@ snapshots; it does not change template content or linked pages. See
 migration formula and safe rollback boundary. Workspace AI/MCP allowlists are
 independent of this retired template switch and continue to apply.
 
-Paginated built-in reads use opaque versioned keyset cursors bound to the tool
+Existing comment/history/attachment metadata and database-row reads use opaque versioned keyset cursors bound to the tool
 name and target resource. Replaying a cursor for another page, database, or
 tool, or supplying a malformed or oversized cursor, returns `400`; cursors do
 not encode a caller-controlled SQL offset.
@@ -1734,12 +1734,43 @@ This compatibility tool still has no view filters or aggregates. Use
 `queryDatabaseView` for a view selection and `summarizeDatabaseView` for full
 server totals.
 
-`getPage` includes full editor JSON only when its serialized document fits the
-compact-response threshold. For larger pages it returns `content=null`, at
-most 16,000 text characters, and up to 80 outline items, with
-`truncated=true`. A client can then use `getOutline`, `getNode`, and
-`searchInPage` to read only the relevant sections. When an outline item has no
-stable `id`, use `#<index>` as the `getNode.nodeId`.
+`getPage` measures the complete serialized response (metadata, editor JSON and text),
+not only the editor document. When that response exceeds 32 KiB it returns
+`content=null`, a bounded text fragment, a compact outline preview and
+`contentHash`. Continue with `cursor=nextCursor` until `nextCursor=null`; a
+`truncated` flag also indicates omitted editor JSON. `getOutline`, `getNode`,
+`getTable`, `getTree` and `getPageContext` support continuation as well. For an
+oversized node, concatenate `nodeJsonChunk` and parse it as JSON; small nodes
+retain the `node` object. Table `#index` references use exactly the same recursive
+structural traversal as the outline, including nested containers. `cellRefs`
+identify complete cell nodes; `cellTruncated` makes preview truncation explicit.
+Wide rows use fragments of at most 50 cells, with `rowIndices` and
+`columnOffsets` to reassemble their original positions.
+
+Content cursors are opaque v2 values bound to tool, resource, content hash and
+Unicode-safe offset. Collection cursors include a hash of the visible, stably
+ordered collection; restart after a change rather than mixing snapshots.
+Foreign/malformed cursors return `MCP_INVALID_CURSOR`; changed content or
+visibility returns `MCP_SOURCE_CHANGED`. `getTree` has no 500-candidate ceiling.
+`getPageContext.cursor` continues its `children` collection.
+
+Large database values are replaced by explicit `valueTruncated`/`valueRef`
+previews. `listDatabaseRows` never advances past an unreturned oversized row.
+Use `getDatabaseCellContent` with its page/property identifiers to reconstruct
+`valueJsonChunk` as JSON. An exceptionally wide row may return `cells=[]` with
+`cellsTruncated=true` and `cellContentTool`; discover properties through
+`getDatabaseContext`. Oversized database/row contexts return `contextJsonChunk`
+with a version-bound cursor; concatenate and parse this complete JSON context.
+
+A comment with unusually large selection/actor metadata returns complete
+`commentJsonChunk` JSON fragments instead of silently shortening that metadata.
+
+Safe document metadata includes current type/database identifiers, a readable
+parent, creation/update times, lock state, creator/editor/contributors, labels,
+and enabled document fields with named assignees/stakeholders. It never returns
+raw page settings, email addresses or access administration. Large metadata
+previews set `metadataTruncated` and reference `getPageMetadata` for complete
+`metadataJsonChunk` reads.
 
 Search and tree results include database rows where the underlying search/page
 model represents them as pages. The opt-in database, table, comment, history,
@@ -1750,9 +1781,59 @@ part of either legacy catalog and require the deployment extension switch,
 workspace and space exact allowlists, current template policy, and (for MCP)
 the authoritative one-space API-key capability. Hidden or cross-space
 consumers are neither returned nor included in the MCP-visible usage count.
-MCP does not
-provide database mutation, schema editing, comment mutation, restore, export,
-attachment bodies, or page-management tools.
+MCP does not provide database mutation, schema editing, comment mutation, restore, export, or page-management tools. Original attachment bytes require the separate opt-in capability described below.
+
+### Additional opt-in document and attachment reads
+
+These six new tools are exposed only to inbound MCP. They do not grow the
+internal Agent catalog or its 64-definition ceiling. Workspace/space policy
+configuration describes the union of both catalogs, while each execution
+surface filters its own exposure. No migration adds capabilities to existing
+API keys or OAuth grants. An administrator explicitly enables the deployment
+extension switch, workspace/space allowlists and key capabilities. Existing
+OAuth grants keep their frozen capability set; authorize a new connection when
+additional capabilities are required.
+
+| Tool | Capability | Read contract |
+| --- | --- | --- |
+| `getPageMetadata` | `page.metadata.read` | `pageId`, optional cursor; complete curated metadata JSON chunks |
+| `getDatabaseCellContent` | `database.cell_content.read` | `pageId`, `propertyId`, optional cursor; full resolved cell value as JSON chunks |
+| `getComment` | `page.comment.read` | `pageId`, `commentId`, optional cursor; complete active comment text, thread/resolution state and safe actors |
+| `getPageVersion` | `page.history.content.read` | `pageId`, `historyId`, optional cursor; complete saved-version text under current source access |
+| `getAttachmentText` | `page.attachments.text.read` | `attachmentId`, optional cursor; already-extracted PDF/DOCX/TXT/MD text, processing status and extraction version |
+| `getAttachmentFileChunk` | `page.attachments.file.read` | `attachmentId`, optional cursor; original bytes as Base64, at most 16 KiB decoded bytes per response |
+
+`getAttachmentText` never queues or starts extraction. It reports `pending`,
+`processing`, `ready`, `skipped`, `failed`, or `unsupported`; an empty text result
+is not proof that processing succeeded. No OCR, spreadsheet or SVG extraction
+is introduced. Those originals remain available as opaque bytes when separately
+permitted. The original-file response includes name, MIME, byte size, offset,
+version, `data`, `nextCursor` and `truncated`. Decode and concatenate data in offset
+order; never execute active file content. Empty files finish immediately.
+
+Every fragment revalidates the current credential/capability, scoped attachment,
+owner page ACL and AI exclusions, including before publication. A workspace role
+change during execution discards the result for both API-key and OAuth actors,
+so an earlier administrator context cannot survive revocation. Storage paths,
+credentials and signed URLs never leave the server. MCP keys still authenticate
+only on `/mcp`; ordinary file routes do not accept them. S3 uses bounded Range,
+ETag/VersionId conditions and a final identity check; local storage checks the
+open file and current path identity with nanosecond stat timestamps. Replacement,
+deletion or metadata changes discard the fragment or invalidate continuation.
+A storage failure returns `MCP_STORAGE_UNAVAILABLE`, without provider details.
+
+For rollback, remove new capabilities before downgrading. Existing keys, legacy
+read capabilities and independent RAG endpoints keep their previous scope.
+
+### Read regression acceptance
+
+After building, run `node apps/client/e2e/database/run-live.mjs --mcp-read-only --api-only`
+under Node 22. It owns PostgreSQL, Redis, API/collaboration and synthetic storage;
+it never loads `.env` or production keys. The full database live acceptance also
+runs this matrix. Pre-extracted attachment fixtures test the MCP contract
+independently of extraction workers; extraction and local/S3 identity races have
+separate server tests. The matrix verifies actual data and `isError`, not only
+HTTP 200. This diagnostic is additional to `verify:full` and release acceptance.
 
 ### Result, error, and content boundaries
 
@@ -1762,16 +1843,14 @@ to 32 KiB. The 128 KiB cumulative budget belongs to an internal agent run and
 does not span independent stateless MCP requests.
 
 Expected authorization, validation, and not-found failures return
-`isError=true` with a bounded safe message. Unexpected internal exceptions are
+`isError=true` with a bounded safe message and additive `structuredContent`
+containing `code`, `message`, and `retryable`. Expected result limits use
+`MCP_RESULT_TOO_LARGE` rather than an unclassified internal failure. Unexpected internal exceptions are
 reported as the generic `MCP tool call failed`; database or stack details are
 not exposed.
 
 The shared content policy can hide an entire page subtree or individual pages
-from AI consumers. MCP applies that policy in addition to page ACL. It never
-fetches or returns attachment binaries, private chat files, or extracted
-attachment text. Page editor JSON may still contain ordinary attachment-node
-references already stored in the page; those references are not dereferenced
-by MCP.
+from AI consumers. MCP applies that policy in addition to page ACL. Private chat files remain unavailable to MCP. Page editor JSON may contain attachment-node references already stored in the page. References do not fetch files automatically; extracted text and original bytes require their own explicit capabilities and live owner-page authorization.
 
 ### Deployment checklist
 

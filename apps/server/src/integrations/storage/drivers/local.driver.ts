@@ -8,10 +8,14 @@ import * as fs from 'fs-extra';
 import { Readable } from 'stream';
 import {
   constants as fsConstants,
+  BigIntStats,
   createReadStream,
   createWriteStream,
 } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
+import { open, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { StorageObjectChangedError } from '../interfaces/storage-driver.interface';
 
 export class LocalDriver implements StorageDriver {
   private readonly config: LocalStorageConfig;
@@ -132,6 +136,65 @@ export class LocalDriver implements StorageDriver {
       throw new Error(
         `Failed to check file existence: ${(err as Error).message}`,
       );
+    }
+  }
+
+  async readVersionedRange(
+    filePath: string,
+    offset: number,
+    maxBytes: number,
+    expectedVersion?: string,
+  ) {
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isInteger(maxBytes) ||
+      maxBytes < 1 ||
+      maxBytes > 16 * 1024
+    )
+      throw new RangeError('Invalid file range');
+    const fullPath = this._fullPath(filePath);
+    const handle = await open(fullPath, 'r');
+    const fingerprint = (value: BigIntStats) =>
+      createHash('sha256')
+        .update(
+          [value.dev, value.ino, value.size, value.mtimeNs, value.ctimeNs].join(
+            ':',
+          ),
+        )
+        .digest('hex');
+    try {
+      const before = await handle.stat({ bigint: true });
+      const size = Number(before.size);
+      if (!before.isFile() || !Number.isSafeInteger(size) || offset > size)
+        throw new RangeError('Invalid file range');
+      const version = fingerprint(before);
+      if (expectedVersion && expectedVersion !== version)
+        throw new StorageObjectChangedError();
+      const data = Buffer.alloc(Math.min(maxBytes, size - offset));
+      let read = 0;
+      while (read < data.length) {
+        const result = await handle.read(
+          data,
+          read,
+          data.length - read,
+          offset + read,
+        );
+        if (!result.bytesRead) break;
+        read += result.bytesRead;
+      }
+      const after = await handle.stat({ bigint: true });
+      const current = await stat(fullPath, { bigint: true }).catch(() => null);
+      if (
+        read !== data.length ||
+        fingerprint(after) !== version ||
+        !current ||
+        fingerprint(current) !== version
+      )
+        throw new StorageObjectChangedError();
+      return { data, size, version };
+    } finally {
+      await handle.close();
     }
   }
 

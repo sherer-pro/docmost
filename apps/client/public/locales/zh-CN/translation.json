@@ -1719,11 +1719,14 @@
             "step1": "以管理员身份启用用户 OAuth，或创建限定空间的 MCP API 密钥。",
             "step2": "使用 OAuth 时，注册客户端并在同意页面批准一个有权访问的空间。",
             "step3": "测试 initialize、tools/list 和允许的读取操作。在账户设置中管理 OAuth 连接。",
-            "step4": "访问权限绑定到您当前的登录会话。退出登录、撤销会话或断开应用连接后，访问权限即终止。"
+            "step4": "访问权限绑定到您当前的登录会话。退出登录、撤销会话或断开应用连接后，访问权限即终止。",
+            "step5": "请在工作区、空间和密钥策略中明确允许读取评论、历史、元数据及所需附件。现有密钥和OAuth连接不会自动获得新权限。",
+            "step6": "将 nextCursor 传入后续请求，直到其值为 null。出现 MCP_SOURCE_CHANGED 时，请从头读取已更改的来源。",
+            "step7": "使用 getAttachmentText 读取已提取的文本。单独授权 getAttachmentFileChunk 后，可将不超过16 KiB的Base64块拼接为原文件。"
           },
-          "success": "允许的工具工作；被拒绝的功能和二进制附件读取仍然不可用",
+          "success": "获准的数据可通过后续请求完整读取；被拒绝的能力和其他空间仍不可访问。",
           "rollback": "撤销密钥或 OAuth 连接。退出登录也会终止绑定到该会话的 OAuth 访问。",
-          "technical": "/mcp 接受 MCP API 密钥或 OAuth 令牌，拒绝普通登录令牌和 RAG 密钥。/api/rag/* 仍仅接受 RAG 密钥。每次检查当前 workspace、用户、空间成员资格、页面 ACL 和功能权限。OAuth 使用 PKCE S256 和 resource /mcp，用户选择一个空间。授权码有效 5 分钟，访问令牌 15 分钟，授权最长 30 天且不超过授权会话期限。重复使用 refresh token 会撤销整个连接。关闭 OAuth 会撤销授权并保留记录。超过 100 条消息的 JSON-RPC 批次返回 HTTP 400。 OAuth: refresh_token."
+          "technical": "/mcp 接受 MCP API 密钥或 OAuth 令牌，拒绝普通登录令牌和 RAG 密钥。/api/rag/* 仍仅接受 RAG 密钥。每次检查当前 workspace、用户、空间成员资格、页面 ACL 和功能权限。OAuth 使用 PKCE S256 和 resource /mcp，用户选择一个空间。授权码有效 5 分钟，访问令牌 15 分钟，授权最长 30 天且不超过授权会话期限。重复使用 refresh token 会撤销整个连接。关闭 OAuth 会撤销授权并保留记录。超过 100 条消息的 JSON-RPC 批次返回 HTTP 400。 OAuth: refresh_token.\n\n每个结果不超过32 KiB，后续请求绑定来源版本。提取文本和原文件需要分别授权。 getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Docmost 代理可以调用已批准的远程 MCP 服务器上的工具。这个方向与入站 MCP 相反，使用独立的设置和凭据。",
@@ -2660,7 +2663,13 @@
         "deleteNode": "从当前页面中删除块",
         "queryDatabaseView": "查询数据库视图",
         "summarizeDatabaseView": "计算数据库汇总",
-        "proposeDatabaseCells": "提出单元格修改"
+        "proposeDatabaseCells": "提出单元格修改",
+        "getDatabaseCellContent": "读取完整单元格值",
+        "getComment": "读取完整评论",
+        "getPageVersion": "读取已保存的页面版本",
+        "getAttachmentText": "读取附件文本",
+        "getAttachmentFileChunk": "读取附件原文件",
+        "getPageMetadata": "读取完整页面元数据"
       },
       "category": {
         "search": "搜索",

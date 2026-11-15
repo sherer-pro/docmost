@@ -1719,11 +1719,14 @@
             "step1": "管理者としてユーザーOAuthを有効にするか、スペース単位のMCP APIキーを作成してください。",
             "step2": "OAuthではクライアントを登録し、同意画面でアクセス可能な1つのスペースを承認してください。",
             "step3": "initialize、tools/list、許可された読み取りを確認してください。OAuth接続はアカウント設定で管理できます。",
-            "step4": "アクセスは現在のログインセッションに紐づきます。ログアウト、セッションの失効、アプリの切断によりアクセスが終了します。"
+            "step4": "アクセスは現在のログインセッションに紐づきます。ログアウト、セッションの失効、アプリの切断によりアクセスが終了します。",
+            "step5": "ワークスペース、スペース、キーのポリシーでコメント、履歴、メタデータ、必要な添付ファイルの読み取りを明示的に許可してください。既存のキーとOAuth接続に新しい権限が自動で付与されることはありません。",
+            "step6": "nextCursor が null になるまで次のリクエストに渡してください。MCP_SOURCE_CHANGED が返された場合は、変更されたソースを最初から読み直してください。",
+            "step7": "抽出済みのテキストには getAttachmentText を使用します。原本には getAttachmentFileChunk を別途許可し、最大16 KiBのBase64ブロックからファイルを復元してください。"
           },
-          "success": "許可されたツールは機能します。拒否された機能とバイナリ添付ファイルの読み取りは利用できないままになります",
+          "success": "許可されたデータは継続リクエストで最後まで読めます。拒否された機能と他のスペースにはアクセスできません。",
           "rollback": "キーまたはOAuth接続を失効させてください。ログアウトでもセッションに紐づくOAuthアクセスが終了します。",
-          "technical": "/mcpはMCP APIキーまたはOAuthトークンを受け付け、通常のログイントークンとRAGキーは拒否します。/api/rag/*はRAGキーのみ対応します。workspace、ユーザー、参加権限、ページACL、機能権限を毎回確認します。OAuthはPKCE S256とresource /mcpを使用し、1つのスペースを選択します。コードは5分、アクセストークンは15分、許可は最大30日かつ承認元セッションの有効期間内です。refresh tokenの再利用は接続全体を失効させます。OAuthの無効化は許可を取り消し、記録を保持します。100件を超えるJSON-RPCバッチはHTTP 400です。 OAuth: refresh_token."
+          "technical": "/mcpはMCP APIキーまたはOAuthトークンを受け付け、通常のログイントークンとRAGキーは拒否します。/api/rag/*はRAGキーのみ対応します。workspace、ユーザー、参加権限、ページACL、機能権限を毎回確認します。OAuthはPKCE S256とresource /mcpを使用し、1つのスペースを選択します。コードは5分、アクセストークンは15分、許可は最大30日かつ承認元セッションの有効期間内です。refresh tokenの再利用は接続全体を失効させます。OAuthの無効化は許可を取り消し、記録を保持します。100件を超えるJSON-RPCバッチはHTTP 400です。 OAuth: refresh_token.\n\n各結果は32 KiB以下で、継続はソースの版に紐づきます。抽出済みテキストと原本ファイルには別々の権限が必要です。 getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Docmost エージェントは、承認済みのリモート MCP サーバー上のツールを呼び出せます。これは受信 MCP と逆方向であり、設定と認証情報は別です。",
@@ -2660,7 +2663,13 @@
         "deleteNode": "現在のページからブロックを削除",
         "queryDatabaseView": "データベースビューを照会",
         "summarizeDatabaseView": "データベースの合計を計算",
-        "proposeDatabaseCells": "セルの変更を提案"
+        "proposeDatabaseCells": "セルの変更を提案",
+        "getDatabaseCellContent": "セルの値をすべて読む",
+        "getComment": "コメント全文を読む",
+        "getPageVersion": "保存済みページ版を読む",
+        "getAttachmentText": "添付ファイルのテキストを読む",
+        "getAttachmentFileChunk": "添付ファイルの原本を読む",
+        "getPageMetadata": "ページの全メタデータを読む"
       },
       "category": {
         "search": "検索",

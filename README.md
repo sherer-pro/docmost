@@ -26,7 +26,7 @@ The guide keeps the operational boundaries explicit: query-time retrieval
 queries an external index; `/api/rag/*` is a read-only export surface that can
 return protected attachment streams after reauthorization; built-in RAG Sync
 writes to Open WebUI through internal services and does not call the public RAG
-API. Inbound `/mcp` returns attachment metadata but never attachment binaries.
+API. Inbound `/mcp` returns attachment metadata; separately authorized tools can read extracted text and original files in bounded chunks.
 Contextual links lead back to the guide from API keys and, for workspace
 administrators, from space settings.
 
@@ -204,8 +204,19 @@ Supported capabilities include:
 This allows Docmost content to serve as an up-to-date knowledge base for local
 or corporate LLMs. RAG and MCP keys are scoped to one space, are not
 interchangeable, and are revalidated on every request against the creator's
-current membership and page access. Existing MCP keys retain only the seven
-baseline reads; optional reads must be selected explicitly for each key.
+current membership and page access. Existing MCP keys retain their selected capabilities; the seven baseline reads
+remain the compatibility catalog. Additional reads require explicit selection
+for each key.
+
+Inbound MCP reads complete page text, nested tables, database values, comments
+and saved versions through version-bound continuation within 32 KiB per result.
+Large tree/outline responses continue without dropping pages or rows. Dedicated
+MCP-only tools return complete safe document metadata and large values.
+`getAttachmentText` reads already-extracted PDF/DOCX/TXT/MD text;
+`getAttachmentFileChunk` returns original bytes as Base64 blocks of at most
+16 KiB. Each requires its own explicit capability and rechecks the owner page's
+ACL and AI exclusions. No storage paths or signed URLs are exposed. Existing
+OAuth grants keep their frozen permissions; both MCP directions remain read-only.
 
 For built-in synchronization, the Open WebUI URL, Knowledge Base ID, and a
 separate writer API key are configured in each space's UI; the writer key is

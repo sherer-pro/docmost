@@ -9,6 +9,7 @@ import { runPageAttachmentsAcceptance } from './page-attachments-live-acceptance
 import { runEditorBlocksAcceptance } from './editor-blocks-live-acceptance.mjs';
 import { runDocxAcceptance } from './docx-live-acceptance.mjs';
 import { runMcpOAuthAcceptance } from './mcp-oauth-live-acceptance.mjs';
+import { runMcpReadAcceptance } from './mcp-read-live-acceptance.mjs';
 import { runIntegrationPreviewAcceptance } from './integration-preview-live-acceptance.mjs';
 import { runUpstreamRepairsAcceptance } from './upstream-repairs-live-acceptance.mjs';
 import { runMarkdownExportAcceptance } from './markdown-export-live-acceptance.mjs';
@@ -148,6 +149,11 @@ export async function runLiveAcceptance({
       spaceId: space.id,
       title: 'Acceptance parent',
     });
+    if (process.argv.includes('--mcp-read-only')) {
+      await runMcpReadAcceptance({ api, actors, space, parent, workspaceId, sql, test, baseURL, output, exactSecrets });
+      await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
+      return;
+    }
     if (process.argv.includes('--mcp-oauth-only')) {
       await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture: { workspaceId }, test, baseURL, sql, exactSecrets });
       await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
@@ -686,6 +692,7 @@ export async function runLiveAcceptance({
       output,
     });
     await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture, test, baseURL, sql, exactSecrets });
+    await runMcpReadAcceptance({ api, actors, space, parent, workspaceId, sql, test, baseURL, output, exactSecrets });
 
     await runIntegrationPreviewAcceptance({ api, fetchApi, actors, parent, space, sql, test, exactSecrets, output, fixture });
 

@@ -1719,11 +1719,14 @@
             "step1": "Aktivieren Sie Benutzer-OAuth als Administrator oder erstellen Sie einen bereichsgebundenen MCP-API-Schlüssel.",
             "step2": "Registrieren Sie für OAuth den Client und bestätigen Sie genau einen zugänglichen Bereich im Zustimmungsdialog.",
             "step3": "Testen Sie initialize, tools/list und einen erlaubten Lesezugriff. Verwalten Sie OAuth-Verbindungen in den Kontoeinstellungen.",
-            "step4": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff."
+            "step4": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
+            "step5": "Erlauben Sie Kommentare, Verlauf, Metadaten und benötigte Anhänge ausdrücklich in den Richtlinien für Workspace, Bereich und Schlüssel. Bestehende Schlüssel und OAuth-Verbindungen erhalten keine neuen Rechte automatisch.",
+            "step6": "Übergeben Sie nextCursor, bis der Wert null ist. Beginnen Sie bei MCP_SOURCE_CHANGED erneut mit dem geänderten Inhalt.",
+            "step7": "Lesen Sie bereits extrahierten Text mit getAttachmentText. Erlauben Sie getAttachmentFileChunk separat und setzen Sie Originaldateien aus Base64-Blöcken mit höchstens 16 KiB zusammen."
           },
-          "success": "Zulässige Werkzeuge funktionieren; verweigerte Funktionen und Lesevorgänge für binäre Anhänge bleiben weiterhin nicht verfügbar",
+          "success": "Erlaubte Daten sind über Fortsetzungen vollständig lesbar; gesperrte Funktionen und fremde Bereiche bleiben unzugänglich.",
           "rollback": "Widerrufen Sie Schlüssel oder OAuth-Verbindung. Abmelden beendet auch den sitzungsgebundenen OAuth-Zugriff.",
-          "technical": "/mcp akzeptiert MCP-API-Schlüssel oder OAuth-Zugriffstoken; normale Anmeldetoken und RAG-Schlüssel werden abgewiesen. /api/rag/* akzeptiert nur RAG-Schlüssel. Workspace, Benutzer, Mitgliedschaft, Seiten-ACL und Werkzeugrechte werden aktuell geprüft. OAuth nutzt PKCE S256 und resource /mcp für einen gewählten Bereich. Codes gelten 5 Minuten, Zugriffstoken 15 Minuten, Freigaben höchstens 30 Tage und bis zum Ende der bestätigenden Sitzung. Wiederverwendung eines Refresh-Tokens widerruft die Verbindung. Deaktivieren widerruft Freigaben und erhält Datensätze. JSON-RPC-Stapel über 100 Nachrichten liefern HTTP 400. OAuth: refresh_token."
+          "technical": "/mcp akzeptiert MCP-API-Schlüssel oder OAuth-Zugriffstoken; normale Anmeldetoken und RAG-Schlüssel werden abgewiesen. /api/rag/* akzeptiert nur RAG-Schlüssel. Workspace, Benutzer, Mitgliedschaft, Seiten-ACL und Werkzeugrechte werden aktuell geprüft. OAuth nutzt PKCE S256 und resource /mcp für einen gewählten Bereich. Codes gelten 5 Minuten, Zugriffstoken 15 Minuten, Freigaben höchstens 30 Tage und bis zum Ende der bestätigenden Sitzung. Wiederverwendung eines Refresh-Tokens widerruft die Verbindung. Deaktivieren widerruft Freigaben und erhält Datensätze. JSON-RPC-Stapel über 100 Nachrichten liefern HTTP 400. OAuth: refresh_token.\n\nJedes Ergebnis ist auf 32 KiB begrenzt; Fortsetzungen sind an die Quellversion gebunden. Extrahierter Text und Originaldateien benötigen getrennte Berechtigungen. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "Der Docmost Agent kann Werkzeuge auf genehmigten entfernten MCP-Servern aufrufen.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Block von der aktuellen Seite löschen",
         "queryDatabaseView": "Datenbankansicht abfragen",
         "summarizeDatabaseView": "Datenbankgesamtwerte berechnen",
-        "proposeDatabaseCells": "Zelländerungen vorschlagen"
+        "proposeDatabaseCells": "Zelländerungen vorschlagen",
+        "getDatabaseCellContent": "Vollständigen Zellenwert lesen",
+        "getComment": "Vollständigen Kommentar lesen",
+        "getPageVersion": "Gespeicherte Seitenversion lesen",
+        "getAttachmentText": "Anhangtext lesen",
+        "getAttachmentFileChunk": "Originalanhang lesen",
+        "getPageMetadata": "Vollständige Seitenmetadaten lesen"
       },
       "category": {
         "search": "Suche",

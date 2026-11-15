@@ -1719,11 +1719,14 @@
             "step1": "Ative OAuth de usuário como administrador ou crie uma chave API MCP limitada a um espaço.",
             "step2": "Para OAuth, registre o cliente e aprove um único espaço acessível na tela de consentimento.",
             "step3": "Teste initialize, tools/list e uma leitura permitida. Gerencie as conexões OAuth nas configurações da conta.",
-            "step4": "O acesso está vinculado à sua sessão atual. Sair, revogar a sessão ou desconectar o aplicativo encerra o acesso."
+            "step4": "O acesso está vinculado à sua sessão atual. Sair, revogar a sessão ou desconectar o aplicativo encerra o acesso.",
+            "step5": "Autorize explicitamente comentários, histórico, metadados e anexos necessários nas políticas do workspace, espaço e chave. Chaves e conexões OAuth existentes não recebem permissões novas automaticamente.",
+            "step6": "Envie nextCursor até que seja null. Se receber MCP_SOURCE_CHANGED, reinicie a leitura da fonte alterada.",
+            "step7": "Use getAttachmentText para texto já extraído. Autorize getAttachmentFileChunk separadamente e reconstrua o original com blocos Base64 de até 16 KiB."
           },
-          "success": "As ferramentas permitidas funcionam; recursos negados e leituras de anexos binários permanecem indisponíveis",
+          "success": "Os dados autorizados são lidos por completo com continuações; recursos negados e outros espaços continuam inacessíveis.",
           "rollback": "Revogue a chave ou conexão OAuth. Sair também encerra o acesso OAuth vinculado à sessão.",
-          "technical": "/mcp aceita chaves API MCP ou tokens OAuth; rejeita tokens de login comuns e chaves RAG. /api/rag/* aceita apenas chaves RAG. Workspace, usuário, associação, ACL e capacidades atuais são verificados. OAuth usa PKCE S256 e resource /mcp para um espaço escolhido. Códigos duram 5 minutos, tokens de acesso 15 minutos e permissões até 30 dias, limitados à sessão autorizadora. Reutilizar um refresh token revoga a conexão. Desativar OAuth revoga permissões e mantém registros. Lotes JSON-RPC com mais de 100 mensagens retornam HTTP 400. OAuth: refresh_token."
+          "technical": "/mcp aceita chaves API MCP ou tokens OAuth; rejeita tokens de login comuns e chaves RAG. /api/rag/* aceita apenas chaves RAG. Workspace, usuário, associação, ACL e capacidades atuais são verificados. OAuth usa PKCE S256 e resource /mcp para um espaço escolhido. Códigos duram 5 minutos, tokens de acesso 15 minutos e permissões até 30 dias, limitados à sessão autorizadora. Reutilizar um refresh token revoga a conexão. Desativar OAuth revoga permissões e mantém registros. Lotes JSON-RPC com mais de 100 mensagens retornam HTTP 400. OAuth: refresh_token.\n\nCada resultado é limitado a 32 KiB e a continuação está vinculada à versão da fonte. Texto extraído e arquivos originais exigem permissões separadas. getPageMetadata; getDatabaseCellContent; getComment; getPageVersion; getAttachmentText; getAttachmentFileChunk. nextCursor; MCP_SOURCE_CHANGED; 32 KiB; 16 KiB; page.attachments.text.read; page.attachments.file.read."
         },
         "outboundMcp": {
           "description": "O agente do Docmost pode chamar ferramentas em servidores MCP remotos aprovados.",
@@ -2660,7 +2663,13 @@
         "deleteNode": "Excluir um bloco da página atual",
         "queryDatabaseView": "Consultar visualização da base",
         "summarizeDatabaseView": "Calcular totais da base",
-        "proposeDatabaseCells": "Propor alterações em células"
+        "proposeDatabaseCells": "Propor alterações em células",
+        "getDatabaseCellContent": "Ler valor completo da célula",
+        "getComment": "Ler comentário completo",
+        "getPageVersion": "Ler versão salva da página",
+        "getAttachmentText": "Ler texto do anexo",
+        "getAttachmentFileChunk": "Ler anexo original",
+        "getPageMetadata": "Ler metadados completos da página"
       },
       "category": {
         "search": "Pesquisa",
