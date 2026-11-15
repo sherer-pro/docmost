@@ -5,7 +5,19 @@ import {
   normalizeJscpdDuplicates,
   normalizeKnipIssues,
   validateKnipReviewGroups,
+  maintenanceReviewWindow,
 } from "./check-maintenance-audit.mjs";
+
+test("new maintenance reviews use the actual UTC date and a bounded 30-day deadline", () => {
+  assert.deepEqual(maintenanceReviewWindow(new Date("2026-11-15T23:59:00Z")), {
+    reviewedAt: "2026-11-15",
+    reviewBy: "2026-12-15",
+  });
+  assert.deepEqual(maintenanceReviewWindow(new Date("2026-12-15T00:00:00Z")), {
+    reviewedAt: "2026-12-15",
+    reviewBy: "2027-01-14",
+  });
+});
 
 test("Knip fingerprints ignore source locations and remain deterministic", () => {
   const report = {

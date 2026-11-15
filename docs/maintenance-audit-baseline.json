@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-08-14",
-  "reviewBy": "2026-11-14",
+  "reviewedAt": "2026-11-15",
+  "reviewBy": "2026-12-15",
   "policy": {
     "newFindings": "blocked",
     "resolvedFindings": "require-baseline-update",
@@ -414,7 +414,7 @@
         "classification": "reusable-or-compatibility-contract",
         "rationale": "Private client exports are reviewed against cross-feature imports, tests, and compatibility aliases before removal.",
         "pathPattern": "^apps/client/",
-        "reviewBy": "2026-11-14"
+        "reviewBy": "2026-12-15"
       },
       {
         "id": "server-generated-database-types",
@@ -422,7 +422,7 @@
         "classification": "generated-contract-surface",
         "rationale": "Generated Kysely entity aliases mirror the database schema and are reviewed after migration type regeneration.",
         "pathPattern": "^apps/server/src/database/types/",
-        "reviewBy": "2026-11-14"
+        "reviewBy": "2026-12-15"
       },
       {
         "id": "server-framework-and-domain-contracts",
@@ -430,7 +430,7 @@
         "classification": "framework-or-reusable-contract",
         "rationale": "Server findings are reviewed with Nest reflection, module wiring, protocol constants, and route contracts before removal.",
         "pathPattern": "^apps/server/(?!src/database/types/)",
-        "reviewBy": "2026-11-14"
+        "reviewBy": "2026-12-15"
       },
       {
         "id": "editor-package-contracts",
@@ -438,7 +438,7 @@
         "classification": "public-package-contract",
         "rationale": "Editor extension findings are reviewed against the package entry point and downstream editor consumers before removal.",
         "pathPattern": "^packages/editor-ext/",
-        "reviewBy": "2026-11-14"
+        "reviewBy": "2026-12-15"
       }
     ]
   },

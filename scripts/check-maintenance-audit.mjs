@@ -128,7 +128,16 @@ export function validateKnipReviewGroups(
   }
 }
 
-function defaultKnipReviewGroups() {
+export function maintenanceReviewWindow(now = new Date()) {
+  const deadline = new Date(now);
+  deadline.setUTCDate(deadline.getUTCDate() + 30);
+  return {
+    reviewedAt: now.toISOString().slice(0, 10),
+    reviewBy: deadline.toISOString().slice(0, 10),
+  };
+}
+
+function defaultKnipReviewGroups(reviewBy) {
   return [
     {
       id: "client-application-contracts",
@@ -137,7 +146,7 @@ function defaultKnipReviewGroups() {
       rationale:
         "Private client exports are reviewed against cross-feature imports, tests, and compatibility aliases before removal.",
       pathPattern: "^apps/client/",
-      reviewBy: "2026-11-14",
+      reviewBy,
     },
     {
       id: "server-generated-database-types",
@@ -146,7 +155,7 @@ function defaultKnipReviewGroups() {
       rationale:
         "Generated Kysely entity aliases mirror the database schema and are reviewed after migration type regeneration.",
       pathPattern: "^apps/server/src/database/types/",
-      reviewBy: "2026-11-14",
+      reviewBy,
     },
     {
       id: "server-framework-and-domain-contracts",
@@ -155,7 +164,7 @@ function defaultKnipReviewGroups() {
       rationale:
         "Server findings are reviewed with Nest reflection, module wiring, protocol constants, and route contracts before removal.",
       pathPattern: "^apps/server/(?!src/database/types/)",
-      reviewBy: "2026-11-14",
+      reviewBy,
     },
     {
       id: "editor-package-contracts",
@@ -164,7 +173,7 @@ function defaultKnipReviewGroups() {
       rationale:
         "Editor extension findings are reviewed against the package entry point and downstream editor consumers before removal.",
       pathPattern: "^packages/editor-ext/",
-      reviewBy: "2026-11-14",
+      reviewBy,
     },
   ];
 }
@@ -259,10 +268,10 @@ function classificationForDuplicate(fingerprint) {
 }
 
 function writeBaseline(audit) {
+  const review = maintenanceReviewWindow();
   const baseline = {
     schemaVersion: 1,
-    reviewedAt: "2026-08-14",
-    reviewBy: "2026-11-14",
+    ...review,
     policy: {
       newFindings: "blocked",
       resolvedFindings: "require-baseline-update",
@@ -273,7 +282,7 @@ function writeBaseline(audit) {
     },
     knip: {
       accepted: audit.knip,
-      reviewGroups: defaultKnipReviewGroups(),
+      reviewGroups: defaultKnipReviewGroups(review.reviewBy),
     },
     jscpd: {
       accepted: audit.jscpd.map((fingerprint) => ({
