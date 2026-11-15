@@ -1,7 +1,11 @@
 import { Button, Center, Paper, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-export default function RouteError() {
+export default function RouteError({
+  onRetry = () => window.location.reload(),
+}: {
+  onRetry?: () => void;
+} = {}) {
   const { t } = useTranslation();
   return (
     <Center component="main" mih="100dvh" p="md" data-testid="route-error">
@@ -11,9 +15,7 @@ export default function RouteError() {
             {t("Error")}
           </Title>
           <Text>{t("Failed to load page. An error occurred.")}</Text>
-          <Button onClick={() => window.location.reload()}>
-            {t("Try again")}
-          </Button>
+          <Button onClick={onRetry}>{t("Try again")}</Button>
         </Stack>
       </Paper>
     </Center>

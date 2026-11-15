@@ -108,7 +108,7 @@ function App() {
   );
 }
 
-export const appRoutes = createRoutesFromElements(
+export const createAppRoutes = () => createRoutesFromElements(
   <Route
     element={<App />}
     errorElement={

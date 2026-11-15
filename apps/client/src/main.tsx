@@ -7,7 +7,7 @@ import "@/features/dictionary/styles/dictionary-highlight.css";
 import "@/styles/accessibility.css";
 
 import ReactDOM from "react-dom/client";
-import { appRoutes } from "./App.tsx";
+import { createAppRoutes } from "./App.tsx";
 import { mantineCssResolver, theme } from "@/theme";
 import { Center, Loader, MantineProvider } from "@mantine/core";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
@@ -24,6 +24,8 @@ import {
   registerLogoutSync,
 } from "@/features/auth/utils/client-session-cleanup.ts";
 import { queryClient } from "@/lib/query-client.ts";
+import { ensureRuntimeConfig } from "@/lib/pwa/runtime-config.ts";
+import RouteError from "@/components/ui/route-error.tsx";
 
 registerStaleClientRecovery();
 
@@ -33,36 +35,67 @@ registerLogoutSync(async () => {
   window.location.replace(APP_ROUTE.AUTH.LOGIN);
 });
 
-const router = createBrowserRouter(appRoutes);
-
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement,
 );
 
-root.render(
-  <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
-    <Center h="100dvh" role="status" aria-live="polite">
-      <Loader size="sm" />
-    </Center>
-  </MantineProvider>,
-);
-
-void i18nReady
-  .catch(() => undefined)
-  .then(() =>
-    root.render(
-      <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
-        <ModalsProvider>
-          <QueryClientProvider client={queryClient}>
-            <Notifications position="bottom-center" limit={3} zIndex={10000} />
-            <HelmetProvider>
-              <RouterProvider router={router} />
-            </HelmetProvider>
-          </QueryClientProvider>
-        </ModalsProvider>
-      </MantineProvider>,
-    ),
+let starting = false;
+function startClient() {
+  if (starting) return;
+  starting = true;
+  root.render(
+    <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
+      <Center h="100dvh" role="status" aria-live="polite">
+        <Loader size="sm" />
+      </Center>
+    </MantineProvider>,
   );
+
+  void Promise.all([
+    i18nReady.catch(() => undefined),
+    import.meta.env.DEV ? Promise.resolve() : ensureRuntimeConfig(),
+  ])
+    .then(() => {
+      // Read cloud flags only after runtime configuration is ready.
+      const router = createBrowserRouter(createAppRoutes());
+      window.removeEventListener("online", startClient);
+      root.render(
+        <MantineProvider
+          theme={theme}
+          cssVariablesResolver={mantineCssResolver}
+        >
+          <ModalsProvider>
+            <QueryClientProvider client={queryClient}>
+              <Notifications
+                position="bottom-center"
+                limit={3}
+                zIndex={10000}
+              />
+              <HelmetProvider>
+                <RouterProvider router={router} />
+              </HelmetProvider>
+            </QueryClientProvider>
+          </ModalsProvider>
+        </MantineProvider>,
+      );
+    })
+    .catch(() => {
+      root.render(
+        <MantineProvider
+          theme={theme}
+          cssVariablesResolver={mantineCssResolver}
+        >
+          <RouteError onRetry={startClient} />
+        </MantineProvider>,
+      );
+    })
+    .finally(() => {
+      starting = false;
+    });
+}
+
+window.addEventListener("online", startClient);
+startClient();
 
 // Register the PWA worker outside the React tree so offline caching logic
 // is not coupled to the lifecycle of React components.

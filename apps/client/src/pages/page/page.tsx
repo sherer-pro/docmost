@@ -53,7 +53,7 @@ export default function Page() {
   return (
     <ErrorBoundary
       resetKeys={[pageSlug]}
-      fallbackRender={({ resetErrorBoundary }) => (
+      fallbackRender={() => (
         <EmptyState
           icon={IconAlertTriangle}
           title={t("Failed to load page. An error occurred.")}
@@ -62,7 +62,7 @@ export default function Page() {
               variant="default"
               size="sm"
               mt="xs"
-              onClick={resetErrorBoundary}
+              onClick={() => window.location.reload()}
             >
               {t("Try again")}
             </Button>

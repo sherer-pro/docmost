@@ -251,3 +251,5 @@ try {
   );
   console.log("PWA recovery receipt: " + path.relative(root, output));
 }
+
+await import("./runtime-config.mjs");
