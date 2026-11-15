@@ -59,7 +59,7 @@ export default function HistoryModal({
   return (
     <Modal.Root size={1400} opened={isModalOpen} onClose={close}>
       <Modal.Overlay />
-      <Modal.Content className={classes.modalContent}>
+      <Modal.Content classNames={{ content: classes.modalContent }}>
         <Modal.Header className={classes.modalHeader}>
           <Modal.Title>
             <Text size="md" fw={500}>

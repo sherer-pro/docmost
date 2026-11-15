@@ -651,6 +651,7 @@ try {
     for (const [width, height] of [
       [1024, 768],
       [1440, 600],
+      [2560, 1540],
     ]) {
       await record(`history bounded ${width}x${height} ${theme}`, async () => {
         const { page, context, errors } = await fixture(
@@ -702,6 +703,7 @@ try {
           geometry.top >= -1 && geometry.bottom <= geometry.viewport + 1,
           JSON.stringify(geometry),
         );
+        assert(geometry.bottom - geometry.top <= 761, JSON.stringify(geometry));
         assert(
           geometry.restoreBottom <= geometry.bottom,
           JSON.stringify(geometry),
@@ -738,6 +740,18 @@ try {
           .click();
         await expect(confirmation).toBeHidden();
         await expect(dialog).toBeVisible();
+        const afterConfirmation = await dialog.evaluate((node) => {
+          const inner = node.closest(".mantine-Modal-inner");
+          return {
+            top: node.getBoundingClientRect().top,
+            innerScroll: inner?.scrollTop,
+            contentScroll: node.scrollTop,
+          };
+        });
+        assert(
+          Math.abs(afterConfirmation.top - geometry.top) <= 1,
+          JSON.stringify({ before: geometry.top, afterConfirmation }),
+        );
         await page.screenshot({
           path: path.join(output, `history-${width}x${height}-${theme}.png`),
           fullPage: true,
