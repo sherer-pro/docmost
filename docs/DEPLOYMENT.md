@@ -36,6 +36,46 @@ The production host needs:
 Run all repository commands below from the exact release checkout. Do not
 deploy a moving branch or the `latest` tag.
 
+## 0. Publish the release image
+
+The normal publication path is a GitHub Release. The checked-in
+`.github/workflows/docker.yml` runs on `release: published`, executes the required
+reusable CI gates, and only then logs in to Docker Hub with the repository secrets
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. A local Docker Hub push credential is
+not required for this path.
+
+1. Align the root, client and server package versions, prepare release notes,
+   and complete the required release verification.
+2. Push the verified source and create a new `v${package.version}` tag pointing
+   to that exact commit. Never move an existing release tag.
+3. Publish the GitHub Release for that tag. A push to `main` runs CI but does
+   not publish the Docker image by itself.
+4. Follow the Docker Build and Push run for the release commit. Both its required
+   gates and `Publish verified image` job must succeed. The workflow publishes
+   `shererpro/docmost:${package.version}` first and then updates `latest`.
+5. Resolve the versioned registry digest and check the OCI version/revision
+   against the release tag before selecting it for production.
+
+Publishing a GitHub Release alone does not prove that an image exists. The release
+workflow checks out the tag; later commits on `main` are not included when that
+release run is retried. Manual `workflow_dispatch` instead publishes
+`manual-<commit-prefix>` and does not update `latest`.
+
+If dispatch reports `Actions has been disabled for this repository` while the
+permissions API says `enabled=true` and the workflow is `active`, diagnose the
+GitHub execution restriction before changing YAML or choosing another publication
+path. First inspect the repository Actions page. If GitHub says workflows are
+not running on the fork due to the scale of Actions usage and offers maintainer
+re-enablement, use the fork's explicit workflow-enablement confirmation. This
+can be a separate step from the already enabled permissions/workflow API flags;
+see [GitHub's fork-enablement instructions](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/configure-code-scanning/configure-code-scanning).
+Verify execution after confirmation rather than assuming HTTP 204 restored it.
+GitHub also documents a separate GitHub-controlled disabled state that cannot be
+cleared by changing repository Actions permissions; see
+[GitHub's repository Actions settings guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
+Record the failing endpoint, timestamp and request ID without credentials for
+review. Preserve the required gates and the existing registry secrets.
+
 ## 1. Pin the release image
 
 The release tag must be `v${package.version}`. The published application image
