@@ -1723,7 +1723,8 @@
             "step5": "Autorizza esplicitamente commenti, cronologia, metadati e allegati necessari nelle politiche di workspace, spazio e chiave. Le chiavi e connessioni OAuth esistenti non ottengono nuovi permessi automaticamente.",
             "step6": "Passa nextCursor finché non è null. In caso di MCP_SOURCE_CHANGED, ricomincia a leggere la fonte modificata.",
             "step7": "Usa getAttachmentText per il testo già estratto. Autorizza separatamente getAttachmentFileChunk e ricostruisci il file originale dai blocchi Base64 fino a 16 KiB.",
-            "step8": "Nel confronto di una versione salvata di grandi dimensioni, precise=false indica che le modifiche e i conteggi dei caratteri sono riepiloghi approssimativi per blocco. Per un confronto esatto del testo, leggete il testo completo con getPageVersion e getPage."
+            "step8": "Nel confronto di una versione salvata di grandi dimensioni, precise=false indica che le modifiche e i conteggi dei caratteri sono riepiloghi approssimativi per blocco. Per un confronto esatto del testo, leggete il testo completo con getPageVersion e getPage.",
+            "step9": "Se metadataSizeMismatch=true, usate fileSize per ricostruire l’originale e conservate declaredFileSize per la diagnostica. La lettura non corregge i metadati. MCP_SOURCE_CHANGED richiede comunque di ricominciare la lettura."
           },
           "success": "I dati autorizzati sono leggibili integralmente tramite continuazioni; le capacità negate e gli altri spazi restano inaccessibili.",
           "rollback": "Revochi la chiave o la connessione OAuth. Uscire termina anche l’accesso OAuth legato alla sessione.",

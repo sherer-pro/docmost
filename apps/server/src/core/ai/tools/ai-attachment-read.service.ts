@@ -176,17 +176,19 @@ export class AiAttachmentReadService {
         16 * 1024,
         range.version,
       );
-      if (
-        attachment.fileSize !== null &&
-        String(range.size) !== String(attachment.fileSize)
-      )
-        this.changed();
       const current = await this.readable(attachmentId, context);
       if (this.revision(current) !== metadataVersion) this.changed();
       const nextOffset = offset + range.data.length;
+      const declaredFileSize =
+        attachment.fileSize === null ? null : String(attachment.fileSize);
       return {
         content: {
           ...this.metadata(attachment),
+          fileSize: String(range.size),
+          declaredFileSize,
+          metadataSizeMismatch:
+            declaredFileSize !== null &&
+            declaredFileSize !== String(range.size),
           version,
           encoding: 'base64',
           offset,

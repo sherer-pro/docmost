@@ -70,6 +70,38 @@ function fixture(extension = '.txt') {
 }
 
 describe('scoped MCP attachment reads', () => {
+  it('reads a stable legacy file with stale declared size without changing metadata', async () => {
+    const { service, source, attachment } = fixture('.svg');
+    attachment.fileSize = '3506';
+    const chunks: Buffer[] = [];
+    let cursor: string | undefined;
+    do {
+      const content = (await service.file('attachment', cursor, context))
+        .content as any;
+      expect(content).toMatchObject({
+        fileSize: String(source.length),
+        declaredFileSize: '3506',
+        metadataSizeMismatch: true,
+        totalBytes: source.length,
+      });
+      chunks.push(Buffer.from(content.data, 'base64'));
+      cursor = content.nextCursor ?? undefined;
+    } while (cursor);
+    expect(Buffer.concat(chunks)).toEqual(source);
+    expect(attachment.fileSize).toBe('3506');
+  });
+
+  it('invalidates a legacy-file cursor if declared metadata changes between chunks', async () => {
+    const { service, source, attachment } = fixture('.svg');
+    attachment.fileSize = '3506';
+    const first = (await service.file('attachment', undefined, context))
+      .content as any;
+    attachment.fileSize = String(source.length);
+    await expect(
+      service.file('attachment', first.nextCursor, context),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('reassembles exact original bytes without exposing a storage path', async () => {
     const { service, source, storage } = fixture('.xlsx');
     const chunks: Buffer[] = [];
@@ -81,6 +113,11 @@ describe('scoped MCP attachment reads', () => {
         32768,
       );
       expect(JSON.stringify(content)).not.toContain('PRIVATE_STORAGE_PATH');
+      expect(content).toMatchObject({
+        fileSize: String(source.length),
+        declaredFileSize: String(source.length),
+        metadataSizeMismatch: false,
+      });
       const bytes = Buffer.from(content.data, 'base64');
       expect(bytes.length).toBeLessThanOrEqual(16384);
       chunks.push(bytes);

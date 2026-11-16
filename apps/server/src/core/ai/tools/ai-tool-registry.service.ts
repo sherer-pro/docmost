@@ -1162,7 +1162,7 @@ export class AiToolRegistryService {
         capability: 'page.attachments.file.read',
         category: 'attachments',
         description:
-          'Read original attachment bytes as base64 chunks up to 16 KiB. Reassemble in offset order; restart on a changed source.',
+          'Read original attachment bytes as base64 chunks up to 16 KiB. Reassemble in offset order; restart on a changed source. fileSize and totalBytes are actual storage sizes; declaredFileSize and metadataSizeMismatch expose stale legacy metadata without changing it.',
         required: ['attachmentId'],
         properties: { attachmentId: PAGE_ID_SCHEMA },
         execute: (args, context) => {

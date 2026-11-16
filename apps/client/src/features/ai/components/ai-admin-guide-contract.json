@@ -1,5 +1,5 @@
 {
-  "version": 46,
+  "version": 47,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,16 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "legacy-original-file-size",
+      "key": "scenario.inboundMcp.steps.step9",
+      "needles": [
+        "metadataSizeMismatch",
+        "fileSize",
+        "declaredFileSize",
+        "MCP_SOURCE_CHANGED"
+      ]
+    },
     {
       "id": "bounded-version-comparison",
       "key": "scenario.inboundMcp.steps.step8",
@@ -485,6 +495,7 @@
     "scenario.inboundMcp.steps.step5",
     "scenario.inboundMcp.steps.step6",
     "scenario.inboundMcp.steps.step7",
-    "scenario.inboundMcp.steps.step8"
+    "scenario.inboundMcp.steps.step8",
+    "scenario.inboundMcp.steps.step9"
   ]
 }

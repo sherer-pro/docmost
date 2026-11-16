@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 46 -->
+<!-- ai-admin-guide-contract-version: 47 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -1814,6 +1814,14 @@ additional capabilities are required.
 | `getPageVersion` | `page.history.content.read` | `pageId`, `historyId`, optional cursor; complete saved-version text under current source access |
 | `getAttachmentText` | `page.attachments.text.read` | `attachmentId`, optional cursor; already-extracted PDF/DOCX/TXT/MD text, processing status and extraction version |
 | `getAttachmentFileChunk` | `page.attachments.file.read` | `attachmentId`, optional cursor; original bytes as Base64, at most 16 KiB decoded bytes per response |
+
+For original bytes, `fileSize` and `totalBytes` describe the actual versioned storage
+object. `declaredFileSize` retains the nullable database declaration, and
+`metadataSizeMismatch` explicitly flags a stale legacy declaration. A stable
+original remains readable when those sizes differ; the read never repairs the
+database record. Both the metadata revision and storage-object version still bind
+every cursor, so changing metadata or overwriting the file between chunks returns
+`MCP_SOURCE_CHANGED`, including same-size overwrites.
 
 `getAttachmentText` never queues or starts extraction. It reports `pending`,
 `processing`, `ready`, `skipped`, `failed`, or `unsupported`; an empty text result

@@ -1723,7 +1723,8 @@
             "step5": "Explicitly allow comments, history, metadata and required attachment reads in the workspace, space and key policies. Existing keys and OAuth grants gain no new permissions automatically.",
             "step6": "Follow nextCursor until it is null. If MCP_SOURCE_CHANGED is returned, restart reading the changed source.",
             "step7": "Use getAttachmentText for already-extracted text. To obtain an original file, explicitly allow getAttachmentFileChunk and reassemble its Base64 chunks of at most 16 KiB.",
-            "step8": "For a large saved-version comparison, precise=false means changes and character counts are approximate block summaries. For an exact text comparison, read the complete text with getPageVersion and getPage."
+            "step8": "For a large saved-version comparison, precise=false means changes and character counts are approximate block summaries. For an exact text comparison, read the complete text with getPageVersion and getPage.",
+            "step9": "If metadataSizeMismatch is true, use fileSize to assemble the original and keep declaredFileSize for diagnostics. Reads do not repair metadata. MCP_SOURCE_CHANGED still requires restarting the read."
           },
           "success": "Allowed reads return complete data through continuation; forbidden capabilities and other spaces remain inaccessible.",
           "rollback": "Revoke the key or OAuth connection. Logging out also invalidates session-bound OAuth access.",

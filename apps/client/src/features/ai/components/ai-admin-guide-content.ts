@@ -169,6 +169,7 @@ export const AI_ADMIN_GUIDE_SCENARIOS: readonly AiAdminGuideScenario[] = [
       "step6",
       "step7",
       "step8",
+      "step9",
     ],
     titleKey: "ai.integrations.mcpTitle",
     contentKey: "ai.adminGuide.scenario.inboundMcp",

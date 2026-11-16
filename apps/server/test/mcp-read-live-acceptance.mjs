@@ -530,6 +530,7 @@ export async function runMcpReadAcceptance({
       files.push({
         id,
         bytes,
+        extension,
         supported,
         absolutePath: path.join(storageRoot, relative),
       });
@@ -550,6 +551,32 @@ export async function runMcpReadAcceptance({
               .status,
             'unsupported',
           );
+      }
+    });
+    await test('MCP stable legacy files expose actual bytes and stale size metadata without repairing records', async () => {
+      const { token } = await key();
+      const legacy = files.find((file) => file.extension === '.svg');
+      await sql`update attachments set file_size=3506 where id=${legacy.id}`;
+      try {
+        const chunks = [];
+        let cursor;
+        do {
+          const part = await read(token, 'getAttachmentFileChunk', {
+            attachmentId: legacy.id,
+            ...(cursor ? { cursor } : {}),
+          });
+          assert.equal(part.fileSize, String(legacy.bytes.length));
+          assert.equal(part.declaredFileSize, '3506');
+          assert.equal(part.metadataSizeMismatch, true);
+          chunks.push(Buffer.from(part.data, 'base64'));
+          cursor = part.nextCursor;
+        } while (cursor);
+        assert.equal(sha(Buffer.concat(chunks)), sha(legacy.bytes));
+        const [stored] =
+          await sql`select file_size from attachments where id=${legacy.id}`;
+        assert.equal(String(stored.file_size), '3506');
+      } finally {
+        await sql`update attachments set file_size=${legacy.bytes.length} where id=${legacy.id}`;
       }
     });
     await test('MCP original binary chunks reconstruct exact bytes and reject changed files', async () => {
@@ -586,6 +613,23 @@ export async function runMcpReadAcceptance({
           await rpc(token, 'getAttachmentFileChunk', {
             attachmentId: files[0].id,
             cursor: first.nextCursor,
+          })
+        ).structuredContent.code,
+        'MCP_SOURCE_CHANGED',
+      );
+      await writeFile(files[0].absolutePath, files[0].bytes);
+      const restored = await read(token, 'getAttachmentFileChunk', {
+        attachmentId: files[0].id,
+      });
+      await writeFile(
+        files[0].absolutePath,
+        Buffer.alloc(files[0].bytes.length + 17, 42),
+      );
+      assert.equal(
+        (
+          await rpc(token, 'getAttachmentFileChunk', {
+            attachmentId: files[0].id,
+            cursor: restored.nextCursor,
           })
         ).structuredContent.code,
         'MCP_SOURCE_CHANGED',

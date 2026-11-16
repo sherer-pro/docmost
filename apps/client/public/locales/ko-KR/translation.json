@@ -1723,7 +1723,8 @@
             "step5": "워크스페이스, 공간 및 키 정책에서 댓글, 기록, 메타데이터와 필요한 첨부 파일 읽기를 명시적으로 허용하세요. 기존 키와 OAuth 연결에 새 권한이 자동으로 추가되지는 않습니다.",
             "step6": "nextCursor가 null이 될 때까지 다음 요청에 전달하세요. MCP_SOURCE_CHANGED가 반환되면 변경된 소스를 처음부터 다시 읽으세요.",
             "step7": "이미 추출된 텍스트는 getAttachmentText로 읽습니다. 원본은 getAttachmentFileChunk를 별도로 허용하고 최대 16 KiB의 Base64 블록을 모아 복원하세요.",
-            "step8": "큰 저장 버전을 비교할 때 precise=false는 변경 내용과 문자 수가 블록별 근사 요약임을 뜻합니다. 텍스트를 정확히 비교하려면 getPageVersion과 getPage로 전체 텍스트를 읽으세요."
+            "step8": "큰 저장 버전을 비교할 때 precise=false는 변경 내용과 문자 수가 블록별 근사 요약임을 뜻합니다. 텍스트를 정확히 비교하려면 getPageVersion과 getPage로 전체 텍스트를 읽으세요.",
+            "step9": "metadataSizeMismatch=true이면 fileSize로 원본을 조합하고 declaredFileSize는 진단용으로 보관하세요. 읽기는 메타데이터를 수정하지 않습니다. MCP_SOURCE_CHANGED가 반환되면 처음부터 다시 읽어야 합니다."
           },
           "success": "허용된 데이터는 후속 요청으로 끝까지 읽을 수 있습니다. 거부된 기능과 다른 공간은 접근할 수 없습니다.",
           "rollback": "키 또는 OAuth 연결을 취소하세요. 로그아웃해도 세션에 연결된 OAuth 접근이 종료됩니다.",
