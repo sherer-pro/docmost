@@ -236,6 +236,31 @@ Use `--no-start` when an operator must boot an older application image against
 its exact migration boundary before upgrading. After that compatibility check,
 run the normal migration path for the target release and start Compose normally.
 
+## Host-generated daily archives
+
+The scheduled host archive observed on 17 November 2026 is a separate format.
+Its regular outer members are `postgres.dump`, `storage.tar`, `manifest.txt`,
+`SHA256SUMS`, `compose.production.yml`, `compose.limits.yml`,
+`deployment-postgres.env`, and `env-keys.txt`. The last file lists configuration
+key names; it does not replace separately escrowed secret values.
+
+This format is neither `docmost-backup/v1` nor the four-member legacy format
+below. The current CLI rejects its member set. Do not rename members or pass
+`--allow-legacy-env` to bypass that mismatch, and never execute archived
+Compose or environment files. A valid outer checksum and successful transport
+do not establish writer coordination or application recovery.
+
+Preserve these archives and their history. Recovery requires a separately
+validated procedure for this host format, the matching application/database
+release, and escrowed configuration secrets. Application-level recovery of
+this scheduled format remains an open acceptance item; the supported CLI
+examples elsewhere in this runbook do not close it.
+
+The host archive is pulled into `/var/backups/docmost/daily.0/backup` on the
+backup VPS and included in the full PC mirror. Point selection, retention,
+and the requirement to copy the rdiff repository before restoring are owned by
+[AllDocker BACKUPS](https://gitlab.sherer.pro/sherer-projects/alldocker-infra/-/blob/main/docs/BACKUPS.md).
+
 ## Legacy archives
 
 The verifier recognizes the former exact member set `.env`,
