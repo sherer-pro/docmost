@@ -2,12 +2,61 @@ import assert from "node:assert/strict";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createSmtpServer } from "node:net";
 import { createRequire } from "node:module";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { once } from "node:events";
 import test from "node:test";
 
 const serverRequire = createRequire(
   new URL("../apps/server/package.json", import.meta.url),
 );
+
+test("Excalidraw Sass compiles with a watcher dependency tree free of picomatch", () => {
+  const clientRequire = createRequire(
+    new URL("../apps/client/package.json", import.meta.url),
+  );
+  const excalidrawRequire = createRequire(
+    clientRequire.resolve("@excalidraw/excalidraw"),
+  );
+  const sassRequire = createRequire(excalidrawRequire.resolve("sass"));
+  const seen = new Set();
+  function checkDependencies(requireFrom, name) {
+    assert.notEqual(name, "picomatch");
+    let directory = dirname(requireFrom.resolve(name));
+    while (!existsSync(join(directory, "package.json"))) {
+      const parent = dirname(directory);
+      assert.notEqual(parent, directory, `Missing manifest for ${name}`);
+      directory = parent;
+    }
+    const manifestPath = join(directory, "package.json");
+    if (seen.has(manifestPath)) return;
+    seen.add(manifestPath);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const dependencyRequire = createRequire(manifestPath);
+    for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+      checkDependencies(dependencyRequire, dependency);
+    }
+  }
+  checkDependencies(sassRequire, "chokidar");
+  const sass = excalidrawRequire("sass");
+  const source = ".preview { color: red; &:hover { color: blue; } }";
+  const expected = ".preview{color:red}.preview:hover{color:blue}";
+  assert.equal(
+    sass.compileString(source, { style: "compressed" }).css,
+    expected,
+  );
+  assert.equal(
+    sass
+      .renderSync({
+        data: source,
+        outputStyle: "compressed",
+        silenceDeprecations: ["legacy-js-api"],
+      })
+      .css.toString(),
+    expected,
+  );
+});
+
 let htmlDependencies;
 function loadHtmlDependencies() {
   return (htmlDependencies ??= import("@tiptap/starter-kit").then(

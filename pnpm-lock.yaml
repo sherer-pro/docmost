@@ -27,6 +27,7 @@ overrides:
   '@tiptap/extension-underline': 3.17.1
   '@tiptap/extension-unique-id': 3.17.1
   '@tiptap/extensions': 3.17.1
+  '@excalidraw/excalidraw>sass': 1.79.4
   axios: 1.20.0
   body-parser: 2.4.0
   brace-expansion@>=5.0.0 <5.0.11: 5.0.11
@@ -440,7 +441,7 @@ importers:
         version: 18.3.1
       '@vitejs/plugin-react':
         specifier: ^5.1.1
-        version: 5.1.1(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
+        version: 5.1.1(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
       eslint:
         specifier: ^9.39.2
         version: 9.39.2(jiti@2.7.0)
@@ -482,10 +483,10 @@ importers:
         version: 8.17.0(eslint@9.39.2(jiti@2.7.0))(typescript@5.7.2)
       vite:
         specifier: ^7.3.2
-        version: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+        version: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
       vitest:
         specifier: 3.2.6
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@25.0.1)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@25.0.1)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
 
   apps/server:
     dependencies:
@@ -744,7 +745,7 @@ importers:
         version: 11.0.10(@nestjs/common@11.1.28(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28)
       '@react-email/preview-server':
         specifier: 5.2.10
-        version: 5.2.10(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.51.0)
+        version: 5.2.10(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.79.4)
       '@tiptap/extension-paragraph':
         specifier: 3.17.1
         version: 3.17.1(@tiptap/core@3.30.5(@tiptap/pm@3.30.5))
@@ -922,7 +923,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 3.2.6
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@23.0.1)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@23.0.1)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
 
 packages:
 
@@ -6573,10 +6574,6 @@ packages:
     resolution: {integrity: sha512-cU8v/EGSrnH+HnxV2z0J7/blxH8gq7Xh2JFT6Aroax7UohdmiJJlxApMxtKfuI7z68NvvVcmR78k2LbT6efhRg==}
     engines: {node: '>= 18'}
 
-  binary-extensions@2.3.0:
-    resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
-    engines: {node: '>=8'}
-
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
 
@@ -6740,10 +6737,6 @@ packages:
 
   chevrotain@11.0.3:
     resolution: {integrity: sha512-ci2iJH6LeIkvP9eJW6gpueU8cnZhv85ELY8w8WiFtNjMHA5ad6pQLaJo9mEly/9qUyCpvqX8/POVUTf18/HFdw==}
-
-  chokidar@3.6.0:
-    resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
-    engines: {node: '>= 8.10.0'}
 
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
@@ -8305,10 +8298,6 @@ packages:
 
   is-arrayish@0.2.1:
     resolution: {integrity: sha512-zz06S8t0ozoDXMG+ube26zeCTNXcKIPJZJi8hBrF4idCLms4CG9QtK7qBl1boi5ODzFpjswb5JPmHCbMpjaYzg==}
-
-  is-binary-path@2.1.0:
-    resolution: {integrity: sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==}
-    engines: {node: '>=8'}
 
   is-core-module@2.13.1:
     resolution: {integrity: sha512-hHrIjvZsftOsvKSn2TRYl63zvxsgE0K+0mYMoH6gD4omR5IWB2KynivBQczo3+wF1cCkjzvptnI9Q0sPU66ilw==}
@@ -10046,10 +10035,6 @@ packages:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
 
-  readdirp@3.6.0:
-    resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
-    engines: {node: '>=8.10.0'}
-
   readdirp@4.0.2:
     resolution: {integrity: sha512-yDMz9g+VaZkqBYS/ozoBJwaBhTbZo3UNYQHNRw1D3UFQB8oHB4uS/tAODO+ZLjGWmUbKnIlOWO+aaIiAxrUWHA==}
     engines: {node: '>= 14.16.0'}
@@ -10235,9 +10220,9 @@ packages:
   sanitize-filename-ts@1.0.2:
     resolution: {integrity: sha512-bON2VOJoappmaBHlnxvBNk5R7HkUAsirf5m1M5Kz15uZykDGbHfGPCQNcEQKR8HrQhgh9CmQ6Xe9y71yM9ywkw==}
 
-  sass@1.51.0:
-    resolution: {integrity: sha512-haGdpTgywJTvHC2b91GSq+clTKGbtkkZmVAb82jZQN/wTy6qs8DdFm2lhEQbEwrY0QDRgSQ3xDurqM977C3noA==}
-    engines: {node: '>=12.0.0'}
+  sass@1.79.4:
+    resolution: {integrity: sha512-K0QDSNPXgyqO4GZq2HO5Q70TLxTH6cIT59RdoCHMivrC8rqzaTw5ab9prjz9KUN1El4FLXrBXJhik61JR4HcGg==}
+    engines: {node: '>=14.0.0'}
     hasBin: true
 
   sax@1.4.1:
@@ -13401,7 +13386,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       roughjs: 4.6.4
-      sass: 1.51.0
+      sass: 1.79.4
       tunnel-rat: 0.1.2(@types/react@18.3.12)(react@18.3.1)
     transitivePeerDependencies:
       - '@types/react'
@@ -15719,10 +15704,10 @@ snapshots:
       marked: 15.0.12
       react: 18.3.1
 
-  '@react-email/preview-server@5.2.10(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.51.0)':
+  '@react-email/preview-server@5.2.10(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.79.4)':
     dependencies:
       esbuild: 0.27.3
-      next: 16.1.7(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.51.0)
+      next: 16.1.7(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.79.4)
     transitivePeerDependencies:
       - '@babel/core'
       - '@opentelemetry/api'
@@ -17224,7 +17209,7 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@5.1.1(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))':
+  '@vitejs/plugin-react@5.1.1(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.6
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.6)
@@ -17232,7 +17217,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.47
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -17244,13 +17229,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 2.0.0
 
-  '@vitest/mocker@3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))':
+  '@vitest/mocker@3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 3.2.6
       estree-walker: 3.0.3
       magic-string: 0.30.17
     optionalDependencies:
-      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
 
   '@vitest/pretty-format@3.2.6':
     dependencies:
@@ -17690,8 +17675,6 @@ snapshots:
       node-addon-api: 8.5.0
       node-gyp-build: 4.8.4
 
-  binary-extensions@2.3.0: {}
-
   bl@4.1.0:
     dependencies:
       buffer: 5.7.1
@@ -17893,18 +17876,6 @@ snapshots:
       '@chevrotain/types': 11.0.3
       '@chevrotain/utils': 11.0.3
       lodash-es: 4.18.1
-
-  chokidar@3.6.0:
-    dependencies:
-      anymatch: 3.1.3
-      braces: 3.0.3
-      glob-parent: 5.1.2
-      is-binary-path: 2.1.0
-      is-glob: 4.0.3
-      normalize-path: 3.0.0
-      readdirp: 3.6.0
-    optionalDependencies:
-      fsevents: 2.3.3
 
   chokidar@4.0.3:
     dependencies:
@@ -19599,10 +19570,6 @@ snapshots:
 
   is-arrayish@0.2.1: {}
 
-  is-binary-path@2.1.0:
-    dependencies:
-      binary-extensions: 2.3.0
-
   is-core-module@2.13.1:
     dependencies:
       hasown: 2.0.4
@@ -20704,7 +20671,7 @@ snapshots:
       pino-http: 11.0.0
       rxjs: 7.8.2
 
-  next@16.1.7(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.51.0):
+  next@16.1.7(@babel/core@7.29.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.62.1)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.79.4):
     dependencies:
       '@next/env': 16.1.7
       '@swc/helpers': 0.5.15
@@ -20725,7 +20692,7 @@ snapshots:
       '@next/swc-win32-x64-msvc': 16.1.7
       '@opentelemetry/api': 1.9.0
       '@playwright/test': 1.62.1
-      sass: 1.51.0
+      sass: 1.79.4
       sharp: 0.34.5
     transitivePeerDependencies:
       - '@babel/core'
@@ -21745,10 +21712,6 @@ snapshots:
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
 
-  readdirp@3.6.0:
-    dependencies:
-      picomatch: 2.3.2
-
   readdirp@4.0.2: {}
 
   real-require@0.2.0: {}
@@ -21949,9 +21912,9 @@ snapshots:
     dependencies:
       truncate-utf8-bytes: 1.0.2
 
-  sass@1.51.0:
+  sass@1.79.4:
     dependencies:
-      chokidar: 3.6.0
+      chokidar: 4.0.3
       immutable: 4.3.9
       source-map-js: 1.2.2
 
@@ -22764,13 +22727,13 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-node@3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
+  vite-node@3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -22785,7 +22748,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
+  vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
     dependencies:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.4)
@@ -22798,15 +22761,16 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
       less: 4.2.0
+      sass: 1.79.4
       terser: 5.39.0
       tsx: 4.19.3
       yaml: 2.9.0
 
-  vitest@3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@23.0.1)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
+  vitest@3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@23.0.1)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.6
-      '@vitest/mocker': 3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
+      '@vitest/mocker': 3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
       '@vitest/pretty-format': 3.2.7
       '@vitest/runner': 3.2.6
       '@vitest/snapshot': 3.2.6
@@ -22824,8 +22788,8 @@ snapshots:
       tinyglobby: 0.2.17
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
-      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
-      vite-node: 3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite-node: 3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/debug': 4.1.12
@@ -22846,11 +22810,11 @@ snapshots:
       - tsx
       - yaml
 
-  vitest@3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@25.0.1)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
+  vitest@3.2.6(@types/debug@4.1.12)(@types/node@22.19.1)(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@25.0.1)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.6
-      '@vitest/mocker': 3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
+      '@vitest/mocker': 3.2.6(vite@7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0))
       '@vitest/pretty-format': 3.2.7
       '@vitest/runner': 3.2.6
       '@vitest/snapshot': 3.2.6
@@ -22868,8 +22832,8 @@ snapshots:
       tinyglobby: 0.2.17
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
-      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
-      vite-node: 3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite: 7.3.2(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
+      vite-node: 3.2.4(@types/node@22.19.1)(jiti@2.7.0)(less@4.2.0)(sass@1.79.4)(terser@5.39.0)(tsx@4.19.3)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/debug': 4.1.12
