@@ -46,7 +46,10 @@ const server = await createServer({
   root,
   mode: "test",
   cacheDir: path.resolve(root, "../../artifacts/database/vite-cache"),
-  optimizeDeps: { entries: ["e2e/database/fixture.html"] },
+  optimizeDeps: {
+    entries: ["e2e/database/fixture.html"],
+    include: ["react-helmet-async"],
+  },
   server: { host: "127.0.0.1", port: 5195, strictPort: true, watch: null },
   plugins: [
     {

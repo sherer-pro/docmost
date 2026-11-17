@@ -248,6 +248,8 @@ for limits, policy controls, transaction recovery and MCP boundaries.
   its draft, while a new empty title and ordinary Enter/Tab/dropdown navigation
   still work. CI and `verify:release` require this suite. The synthetic runner
   accepts `--browser=chromium|firefox|webkit|all`; its default remains Chromium.
+  It prebundles `react-helmet-async` before browser startup so cold dependency
+  discovery cannot reload the fixture during its first keyboard interaction.
 - Full local application: build the monorepo, then run `node apps/client/e2e/database/run-live.mjs`. The runner creates dedicated localhost PostgreSQL 18 and Redis 8 containers, applies all migrations, starts the built API and collaboration process, and serves the production client. It seeds 1,000 rows and 20 fields with actual editor/reader sessions and mixed row ACL, runs the PostgreSQL regressions, HTTP/export/import/outbox checks, and the light/dark browser matrix at 320/390/768/1440 px. Application secrets and authentication cookies stay in memory; traces and videos are disabled. A separate working directory prevents loading the repository `.env` and isolates file storage. Cleanup removes only the runner's own processes, containers, network, and runtime files. Compact receipts are saved under `artifacts/database/live/<timestamp>-<runId-prefix>/`; exclusive directory creation and `runtime-owner.json` prevent concurrent runs from sharing a runtime. `--api-only` and `--startup-only` are diagnostic subsets; Playwright flags such as `--grep` select browser scenarios and are not full acceptance.
 
 The live runner also accepts `--subnet=10.x.x.0/28` for an unused private
