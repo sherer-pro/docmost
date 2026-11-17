@@ -238,6 +238,9 @@ run the normal migration path for the target release and start Compose normally.
 
 ## Host-generated daily archives
 
+The installed transition and actual native/application restore results are recorded
+in [the 17 November acceptance](./verification/docmost-native-backup-2026-11-17.md).
+
 The scheduled producer now uses the same coordinated `docmost-backup/v1` CLI.
 `backup:scheduled` creates and verifies a candidate in a private directory on
 the destination filesystem. It grants only read access to the `pullbackup`
