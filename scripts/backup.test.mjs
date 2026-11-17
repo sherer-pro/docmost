@@ -702,3 +702,37 @@ scheduledBackup(${JSON.stringify(options)},async (binary,args)=>{
     }
   },
 );
+
+test("runs the scheduled CLI through its installed checkout symlink", async () => {
+  const { symlinkSync, unlinkSync } = await import("node:fs");
+  const { dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const { spawnSync } = await import("node:child_process");
+  const root = mkdtempSync(join(tmpdir(), "docmost-scheduled-entry-"));
+  const link = join(root, "installed-scripts");
+  try {
+    symlinkSync(
+      dirname(fileURLToPath(import.meta.url)),
+      link,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const result = spawnSync(
+      process.execPath,
+      [join(link, "backup-scheduled.mjs")],
+      { encoding: "utf8" },
+    );
+    assert.equal(
+      result.status,
+      1,
+      "invalid scheduled CLI input must fail, not silently skip main",
+    );
+    assert.match(result.stderr, /Scheduled backup failed/u);
+  } finally {
+    try {
+      unlinkSync(link);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});

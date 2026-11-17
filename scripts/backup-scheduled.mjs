@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -205,7 +206,7 @@ export async function scheduledBackup(options, execute = runScheduledCommand) {
 
 if (
   process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)
 ) {
   scheduledBackup(
     parseArguments([
