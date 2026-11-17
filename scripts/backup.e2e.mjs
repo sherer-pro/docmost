@@ -12,8 +12,8 @@ import {
   statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, basename } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve, basename, isAbsolute } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repository = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const root = mkdtempSync(join(tmpdir(), "docmost-backup-e2e-"));
@@ -106,7 +106,12 @@ const cli = (command, file, extra = [], fail = false, preload) => {
   const result = run(
     process.execPath,
     [
-      ...(preload ? ["--import", preload] : []),
+      ...(preload
+        ? [
+            "--import",
+            isAbsolute(preload) ? pathToFileURL(preload).href : preload,
+          ]
+        : []),
       join(repository, "scripts/backup.mjs"),
       command,
       "--archive",
@@ -241,7 +246,12 @@ function assertRestorePreflightCleanup(verifiedArchive) {
     const result = spawnSync(
       process.execPath,
       [
-        ...(preload ? ["--import", preload] : []),
+        ...(preload
+          ? [
+              "--import",
+              isAbsolute(preload) ? pathToFileURL(preload).href : preload,
+            ]
+          : []),
         join(repository, "scripts/backup.mjs"),
         "restore",
         "--archive",

@@ -138,6 +138,7 @@
 - Verify the backup CLI contract: `pnpm check:backup`
 - Isolated production-manifest create/verify/restore and failure recovery acceptance: `pnpm test:backup:e2e` (fresh test project/volumes, synthetic lifecycle fixtures, real PostgreSQL/Redis/Typesense, no published ports).
 - Create, verify, or restore a coordinated Compose backup: `pnpm backup -- create|verify|restore ...`; use absolute archive paths outside the repository and follow `docs/BACKUP_AND_RESTORE.md`.
+- Publish the native scheduled archive: `pnpm backup:scheduled -- --archive ABSOLUTE_PATH --env-file PATH --state-file PATH --compose-file PATH --yes`. Repeat ordered inputs as for `backup`; the Linux publisher grants `pullbackup` read ACL before atomic replacement, resumes previously running writers, and checks their health. Install `scripts/backup-docmost-native.conf` as a systemd drop-in only after an off-host backup and restore rehearsal; retain the existing timer. Private receipts and a separate publication lock live beside deployment state in `scheduled-backup/`.
 
 ### Development
 

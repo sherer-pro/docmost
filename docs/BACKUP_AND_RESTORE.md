@@ -181,7 +181,7 @@ The exact outer member set is:
 
 - `manifest.json`;
 - `postgres.dump`;
-- `storage.tar.gz`.
+- `storage.tar.gz`. Storage uses sorted GNU tar entries and standard `gzip -n --rsyncable`: it remains readable by the same verifier and restore path while limiting compressed-stream drift for rdiff transport.
 
 `manifest.json` records the application image identity and OCI version/revision
 labels (explicitly `unknown` when absent), separate tool checkout provenance, PostgreSQL dump
@@ -238,28 +238,69 @@ run the normal migration path for the target release and start Compose normally.
 
 ## Host-generated daily archives
 
-The scheduled host archive observed on 17 November 2026 is a separate format.
-Its regular outer members are `postgres.dump`, `storage.tar`, `manifest.txt`,
-`SHA256SUMS`, `compose.production.yml`, `compose.limits.yml`,
-`deployment-postgres.env`, and `env-keys.txt`. The last file lists configuration
-key names; it does not replace separately escrowed secret values.
+The scheduled producer now uses the same coordinated `docmost-backup/v1` CLI.
+`backup:scheduled` creates and verifies a candidate in a private directory on
+the destination filesystem. It grants only read access to the `pullbackup`
+account, then atomically replaces `docmost.latest.tar`. PostgreSQL, storage,
+image provenance and the manifest follow the normal three-member format above.
+Secrets and deployment files are not added to this archive.
 
-This format is neither `docmost-backup/v1` nor the four-member legacy format
-below. The current CLI rejects its member set. Do not rename members or pass
-`--allow-legacy-env` to bypass that mismatch, and never execute archived
-Compose or environment files. A valid outer checksum and successful transport
-do not establish writer coordination or application recovery.
+The publisher remembers which API/collaboration services were running. After
+creation, including a failed creation, it starts those services and waits for
+their health checks. A creation, health or ACL failure retains the previous
+published archive. It does not start a writer that was already stopped.
+Native backup/migration serialization remains in effect; an additional private
+publication lock prevents concurrent publishers. Stop conditions and stale-lock
+review apply to both locks; neither is stolen automatically after a crash.
 
-Preserve these archives and their history. Recovery requires a separately
-validated procedure for this host format, the matching application/database
-release, and escrowed configuration secrets. Application-level recovery of
-this scheduled format remains an open acceptance item; the supported CLI
-examples elsewhere in this runbook do not close it.
+Example Linux installation:
 
-The host archive is pulled into `/var/backups/docmost/daily.0/backup` on the
-backup VPS and included in the full PC mirror. Point selection, retention,
-and the requirement to copy the rdiff repository before restoring are owned by
+1. Keep an immutable verified tool checkout at `/opt/docmost/backup-tool` and
+   a qualified Node 22 executable at `/opt/docmost/tools/node22`.
+2. Install `scripts/backup-docmost-native.conf` as
+   `/etc/systemd/system/backup-docmost.service.d/20-native.conf`. Adapt every
+   ordered env/Compose input to the actual deployment. A later host drop-in can
+   set `DOCMOST_BACKUP_COMPOSE` to a flattened release manifest; its filename
+   is not evidence of the running application version.
+3. Preserve the existing daily timer, low-priority service settings and the
+   deployment owner's separately escrowed secrets. Reload systemd, run the
+   service manually, check native `verify`, writer health, off-host pull and
+   an isolated native restore before accepting the change.
+
+The command itself is also available for an explicit controlled run:
+
+```bash
+corepack pnpm backup:scheduled -- \
+  --archive /backup/docmost.latest.tar \
+  --env-file /etc/docmost/docmost.env \
+  --state-file /var/lib/docmost/deployment/postgres.env \
+  --compose-file /opt/docmost/compose.production.yml \
+  --yes
+```
+
+`scheduled-backup/receipt.json` beside the selected deployment state records
+the published hash, bytes and original creation time. `last-error.json` records
+the phase, exit code and bounded native diagnostic from the last failure;
+compare its timestamp with the current receipt. Neither file is exported as a
+backup payload. A hard kill can leave private staging or operation locks.
+Check the recorded owner PID, active services and exact staging paths before
+manual recovery. Do not remove a lock or data based only on its age.
+
+Before this transition, the host producer used eight regular members:
+`postgres.dump`, `storage.tar`, `manifest.txt`, `SHA256SUMS`,
+`compose.production.yml`, `compose.limits.yml`, `deployment-postgres.env`,
+and `env-keys.txt`. That format remains unsupported by native restore.
+Do not rename its members, execute archived configuration, or use
+`--allow-legacy-env` to bypass the mismatch. Historical points keep their
+original formats; switching the producer does not convert them.
+
+A fresh verified off-host v1 backup and a successful restore drill are required
+before retiring an older host archive. The normal transport still pulls
+`/backup/docmost.latest.tar` into `/var/backups/docmost/daily.0/backup` on the
+backup VPS and includes it in the full PC mirror. Point selection, retention
+and working-copy rdiff restore are owned by
 [AllDocker BACKUPS](https://gitlab.sherer.pro/sherer-projects/alldocker-infra/-/blob/main/docs/BACKUPS.md).
+No source receives credentials or write access to the backup VPS.
 
 ## Legacy archives
 

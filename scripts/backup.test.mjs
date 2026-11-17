@@ -468,3 +468,237 @@ test("builds a deterministic storage inventory", () => {
     expected,
   );
 });
+
+test("publishes scheduled backups only after native creation, writer health and read ACL", async () => {
+  const { scheduledBackup } = await import("./backup-scheduled.mjs");
+  const root = mkdtempSync(join(tmpdir(), "docmost-scheduled-test-"));
+  const runtime = join(root, "runtime.env");
+  const state = join(root, "state.env");
+  const compose = join(root, "compose.yml");
+  const archive = join(root, "latest.tar");
+  writeFileSync(runtime, "STORAGE_DRIVER=local\n");
+  writeFileSync(
+    state,
+    "POSTGRES_VOLUME_NAME=test-pg\nDOCMOST_STORAGE_VOLUME_NAME=test-storage\nMIGRATION_PHASE=ready\n",
+  );
+  writeFileSync(compose, "name: test\nservices: {}\n");
+  const options = parseArguments([
+    "create",
+    "--yes",
+    "--archive",
+    archive,
+    "--env-file",
+    runtime,
+    "--state-file",
+    state,
+    "--compose-file",
+    compose,
+  ]);
+  let mode = "success";
+  const calls = [];
+  const execute = async (binary, args) => {
+    calls.push([binary, ...args]);
+    if (args.includes("create")) {
+      writeFileSync(
+        args[args.indexOf("--archive") + 1],
+        "new coordinated payload",
+      );
+      if (mode === "create-failure")
+        throw new Error("native verification failed");
+      return JSON.stringify({
+        status: "created",
+        manifest: { schema: BACKUP_SCHEMA, createdAt: "2026-11-17T00:00:00Z" },
+      });
+    }
+    if (binary === "setfacl") {
+      if (mode === "acl-failure") throw new Error("ACL failed");
+      assert.equal(readFileSync(archive, "utf8"), "previous verified payload");
+      return "";
+    }
+    if (args.includes("--services")) return "db\nredis\ndocmost\ncollab\n";
+    if (args.includes("-q")) return "api-id\ncollab-id\n";
+    if (args[0] === "inspect") {
+      if (mode === "health-failure") throw new Error("health check failed");
+      return JSON.stringify(
+        [1, 2].map(() => ({
+          State: { Running: true, Health: { Status: "healthy" } },
+        })),
+      );
+    }
+    return "";
+  };
+  try {
+    for (mode of ["create-failure", "acl-failure", "health-failure"]) {
+      calls.length = 0;
+      writeFileSync(archive, "previous verified payload");
+      await assert.rejects(scheduledBackup(options, execute));
+      assert.equal(readFileSync(archive, "utf8"), "previous verified payload");
+      assert(
+        calls.some((args) => args.includes("start") && args.includes("collab")),
+      );
+      const { readdirSync } = await import("node:fs");
+      assert(
+        !readdirSync(root).some((name) => name.startsWith(".docmost-native-")),
+      );
+    }
+    mode = "success";
+    writeFileSync(archive, "previous verified payload");
+    const receipt = await scheduledBackup(options, execute);
+    assert.equal(receipt.status, "published");
+    assert.equal(receipt.bytes, Buffer.byteLength("new coordinated payload"));
+    assert.equal(readFileSync(archive, "utf8"), "new coordinated payload");
+    assert.match(receipt.sha256, /^[a-f0-9]{64}$/u);
+    const stateReceipt = JSON.parse(
+      readFileSync(join(root, "scheduled-backup", "receipt.json"), "utf8"),
+    );
+    assert.deepEqual(receipt, stateReceipt);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects concurrent scheduled publishers without replacing the last copy", async () => {
+  const { scheduledBackup } = await import("./backup-scheduled.mjs");
+  const root = mkdtempSync(join(tmpdir(), "docmost-scheduled-lock-"));
+  try {
+    const runtime = join(root, "runtime.env");
+    const state = join(root, "state.env");
+    const compose = join(root, "compose.yml");
+    const archive = join(root, "latest.tar");
+    writeFileSync(runtime, "");
+    writeFileSync(
+      state,
+      "POSTGRES_VOLUME_NAME=test-pg\nDOCMOST_STORAGE_VOLUME_NAME=test-storage\nMIGRATION_PHASE=ready\n",
+    );
+    writeFileSync(compose, "services: {}\n");
+    writeFileSync(archive, "last verified copy");
+    const options = parseArguments([
+      "create",
+      "--yes",
+      "--archive",
+      archive,
+      "--env-file",
+      runtime,
+      "--state-file",
+      state,
+      "--compose-file",
+      compose,
+    ]);
+    const directory = join(root, "scheduled-backup");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(directory);
+    const receipt = join(directory, "receipt.json");
+    writeFileSync(receipt, "{}");
+    await withDeploymentLock(receipt, "other-publisher", async () => {
+      await assert.rejects(
+        scheduledBackup(options, async () => {
+          throw new Error("must not run");
+        }),
+        /locked/u,
+      );
+      assert.equal(readFileSync(archive, "utf8"), "last verified copy");
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test(
+  "terminates a scheduled create process group and preserves the published copy",
+  { skip: process.platform === "win32" },
+  async () => {
+    const { spawn } = await import("node:child_process");
+    const { once } = await import("node:events");
+    const root = mkdtempSync(join(tmpdir(), "docmost-scheduled-term-"));
+    let child;
+    try {
+      const runtime = join(root, "runtime.env");
+      const state = join(root, "state.env");
+      const compose = join(root, "compose.yml");
+      const archive = join(root, "latest.tar");
+      const pidfile = join(root, "child-pids.json");
+      writeFileSync(runtime, "");
+      writeFileSync(
+        state,
+        "POSTGRES_VOLUME_NAME=test-pg\nDOCMOST_STORAGE_VOLUME_NAME=test-storage\nMIGRATION_PHASE=ready\n",
+      );
+      writeFileSync(compose, "services: {}\n");
+      writeFileSync(archive, "previous verified copy");
+      const options = parseArguments([
+        "create",
+        "--yes",
+        "--archive",
+        archive,
+        "--env-file",
+        runtime,
+        "--state-file",
+        state,
+        "--compose-file",
+        compose,
+      ]);
+      const create = `const {spawn}=require('node:child_process');
+const grandchild=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
+require('node:fs').writeFileSync(${JSON.stringify(pidfile)},JSON.stringify({child:process.pid,grandchild:grandchild.pid}));
+setInterval(()=>{},1000);`;
+      const probe = join(root, "probe.mjs");
+      writeFileSync(
+        probe,
+        `import {scheduledBackup,runScheduledCommand} from ${JSON.stringify(new URL("./backup-scheduled.mjs", import.meta.url).href)};
+scheduledBackup(${JSON.stringify(options)},async (binary,args)=>{
+ if(args.includes('create'))return runScheduledCommand(process.execPath,['-e',${JSON.stringify(create)}]);
+ return '';
+}).catch(()=>{process.exitCode=1;});`,
+      );
+      child = spawn(process.execPath, [probe], {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      child.stderr.resume();
+      const exited = once(child, "exit");
+      const { existsSync } = await import("node:fs");
+      for (let attempt = 0; !existsSync(pidfile); attempt += 1) {
+        assert(attempt < 200, "create child did not start");
+        await new Promise((done) => setTimeout(done, 20));
+      }
+      const pids = JSON.parse(readFileSync(pidfile, "utf8"));
+      child.kill("SIGTERM");
+      const [code] = await Promise.race([
+        exited,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("scheduled TERM did not finish")),
+            5000,
+          ).unref(),
+        ),
+      ]);
+      assert.equal(code, 1);
+      assert.equal(readFileSync(archive, "utf8"), "previous verified copy");
+      for (const pid of Object.values(pids)) {
+        let running;
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          try {
+            running = !/^State:\s+Z/mu.test(
+              readFileSync(`/proc/${pid}/status`, "utf8"),
+            );
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
+            running = false;
+          }
+          if (!running) break;
+          await new Promise((done) => setTimeout(done, 20));
+        }
+        assert.equal(running, false, "create descendant is still running");
+      }
+      const error = JSON.parse(
+        readFileSync(join(root, "scheduled-backup", "last-error.json"), "utf8"),
+      );
+      assert.equal(error.previousArchiveRetained, true);
+      const { readdirSync } = await import("node:fs");
+      assert(
+        !readdirSync(root).some((name) => name.startsWith(".docmost-native-")),
+      );
+    } finally {
+      if (child?.exitCode === null) child.kill("SIGKILL");
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
