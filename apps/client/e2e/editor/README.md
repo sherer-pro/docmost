@@ -49,6 +49,12 @@ PNG/WAV/PDF fixtures avoid public conversion services. Console failures, axe
 results, screenshots, exports, and the Playwright HTML/JSON reports are stored
 under the same audit directory.
 
+The media/clipboard scenario serves a static iframe for its single YouTube
+fixture on both youtube.com and youtube-nocookie.com. This isolates local modal
+keyboard focus from remote player scripts that can activate their own frame.
+All modal focus assertions remain enabled; actual YouTube playback and remote
+frame focus behavior are outside this scenario's acceptance boundary.
+
 The page-template matrix uses the current
 `allowRegularTemplate`/`allowSyncedTemplate` policy flags. It does not create
 legacy `pageEmbed` nodes. Template and synced-block scenarios provision an

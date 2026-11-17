@@ -11,6 +11,18 @@ test("media nodes, fullscreen image, Mermaid sanitization and clipboard survive 
   page,
   context,
 }, testInfo) => {
+  // Keep remote player scripts from changing focus during the local modal test.
+  await page.route(
+    (url) =>
+      ["www.youtube.com", "www.youtube-nocookie.com"].includes(url.hostname) &&
+      url.pathname === "/embed/dQw4w9WgXcQ",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body>Editor audit video fixture</body></html>",
+      }),
+  );
   const api = await createAdminApi();
   const state = await loadAuditState();
   const current = await apiGet<any>(api, "/api/users/me");
