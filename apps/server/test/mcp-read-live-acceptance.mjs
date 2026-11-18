@@ -105,7 +105,7 @@ export async function runMcpReadAcceptance({
     `/spaces/${space.id}/ai/tool-policy`,
   );
   const capabilities = originalPolicy.catalog
-    .filter((entry) => entry.exposures.includes('mcp'))
+    .filter((entry) => entry.exposures.includes('mcp') && entry.writeClass === 'read_only')
     .map((entry) => entry.capability);
   const keys = [];
   const policyBody = (view) => ({

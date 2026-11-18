@@ -20,6 +20,8 @@ import {
 } from '../common/helpers/prosemirror/ai-page-operation';
 import { hashPageTemplateInstanceContent } from '../common/helpers/prosemirror/page-template-content-hash';
 import { strictJsonToNode } from './collaboration.util';
+import { applyMcpContentEdit } from '../common/helpers/prosemirror/mcp-content-edit';
+import { mcpContentIntents } from './mcp-content-intent';
 import type {
   CollaborationActor,
   CollaborationCommandHandlers,
@@ -33,6 +35,52 @@ export class CollaborationHandler {
 
   getHandlers(hocuspocus: Hocuspocus): CollaborationCommandHandlers {
     return {
+      applyMcpContentEdit: async (documentName, payload) => {
+        const { edit, ...intent } = payload;
+        await this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user: intent.user },
+          (doc) => {
+            const pending = mcpContentIntents.get(doc);
+            if (pending) {
+              if (
+                pending.keyId === intent.keyId &&
+                pending.operationId === intent.operationId &&
+                pending.previewHash === intent.previewHash
+              )
+                return;
+              throw new ConflictException(
+                'A previous MCP edit is waiting for persistence',
+              );
+            }
+            const current = TiptapTransformer.fromYdoc(doc, 'default');
+            if (hashProseMirrorJson(current) !== intent.baseHash) {
+              throw new ConflictException({
+                code: 'MCP_WRITE_STALE',
+                message: 'The live document changed',
+              });
+            }
+            const { next } = applyMcpContentEdit(current, edit);
+            const nextNode = strictJsonToNode(next as any);
+            nextNode.check();
+            if (
+              hashProseMirrorJson(prosemirrorNodeToYJson(nextNode)) !==
+              intent.afterHash
+            ) {
+              throw new ConflictException('The edit differs from the preview');
+            }
+            const fragment = doc.getXmlFragment('default');
+            doc.transact(() => {
+              updateYFragment(doc, fragment, nextNode, {
+                mapping: new Map(),
+                isOMark: new Map(),
+              });
+              mcpContentIntents.set(doc, intent);
+            });
+          },
+        );
+      },
       updatePageContent: async (
         documentName: string,
         payload: {

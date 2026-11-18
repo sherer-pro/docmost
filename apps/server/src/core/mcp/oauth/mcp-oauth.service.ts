@@ -286,6 +286,7 @@ export class McpOAuthService {
         workspace.id,
         spaceId,
         'mcp',
+        true,
       );
       if (!capabilities.length)
         throw new ForbiddenException('No MCP read tools are available');

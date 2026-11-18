@@ -110,6 +110,7 @@ const TOOL_CATEGORY_ICONS: Record<AiBuiltinToolCategory, TablerIcon> = {
   search: IconSearch,
   page_read: IconFileText,
   page_write: IconEdit,
+  mcp_write: IconEdit,
   context: IconStack2,
   database: IconDatabase,
   page_structure: IconSitemap,

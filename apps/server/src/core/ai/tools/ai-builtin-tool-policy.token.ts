@@ -9,5 +9,6 @@ export interface AiBuiltinToolPolicyResolver {
     workspaceId: string,
     spaceId: string,
     exposure: 'agent' | 'mcp',
+    readOnly?: boolean,
   ): Promise<AiBuiltinToolCapability[]>;
 }

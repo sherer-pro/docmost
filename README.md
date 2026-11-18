@@ -198,15 +198,17 @@ Supported capabilities include:
 
 - a shared content-exclusion policy applied to retrieval, synchronization, agent tools, and MCP results;
 
-- a stateless read-only MCP endpoint for external assistants, using the same
-  access-aware tool registry and exact capability policy as agent mode.
+- a stateless MCP endpoint for external assistants, with access-aware reads
+  and individually enabled API-key write capabilities.
 
 This allows Docmost content to serve as an up-to-date knowledge base for local
 or corporate LLMs. RAG and MCP keys are scoped to one space, are not
 interchangeable, and are revalidated on every request against the creator's
-current membership and page access. Existing MCP keys retain their selected capabilities; the seven baseline reads
-remain the compatibility catalog. Additional reads require explicit selection
-for each key.
+current membership and page access. The seven baseline reads remain available
+to compatible keys. The upgrade extends existing MCP keys
+with six write capabilities and two comment reads, subject to workspace and
+space restrictions. New keys start with read access and writes can be
+selected individually.
 
 Inbound MCP reads complete page text, nested tables, database values, comments
 and saved versions through version-bound continuation within 32 KiB per result.
@@ -216,7 +218,14 @@ MCP-only tools return complete safe document metadata and large values.
 `getAttachmentFileChunk` returns original bytes as Base64 blocks of at most
 16 KiB. Each requires its own explicit capability and rechecks the owner page's
 ACL and AI exclusions. No storage paths or signed URLs are exposed. Existing
-OAuth grants keep their frozen permissions; both MCP directions remain read-only.
+OAuth grants retain their frozen read permissions.
+
+With a write-enabled key, an external client can create pages, rename them,
+edit individual Markdown blocks, upload images and diagram previews up to
+2 MiB, reply to comments, and resolve or reopen threads. Each change has an
+exact preview, a target revision and an operation ID. After an interrupted
+request, the client can recover the original result without duplicating the
+write. [Inbound MCP write contract](docs/AI_ASSISTANT_AND_RAG.md#inbound-mcp-writes)
 
 For built-in synchronization, the Open WebUI URL, Knowledge Base ID, and a
 separate writer API key are configured in each space's UI; the writer key is
@@ -323,7 +332,7 @@ AI features are implemented as a separate server-side subsystem:
 AI can query and summarize an explicitly selected database view through the
 shared server compiler. Optional internal Agent proposals can update up to
 20 rows and 100 existing cells with a full 32 KiB preview, revision checks and
-a transactional receipt. Both MCP directions remain read-only. Administrators
+a transactional receipt. MCP database tools remain read-only. Administrators
 can require read-only tools and answers grounded in permitted sources; the
 workspace restriction cannot be weakened by a space or assistant profile.
 
@@ -1049,8 +1058,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.3.3`. Follow the
-[v1.3.3 upgrade and rollback notes](./apps/server/docs/release-notes/v1.3.3.md)
+For the current candidate the only accepted release tag is `v1.4.0`. Follow the
+[v1.4.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.4.0.md)
 before deployment.
 
 For backend changes:

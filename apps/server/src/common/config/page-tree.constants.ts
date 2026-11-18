@@ -10,3 +10,4 @@
  * The value is also the effective nesting limit for the page tree.
  */
 export const MAX_PAGE_TREE_DEPTH = 100;
+export const PAGE_TREE_LOCK_NAMESPACE = 0x70616765;

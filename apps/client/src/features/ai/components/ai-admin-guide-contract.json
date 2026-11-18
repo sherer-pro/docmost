@@ -1,5 +1,5 @@
 {
-  "version": 47,
+  "version": 48,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,11 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "inbound-mcp-write-preview",
+      "key": "scenario.inboundMcp.steps.step10",
+      "needles": ["inspect", "preview", "expectedRevision", "operationId", "commit", "previewHash", "status"]
+    },
     {
       "id": "legacy-original-file-size",
       "key": "scenario.inboundMcp.steps.step9",
@@ -496,6 +501,7 @@
     "scenario.inboundMcp.steps.step6",
     "scenario.inboundMcp.steps.step7",
     "scenario.inboundMcp.steps.step8",
-    "scenario.inboundMcp.steps.step9"
+    "scenario.inboundMcp.steps.step9",
+    "scenario.inboundMcp.steps.step10"
   ]
 }

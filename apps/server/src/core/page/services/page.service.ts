@@ -24,7 +24,7 @@ import {
 } from '@docmost/db/pagination/cursor-pagination';
 import { InjectKysely } from 'nestjs-kysely';
 import { sql } from 'kysely';
-import { MAX_PAGE_TREE_DEPTH } from '../../../common/config/page-tree.constants';
+import { MAX_PAGE_TREE_DEPTH, PAGE_TREE_LOCK_NAMESPACE } from '../../../common/config/page-tree.constants';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { generateJitteredKeyBetween } from 'fractional-indexing-jittered';
 import { MovePageDto } from '../dto/move-page.dto';
@@ -124,7 +124,6 @@ interface DuplicatePageOptions {
 
 // Keep page-tree mutations for a space in a single, short critical section.
 // The namespace avoids colliding with unrelated two-key advisory locks.
-const PAGE_TREE_LOCK_NAMESPACE = 0x70616765;
 
 @Injectable()
 export class PageService {

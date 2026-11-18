@@ -1,5 +1,6 @@
 import type { User } from '@docmost/db/types/entity.types';
 import type { AiPageOperation } from '../common/helpers/prosemirror/ai-page-operation';
+import type { McpContentEdit } from '../common/helpers/prosemirror/mcp-content-edit';
 
 export const COLLABORATION_DOCUMENT_PORT = Symbol(
   'COLLABORATION_DOCUMENT_PORT',
@@ -7,7 +8,21 @@ export const COLLABORATION_DOCUMENT_PORT = Symbol(
 
 export type CollaborationActor = Pick<User, 'id'>;
 
+export type McpContentCommand = {
+  edit: McpContentEdit;
+  baseHash: string;
+  afterHash: string;
+  keyId: string;
+  operationId: string;
+  previewHash: string;
+  user: CollaborationActor;
+};
+
 export interface CollaborationCommandHandlers {
+  applyMcpContentEdit: (
+    documentName: string,
+    payload: McpContentCommand,
+  ) => Promise<void>;
   updatePageContent: (
     documentName: string,
     payload: {
@@ -51,6 +66,10 @@ export interface CollaborationCommandHandlers {
 export type CollaborationCommandName = keyof CollaborationCommandHandlers;
 
 export interface CollaborationDocumentPort {
+  applyMcpContentEdit(
+    documentName: string,
+    payload: McpContentCommand,
+  ): Promise<void>;
   updatePageContent(
     documentName: string,
     payload: Parameters<CollaborationCommandHandlers['updatePageContent']>[1],

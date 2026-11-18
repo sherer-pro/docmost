@@ -9,17 +9,24 @@ import {
 
 const policy = {
   spaceId: "space-1",
-  effectiveCapabilities: ["page.content.read", "page.text.propose"],
+  effectiveCapabilities: ["page.content.read", "page.text.propose", "page.create"],
   catalog: [
     {
       name: "getPage",
       capability: "page.content.read",
       exposures: ["agent", "mcp"],
+      writeClass: "read_only",
     },
     {
       name: "editPageText",
       capability: "page.text.propose",
       exposures: ["agent"],
+    },
+    {
+      name: "createPage",
+      capability: "page.create",
+      exposures: ["mcp"],
+      writeClass: "write",
     },
   ],
 } as AiBuiltinToolSpacePolicyView;
@@ -56,8 +63,9 @@ describe("MCP capability policy state", () => {
     ).toBe("ready");
   });
 
-  it("offers only MCP reads and reports revoked selections", () => {
-    expect(getAvailableMcpCapabilities(policy)).toEqual(["page.content.read"]);
+  it("offers MCP writes separately from the default read selection", () => {
+    expect(getAvailableMcpCapabilities(policy)).toEqual(["page.content.read", "page.create"]);
+    expect(getAvailableMcpCapabilities(policy, true)).toEqual(["page.content.read"]);
     expect(
       getUnavailableMcpCapabilities(
         ["page.content.read", "page.comments.read"],

@@ -115,7 +115,7 @@ export function CreateApiKeyModal({
       initializeMcpCapabilitySelection(
         selectionsBySpace.current,
         form.values.spaceId,
-        getAvailableMcpCapabilities(toolPolicy.data),
+        getAvailableMcpCapabilities(toolPolicy.data, true),
       ),
     );
   }, [opened, keyType, form.values.spaceId, toolPolicy.data]);

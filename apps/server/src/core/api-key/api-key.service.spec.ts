@@ -299,7 +299,7 @@ describe('ApiKeyService', () => {
     );
   });
 
-  it('requires a non-empty exact capability list for new MCP keys', async () => {
+  it('rejects an explicitly empty capability list for new MCP keys', async () => {
     spaceRepo.findById.mockResolvedValue({
       id: 'space-1',
       workspaceId: workspace.id,
@@ -310,6 +310,7 @@ describe('ApiKeyService', () => {
         name: 'MCP key',
         spaceId: 'space-1',
         keyType: 'mcp',
+        allowedCapabilities: [],
       }),
     ).rejects.toThrow('Select at least one capability');
   });

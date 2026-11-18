@@ -11,11 +11,13 @@ export type McpCapabilityPolicyState =
 
 export function getAvailableMcpCapabilities(
   policy: AiBuiltinToolSpacePolicyView | undefined,
+  readOnly = false,
 ): AiBuiltinToolCapability[] {
   if (!policy) return [];
   const mcpCapabilities = new Set(
     policy.catalog
-      .filter((tool) => tool.exposures.includes("mcp"))
+      .filter((tool) => tool.exposures.includes("mcp") &&
+        (!readOnly || tool.writeClass === "read_only"))
       .map((tool) => tool.capability),
   );
   return policy.effectiveCapabilities.filter((capability) =>

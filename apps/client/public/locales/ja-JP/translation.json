@@ -1714,17 +1714,18 @@
           "description": "スペース単位のMCP APIキー、またはユーザーOAuthで1つのスペースを承認します。",
           "owner": "workspace管理者とアクセスを承認するユーザー",
           "prerequisite": "MCP APIキー、または管理者が有効にしたOAuthと明示的なユーザー同意",
-          "result": "クライアントは、/mcp を介して、承認された読み取り専用 Docmost ツールを呼び出すことができます。",
+          "result": "クライアントは /mcp で読み取り、API キーに許可された書き込み操作を実行できます。",
           "steps": {
             "step1": "管理者としてユーザーOAuthを有効にするか、スペース単位のMCP APIキーを作成してください。",
             "step2": "OAuthではクライアントを登録し、同意画面でアクセス可能な1つのスペースを承認してください。",
             "step3": "initialize、tools/list、許可された読み取りを確認してください。OAuth接続はアカウント設定で管理できます。",
             "step4": "アクセスは現在のログインセッションに紐づきます。ログアウト、セッションの失効、アプリの切断によりアクセスが終了します。",
-            "step5": "ワークスペース、スペース、キーのポリシーでコメント、履歴、メタデータ、必要な添付ファイルの読み取りを明示的に許可してください。既存のキーとOAuth接続に新しい権限が自動で付与されることはありません。",
+            "step5": "必要な読み取り権限を選択します。アップグレードにより、既存の MCP キーに 6 個の書き込み権限と 2 個のコメント読み取り権限が追加されます。ワークスペースとスペースの制限は引き続き適用されます。OAuth は読み取り専用です。",
             "step6": "nextCursor が null になるまで次のリクエストに渡してください。MCP_SOURCE_CHANGED が返された場合は、変更されたソースを最初から読み直してください。",
             "step7": "抽出済みのテキストには getAttachmentText を使用します。原本には getAttachmentFileChunk を別途許可し、最大16 KiBのBase64ブロックからファイルを復元してください。",
             "step8": "大きな保存済みバージョンを比較する場合、precise=false は変更と文字数がブロック単位の概算であることを示します。テキストを正確に比較するには、getPageVersion と getPage で全文を読み取ってください。",
-            "step9": "metadataSizeMismatch=true の場合は、fileSize を使って元ファイルを組み立て、declaredFileSize は診断用に保持してください。読み取りでメタデータは修正されません。MCP_SOURCE_CHANGED の場合は、引き続き最初から読み直す必要があります。"
+            "step9": "metadataSizeMismatch=true の場合は、fileSize を使って元ファイルを組み立て、declaredFileSize は診断用に保持してください。読み取りでメタデータは修正されません。MCP_SOURCE_CHANGED の場合は、引き続き最初から読み直す必要があります。",
+            "step10": "inspect の後、expectedRevision と operationId を指定して preview を呼び出します。変更内容を確認し、previewHash を指定して commit を実行します。応答を失った場合は status を呼び出します。"
           },
           "success": "許可されたデータは継続リクエストで最後まで読めます。拒否された機能と他のスペースにはアクセスできません。",
           "rollback": "キーまたはOAuth接続を失効させてください。ログアウトでもセッションに紐づくOAuthアクセスが終了します。",
@@ -1838,7 +1839,7 @@
           "retrieval": "Docmost は生成前と生成中、チャット履歴の再利用時、選択範囲の結果を返す前に、ソースの現在状態、除外設定、ACL を再確認します。ページ添付ファイルと非公開チャットファイルも保護され、選択テキストは信頼できない入力として扱われます。アクセスが変わると、途中の本文、推論、引用を消去し、メッセージを制限状態にします。",
           "ragApi": "受信側の /mcp と /api/rag/* は、それぞれ専用のキー種別だけを受け付けます。ユーザーセッションや別種別のキーは拒否されます。キーは作成者の現在のスペースアクセス権とページ可視性の範囲を超えません。対象スペースをアーカイブすると、そのキーは直ちに無効になります。トークンは作成時にのみ返され、種別、スペース、作成者、有効期限は更新できません。",
           "ragSync": "プロバイダー、検索、Open WebUI writer、RAG、受信 MCP、送信 MCP の認証情報は別々のシークレットです。スペースごとの認証情報を Docker の環境やメタデータ、ログ、URL に保存しないでください。APP_SECRET を変更する前に、すべての RAG binding を無効にしてクリーンアップの完了を待ってください。このシークレットはリモート所有権 metadata の署名にも使われます。先に変更した場合は、クリーンアップ前に以前の値へ戻し、その後で暗号化された認証情報を再入力してください。",
-          "inboundMcp": "スペース単位のMCP APIキー、またはユーザーOAuthで1つのスペースを承認します。 有効なMCPツールを通じて、選択した1つのスペース内であなたが閲覧できる内容を読み取れます。データの書き込みはできません。 アクセスは現在のログインセッションに紐づきます。ログアウト、セッションの失効、アプリの切断によりアクセスが終了します。",
+          "inboundMcp": "MCP API キーは 1 つのスペースに限定され、選択した書き込み操作を許可します。ユーザー OAuth は 1 つのスペースでの読み取りを許可し、ログアウト、セッションの失効、アプリの切断で終了します。",
           "outboundMcp": "送信 MCP は、デプロイスイッチ、ワークスペーススイッチ、有効なサーバー、スペースのバインド、グループポリシー、ユーザーの同意がすべて許可するまで閉じたままです。デプロイの緊急停止スイッチは AI_EXTERNAL_MCP_ENABLED です。 送信 MCP は選択された Docmost データを別システムへ送信します。リモートの説明、スキーマ、結果は信頼されないものとして扱われます。「読み取り専用」は Docmost のポリシー分類であり、リモート実装に副作用がないことの証明ではありません。"
         }
       },
@@ -2671,7 +2672,13 @@
         "getPageVersion": "保存済みページ版を読む",
         "getAttachmentText": "添付ファイルのテキストを読む",
         "getAttachmentFileChunk": "添付ファイルの原本を読む",
-        "getPageMetadata": "ページの全メタデータを読む"
+        "getPageMetadata": "ページの全メタデータを読む",
+        "createPage": "ページを作成",
+        "updatePageTitle": "ページ名を変更",
+        "editPageContent": "ページの本文を編集",
+        "uploadPageImage": "ページに画像をアップロード",
+        "replyToComment": "スレッドに返信",
+        "setCommentResolved": "スレッドを解決または再開"
       },
       "category": {
         "search": "検索",
@@ -2683,7 +2690,8 @@
         "collaboration": "コメントとトランスクルージョン",
         "history": "履歴",
         "attachments": "添付ファイル",
-        "sharing": "公開共有"
+        "sharing": "公開共有",
+        "mcp_write": "MCP の書き込み"
       },
       "readOnly": "回答のみ",
       "readOnlyDescription": "アシスタントは内容を読めますが、変更を提案できません。",
@@ -2791,7 +2799,7 @@
     "personalRagTitle": "Personal RAG keys",
     "personalRagDescription": "These keys synchronize a space with an external index. Workspace MCP keys are created by an administrator under AI and integrations.",
     "capabilities": "許可されたツール",
-    "capabilitiesDescription": "この MCP キーに付与する読み取り機能を正確に選択します。",
+    "capabilitiesDescription": "このキーの権限を選択します。新しいキーでは読み取りが選択済みです。書き込み権限は個別に選択してください。",
     "capabilitiesLoading": "利用可能な MCP 機能を読み込んでいます...",
     "capabilitiesLoadFailed": "MCP 機能ポリシーを読み込めませんでした。",
     "noCapabilities": "このスペースで現在利用できる MCP 読み取り機能はありません。",

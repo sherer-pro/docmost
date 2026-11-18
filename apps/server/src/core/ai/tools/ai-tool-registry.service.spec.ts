@@ -122,7 +122,9 @@ describe('built-in AI tool names', () => {
         }),
       );
       expect(tool.maxResultBytes).toBeLessThanOrEqual(AI_TOOL_RESULT_MAX_BYTES);
-      expect(tool.annotations.destructive).toBe(tool.name === 'deleteNode');
+      expect(tool.annotations.destructive).toBe(
+        ['deleteNode', 'editPageContent'].includes(tool.name),
+      );
     }
     expect(
       tools
@@ -146,13 +148,20 @@ describe('built-in AI tool names', () => {
     }
   });
 
-  it('exposes only read-only tools to the inbound MCP surface', () => {
+  it('exposes the six preview-bound writes exclusively to inbound MCP', () => {
     const mcpTools = buildRegistry().list('mcp');
 
-    expect(mcpTools).toHaveLength(30);
-    expect(mcpTools.every((tool) => tool.writeClass === 'read_only')).toBe(
-      true,
-    );
+    expect(mcpTools.filter((tool) => tool.writeClass === 'read_only')).toHaveLength(30);
+    const writes = mcpTools.filter((tool) => tool.writeClass === 'write');
+    expect(writes.map((tool) => tool.name)).toEqual([
+      'createPage', 'updatePageTitle', 'editPageContent', 'uploadPageImage',
+      'replyToComment', 'setCommentResolved',
+    ]);
+    for (const tool of writes) {
+      expect(tool.exposures).toEqual(['mcp']);
+      expect(tool.approvalMode).toBe('mcp_preview_revision');
+      expect(buildRegistry().get(tool.name, 'agent')).toBeUndefined();
+    }
     expect(new Set(mcpTools.map((tool) => tool.capability)).size).toBe(
       mcpTools.length,
     );

@@ -56,6 +56,7 @@ import {
 } from '../../../common/helpers/prosemirror/ai-page-operation';
 import { AiCitationCandidate } from '../ai.types';
 import { AI_MCP_TOOL_NAME_PREFIX } from '../mcp/ai-mcp.constants';
+import { MCP_WRITE_TOOLS } from '../../mcp/mcp-write-contract';
 import { ShareService } from '../../share/share.service';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import SpaceAbilityFactory from '../../casl/abilities/space-ability.factory';
@@ -334,9 +335,10 @@ export class AiToolRegistryService {
   }
 
   list(exposure: AiToolExposure): AiToolDefinition[] {
-    return this.tools
+    const registry = this.tools
       .filter((tool) => tool.exposures.includes(exposure))
       .map(({ execute: _execute, ...tool }) => tool);
+    return exposure === 'mcp' ? [...registry, ...MCP_WRITE_TOOLS] : registry;
   }
 
   get(name: string, exposure: AiToolExposure): AiToolDefinition | undefined {
@@ -344,7 +346,11 @@ export class AiToolRegistryService {
       (candidate) =>
         candidate.name === name && candidate.exposures.includes(exposure),
     );
-    if (!tool) return undefined;
+    if (!tool) {
+      return exposure === 'mcp'
+        ? MCP_WRITE_TOOLS.find((candidate) => candidate.name === name)
+        : undefined;
+    }
     const { execute: _execute, ...definition } = tool;
     return definition;
   }

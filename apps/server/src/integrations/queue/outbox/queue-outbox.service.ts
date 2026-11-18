@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectKysely } from 'nestjs-kysely';
 import { Queue } from 'bullmq';
@@ -27,6 +32,7 @@ import {
   DuplicatePageAttachmentsOutboxPayload,
   AttachmentCleanupOutboxPayload,
   FileImportOutboxPayload,
+  McpPageMutationOutboxPayload,
   NotificationEmailOutboxPayload,
   NotificationEmailSecretPayload,
   NotificationDispatchOutboxPayload,
@@ -89,6 +95,9 @@ export class QueueOutboxService {
     @InjectQueue(QueueName.NOTIFICATION_QUEUE)
     private readonly notificationQueue: Queue,
     private readonly handlerRegistry: QueueOutboxHandlerRegistryService,
+    @Optional()
+    @InjectQueue(QueueName.SEARCH_QUEUE)
+    private readonly searchQueue?: Queue,
   ) {}
 
   async enqueueWorkspaceInvitationEmail(
@@ -202,6 +211,20 @@ export class QueueOutboxService {
         kind: QueueOutboxKind.NOTIFICATION_DISPATCH,
         payload: payload as unknown as JsonValue,
         dedupeKey: `notification-dispatch:${payload.jobName}:${payload.jobData.eventId}`,
+      },
+      trx,
+    );
+  }
+
+  async enqueueMcpPageMutation(
+    payload: McpPageMutationOutboxPayload,
+    trx: KyselyTransaction,
+  ) {
+    await this.outboxRepo.enqueue(
+      {
+        kind: QueueOutboxKind.MCP_PAGE_MUTATION,
+        payload: { ...payload },
+        dedupeKey: `mcp-page-mutation:${payload.deliveryId}`,
       },
       trx,
     );
@@ -719,9 +742,57 @@ export class QueueOutboxService {
           .processImportFromOutbox(payload.fileTaskId);
         return 'completed';
       }
+      case QueueOutboxKind.MCP_PAGE_MUTATION:
+        return this.dispatchMcpPageMutation(entry.payload);
       default:
         throw new PermanentOutboxError('unknown_outbox_kind');
     }
+  }
+
+  private async dispatchMcpPageMutation(
+    raw: unknown,
+  ): Promise<ProcessingOutcome> {
+    const code = 'invalid_mcp_page_mutation_payload';
+    const payload = this.requireRecord(raw, code);
+    const { mutation } = payload;
+    if (
+      mutation !== 'create' &&
+      mutation !== 'rename' &&
+      mutation !== 'reply'
+    ) {
+      throw new PermanentOutboxError(code);
+    }
+    const pageId = this.requireUuid(payload.pageId, code);
+    const spaceId = this.requireUuid(payload.spaceId, code);
+    const workspaceId = this.requireUuid(payload.workspaceId, code);
+    const actorId = this.requireUuid(payload.actorId, code);
+    const deliveryId = this.requireUuid(payload.deliveryId, code);
+    if (
+      mutation !== 'reply' &&
+      (mutation === 'create' ||
+        this.environmentService.getSearchDriver() === 'typesense')
+    ) {
+      if (!this.searchQueue) throw new Error('search_queue_unavailable');
+      await this.searchQueue.add(
+        mutation === 'create' ? QueueJob.PAGE_CREATED : QueueJob.PAGE_UPDATED,
+        {
+          pageIds: [pageId],
+          workspaceId,
+        },
+        { jobId: `mcp-page-index-${deliveryId}` },
+      );
+    }
+    await this.generalQueue.add(
+      QueueJob.ADD_PAGE_WATCHERS,
+      {
+        userIds: [actorId],
+        pageId,
+        spaceId,
+        workspaceId,
+      },
+      { jobId: `mcp-page-watcher-${deliveryId}` },
+    );
+    return 'completed';
   }
 
   private async processNotificationEmail(

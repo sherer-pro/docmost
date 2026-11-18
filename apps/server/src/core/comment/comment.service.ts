@@ -22,7 +22,7 @@ import {
   ICommentResolvedNotificationJob,
 } from '../../integrations/queue/constants/queue.interface';
 import { InjectKysely } from 'nestjs-kysely';
-import { KyselyDB } from '@docmost/db/types/kysely.types';
+import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import {
   COMMENT_LIMIT,
@@ -57,7 +57,12 @@ export class CommentService {
   }
 
   async create(
-    opts: { userId: string; page: Page; workspaceId: string },
+    opts: {
+      userId: string;
+      page: Page;
+      workspaceId: string;
+      trx?: KyselyTransaction;
+    },
     createCommentDto: CreateCommentDto,
   ) {
     const { userId, page, workspaceId } = opts;
@@ -67,9 +72,14 @@ export class CommentService {
     if (createCommentDto.parentCommentId) {
       const parentComment = await this.commentRepo.findById(
         createCommentDto.parentCommentId,
+        { trx: opts.trx },
       );
 
-      if (!parentComment || parentComment.pageId !== page.id) {
+      if (
+        !parentComment ||
+        parentComment.deletedAt ||
+        parentComment.pageId !== page.id
+      ) {
         throw new BadRequestException('Parent comment not found');
       }
 
@@ -86,58 +96,63 @@ export class CommentService {
 
     const isReply = !!createCommentDto.parentCommentId;
     let notificationQueued = false;
-    const comment = await executeTx(this.db, async (trx) => {
-      const lockedPage = await this.pageRepo.findById(page.id, {
-        withLock: true,
-        trx,
-      });
+    const comment = await executeTx(
+      this.db,
+      async (trx) => {
+        const lockedPage = await this.pageRepo.findById(page.id, {
+          withLock: true,
+          trx,
+        });
 
-      if (!lockedPage || lockedPage.deletedAt) {
-        throw new NotFoundException('Page not found');
-      }
+        if (!lockedPage || lockedPage.deletedAt) {
+          throw new NotFoundException('Page not found');
+        }
 
-      const commentCount = await this.commentRepo.countPageComments(
-        page.id,
-        trx,
-      );
-      if (commentCount >= COMMENT_LIMIT) {
-        throw new ConflictException(COMMENT_LIMIT_REACHED_MESSAGE);
-      }
-
-      const inserted = await this.commentRepo.insertComment(
-        {
-          pageId: page.id,
-          content: commentContent,
-          selection: createCommentDto?.selection?.substring(0, 250),
-          type: commentType,
-          parentCommentId: createCommentDto?.parentCommentId,
-          creatorId: userId,
-          workspaceId: workspaceId,
-          spaceId: page.spaceId,
-        },
-        trx,
-      );
-      const jobData = this.buildCommentNotificationJob(
-        commentContent,
-        [],
-        inserted.id,
-        page.id,
-        page.spaceId,
-        workspaceId,
-        userId,
-        !isReply,
-        createCommentDto.parentCommentId,
-      );
-      if (jobData) {
-        await this.queueOutboxService.enqueueNotificationDispatch(
-          { jobName: QueueJob.COMMENT_NOTIFICATION, jobData },
+        const commentCount = await this.commentRepo.countPageComments(
+          page.id,
           trx,
         );
-        notificationQueued = true;
-      }
-      return inserted;
-    });
+        if (commentCount >= COMMENT_LIMIT) {
+          throw new ConflictException(COMMENT_LIMIT_REACHED_MESSAGE);
+        }
 
+        const inserted = await this.commentRepo.insertComment(
+          {
+            pageId: page.id,
+            content: commentContent,
+            selection: createCommentDto?.selection?.substring(0, 250),
+            type: commentType,
+            parentCommentId: createCommentDto?.parentCommentId,
+            creatorId: userId,
+            workspaceId: workspaceId,
+            spaceId: page.spaceId,
+          },
+          trx,
+        );
+        const jobData = this.buildCommentNotificationJob(
+          commentContent,
+          [],
+          inserted.id,
+          page.id,
+          page.spaceId,
+          workspaceId,
+          userId,
+          !isReply,
+          createCommentDto.parentCommentId,
+        );
+        if (jobData) {
+          await this.queueOutboxService.enqueueNotificationDispatch(
+            { jobName: QueueJob.COMMENT_NOTIFICATION, jobData },
+            trx,
+          );
+          notificationQueued = true;
+        }
+        return inserted;
+      },
+      opts.trx,
+    );
+
+    if (opts.trx) return comment;
     this.generalQueue
       .add(QueueJob.ADD_PAGE_WATCHERS, {
         userIds: [userId],
@@ -227,52 +242,59 @@ export class CommentService {
     comment: Comment,
     resolveCommentDto: ResolveCommentDto,
     authUser: User,
+    transaction?: KyselyTransaction,
   ): Promise<Comment> {
     let notificationQueued = false;
-    await executeTx(this.db, async (trx) => {
-      const lockedComment = await this.commentRepo.findById(comment.id, {
-        trx,
-        withLock: true,
-      });
-      if (!lockedComment) {
-        throw new NotFoundException('Comment not found');
-      }
+    await executeTx(
+      this.db,
+      async (trx) => {
+        const lockedComment = await this.commentRepo.findById(comment.id, {
+          trx,
+          withLock: true,
+        });
+        if (!lockedComment) {
+          throw new NotFoundException('Comment not found');
+        }
 
-      const isResolved = lockedComment.resolvedAt !== null;
-      if (isResolved === resolveCommentDto.resolved) {
-        return;
-      }
+        const isResolved = lockedComment.resolvedAt !== null;
+        if (isResolved === resolveCommentDto.resolved) {
+          return;
+        }
 
-      const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
-      const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
-      await this.commentRepo.updateComment(
-        {
-          resolvedAt,
-          resolvedById,
-          updatedAt: new Date(),
-        },
-        comment.id,
-        trx,
-      );
-      if (resolveCommentDto.resolved) {
-        const jobData: ICommentResolvedNotificationJob = {
-          eventId: uuid7(),
-          commentId: lockedComment.id,
-          commentCreatorId: lockedComment.creatorId,
-          pageId: lockedComment.pageId,
-          spaceId: lockedComment.spaceId,
-          workspaceId: lockedComment.workspaceId,
-          actorId: authUser.id,
-        };
-        await this.queueOutboxService.enqueueNotificationDispatch(
-          { jobName: QueueJob.COMMENT_RESOLVED_NOTIFICATION, jobData },
+        const resolvedAt = resolveCommentDto.resolved ? new Date() : null;
+        const resolvedById = resolveCommentDto.resolved ? authUser.id : null;
+        await this.commentRepo.updateComment(
+          {
+            resolvedAt,
+            resolvedById,
+            updatedAt: new Date(),
+          },
+          comment.id,
           trx,
         );
-        notificationQueued = true;
-      }
-    });
-    if (notificationQueued) this.queueOutboxService.kick();
+        if (resolveCommentDto.resolved) {
+          const jobData: ICommentResolvedNotificationJob = {
+            eventId: uuid7(),
+            commentId: lockedComment.id,
+            commentCreatorId: lockedComment.creatorId,
+            pageId: lockedComment.pageId,
+            spaceId: lockedComment.spaceId,
+            workspaceId: lockedComment.workspaceId,
+            actorId: authUser.id,
+          };
+          await this.queueOutboxService.enqueueNotificationDispatch(
+            { jobName: QueueJob.COMMENT_RESOLVED_NOTIFICATION, jobData },
+            trx,
+          );
+          notificationQueued = true;
+        }
+      },
+      transaction,
+    );
+    if (notificationQueued && !transaction) this.queueOutboxService.kick();
 
+    if (transaction)
+      return this.commentRepo.findById(comment.id, { trx: transaction });
     return this.findById(comment.id);
   }
 

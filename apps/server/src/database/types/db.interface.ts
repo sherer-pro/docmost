@@ -88,8 +88,10 @@ import type {
 import type { McpOauthSettings, McpOauthClients, McpOauthAuthorizations, McpOauthGrants, McpOauthTokens } from './mcp-oauth.types';
 
 import type { IntegrationPreviewSettingsRow, IntegrationPreviewConnections } from './integration-preview.types';
+import type { McpWriteOperationRow } from './mcp-write.types';
 
 export interface DbInterface {
+  mcpWriteOperations: McpWriteOperationRow;
   integrationPreviewSettings: IntegrationPreviewSettingsRow;
   integrationPreviewConnections: IntegrationPreviewConnections;
   mcpOauthSettings: McpOauthSettings;

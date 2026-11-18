@@ -3,6 +3,8 @@ jest.mock('lib0/decoding.js', () => ({ readVarString: jest.fn() }));
 import {
   AI_LEGACY_AGENT_CAPABILITIES,
   AI_LEGACY_MCP_CAPABILITIES,
+  MCP_WRITE_CAPABILITIES,
+  MCP_WRITE_COMPANION_READ_CAPABILITIES,
 } from '@docmost/api-contract';
 import { AiToolRegistryService } from './ai-tool-registry.service';
 import { AiBuiltinToolPolicyService } from './ai-builtin-tool-policy.service';
@@ -115,7 +117,7 @@ describe('AiBuiltinToolPolicyService', () => {
     expect(snapshot.toolNames).not.toContain('editPageText');
     expect(snapshot.toolNames).toContain('getPage');
   });
-  it('keeps a migrated MCP key on the exact seven legacy reads', async () => {
+  it('keeps a read-only MCP key on the exact seven selected legacy reads', async () => {
     const policy = service({}, true);
     const tools = await policy.listForMcp({
       workspaceId: 'workspace-1',
@@ -132,6 +134,62 @@ describe('AiBuiltinToolPolicyService', () => {
       'getNode',
       'searchInPage',
     ]);
+  });
+
+  it('gates migrated write capabilities on key type, deployment and administrator policy', async () => {
+    const key = {
+      keyType: 'mcp',
+      workspaceId: 'workspace-1',
+      spaceId: 'space-1',
+      allowedCapabilities: [
+        ...AI_LEGACY_MCP_CAPABILITIES,
+        ...MCP_WRITE_CAPABILITIES,
+        ...MCP_WRITE_COMPANION_READ_CAPABILITIES,
+      ],
+    };
+    const tools = await service({}, true).listForMcp(key);
+    expect(
+      tools.filter(({ writeClass }) => writeClass === 'write'),
+    ).toHaveLength(6);
+    expect(tools.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['listComments', 'getComment']),
+    );
+    expect(
+      await service({}, true).getEffectiveCapabilities(
+        key.workspaceId,
+        key.spaceId,
+        'agent',
+      ),
+    ).toEqual(AI_LEGACY_AGENT_CAPABILITIES);
+    const { keyType: _keyType, ...oauth } = key;
+    for (const restricted of [
+      await service({}, true).listForMcp(oauth),
+      await service({}, false).listForMcp(key),
+      await service(
+        {
+          workspace: {
+            enabled: true,
+            policyVersion: 2,
+            readOnly: true,
+            allowedCapabilities: key.allowedCapabilities,
+          },
+        },
+        true,
+      ).listForMcp(key),
+      await service(
+        {
+          space: {
+            policyVersion: 2,
+            allowedCapabilities: ['page.content.read'],
+          },
+        },
+        true,
+      ).listForMcp(key),
+    ]) {
+      expect(
+        restricted.every(({ writeClass }) => writeClass === 'read_only'),
+      ).toBe(true);
+    }
   });
 
   it('intersects a new MCP key with workspace and space exact allowlists', async () => {

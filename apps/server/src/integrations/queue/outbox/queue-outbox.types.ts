@@ -15,6 +15,7 @@ export const QueueOutboxKind = {
   NOTIFICATION_DISPATCH: 'notification_dispatch',
   ATTACHMENT_CLEANUP: 'attachment_cleanup',
   FILE_IMPORT: 'file_import',
+  MCP_PAGE_MUTATION: 'mcp_page_mutation',
 } as const;
 
 export type QueueOutboxKind =
@@ -87,6 +88,15 @@ export interface AttachmentCleanupOutboxPayload {
 
 export interface FileImportOutboxPayload {
   fileTaskId: string;
+}
+
+export interface McpPageMutationOutboxPayload {
+  mutation: 'create' | 'rename' | 'reply';
+  deliveryId: string;
+  pageId: string;
+  spaceId: string;
+  workspaceId: string;
+  actorId: string;
 }
 
 export const ATTACHMENT_CLEANUP_HANDLER = 'ATTACHMENT_CLEANUP_HANDLER';

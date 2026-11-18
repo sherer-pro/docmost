@@ -1714,17 +1714,18 @@
           "description": "Use a space-scoped MCP API key or enable user OAuth and approve a single space.",
           "owner": "Workspace administrator and authorizing user",
           "prerequisite": "MCP API key or administrator-enabled OAuth with explicit user consent",
-          "result": "The client can call authorized read-only Docmost tools through /mcp",
+          "result": "The client can read through /mcp and use any writes authorized for its API key.",
           "steps": {
             "step1": "Enable user OAuth as an administrator, or create a scoped MCP API key.",
             "step2": "For OAuth, register the client and approve exactly one accessible space on the consent screen.",
             "step3": "Test initialize, tools/list and an allowed read. Manage OAuth connections in your account settings.",
             "step4": "Access is bound to your current login session. Signing out, revoking the session or disconnecting the application ends access.",
-            "step5": "Explicitly allow comments, history, metadata and required attachment reads in the workspace, space and key policies. Existing keys and OAuth grants gain no new permissions automatically.",
+            "step5": "Choose the reads the client needs. The upgrade adds six write capabilities and two comment reads to existing MCP keys. Workspace and space restrictions still apply. OAuth stays read-only.",
             "step6": "Follow nextCursor until it is null. If MCP_SOURCE_CHANGED is returned, restart reading the changed source.",
             "step7": "Use getAttachmentText for already-extracted text. To obtain an original file, explicitly allow getAttachmentFileChunk and reassemble its Base64 chunks of at most 16 KiB.",
             "step8": "For a large saved-version comparison, precise=false means changes and character counts are approximate block summaries. For an exact text comparison, read the complete text with getPageVersion and getPage.",
-            "step9": "If metadataSizeMismatch is true, use fileSize to assemble the original and keep declaredFileSize for diagnostics. Reads do not repair metadata. MCP_SOURCE_CHANGED still requires restarting the read."
+            "step9": "If metadataSizeMismatch is true, use fileSize to assemble the original and keep declaredFileSize for diagnostics. Reads do not repair metadata. MCP_SOURCE_CHANGED still requires restarting the read.",
+            "step10": "Run inspect, then preview with expectedRevision and operationId. Review the changes before calling commit with previewHash. If the response is lost, call status."
           },
           "success": "Allowed reads return complete data through continuation; forbidden capabilities and other spaces remain inaccessible.",
           "rollback": "Revoke the key or OAuth connection. Logging out also invalidates session-bound OAuth access.",
@@ -1838,7 +1839,7 @@
           "retrieval": "Docmost rechecks live source state, exclusions, and ACL before and during generation, when reusing chat history, and before returning editor-selection results. Page attachments and private chat files are guarded too, and selected text remains untrusted input. If access changes, partial text, reasoning, and citations are cleared and the message becomes restricted.",
           "ragApi": "Inbound /mcp and /api/rag/* accept only their own key types; user sessions and the other key type are rejected. Keys remain bounded by their creator's current space access and page visibility. Archiving the scoped space invalidates its keys immediately. The token is returned only at creation; its type, space, creator, and expiry cannot be updated.",
           "ragSync": "Provider, retrieval, Open WebUI writer, RAG, inbound MCP, and outbound MCP credentials are separate secrets. Keep per-space credential values out of Docker environment and metadata, logs, and URLs. Before rotating APP_SECRET, disable every RAG sync binding and wait for cleanup; the secret also signs remote ownership metadata. If it was rotated too early, restore the previous value before cleanup, then re-enter encrypted credentials.",
-          "inboundMcp": "Use a space-scoped MCP API key or enable user OAuth and approve a single space. This application can read the content you may access in one selected space through the enabled MCP tools. It cannot write data. Access is bound to your current login session. Signing out, revoking the session or disconnecting the application ends access.",
+          "inboundMcp": "An MCP API key is scoped to one space and can use selected write capabilities. User OAuth allows reading from one space and ends at logout, session revocation, or disconnection.",
           "outboundMcp": "Outbound MCP is closed unless the deployment switch, workspace switch, enabled server, space binding, group policy, and user opt-in all allow it. The deployment kill switch is AI_EXTERNAL_MCP_ENABLED. Outbound MCP sends selected Docmost data to another system. Remote descriptions, schemas, and results are untrusted; 'read-only' is Docmost's policy classification, not proof that the remote implementation has no side effects."
         }
       },
@@ -2671,7 +2672,13 @@
         "getPageVersion": "Read saved page version",
         "getAttachmentText": "Read attachment text",
         "getAttachmentFileChunk": "Read original attachment",
-        "getPageMetadata": "Read complete page metadata"
+        "getPageMetadata": "Read complete page metadata",
+        "createPage": "Create page",
+        "updatePageTitle": "Rename page",
+        "editPageContent": "Edit page content",
+        "uploadPageImage": "Upload page image",
+        "replyToComment": "Reply to thread",
+        "setCommentResolved": "Resolve or reopen thread"
       },
       "category": {
         "search": "Search",
@@ -2683,7 +2690,8 @@
         "collaboration": "Comments and transclusions",
         "history": "History",
         "attachments": "Attachments",
-        "sharing": "Public sharing"
+        "sharing": "Public sharing",
+        "mcp_write": "MCP writes"
       },
       "readOnly": "Answers only",
       "readOnlyDescription": "The assistant may read content but cannot propose changes.",
@@ -2791,7 +2799,7 @@
     "personalRagTitle": "Personal RAG keys",
     "personalRagDescription": "These keys synchronize a space with an external index. Workspace MCP keys are created by an administrator under AI and integrations.",
     "capabilities": "Allowed tools",
-    "capabilitiesDescription": "Select the exact read capabilities granted to this MCP key.",
+    "capabilitiesDescription": "Choose the capabilities for this key. New keys start with reads selected. Select write capabilities individually.",
     "capabilitiesLoading": "Loading the available MCP capabilities...",
     "capabilitiesLoadFailed": "The MCP capability policy could not be loaded.",
     "noCapabilities": "No MCP read capabilities are currently available for this space.",

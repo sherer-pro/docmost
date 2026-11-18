@@ -132,7 +132,6 @@
       "exports|apps/server/src/common/helpers/constants.ts|resolveAppRoot",
       "exports|apps/server/src/common/helpers/html-escaper.ts|htmlUnescape",
       "exports|apps/server/src/common/helpers/notification-copy.ts|getNotificationLocale",
-      "exports|apps/server/src/common/helpers/prosemirror/ai-page-operation.ts|assertUniqueNodeIds",
       "exports|apps/server/src/common/helpers/utils.ts|extractDateFromUuid7",
       "exports|apps/server/src/common/helpers/utils.ts|removeAccent",
       "exports|apps/server/src/common/security/host.util.ts|isValidWorkspaceHostname",

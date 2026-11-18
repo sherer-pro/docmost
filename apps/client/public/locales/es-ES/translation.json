@@ -1714,17 +1714,18 @@
           "description": "Use una clave API MCP de un espacio o habilite OAuth de usuario y confirme un espacio.",
           "owner": "Administrador del workspace y usuario que autoriza",
           "prerequisite": "Clave API MCP u OAuth habilitado por el administrador con consentimiento explícito",
-          "result": "El cliente puede llamar a herramientas autorizadas de solo lectura Docmost a través de /mcp",
+          "result": "El cliente puede leer por /mcp y realizar las escrituras autorizadas para su clave API.",
           "steps": {
             "step1": "Active OAuth de usuario como administrador o cree una clave API MCP limitada a un espacio.",
             "step2": "Para OAuth, registre el cliente y apruebe un único espacio accesible en la pantalla de consentimiento.",
             "step3": "Pruebe initialize, tools/list y una lectura permitida. Gestione las conexiones OAuth en los ajustes de su cuenta.",
             "step4": "El acceso está vinculado a su sesión actual. Cerrar sesión, revocarla o desconectar la aplicación termina el acceso.",
-            "step5": "Autorice expresamente comentarios, historial, metadatos y los adjuntos necesarios en las políticas del espacio de trabajo, espacio y clave. Las claves y conexiones OAuth existentes no reciben permisos nuevos automáticamente.",
+            "step5": "Elija las lecturas necesarias. La actualización añade seis permisos de escritura y dos de lectura de comentarios a las claves MCP existentes. Siguen vigentes las restricciones del espacio de trabajo y del espacio. OAuth conserva solo la lectura.",
             "step6": "Envíe nextCursor hasta que sea null. Si recibe MCP_SOURCE_CHANGED, reinicie la lectura de la fuente modificada.",
             "step7": "Use getAttachmentText para texto ya extraído. Autorice getAttachmentFileChunk por separado y reconstruya el original con bloques Base64 de hasta 16 KiB.",
             "step8": "Al comparar una versión guardada grande, precise=false indica que los cambios y los recuentos de caracteres son resúmenes aproximados por bloques. Para comparar el texto con exactitud, lea el texto completo con getPageVersion y getPage.",
-            "step9": "Si metadataSizeMismatch=true, use fileSize para reconstruir el original y conserve declaredFileSize para el diagnóstico. La lectura no corrige los metadatos. MCP_SOURCE_CHANGED sigue requiriendo reiniciar la lectura."
+            "step9": "Si metadataSizeMismatch=true, use fileSize para reconstruir el original y conserve declaredFileSize para el diagnóstico. La lectura no corrige los metadatos. MCP_SOURCE_CHANGED sigue requiriendo reiniciar la lectura.",
+            "step10": "Ejecute inspect y luego preview con expectedRevision y operationId. Revise los cambios antes de usar commit con previewHash. Si se pierde la respuesta, consulte status."
           },
           "success": "Los datos autorizados se leen completos mediante continuaciones; las capacidades denegadas y otros espacios siguen inaccesibles.",
           "rollback": "Revoque la clave o conexión OAuth. Cerrar sesión también termina el acceso OAuth vinculado a ella.",
@@ -1838,7 +1839,7 @@
           "retrieval": "Docmost vuelve a comprobar el estado actual de la fuente, las exclusiones y la ACL antes y durante la generación, al reutilizar el historial del chat y antes de devolver resultados de una selección. También protege los adjuntos de página y los archivos privados del chat; el texto seleccionado sigue siendo una entrada no confiable. Si cambia el acceso, borra texto parcial, razonamiento y citas, y restringe el mensaje.",
           "ragApi": "Las entradas /mcp y /api/rag/* solo aceptan sus respectivos tipos de clave; las sesiones de usuario y el otro tipo de clave se rechazan. Las claves siguen limitadas por el acceso actual de su creador al espacio y por la visibilidad de las páginas. Al archivar el espacio asociado, sus claves se invalidan de inmediato. El token solo se devuelve al crear la clave; no se pueden cambiar su tipo, espacio, creador ni caducidad.",
           "ragSync": "Las credenciales del proveedor, la recuperación, el writer de Open WebUI, RAG y los MCP entrante y saliente son secretos independientes. No guarde credenciales por espacio en el entorno ni en los metadatos de Docker, registros o URLs. Antes de cambiar APP_SECRET, desactive todos los bindings RAG y espere a que termine la limpieza; el secreto también firma los metadatos de propiedad remota. Si se cambió demasiado pronto, restaure el valor anterior antes de limpiar y vuelva a introducir después las credenciales cifradas.",
-          "inboundMcp": "Use una clave API MCP de un espacio o habilite OAuth de usuario y confirme un espacio. La aplicación puede leer el contenido al que usted tiene acceso en un espacio seleccionado mediante las herramientas MCP habilitadas. No puede escribir datos. El acceso está vinculado a su sesión actual. Cerrar sesión, revocarla o desconectar la aplicación termina el acceso.",
+          "inboundMcp": "Una clave API MCP está limitada a un espacio y permite las escrituras seleccionadas. El OAuth de usuario permite leer un espacio hasta cerrar sesión, revocarla o desconectar la aplicación.",
           "outboundMcp": "El MCP saliente permanece cerrado salvo que lo permitan a la vez el interruptor del despliegue, el interruptor del workspace, el servidor habilitado, la vinculación al espacio, la política de grupo y la aceptación del usuario. El interruptor de emergencia del despliegue es AI_EXTERNAL_MCP_ENABLED. El MCP saliente envía datos seleccionados de Docmost a otro sistema. Las descripciones, los esquemas y los resultados remotos no son de confianza; «solo lectura» es una clasificación de la política de Docmost, no una prueba de que la implementación remota no tenga efectos secundarios."
         }
       },
@@ -2671,7 +2672,13 @@
         "getPageVersion": "Leer versión guardada",
         "getAttachmentText": "Leer texto del archivo adjunto",
         "getAttachmentFileChunk": "Leer archivo adjunto original",
-        "getPageMetadata": "Leer metadatos completos de página"
+        "getPageMetadata": "Leer metadatos completos de página",
+        "createPage": "Crear página",
+        "updatePageTitle": "Renombrar página",
+        "editPageContent": "Editar contenido de la página",
+        "uploadPageImage": "Subir imagen a la página",
+        "replyToComment": "Responder en el hilo",
+        "setCommentResolved": "Resolver o reabrir el hilo"
       },
       "category": {
         "search": "Búsqueda",
@@ -2683,7 +2690,8 @@
         "collaboration": "Comentarios y transclusiones",
         "history": "Historial",
         "attachments": "Adjuntos",
-        "sharing": "Uso compartido público"
+        "sharing": "Uso compartido público",
+        "mcp_write": "Escritura con MCP"
       },
       "readOnly": "Solo respuestas",
       "readOnlyDescription": "El asistente puede leer contenido, pero no proponer cambios.",
@@ -2791,7 +2799,7 @@
     "personalRagTitle": "Personal RAG keys",
     "personalRagDescription": "These keys synchronize a space with an external index. Workspace MCP keys are created by an administrator under AI and integrations.",
     "capabilities": "Herramientas permitidas",
-    "capabilitiesDescription": "Selecciona las capacidades de lectura exactas concedidas a esta clave MCP.",
+    "capabilitiesDescription": "Elija los permisos de la clave. Las nuevas claves tienen seleccionada la lectura. Seleccione cada permiso de escritura.",
     "capabilitiesLoading": "Cargando las capacidades MCP disponibles...",
     "capabilitiesLoadFailed": "No se pudo cargar la política de capacidades MCP.",
     "noCapabilities": "Actualmente no hay capacidades de lectura MCP disponibles para este espacio.",

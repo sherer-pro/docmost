@@ -18,6 +18,7 @@ import type {
 } from '../collaboration-document.port';
 
 const COMMAND_NAMES = new Set<CollaborationCommandName>([
+  'applyMcpContentEdit',
   'updatePageContent',
   'applyAiPageOperation',
   'applyPageTemplateMutation',

@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 47 -->
+<!-- ai-admin-guide-contract-version: 48 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -42,9 +42,8 @@ distinct paths:
    external indexes. It does not answer retrieval queries itself.
 3. **Agent mode** lets the private assistant call bounded Docmost tools and
    propose safe current-page changes that require explicit user approval.
-4. **Inbound MCP** (`/mcp`) exposes the read-only subset of the same tool
-   registry to external assistants through stateless Streamable HTTP. Docmost is
-   the MCP _server_ here.
+4. **Inbound MCP** (`/mcp`) exposes shared reads and selected API-key write
+   capabilities through stateless Streamable HTTP. Docmost is the MCP _server_.
 5. **Outbound external MCP** lets the internal agent call read-only tools on
    remote MCP servers after workspace approval, space binding, and per-user
    opt-in. Docmost is the MCP _client_ here.
@@ -163,7 +162,7 @@ The main components are:
 | `AiAuxRunService`                        | auxiliary jobs for automatic conversation titles and editor-selection transforms                                       |
 | `AiTextGenerationService`                | narrow provider session facade exported through `AI_TEXT_GENERATION_PORT`                                              |
 | `DictionaryWordFormService`              | bounded structured word-form generation through the narrow generation port                                             |
-| `AiToolRegistryService`                  | access-aware tools shared by agent mode and the read-only MCP surface                                                  |
+| `AiToolRegistryService`                  | access-aware read tools and capability catalog for Agent and inbound MCP                                              |
 | `AiBuiltinToolPolicyService`             | deployment/workspace/space/key intersections and immutable Agent tool snapshots                                        |
 | `AiRunStepService`                       | initiator-only approval, safe Yjs application, history, and agent resumption                                           |
 | `McpController` / `McpApiKeyAuthGuard`   | stateless Streamable HTTP adapter with typed MCP API keys or session-bound user OAuth access tokens                    |
@@ -388,7 +387,7 @@ after commit the run no longer awaits that approval. Recovery also excludes
 steps whose receipt already says `applied: true`, including when the same run
 later awaits a different approval, so successful writes cannot be replayed. Failed rows require a new preview. Search refresh happens
 after commit. Pending approval keeps the existing provider admission behavior.
-Both inbound and outbound MCP remain read-only.
+Database tools in both MCP directions remain read-only.
 
 Database reads also resolve system fields, formula results, multiple participants
 and row-owned file metadata through the database value compiler. Formula settings
@@ -975,7 +974,7 @@ filters, sorting and selected rows. An empty array clears calculations. Legacy
 `viewState.calculations` remains readable when the array is omitted. IDs remain
 exact opaque UUIDs; quoted IDs, duplicate entries and unsupported operations are
 rejected rather than repaired. The existing schema/type validation and the
-read-only MCP policy still apply.
+read-only MCP database-tool policy still apply.
 
 The database tool definitions publish the `viewState.filter` grammar: a group
 with `conjunction: and | or` and `conditions: [{propertyId, operator, value}]`.
@@ -1261,6 +1260,7 @@ above remain authoritative for runtime rollout switches and recovery behavior.
 | [`20261031T140000-mcp-user-oauth.ts`](../apps/server/src/database/migrations/20261031T140000-mcp-user-oauth.ts) | Adds disabled-by-default workspace OAuth settings, registered clients, pending authorization codes, user/session/space grants and hashed access/refresh tokens. No API key or existing configuration is changed. | Refuses while any grant remains. Disable OAuth to revoke access while retaining records. |
 | [`20261031T150000-integration-link-previews.ts`](../apps/server/src/database/migrations/20261031T150000-integration-link-previews.ts) | Adds disabled-by-default preview settings and personal encrypted connections. Preview nodes supply only URLs to AI/RAG. | Refuses while any connection remains. Disable previews to preserve credentials and existing nodes. |
 | [`20261101T000000-plain-text-attachment-search.ts`](../apps/server/src/database/migrations/20261101T000000-plain-text-attachment-search.ts) | Queues live `.md`/`.txt` attachments that have no indexing state or were skipped as unsupported. Existing claims and other terminal failures remain unchanged. | No-op preserving extracted text and active claims. The previous worker skips these formats; already indexed text remains searchable. |
+| [`20261118T000000-mcp-write-operations.ts`](../apps/server/src/database/migrations/20261118T000000-mcp-write-operations.ts) | Adds durable inbound MCP write receipts and page-mutation outbox delivery. Extends existing MCP keys with six write capabilities and two comment reads, preserving their previous capability lists. | Disable writes before rollback. Schema rollback removes receipts and MCP mutation deliveries, restores unedited key lists and strips write capabilities from edited and new lists. Page, comment and attachment writes remain. |
 
 Apply the ordered set with `pnpm --filter ./apps/server migration:latest` only
 after a database backup and normal deployment review. A schema `down` operation
@@ -1629,16 +1629,16 @@ stored as SHA-256 hashes. Losing a token response requires reconnecting rather
 than replaying an issued token. Current rights and assurance are checked before
 each read and again before returning its result. Redis traffic admission uses
 the grant ID with the existing MCP limits. OAuth credentials work only at `/mcp`;
-they cannot authenticate ordinary application APIs or `/api/rag/*`. Both MCP
-directions remain read-only, including after user consent.
+they cannot authenticate ordinary application APIs or `/api/rag/*`. OAuth grants
+are restricted to read tools, including after user consent.
 
 ### Creating and validating an MCP key
 
 Workspace owners and administrators create the key on the MCP tab of
 `/settings/keys` (`/settings/keys/mcp`) through the fixed MCP flow: space,
-exact non-empty read capability selection, name/expiry, client, creation, and
-connection. Existing MCP keys were migrated to the exact seven legacy read
-capabilities. The JWT shape is unchanged; the authoritative
+exact non-empty capability selection, name/expiry, client, creation, and
+connection. New keys start with only read capabilities selected. Write
+capabilities require explicit selection. The JWT shape is unchanged. The authoritative
 `api_keys.allowed_capabilities` row is read for every request. RAG keys reject
 this field. The legacy `/settings/api-keys`
 and `/settings/ai/mcp` URLs redirect to this tab.
@@ -1793,16 +1793,18 @@ part of either legacy catalog and require the deployment extension switch,
 workspace and space exact allowlists, current template policy, and (for MCP)
 the authoritative one-space API-key capability. Hidden or cross-space
 consumers are neither returned nor included in the MCP-visible usage count.
-MCP does not provide database mutation, schema editing, comment mutation, restore, export, or page-management tools. Original attachment bytes require the separate opt-in capability described below.
+Database mutation, schema editing, page deletion, page movement, access and
+sharing changes, restore, and export are outside the inbound tool contract.
+Original attachment bytes require a separate read capability.
 
 ### Additional opt-in document and attachment reads
 
 These six new tools are exposed only to inbound MCP. They do not grow the
 internal Agent catalog or its 64-definition ceiling. Workspace/space policy
 configuration describes the union of both catalogs, while each execution
-surface filters its own exposure. No migration adds capabilities to existing
-API keys or OAuth grants. An administrator explicitly enables the deployment
-extension switch, workspace/space allowlists and key capabilities. Existing
+surface filters its own exposure. The inbound write migration adds the two
+comment readers to existing MCP API keys. Other expanded reads require the
+deployment extension switch and explicit workspace, space and key policy. Existing
 OAuth grants keep their frozen capability set; authorize a new connection when
 additional capabilities are required.
 
@@ -1854,6 +1856,88 @@ runs this matrix. Pre-extracted attachment fixtures test the MCP contract
 independently of extraction workers; extraction and local/S3 identity races have
 separate server tests. The matrix verifies actual data and `isError`, not only
 HTTP 200. This diagnostic is additional to `verify:full` and release acceptance.
+
+### Inbound MCP writes
+
+The write tools use the existing `/mcp` endpoint and a space-scoped MCP API
+key. The deployment must enable `AI_BUILTIN_TOOL_EXTENSIONS_ENABLED`. The
+workspace and space allowlists, read-only and knowledge-only settings, key
+capability list, live creator ACL and AI exclusions all apply. The original
+unmodified workspace seed inherits the inbound capabilities. An administrator's
+explicit workspace or space list remains authoritative. OAuth grants, RAG keys,
+and the built-in Agent have no access to these write tools.
+
+The migration adds six write capabilities and `page.comments.read` and
+`page.comment.read` to existing MCP keys, preserving all previous reads.
+The migration ledger prevents reapplication after a key is narrowed. Create
+new keys with read-only defaults or explicitly select the desired writes. When
+the API receives no capability selection for a new MCP key, it takes the
+effective read capabilities for that space.
+
+Each tool takes `spaceId` and the target in the table for all four modes.
+
+1. Call `mode: "inspect"` to get the target and its revision. For page content
+   this is the live Yjs content hash.
+2. Call `mode: "preview"` with the tool payload, `expectedRevision` (the
+   inspected hash), and a new `operationId` (UUID). The receipt binds the exact
+   preview to that payload, key, target and revision.
+3. Review the preview in the calling interface. Call `mode: "commit"` with the
+   identical payload plus the returned `previewHash`. Docmost verifies the
+   preview, live authorization and target revision. The calling interface is
+   responsible for obtaining approval from its user.
+4. Call `mode: "status"` with the same target and `operationId` after a lost
+   response. It returns `unknown`, `previewed`, `pending` or `committed`. A
+   committed response includes the original result. Matching retries return the
+   same result regardless of later revisions, subject to current access.
+
+| Tool | Capability | Target and preview/commit payload | Committed result |
+| --- | --- | --- | --- |
+| `createPage` | `page.create` | `parentPageId` (UUID or explicit `null` for space root), `title` | `pageId`, `slugId`, `title` |
+| `updatePageTitle` | `page.title.write` | `pageId`, `title` | `pageId`, `title` |
+| `editPageContent` | `page.content.write` | `pageId`, `edit` (see below) | `pageId`, `beforeHash`, `afterHash` |
+| `uploadPageImage` | `page.image.upload` | `pageId`, `fileName`, `base64`, lower-case hex `sha256` | `pageId`, `attachmentId`, authenticated app-relative `url`, `sha256` |
+| `replyToComment` | `page.comment.reply` | `pageId`, root `threadId`, plain `text` up to 4,096 characters | `pageId`, `threadId`, `commentId` |
+| `setCommentResolved` | `page.comment.resolve` | `pageId`, root `threadId`, boolean `resolved` | `pageId`, `threadId`, `resolved` |
+
+`edit` supports the following operations, one per commit.
+
+- `{kind:"editText",nodeId,oldText,newText}` changes one matching text run.
+- `{kind:"insertBlock",nodeId,position,markdown}` inserts one Markdown block
+  before or after the anchor. Use `position:"before"` or `position:"after"`.
+- `{kind:"replaceBlock",nodeId,markdown}` replaces one editable text block.
+- `{kind:"deleteBlock",nodeId}` removes one editable text block.
+- `{kind:"appendBlock",markdown}` appends one Markdown block.
+- `{kind:"appendImage",attachmentId,alt}` embeds an existing image from the
+  same page, including an image just uploaded through MCP.
+
+Use `getOutline` for node IDs or its version-bound `#index` node references.
+Markdown and individual edit strings are limited to 4,096 characters. The
+preview includes the exact selected block before and after the edit, subject
+to the 24 KiB response limit. Unsupported structures, embedded content,
+synced block descendants and managed template content retain their existing
+protection. The server rejects changes that would touch an inline comment
+anchor with `MCP_COMMENT_ANCHOR_CONFLICT`. Untouched blocks keep their IDs.
+Images are PNG, JPEG, GIF or WebP, up to 2 MiB decoded or the configured upload
+limit if lower. Base64 must be canonical. The route accepts the encoded image
+and 16 KiB of JSON overhead. Configure ingress to admit that size on `/mcp`.
+The tool never fetches a URL.
+
+The relational writes and their result receipts commit together. Indexing,
+watcher setup and comment notifications use the transactional outbox. The
+collaboration worker stores the content receipt with the PostgreSQL Yjs save;
+a lost API response after that transaction does not duplicate the edit.
+The live collaboration session can observe the edit before it is durable.
+After ambiguous delivery check `status`. If it is pending, retry only the same
+operation. If the base no longer matches and there is no committed receipt,
+inspect the page before forming a new operation. The storage object for an
+image has a deterministic ID and path so a retry after an interrupted upload
+uses the same object. A process failure before saving attachment metadata can
+leave an unreferenced object until that retry.
+
+`MCP_WRITE_STALE` and `MCP_PREVIEW_CHANGED` require a fresh preview and new
+operation ID. `MCP_OPERATION_MISMATCH` means the ID already binds another
+operation. Run the isolated API/collaboration check with
+`node apps/client/e2e/database/run-live.mjs --mcp-write-only --api-only`.
 
 ### Result, error, and content boundaries
 
@@ -2384,6 +2468,6 @@ access-restricted message.
 
 ## Database table property contract
 
-Database row sources support `number`, `date`, `multi_select`, `url`, `email`, and `phone` in addition to existing properties. Numbers remain JSON numbers; dates carry a start, optional end, and a time zone when time is included; multi-select values contain option identifiers. Text projections resolve option labels and render dates explicitly. View filters and grouping do not restrict RAG: page ACL and the AI content policy remain authoritative. MCP remains read-only. Internal Agent can propose the limited, explicitly approved cell operations described above.
+Database row sources support `number`, `date`, `multi_select`, `url`, `email`, and `phone` in addition to existing properties. Numbers remain JSON numbers; dates carry a start, optional end, and a time zone when time is included; multi-select values contain option identifiers. Text projections resolve option labels and render dates explicitly. View filters and grouping do not restrict RAG: page ACL and the AI content policy remain authoritative. MCP database tools remain read-only. Internal Agent can propose the limited, explicitly approved cell operations described above.
 
 Migration `20261013T120000-database-revisions.ts` adds integer revisions to cells and views with default 1 and a read-only SQL value adapter. It does not rewrite cell values. Its `down` removes the adapter and conflict-detection metadata; older application versions do not understand newly introduced property types, so reverting the schema alone is not a safe application downgrade. See [Database tables](DATABASE_TABLES.md) for UI/API query and recovery contracts.

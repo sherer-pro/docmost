@@ -17,6 +17,7 @@ import { getTrustedProxiesFromEnv } from './common/security/trusted-proxy.util';
 import { envPath } from './common/helpers';
 import { getEmbedFrameSources } from '@docmost/editor-ext/server';
 import { API_PREFIX_EXCLUDES } from './common/config/api-prefix-excludes';
+import { MCP_ROUTE_BODY_LIMIT } from './common/config/mcp-body-limit';
 import {
   closeApplicationOnStartupFailure,
   terminateStartup,
@@ -240,6 +241,9 @@ async function bootstrap() {
 
     app.setGlobalPrefix('api', {
       exclude: API_PREFIX_EXCLUDES,
+    });
+    app.getHttpAdapter().getInstance().addHook('onRoute', (route) => {
+      if (route.url === '/mcp') route.bodyLimit = MCP_ROUTE_BODY_LIMIT;
     });
 
     const reflector = app.get(Reflector);

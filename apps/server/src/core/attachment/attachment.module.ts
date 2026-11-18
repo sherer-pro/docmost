@@ -40,6 +40,6 @@ import { PageAttachmentsService } from './services/page-attachments.service';
       useExisting: AttachmentCleanupService,
     },
   ],
-  exports: [ATTACHMENT_CLEANUP_HANDLER],
+  exports: [ATTACHMENT_CLEANUP_HANDLER, AttachmentService],
 })
 export class AttachmentModule {}

@@ -461,7 +461,8 @@ when Docmost page ACLs are narrower.
 The Agent loop and inbound `/mcp` endpoint share one access-aware built-in tool
 registry, but they remain different security surfaces: Agent is bound to a
 private conversation and may create one of the existing current-page proposals,
-while inbound MCP is API-key-only and read-only. The catalog, capability IDs,
+while inbound MCP uses one-space API keys or read-only OAuth grants. MCP API
+keys can separately enable [preview-bound writes](AI_ASSISTANT_AND_RAG.md#inbound-mcp-writes). The catalog, capability IDs,
 result limits, and approval invariants are canonical in
 [`AI_ASSISTANT_AND_RAG.md`](./AI_ASSISTANT_AND_RAG.md) sections 2 and 6.
 

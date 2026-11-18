@@ -37,6 +37,8 @@ import { McpOAuthService } from './oauth/mcp-oauth.service';
 import { ApiKeyValidationService } from '../api-key/api-key-validation.service';
 import { TokenService } from '../auth/services/token.service';
 import { JwtType } from '../auth/dto/jwt-payload';
+import { McpWriteService } from './mcp-write.service';
+import { isMcpWriteTool } from './mcp-write-contract';
 
 /*
  * The shared tool-registry approach and Streamable HTTP adapter were adapted
@@ -54,6 +56,7 @@ export class McpController {
     private readonly oauth: McpOAuthService,
     @Optional() private readonly apiKeys?: ApiKeyValidationService,
     @Optional() private readonly tokens?: TokenService,
+    @Optional() private readonly writes?: McpWriteService,
   ) {}
 
   @All()
@@ -74,7 +77,7 @@ export class McpController {
       {
         capabilities: { tools: {} },
         instructions:
-          'Read-only access to the single Docmost space explicitly authorized by the user or API key.',
+          'Access to one authorized Docmost space. API keys can provide selected, version-checked write capabilities. OAuth grants are read-only.',
       },
     );
 
@@ -98,16 +101,55 @@ export class McpController {
         const actor = await this.revalidateOAuth(request, workspace);
         const principal = actor?.mcpScope ?? apiKey;
         await this.toolPolicy.assertMcpToolAllowed(principal, call.params.name);
-        const result = await this.tools.execute(
-          call.params.name,
-          call.params.arguments ?? {},
-          {
-            user: actor?.user ?? user,
-            workspaceId: workspace.id,
-            spaceId: space.id,
-            source: 'mcp',
-          },
-        );
+        const name = call.params.name;
+        const args = call.params.arguments ?? {};
+        let content: unknown;
+        if (isMcpWriteTool(name)) {
+          if (
+            !this.writes ||
+            !actor ||
+            !('keyType' in principal) ||
+            principal.keyType !== 'mcp' ||
+            !principal.id
+          ) {
+            throw new HttpException(
+              'MCP write requires an authorized API key',
+              403,
+            );
+          }
+          content = await this.writes.execute(name, args, {
+            keyId: principal.id,
+            user: actor.user,
+            space,
+            reauthorize: async () => {
+              const live = await this.revalidateOAuth(request, workspace);
+              if (
+                !live ||
+                live.mcpScope.id !== principal.id ||
+                live.mcpScope.spaceId !== space.id ||
+                !('keyType' in live.mcpScope) ||
+                live.mcpScope.keyType !== 'mcp' ||
+                live.user.id !== user.id
+              ) {
+                throw new HttpException(
+                  'MCP write requires an authorized API key',
+                  403,
+                );
+              }
+              await this.toolPolicy.assertMcpToolAllowed(live.mcpScope, name);
+              return live.user;
+            },
+          });
+        } else {
+          content = (
+            await this.tools.execute(name, args, {
+              user: actor?.user ?? user,
+              workspaceId: workspace.id,
+              spaceId: space.id,
+              source: 'mcp',
+            })
+          ).content;
+        }
         const current = await this.revalidateOAuth(request, workspace);
         if (
           actor &&
@@ -123,7 +165,7 @@ export class McpController {
           current?.mcpScope ?? principal,
           call.params.name,
         );
-        const text = JSON.stringify(result.content);
+        const text = JSON.stringify(content);
         this.traffic.observeMcpTool(
           'success',
           Date.now() - startedAt,

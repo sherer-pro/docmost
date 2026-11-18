@@ -1714,17 +1714,18 @@
           "description": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich.",
           "owner": "Workspace-Administrator und autorisierender Benutzer",
           "prerequisite": "MCP-API-Schlüssel oder vom Administrator aktiviertes OAuth mit ausdrücklicher Zustimmung",
-          "result": "Der Client kann autorisierte schreibgeschützte Docmost-Tools über /mcp aufrufen",
+          "result": "Der Client kann über /mcp lesen und die für seinen API-Schlüssel freigegebenen Schreibwerkzeuge nutzen.",
           "steps": {
             "step1": "Aktivieren Sie Benutzer-OAuth als Administrator oder erstellen Sie einen bereichsgebundenen MCP-API-Schlüssel.",
             "step2": "Registrieren Sie für OAuth den Client und bestätigen Sie genau einen zugänglichen Bereich im Zustimmungsdialog.",
             "step3": "Testen Sie initialize, tools/list und einen erlaubten Lesezugriff. Verwalten Sie OAuth-Verbindungen in den Kontoeinstellungen.",
             "step4": "Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
-            "step5": "Erlauben Sie Kommentare, Verlauf, Metadaten und benötigte Anhänge ausdrücklich in den Richtlinien für Workspace, Bereich und Schlüssel. Bestehende Schlüssel und OAuth-Verbindungen erhalten keine neuen Rechte automatisch.",
+            "step5": "Wählen Sie die erforderlichen Leserechte. Das Upgrade ergänzt bestehende MCP-Schlüssel um sechs Schreibrechte und zwei Rechte zum Lesen von Kommentaren. Workspace- und Bereichsregeln gelten weiterhin. OAuth bleibt schreibgeschützt.",
             "step6": "Übergeben Sie nextCursor, bis der Wert null ist. Beginnen Sie bei MCP_SOURCE_CHANGED erneut mit dem geänderten Inhalt.",
             "step7": "Lesen Sie bereits extrahierten Text mit getAttachmentText. Erlauben Sie getAttachmentFileChunk separat und setzen Sie Originaldateien aus Base64-Blöcken mit höchstens 16 KiB zusammen.",
             "step8": "Bei einem Vergleich großer gespeicherter Versionen bedeutet precise=false, dass Änderungen und Zeichenzahlen ungefähre Blockzusammenfassungen sind. Lesen Sie für einen exakten Textvergleich den vollständigen Text mit getPageVersion und getPage.",
-            "step9": "Wenn metadataSizeMismatch=true ist, verwenden Sie fileSize zum Zusammensetzen des Originals und declaredFileSize zur Diagnose. Lesezugriffe korrigieren keine Metadaten. Bei MCP_SOURCE_CHANGED muss der Lesevorgang weiterhin neu beginnen."
+            "step9": "Wenn metadataSizeMismatch=true ist, verwenden Sie fileSize zum Zusammensetzen des Originals und declaredFileSize zur Diagnose. Lesezugriffe korrigieren keine Metadaten. Bei MCP_SOURCE_CHANGED muss der Lesevorgang weiterhin neu beginnen.",
+            "step10": "Rufen Sie zuerst inspect und danach preview mit expectedRevision und operationId auf. Prüfen Sie die Änderungen vor commit mit previewHash. Bei verlorener Antwort hilft status."
           },
           "success": "Erlaubte Daten sind über Fortsetzungen vollständig lesbar; gesperrte Funktionen und fremde Bereiche bleiben unzugänglich.",
           "rollback": "Widerrufen Sie Schlüssel oder OAuth-Verbindung. Abmelden beendet auch den sitzungsgebundenen OAuth-Zugriff.",
@@ -1838,7 +1839,7 @@
           "retrieval": "Docmost prüft den Live-Quellenstatus, Ausschlüsse und ACL vor und während der Generierung, bei der Wiederverwendung des Chatverlaufs sowie vor der Rückgabe von Ergebnissen für Textauswahlen erneut. Das gilt auch für Seitenanhänge und private Chatdateien; ausgewählter Text bleibt eine nicht vertrauenswürdige Eingabe. Ändert sich der Zugriff, werden Teiltext, Begründung und Zitate gelöscht und die Nachricht wird eingeschränkt.",
           "ragApi": "Eingehende Zugriffe auf /mcp und /api/rag/* akzeptieren nur ihren jeweils eigenen Schlüsseltyp; Benutzersitzungen und der jeweils andere Schlüsseltyp werden abgewiesen. Schlüssel bleiben durch den aktuellen Bereichszugriff und die Seitensichtbarkeit ihres Erstellers begrenzt. Durch das Archivieren des zugeordneten Bereichs werden dessen Schlüssel sofort ungültig. Das Token wird nur bei der Erstellung zurückgegeben; Typ, Bereich, Ersteller und Ablaufdatum können nicht geändert werden.",
           "ragSync": "Anmeldedaten für Anbieter, Abruf, Open WebUI Writer, RAG sowie eingehendes und ausgehendes MCP sind getrennte Geheimnisse. Speichern Sie Anmeldedaten pro Space nicht in der Docker-Umgebung oder in Docker-Metadaten, Protokollen oder URLs. Deaktivieren Sie vor einer Änderung von APP_SECRET alle RAG-Bindings und warten Sie auf die Bereinigung; das Geheimnis signiert auch Metadaten zum Besitz entfernter Dateien. Wurde es zu früh geändert, stellen Sie vor der Bereinigung den vorherigen Wert wieder her und geben Sie danach verschlüsselte Anmeldedaten erneut ein.",
-          "inboundMcp": "Verwenden Sie einen bereichsgebundenen MCP-API-Schlüssel oder aktivieren Sie Benutzer-OAuth und bestätigen Sie einen Bereich. Die Anwendung kann über freigegebene MCP-Werkzeuge Inhalte eines ausgewählten Bereichs lesen, auf die Sie Zugriff haben. Schreibzugriff ist ausgeschlossen. Der Zugriff ist an Ihre aktuelle Sitzung gebunden. Abmelden, Sitzungswiderruf oder Trennen der Anwendung beendet den Zugriff.",
+          "inboundMcp": "Ein MCP-API-Schlüssel gilt für einen Bereich und kann ausgewählte Schreibrechte erhalten. Benutzer-OAuth erlaubt Lesen in einem Bereich bis zur Abmeldung, zum Sitzungswiderruf oder zur Trennung der Anwendung.",
           "outboundMcp": "Ausgehendes MCP bleibt gesperrt, sofern nicht Bereitstellungsschalter, Workspace-Schalter, aktivierter Server, Bereichsbindung, Gruppenrichtlinie und Zustimmung des Benutzers gemeinsam den Zugriff erlauben. Der Notausschalter der Bereitstellung ist AI_EXTERNAL_MCP_ENABLED. Ausgehendes MCP sendet ausgewählte Docmost-Daten an ein anderes System. Entfernte Beschreibungen, Schemas und Ergebnisse sind nicht vertrauenswürdig. „Schreibgeschützt“ ist eine Richtlinienklassifizierung von Docmost und kein Beweis dafür, dass die entfernte Implementierung keine Nebenwirkungen hat."
         }
       },
@@ -2671,7 +2672,13 @@
         "getPageVersion": "Gespeicherte Seitenversion lesen",
         "getAttachmentText": "Anhangtext lesen",
         "getAttachmentFileChunk": "Originalanhang lesen",
-        "getPageMetadata": "Vollständige Seitenmetadaten lesen"
+        "getPageMetadata": "Vollständige Seitenmetadaten lesen",
+        "createPage": "Seite erstellen",
+        "updatePageTitle": "Seite umbenennen",
+        "editPageContent": "Seiteninhalt bearbeiten",
+        "uploadPageImage": "Bild hochladen",
+        "replyToComment": "Auf Diskussion antworten",
+        "setCommentResolved": "Diskussion schließen oder wieder öffnen"
       },
       "category": {
         "search": "Suche",
@@ -2683,7 +2690,8 @@
         "collaboration": "Kommentare und Transklusionen",
         "history": "Verlauf",
         "attachments": "Anhänge",
-        "sharing": "Öffentliche Freigabe"
+        "sharing": "Öffentliche Freigabe",
+        "mcp_write": "MCP-Schreibzugriff"
       },
       "readOnly": "Nur Antworten",
       "readOnlyDescription": "Der Assistent darf Inhalte lesen, aber keine Änderungen vorschlagen.",
@@ -2791,7 +2799,7 @@
     "personalRagTitle": "Personal RAG keys",
     "personalRagDescription": "These keys synchronize a space with an external index. Workspace MCP keys are created by an administrator under AI and integrations.",
     "capabilities": "Erlaubte Werkzeuge",
-    "capabilitiesDescription": "Wählen Sie genau die Lesefähigkeiten aus, die diesem MCP-Schlüssel gewährt werden.",
+    "capabilitiesDescription": "Wählen Sie die Rechte für diesen Schlüssel. Leserechte sind vorausgewählt. Wählen Sie Schreibrechte einzeln aus.",
     "capabilitiesLoading": "Verfügbare MCP-Fähigkeiten werden geladen...",
     "capabilitiesLoadFailed": "Die MCP-Fähigkeitsrichtlinie konnte nicht geladen werden.",
     "noCapabilities": "Für diesen Bereich sind derzeit keine MCP-Lesefähigkeiten verfügbar.",

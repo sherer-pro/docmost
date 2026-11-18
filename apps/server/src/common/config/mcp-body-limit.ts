@@ -1,0 +1,3 @@
+export const MCP_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+export const MCP_IMAGE_MAX_BASE64 = 4 * Math.ceil(MCP_IMAGE_MAX_BYTES / 3);
+export const MCP_ROUTE_BODY_LIMIT = MCP_IMAGE_MAX_BASE64 + 16 * 1024;

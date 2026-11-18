@@ -10,6 +10,8 @@ import {
   AI_BUILTIN_TOOL_CAPABILITIES,
   AI_LEGACY_AGENT_CAPABILITIES,
   AI_LEGACY_MCP_CAPABILITIES,
+  MCP_WRITE_CAPABILITIES,
+  MCP_WRITE_COMPANION_READ_CAPABILITIES,
   AiBuiltinToolCapability,
   AiBuiltinToolCatalogEntry,
   AiBuiltinToolSpacePolicyView,
@@ -40,7 +42,8 @@ import { postgresJsonb } from '../utils/postgres-jsonb.util';
 export type McpToolPrincipal = Pick<
   ApiKey,
   'workspaceId' | 'spaceId' | 'allowedCapabilities'
->;
+> &
+  Partial<Pick<ApiKey, 'id' | 'keyType'>>;
 
 @Injectable()
 export class AiBuiltinToolPolicyService {
@@ -260,16 +263,22 @@ export class AiBuiltinToolPolicyService {
       'mcp',
       this.readCapabilities(apiKey.allowedCapabilities),
     );
-    return this.filterDefinitions('mcp', resolved.capabilities);
+    return this.filterDefinitions('mcp', resolved.capabilities).filter(
+      (tool) => tool.writeClass === 'read_only' || apiKey.keyType === 'mcp',
+    );
   }
 
   async getEffectiveCapabilities(
     workspaceId: string,
     spaceId: string,
     exposure: AiToolExposure,
+    readOnly = false,
   ): Promise<AiBuiltinToolCapability[]> {
     const resolved = await this.resolve(workspaceId, spaceId, exposure);
-    return resolved.capabilities;
+    if (!readOnly) return resolved.capabilities;
+    return this.filterDefinitions(exposure, resolved.capabilities)
+      .filter((tool) => tool.writeClass === 'read_only')
+      .map((tool) => tool.capability);
   }
 
   async getEffectiveModes(workspaceId: string, spaceId: string) {
@@ -424,7 +433,7 @@ export class AiBuiltinToolPolicyService {
     keyCapabilities?: AiBuiltinToolCapability[],
     db: KyselyDB | KyselyTransaction = this.db,
   ) {
-    const workspace = await this.readWorkspacePolicy(workspaceId, db);
+    const workspace = await this.readWorkspacePolicy(workspaceId, db, exposure);
     const space = await db
       .selectFrom('aiBuiltinToolSpacePolicies')
       .select([
@@ -461,7 +470,7 @@ export class AiBuiltinToolPolicyService {
     const readOnly = workspace.readOnly || Boolean(space?.readOnly);
     const knowledgeOnly =
       workspace.knowledgeOnly || Boolean(space?.knowledgeOnly);
-    if (readOnly) {
+    if (readOnly || (exposure !== 'agent' && knowledgeOnly)) {
       const reads = new Set(
         this.definitions(exposure)
           .filter((tool) => tool.writeClass === 'read_only')
@@ -489,6 +498,7 @@ export class AiBuiltinToolPolicyService {
   private async readWorkspacePolicy(
     workspaceId: string,
     db: KyselyDB | KyselyTransaction = this.db,
+    exposure: AiToolExposure | 'catalog' = 'catalog',
   ) {
     const row = await db
       .selectFrom('aiBuiltinToolWorkspacePolicies')
@@ -498,16 +508,31 @@ export class AiBuiltinToolPolicyService {
         'policyVersion',
         'readOnly',
         'knowledgeOnly',
+        'updatedById',
       ])
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
+    const allowedCapabilities = row
+      ? this.readCapabilities(row.allowedCapabilities)
+      : [...AI_LEGACY_AGENT_CAPABILITIES];
+    if (
+      exposure !== 'agent' &&
+      (!row ||
+        (row.updatedById === null &&
+          Number(row.policyVersion) === 1 &&
+          JSON.stringify(allowedCapabilities) ===
+            JSON.stringify(AI_LEGACY_AGENT_CAPABILITIES)))
+    ) {
+      allowedCapabilities.push(
+        ...MCP_WRITE_CAPABILITIES,
+        ...MCP_WRITE_COMPANION_READ_CAPABILITIES,
+      );
+    }
     return {
       enabled: row?.enabled ?? true,
       readOnly: row?.readOnly ?? false,
       knowledgeOnly: row?.knowledgeOnly ?? false,
-      allowedCapabilities: row
-        ? this.readCapabilities(row.allowedCapabilities)
-        : [...AI_LEGACY_AGENT_CAPABILITIES],
+      allowedCapabilities,
       policyVersion: row ? Number(row.policyVersion) : 0,
     };
   }

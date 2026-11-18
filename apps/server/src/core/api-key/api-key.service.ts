@@ -53,27 +53,27 @@ export class ApiKeyService {
     workspaceId: string,
     spaceId: string,
   ): Promise<AiBuiltinToolCapability[]> {
-    if (!dtoCapabilities?.length) {
-      throw new BadRequestException(
-        'Select at least one capability for an MCP API key',
-      );
-    }
     const effective = new Set(
       await this.builtinToolPolicy.getEffectiveCapabilities(
         workspaceId,
         spaceId,
         'mcp',
+        ...(dtoCapabilities === undefined ? [true] : []),
       ),
     );
-    const invalid = dtoCapabilities.find(
-      (capability) => !effective.has(capability),
-    );
+    const requested = dtoCapabilities ?? [...effective];
+    if (!requested.length) {
+      throw new BadRequestException(
+        'Select at least one capability for an MCP API key',
+      );
+    }
+    const invalid = requested.find((capability) => !effective.has(capability));
     if (invalid) {
       throw new BadRequestException(
         `MCP capability is not allowed in this space: ${invalid}`,
       );
     }
-    return [...new Set(dtoCapabilities)];
+    return [...new Set(requested)];
   }
 
   private isAdminOrOwner(user: User) {

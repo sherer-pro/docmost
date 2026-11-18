@@ -1,3 +1,17 @@
+export const MCP_WRITE_CAPABILITIES = [
+  "page.create",
+  "page.title.write",
+  "page.content.write",
+  "page.image.upload",
+  "page.comment.reply",
+  "page.comment.resolve",
+] as const;
+
+export const MCP_WRITE_COMPANION_READ_CAPABILITIES = [
+  "page.comments.read",
+  "page.comment.read",
+] as const;
+
 export const AI_BUILTIN_TOOL_CAPABILITIES = [
   "search.query",
   "page.tree.read",
@@ -34,6 +48,7 @@ export const AI_BUILTIN_TOOL_CAPABILITIES = [
   "page.templates.list",
   "page.template.metadata.read",
   "page.template.usages.read",
+  ...MCP_WRITE_CAPABILITIES,
 ] as const;
 
 export type AiBuiltinToolCapability =
@@ -67,6 +82,7 @@ export const AI_BUILTIN_TOOL_CATEGORIES = [
   "search",
   "page_read",
   "page_write",
+  "mcp_write",
   "context",
   "database",
   "page_structure",
@@ -87,6 +103,7 @@ export type AiBuiltinToolTargetScope =
 
 export type AiBuiltinToolApprovalMode =
   | "none"
+  | "mcp_preview_revision"
   | "current_page_hash"
   | "database_cell_revisions";
 

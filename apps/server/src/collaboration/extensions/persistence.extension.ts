@@ -45,6 +45,7 @@ import { TransclusionService } from '../../core/page/transclusion/transclusion.s
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventName } from '../../common/events/event.contants';
 import { hashProseMirrorJson } from '../../common/helpers/prosemirror/ai-page-operation';
+import { mcpContentIntents } from '../mcp-content-intent';
 import { validateTemplateInstanceMutation } from '@docmost/editor-ext/server';
 import { CollabPageUpdatePublisherService } from '../services/collab-page-update-publisher.service';
 import { PageTemplatePolicyService } from '../../core/page/transclusion/page-template-policy.service';
@@ -160,6 +161,7 @@ export class PersistenceExtension implements Extension {
 
     const tiptapJson = TiptapTransformer.fromYdoc(document, 'default');
     const ydocState = Buffer.from(Y.encodeStateAsUpdate(document));
+    const mcpIntent = mcpContentIntents.get(document);
 
     let textContent = null;
 
@@ -192,7 +194,7 @@ export class PersistenceExtension implements Extension {
           }
 
           if (
-            !context?.pageTemplateMutationId &&
+            !mcpIntent && !context?.pageTemplateMutationId &&
             isDeepStrictEqual(tiptapJson, lockedPage.content)
           ) {
             return;
@@ -378,6 +380,29 @@ export class PersistenceExtension implements Extension {
             trx,
           );
 
+          if (mcpIntent) {
+            const receipt = await trx.updateTable('mcpWriteOperations')
+              .set({
+                result: {
+                  pageId,
+                  beforeHash: mcpIntent.baseHash,
+                  afterHash: mcpIntent.afterHash,
+                },
+              })
+              .where('keyId', '=', mcpIntent.keyId)
+              .where('operationId', '=', mcpIntent.operationId)
+              .where('actorId', '=', mcpIntent.user.id)
+              .where('spaceId', '=', lockedPage.spaceId)
+              .where('pageId', '=', pageId)
+              .where('tool', '=', 'editPageContent')
+              .where('previewHash', '=', mcpIntent.previewHash)
+              .where('expectedRevision', '=', mcpIntent.baseHash)
+              .where('startedAt', 'is not', null)
+              .returning('operationId')
+              .executeTakeFirst();
+            if (!receipt) throw new Error('mcp_content_receipt_missing');
+          }
+
           if (mutationOperation) {
             const completedOperation = await trx
               .updateTable('pageTemplateOperations')
@@ -420,6 +445,7 @@ export class PersistenceExtension implements Extension {
         const integrityCode = this.getContentIntegrityErrorCode(err);
         if (integrityCode && !context?.pageTemplateMutationId) {
           await this.restorePersistedDocument(document, pageId);
+          if (mcpIntent) mcpContentIntents.delete(document);
           document.broadcastStateless(
             JSON.stringify({
               type: 'page_content_integrity_error',
@@ -459,6 +485,9 @@ export class PersistenceExtension implements Extension {
       return;
     }
 
+    if (mcpIntent && mcpContentIntents.get(document) === mcpIntent) {
+      mcpContentIntents.delete(document);
+    }
     this.clearDocumentDirty(documentName);
     this.removeContributors(documentName, editingUserIds);
 

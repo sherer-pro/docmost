@@ -453,8 +453,9 @@ try {
     name: 'API and collaboration readiness against PostgreSQL and Redis',
     passed: true,
   });
+  const mcpWriteOnly = process.argv.includes('--mcp-write-only');
   if (
-    !aiBrowserOnly &&
+    mcpWriteOnly || (!aiBrowserOnly &&
     !editorBrowserOnly &&
     !process.argv.includes('--startup-only') &&
     !process.argv.includes('--api-only') &&
@@ -465,7 +466,7 @@ try {
     !process.argv.includes('--upstream-repairs-only') &&
     !process.argv.includes('--templates-only') &&
     !process.argv.includes('--advanced-only') &&
-    !quality
+    !quality)
   ) {
     const jest = require.resolve('jest/bin/jest');
     const check = spawn(
@@ -475,8 +476,11 @@ try {
         '--config',
         'test/jest-e2e.json',
         '--runInBand',
-        'test/database-tables.e2e-spec.ts',
-        'test/attachment-text-search.e2e-spec.ts',
+        ...(mcpWriteOnly ? [] : [
+          'test/database-tables.e2e-spec.ts',
+          'test/attachment-text-search.e2e-spec.ts',
+        ]),
+        'test/mcp-write-migration.e2e-spec.ts',
       ],
       {
         cwd: path.join(repo, 'apps/server'),

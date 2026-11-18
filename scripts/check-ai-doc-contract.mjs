@@ -57,6 +57,7 @@ export const AI_GUIDE_MIGRATION_FILES = [
   "20261030T180000-ai-database-context.ts",
   "20261031T130000-database-computed-and-file-properties.ts",
   "20261031T140000-mcp-user-oauth.ts",
+  "20261118T000000-mcp-write-operations.ts",
 ];
 
 const LOGIC_PATH_PATTERNS = [

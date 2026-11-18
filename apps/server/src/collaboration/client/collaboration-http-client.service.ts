@@ -31,6 +31,13 @@ export class CollaborationHttpClientService
 
   constructor(private readonly environment: EnvironmentService) {}
 
+  applyMcpContentEdit(
+    documentName: string,
+    payload: Parameters<CollaborationCommandHandlers['applyMcpContentEdit']>[1],
+  ) {
+    return this.sendCommand('applyMcpContentEdit', documentName, payload);
+  }
+
   updatePageContent(
     documentName: string,
     payload: Parameters<CollaborationCommandHandlers['updatePageContent']>[1],
