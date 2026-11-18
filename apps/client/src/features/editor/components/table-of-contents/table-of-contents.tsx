@@ -68,7 +68,7 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
   };
 
   const handleUpdate = () => {
-    if (!props.editor) {
+    if (!props.editor || props.editor.isDestroyed) {
       setLinks([]);
       setHeadingDOMNodes([]);
       return;

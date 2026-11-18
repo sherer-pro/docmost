@@ -48,6 +48,28 @@ afterEach(() => {
 });
 
 describe("TableOfContents", () => {
+  it("does not read headings from an unmounted shared editor", async () => {
+    const editor = {
+      isDestroyed: true,
+      $nodes: vi.fn(() => {
+        throw new Error("The editor view is not mounted");
+      }),
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+
+    await act(async () => {
+      root.render(
+        <MantineProvider>
+          <TableOfContents editor={editor as any} isShare />
+        </MantineProvider>,
+      );
+    });
+
+    expect(editor.$nodes).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No table of contents.");
+  });
+
   it.each([
     { surface: "regular page", isShare: false },
     { surface: "public page", isShare: true },
