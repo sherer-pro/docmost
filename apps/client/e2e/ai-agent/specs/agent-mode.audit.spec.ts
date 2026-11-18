@@ -319,7 +319,12 @@ function sql(statement: string): string {
 }
 
 async function waitHealth(timeoutMs = 120_000) {
-  return waitFor("Docmost health", async () => fetch(`${baseURL}/api/health`).then((response) => response.ok).catch(() => false), timeoutMs);
+  return waitFor("Docmost health", async () => {
+    const response = await fetch(`${baseURL}/api/health`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    return response.ok;
+  }, timeoutMs);
 }
 
 async function capture(page: Page, name: string) {
