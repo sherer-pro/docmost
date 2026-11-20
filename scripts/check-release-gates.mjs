@@ -599,17 +599,27 @@ export function validateReleaseGateContract({
   if (/^    if:\s*.*always\(\)/mu.test(publish)) {
     errors.push("publish must not bypass failed gates with always()");
   }
+  if (
+    !candidate.split("\n").includes("      digest: ${{ steps.image.outputs.digest }}") ||
+    !publish.split("\n").includes("      IMAGE: shererpro/docmost@${{ needs.candidate.outputs.digest }}")
+  ) {
+    errors.push(
+      "publish must reconstruct the image reference from the candidate digest",
+    );
+  }
   for (const command of [
     'manifest_version="$(node -p "require(\'./package.json\').version")"',
     'test "$tag" = "$expected_tag"',
     '--build-arg "BUILD_VERSION=${VERSION}"',
     '--build-arg "BUILD_REVISION=${GITHUB_SHA}"',
     'docker push "$candidate"',
+    'echo "digest=${image#*@}" >> "$GITHUB_OUTPUT"',
     'shererpro/docmost:candidate-${VERSION}-${GITHUB_SHA}',
   ]) {
     requireWorkflowCommand(errors, candidate, "candidate", command);
   }
   for (const command of [
+    '[[ "$IMAGE" =~ ^shererpro/docmost@sha256:[0-9a-f]{64}$ ]]',
     'docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"',
     'docker buildx imagetools create --prefer-index=false --tag shererpro/docmost:latest "$IMAGE"',
   ]) {

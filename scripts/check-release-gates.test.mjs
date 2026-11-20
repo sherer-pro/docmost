@@ -731,6 +731,21 @@ const workflowMutations = [
     '--build-arg "BUILD_REVISION=${GITHUB_SHA}"',
   ],
   [
+    "candidate digest without the registry account name",
+    "dockerSource",
+    'echo "digest=${image#*@}" >> "$GITHUB_OUTPUT"',
+  ],
+  [
+    "candidate job digest output",
+    "dockerSource",
+    'digest: ${{ steps.image.outputs.digest }}',
+  ],
+  [
+    "verified image reference from the candidate digest",
+    "dockerSource",
+    'IMAGE: shererpro/docmost@${{ needs.candidate.outputs.digest }}',
+  ],
+  [
     "versioned image publish",
     "dockerSource",
     'docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"',

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
-      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.image.outputs.digest }}
       version: ${{ steps.image.outputs.version }}
 
     steps:
@@ -64,7 +64,7 @@ jobs:
           docker push "$candidate"
           image="$(docker image inspect --format '{{index .RepoDigests 0}}' "$candidate")"
           [[ "$image" =~ ^shererpro/docmost@sha256:[0-9a-f]{64}$ ]]
-          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "digest=${image#*@}" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Candidate for \`$GITHUB_SHA\`: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
 
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      IMAGE: ${{ needs.candidate.outputs.image }}
+      IMAGE: shererpro/docmost@${{ needs.candidate.outputs.digest }}
       VERSION: ${{ needs.candidate.outputs.version }}
     steps:
       - name: Log in to Docker Hub
@@ -85,6 +85,7 @@ jobs:
 
       - name: Push the immutable version first
         run: |
+          [[ "$IMAGE" =~ ^shererpro/docmost@sha256:[0-9a-f]{64}$ ]]
           docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"
 
       - name: Publish latest after the versioned push succeeds
