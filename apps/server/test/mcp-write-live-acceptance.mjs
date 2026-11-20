@@ -102,6 +102,7 @@ export async function runMcpWriteAcceptance({
   const policy = await api(admin, '/ai/tool-policy');
   const readCapabilities = [
     'page.metadata.read',
+    'page.outline.read',
     'page.node.read',
     'page.attachments.file.read',
   ];

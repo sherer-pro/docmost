@@ -1726,7 +1726,8 @@
             "step8": "大きな保存済みバージョンを比較する場合、precise=false は変更と文字数がブロック単位の概算であることを示します。テキストを正確に比較するには、getPageVersion と getPage で全文を読み取ってください。",
             "step9": "metadataSizeMismatch=true の場合は、fileSize を使って元ファイルを組み立て、declaredFileSize は診断用に保持してください。読み取りでメタデータは修正されません。MCP_SOURCE_CHANGED の場合は、引き続き最初から読み直す必要があります。",
             "step10": "inspect の後、expectedRevision と operationId を指定して preview を呼び出します。変更内容を確認し、previewHash を指定して commit を実行します。応答を失った場合は status を呼び出します。",
-            "step11": "createPage の settings に assigneeId、status、aiRole を指定できます。Markdown で ::tag[TODO] などのタグを挿入できます。replaceDrawio のプレビューで使用中の添付ファイルのバージョンとモデルのチェックサムを確認し、保存後に新しい添付ファイルを分割して読み取ります。"
+            "step11": "createPage の settings に assigneeId、status、aiRole を指定できます。Markdown で ::tag[TODO] などのタグを挿入できます。replaceDrawio のプレビューで使用中の添付ファイルのバージョンとモデルのチェックサムを確認し、保存後に新しい添付ファイルを分割して読み取ります。",
+            "step12": "ページ末尾に別の編集可能な図を追加するには appendDrawio を使用します。見出しとリンクを含む Markdown の表には appendBlock、insertBlock、replaceBlock を使用できます。"
           },
           "success": "許可されたデータは継続リクエストで最後まで読めます。拒否された機能と他のスペースにはアクセスできません。",
           "rollback": "キーまたはOAuth接続を失効させてください。ログアウトでもセッションに紐づくOAuthアクセスが終了します。",

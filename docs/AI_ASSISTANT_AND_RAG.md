@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 49 -->
+<!-- ai-admin-guide-contract-version: 50 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -1913,7 +1913,16 @@ JSON. Enabled document fields appear in `customFields` and `assignee.id`.
   before or after the anchor. Use `position:"before"` or `position:"after"`.
 - `{kind:"replaceBlock",nodeId,markdown}` replaces one editable text block.
 - `{kind:"deleteBlock",nodeId}` removes one editable text block.
-- `{kind:"appendBlock",markdown}` appends one Markdown block.
+- `{kind:"appendBlock",markdown}` appends one Markdown block. It also accepts
+  one pipe table with a header separator. `insertBlock` and `replaceBlock`
+  accept the same input. Header and body cells preserve inline links and tags.
+- `{kind:"appendDrawio",modelBase64,modelSha256,pngBase64}` appends an
+  independent editable diagram at the end of the page. Append a heading in
+  a separate edit if desired. Both Draw.io operations require
+  `page.content.write` and `page.image.upload` and use the same payload limits,
+  revision check, preview, receipt and chunked readback described below.
+  For an append, `before` is null and `after.attrs.attachmentId` identifies the
+  new attachment. The other diagrams on the page keep their attachments.
 - In block Markdown, `::tag[TBD]`, `::tag[TODO]` and `::tag[DONE]` create inline
   editor nodes with lowercase values. Code spans and fenced blocks retain literal text.
 - `{kind:"replaceDrawio",nodeId,attachmentId,attachmentVersion,modelBase64,modelSha256,pngBase64}`
@@ -1938,7 +1947,10 @@ JSON. Enabled document fields appear in `customFields` and `assignee.id`.
 
 Use `getOutline` for node IDs or its version-bound `#index` node references.
 Markdown and individual edit strings are limited to 4,096 characters. The
-preview includes the exact selected block before and after the edit, subject
+content-edit preview binds the live document revision, target identity and
+exact resulting content. Its displayed page-row `target.updatedAt` can advance
+when collaboration persists the same document. The preview includes the exact
+selected block before and after the edit, subject
 to the 24 KiB response limit. Unsupported structures, embedded content,
 synced block descendants and managed template content retain their existing
 protection. The server rejects changes that would touch an inline comment

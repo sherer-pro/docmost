@@ -82,8 +82,8 @@ export class CollaborationHandler {
             });
           },
         );
-        if (intent.diagram) {
-          if (!this.drawioSource) throw new Error('Draw.io source verification unavailable');
+        if (edit.kind === 'replaceDrawio') {
+          if (!this.drawioSource || !intent.diagram?.source) throw new Error('Draw.io source verification unavailable');
           await this.drawioSource.withCurrentSource(intent.diagram.source, mutate);
         } else await mutate();
       },

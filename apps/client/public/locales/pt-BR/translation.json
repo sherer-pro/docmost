@@ -1726,7 +1726,8 @@
             "step8": "Ao comparar uma versão salva grande, precise=false indica que as alterações e as contagens de caracteres são resumos aproximados por bloco. Para comparar o texto com exatidão, leia o texto completo com getPageVersion e getPage.",
             "step9": "Se metadataSizeMismatch=true, use fileSize para reconstruir o original e mantenha declaredFileSize para diagnóstico. A leitura não corrige os metadados. MCP_SOURCE_CHANGED ainda exige reiniciar a leitura.",
             "step10": "Chame inspect e depois preview com expectedRevision e operationId. Confira as alterações antes de usar commit com previewHash. Se a resposta for perdida, consulte status.",
-            "step11": "createPage aceita assigneeId, status e aiRole em settings. Insira tags nativas como ::tag[TODO] no Markdown. Em replaceDrawio, confira a versão do anexo ativo e a soma de verificação do modelo na prévia. Leia o novo anexo em partes."
+            "step11": "createPage aceita assigneeId, status e aiRole em settings. Insira tags nativas como ::tag[TODO] no Markdown. Em replaceDrawio, confira a versão do anexo ativo e a soma de verificação do modelo na prévia. Leia o novo anexo em partes.",
+            "step12": "Use appendDrawio para adicionar outro diagrama editável ao final da página. Para tabelas Markdown com cabeçalhos e links, use appendBlock, insertBlock ou replaceBlock."
           },
           "success": "Os dados autorizados são lidos por completo com continuações; recursos negados e outros espaços continuam inacessíveis.",
           "rollback": "Revogue a chave ou conexão OAuth. Sair também encerra o acesso OAuth vinculado à sessão.",

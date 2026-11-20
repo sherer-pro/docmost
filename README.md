@@ -232,6 +232,8 @@ a page, and keep native inline tags in paragraphs and lists. It can also replace
 one editable Draw.io block with a reviewed model and its PNG preview. The client
 checks the selected attachment version and can read the resulting SVG back in
 chunks to verify both checksums.
+The client can append another editable Draw.io block to the same page and write
+Markdown pipe tables with headers, body cells, inline links and native tags.
 
 For built-in synchronization, the Open WebUI URL, Knowledge Base ID, and a
 separate writer API key are configured in each space's UI; the writer key is

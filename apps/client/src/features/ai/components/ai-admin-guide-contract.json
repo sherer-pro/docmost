@@ -1,5 +1,5 @@
 {
-  "version": 49,
+  "version": 50,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,11 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "inbound-mcp-diagram-and-table-insertion",
+      "key": "scenario.inboundMcp.steps.step12",
+      "needles": ["appendDrawio", "appendBlock", "insertBlock", "replaceBlock"]
+    },
     {
       "id": "inbound-mcp-page-publication",
       "key": "scenario.inboundMcp.steps.step11",
@@ -508,6 +513,7 @@
     "scenario.inboundMcp.steps.step8",
     "scenario.inboundMcp.steps.step9",
     "scenario.inboundMcp.steps.step10",
-    "scenario.inboundMcp.steps.step11"
+    "scenario.inboundMcp.steps.step11",
+    "scenario.inboundMcp.steps.step12"
   ]
 }

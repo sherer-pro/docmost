@@ -1726,7 +1726,8 @@
             "step8": "For a large saved-version comparison, precise=false means changes and character counts are approximate block summaries. For an exact text comparison, read the complete text with getPageVersion and getPage.",
             "step9": "If metadataSizeMismatch is true, use fileSize to assemble the original and keep declaredFileSize for diagnostics. Reads do not repair metadata. MCP_SOURCE_CHANGED still requires restarting the read.",
             "step10": "Run inspect, then preview with expectedRevision and operationId. Review the changes before calling commit with previewHash. If the response is lost, call status.",
-            "step11": "createPage accepts assigneeId, status and aiRole in settings. Insert native ::tag[TODO] tags in Markdown. For replaceDrawio, preview the active attachment version and model checksum, then read the new attachment in chunks."
+            "step11": "createPage accepts assigneeId, status and aiRole in settings. Insert native ::tag[TODO] tags in Markdown. For replaceDrawio, preview the active attachment version and model checksum, then read the new attachment in chunks.",
+            "step12": "Use appendDrawio to add another editable diagram at the end of the page. For a Markdown table with headings and links, use appendBlock, insertBlock or replaceBlock."
           },
           "success": "Allowed reads return complete data through continuation; forbidden capabilities and other spaces remain inaccessible.",
           "rollback": "Revoke the key or OAuth connection. Logging out also invalidates session-bound OAuth access.",

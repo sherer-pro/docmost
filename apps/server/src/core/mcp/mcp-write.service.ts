@@ -49,6 +49,7 @@ import {
 import {
   applyMcpContentEdit,
   MCP_TEXT_NODES,
+  MCP_TABLE_NODES,
   type McpContentEdit,
 } from '../../common/helpers/prosemirror/mcp-content-edit';
 import { PAGE_TREE_LOCK_NAMESPACE } from '../../common/config/page-tree.constants';
@@ -200,10 +201,7 @@ export class McpWriteService {
     }
     if (input.mode === 'preview') {
       const plan = await this.buildPlan(tool, input, target, context);
-      const previewHash = hashCanonicalJson({
-        payloadHash,
-        preview: plan.preview,
-      });
+      const previewHash = this.planPreviewHash(payloadHash, plan, existing?.previewHash);
       const preview = {
         operationId: binding.operationId,
         expectedRevision,
@@ -500,15 +498,17 @@ export class McpWriteService {
     let edit: McpContentEdit;
     let diagram: Plan['diagram'];
     let previewEdit: Record<string, unknown> = rawEdit;
-    if (rawEdit.kind === 'replaceDrawio') {
-      const source = {
-        pageId: page.id,
-        spaceId: page.spaceId,
-        workspaceId: page.workspaceId,
-        attachmentId: rawEdit.attachmentId,
-        attachmentVersion: rawEdit.attachmentVersion,
-      };
-      await this.drawioSource.check(source);
+    if (rawEdit.kind === 'replaceDrawio' || rawEdit.kind === 'appendDrawio') {
+      const source = rawEdit.kind === 'replaceDrawio'
+        ? {
+            pageId: page.id,
+            spaceId: page.spaceId,
+            workspaceId: page.workspaceId,
+            attachmentId: rawEdit.attachmentId,
+            attachmentVersion: rawEdit.attachmentVersion,
+          }
+        : undefined;
+      if (source) await this.drawioSource.check(source);
       const { svg, modelBytes, sheets, svgSha256 } = makeDrawioSvg(rawEdit);
       if (svg.length > bytes(this.environment.getFileUploadSizeLimit()))
         throw new BadRequestException(
@@ -518,7 +518,7 @@ export class McpWriteService {
       const filePath = `${getAttachmentFolderPath(AttachmentType.File, page.workspaceId)}/${id}/${DRAWIO_FILE_NAME}`;
       diagram = {
         command: {
-          source,
+          ...(source && { source }),
           attachmentId: id,
           filePath,
           size: svg.length,
@@ -527,19 +527,29 @@ export class McpWriteService {
         },
         svg,
       };
-      edit = {
-        kind: 'replaceDrawio',
-        nodeId: rawEdit.nodeId,
-        attachmentId: rawEdit.attachmentId,
-        replacementId: id,
-        src: this.attachmentUrl(id, DRAWIO_FILE_NAME),
-        size: svg.length,
-      };
+      const src = this.attachmentUrl(id, DRAWIO_FILE_NAME);
+      edit = rawEdit.kind === 'appendDrawio'
+        ? {
+            kind: 'appendDrawio',
+            node: { type: 'drawio', attrs: { attachmentId: id, src, size: svg.length } },
+          }
+        : {
+            kind: 'replaceDrawio',
+            nodeId: rawEdit.nodeId,
+            attachmentId: rawEdit.attachmentId,
+            replacementId: id,
+            src,
+            size: svg.length,
+          };
       previewEdit = {
         kind: rawEdit.kind,
-        nodeId: rawEdit.nodeId,
-        attachmentId: rawEdit.attachmentId,
-        attachmentVersion: rawEdit.attachmentVersion,
+        ...(rawEdit.kind === 'replaceDrawio'
+          ? {
+              nodeId: rawEdit.nodeId,
+              attachmentId: rawEdit.attachmentId,
+              attachmentVersion: rawEdit.attachmentVersion,
+            }
+          : { attachmentId: id }),
         modelSha256: rawEdit.modelSha256,
         modelBytes,
         sheets,
@@ -627,8 +637,11 @@ export class McpWriteService {
     if (nodes?.length !== 1)
       throw new BadRequestException('Supply one Markdown block per edit');
     const assignIds = (node: ProseMirrorJson, path: string) => {
-      if (!node.type || !MCP_TEXT_NODES.has(node.type))
+      if (!node.type || !(MCP_TEXT_NODES.has(node.type) || MCP_TABLE_NODES.has(node.type)))
         throw new BadRequestException('Unsupported Markdown node');
+      if ((node.type === 'tableHeader' || node.type === 'tableCell') &&
+          (node.attrs?.colspan !== 1 || node.attrs?.rowspan !== 1))
+        throw new BadRequestException('Markdown tables require unmerged cells');
       for (const mark of node.marks ?? []) {
         if (!mark.type || !MARKDOWN_MARKS.has(mark.type)) {
           throw new BadRequestException('Unsupported Markdown mark or link');
@@ -915,14 +928,20 @@ export class McpWriteService {
     }
   }
 
+  private planPreviewHash(payloadHash: string, plan: Plan, previousHash?: string) {
+    const preview = plan.preview;
+    const original = hashCanonicalJson({ payloadHash, preview });
+    if (!plan.content || previousHash === original) return original;
+
+    // Collaboration persistence may advance the row timestamp without changing
+    // the live document. Its hash binds the content revision in the payload.
+    // Existing previews from earlier versions keep their original binding.
+    const { updatedAt: _timestamp, ...target } = preview.target as Record<string, unknown>;
+    return hashCanonicalJson({ payloadHash, preview: { ...preview, target } });
+  }
+
   private assertPreview(receipt: Receipt, plan: Plan) {
-    if (
-      receipt.previewHash !==
-      hashCanonicalJson({
-        payloadHash: receipt.payloadHash,
-        preview: plan.preview,
-      })
-    ) {
+    if (receipt.previewHash !== this.planPreviewHash(receipt.payloadHash, plan, receipt.previewHash)) {
       throw new ConflictException({
         code: 'MCP_PREVIEW_CHANGED',
         message:

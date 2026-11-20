@@ -1726,7 +1726,8 @@
             "step8": "Bei einem Vergleich großer gespeicherter Versionen bedeutet precise=false, dass Änderungen und Zeichenzahlen ungefähre Blockzusammenfassungen sind. Lesen Sie für einen exakten Textvergleich den vollständigen Text mit getPageVersion und getPage.",
             "step9": "Wenn metadataSizeMismatch=true ist, verwenden Sie fileSize zum Zusammensetzen des Originals und declaredFileSize zur Diagnose. Lesezugriffe korrigieren keine Metadaten. Bei MCP_SOURCE_CHANGED muss der Lesevorgang weiterhin neu beginnen.",
             "step10": "Rufen Sie zuerst inspect und danach preview mit expectedRevision und operationId auf. Prüfen Sie die Änderungen vor commit mit previewHash. Bei verlorener Antwort hilft status.",
-            "step11": "createPage akzeptiert assigneeId, status und aiRole in settings. Verwenden Sie native Tags wie ::tag[TODO] in Markdown. Prüfen Sie bei replaceDrawio die aktive Anhangsversion und die Modellprüfsumme in der Vorschau und lesen Sie den neuen Anhang in Teilen."
+            "step11": "createPage akzeptiert assigneeId, status und aiRole in settings. Verwenden Sie native Tags wie ::tag[TODO] in Markdown. Prüfen Sie bei replaceDrawio die aktive Anhangsversion und die Modellprüfsumme in der Vorschau und lesen Sie den neuen Anhang in Teilen.",
+            "step12": "Mit appendDrawio fügen Sie am Seitenende ein weiteres bearbeitbares Diagramm ein. Für Markdown-Tabellen mit Kopfzeilen und Links verwenden Sie appendBlock, insertBlock oder replaceBlock."
           },
           "success": "Erlaubte Daten sind über Fortsetzungen vollständig lesbar; gesperrte Funktionen und fremde Bereiche bleiben unzugänglich.",
           "rollback": "Widerrufen Sie Schlüssel oder OAuth-Verbindung. Abmelden beendet auch den sitzungsgebundenen OAuth-Zugriff.",

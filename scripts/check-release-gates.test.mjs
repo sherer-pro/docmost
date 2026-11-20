@@ -733,12 +733,12 @@ const workflowMutations = [
   [
     "versioned image publish",
     "dockerSource",
-    'docker push "shererpro/docmost:${VERSION}"',
+    'docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"',
   ],
   [
     "latest image publish",
     "dockerSource",
-    "docker push shererpro/docmost:latest",
+    'docker buildx imagetools create --prefer-index=false --tag shererpro/docmost:latest "$IMAGE"',
   ],
   [
     "Open WebUI artifact sanitizer",
@@ -779,12 +779,10 @@ test("rejects a failed-smoke publish bypass", () => {
         "    needs: integration",
         "    needs: validate",
       ),
-      dockerSource: dockerSource
-        .replace("    needs: gates", "    needs: validate")
-        .replace(
-          "    runs-on: ubuntu-latest",
-          "    if: always()\n    runs-on: ubuntu-latest",
-        ),
+      dockerSource: dockerSource.replace(
+        "    needs: [gates, candidate]",
+        "    needs: [validate, candidate]\n    if: always()",
+      ),
     }),
   );
 

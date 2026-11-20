@@ -23,7 +23,7 @@ export type McpContentEdit =
       src: string;
       size: number;
     }
-  | { kind: 'appendBlock' | 'appendImage'; node: ProseMirrorJson };
+  | { kind: 'appendBlock' | 'appendImage' | 'appendDrawio'; node: ProseMirrorJson };
 
 export const MCP_TEXT_NODES = new Set([
   'paragraph',
@@ -39,6 +39,13 @@ export const MCP_TEXT_NODES = new Set([
   'taskList',
   'taskItem',
   'codeBlock',
+]);
+
+export const MCP_TABLE_NODES = new Set([
+  'table',
+  'tableRow',
+  'tableHeader',
+  'tableCell',
 ]);
 
 function visit(
@@ -65,7 +72,7 @@ export function applyMcpContentEdit(
   next.content ??= [];
   if (
     'node' in edit &&
-    (edit.kind === 'appendBlock' || edit.kind === 'appendImage')
+    (edit.kind === 'appendBlock' || edit.kind === 'appendImage' || edit.kind === 'appendDrawio')
   ) {
     next.content.push(edit.node);
     assertUniqueNodeIds(next);
@@ -168,7 +175,8 @@ export function applyMcpContentEdit(
 
   visit(target, (node) => {
     if (node.marks?.some((mark) => mark.type === 'comment')) anchorConflict();
-    if (!node.type || !MCP_TEXT_NODES.has(node.type)) {
+    if (!node.type || !(MCP_TEXT_NODES.has(node.type) ||
+        (edit.kind === 'replaceBlock' && MCP_TABLE_NODES.has(node.type)))) {
       throw new ConflictException(
         'The selected block contains protected or embedded content',
       );

@@ -326,5 +326,70 @@ export async function runMcpPublicationAcceptance({
       await sql`select id from attachments where page_id=${pageId} and file_name='diagram.drawio.svg'`;
     assert.equal(rows.length, 3);
     await writeFile(path.join(output, 'mcp-drawio-readback.svg'), file.bytes);
+
+    const secondModel = Buffer.from(model.toString().replace('name="Second"', 'name="Architecture"'));
+    const append = {
+      kind: 'appendDrawio', modelBase64: secondModel.toString('base64'), modelSha256: sha(secondModel), pngBase64,
+    };
+    const outdated = await planEdit(append);
+    await commitEdit({ kind: 'appendBlock', markdown: '## Second diagram' });
+    assert.equal((await call(writer, 'editPageContent', outdated)).structuredContent.code, 'MCP_WRITE_STALE');
+    const insertion = await planEdit(append);
+    assert((await call(reader, 'editPageContent', insertion)).isError);
+    assert.equal((await call(editOnly, 'editPageContent', insertion)).structuredContent.code, 'MCP_HTTP_403');
+    const insertionPreview = await read('editPageContent', { ...insertion, mode: 'preview', previewHash: undefined });
+    assert.equal(insertionPreview.before, null);
+    assert.equal(insertionPreview.after.type, 'drawio');
+    const appended = await read('editPageContent', insertion);
+    assert.deepEqual(await read('editPageContent', insertion), appended);
+    assert.deepEqual(await recover(writer, 'editPageContent', target, insertion.operationId), appended);
+    assert.notEqual(appended.result.attachmentId, receipt.result.attachmentId);
+    assert.equal((await node('#0')).attrs.attachmentId, receipt.result.attachmentId);
+    assert.equal((await node('#4')).attrs.attachmentId, appended.result.attachmentId);
+    const secondFile = await readFile(appended.result.attachmentId);
+    assert.equal(sha(secondFile.bytes), appended.result.svgSha256);
+    assert.notEqual(appended.result.svgSha256, receipt.result.svgSha256);
+    const secondSvg = new DOMParser().parseFromString(secondFile.bytes.toString(), 'image/svg+xml').documentElement;
+    assert.deepEqual(Buffer.from(secondSvg.getAttribute('content')), secondModel);
+    assert.deepEqual((await readFile(receipt.result.attachmentId)).bytes, file.bytes);
+    assert.equal((await sql`select id from attachments where page_id=${pageId} and file_name='diagram.drawio.svg'`).length, 4);
+  });
+
+  await test('MCP appends, inserts and replaces pipe tables with readable header cells and inline links', async () => {
+    const table = '| Name | Status |\n| --- | --- |\n| [Product](https://example.org/product) | ::tag[TODO] ' + 'x'.repeat(2250) + ' |';
+    const tableRefs = async () => {
+      const outline = await read('getOutline', { pageId });
+      assert(!outline.nextCursor);
+      return outline.items.filter(item => item.type === 'table').map(item => `#${item.index}`);
+    };
+    const check = (block, name) => {
+      assert.equal(block.type, 'table');
+      assert.deepEqual(block.content.map(row => row.type), ['tableRow','tableRow']);
+      assert.deepEqual(block.content[0].content.map(cell => cell.type), ['tableHeader','tableHeader']);
+      assert.deepEqual(block.content[1].content.map(cell => cell.type), ['tableCell','tableCell']);
+      const label = block.content[1].content[0].content[0].content[0];
+      assert.equal(label.text, name);
+      assert.equal(label.marks.find(mark => mark.type === 'link').attrs.href, 'https://example.org/product');
+      assert.equal(block.content[1].content[1].content[0].content[0].type, 'tag');
+    };
+    const first = await read('editPageContent', {...target, mode:'inspect'});
+    const args = {...target, expectedRevision:first.revision, operationId:randomUUID(), edit:{kind:'appendBlock', markdown:table}};
+    const preview = await read('editPageContent', {...args, mode:'preview'});
+    check(preview.after, 'Product');
+    // Model a delayed save of identical Yjs content between two previews.
+    await sql`update pages set updated_at=updated_at+interval '1 second' where id=${pageId}`;
+    const repeat = await read('editPageContent',{...args,mode:'preview'});
+    assert.equal(repeat.previewHash, preview.previewHash);
+    assert.deepEqual(repeat.after, preview.after);
+    const operation = {...args,mode:'commit',previewHash:preview.previewHash};
+    await read('editPageContent', operation);
+    const [originalRef] = await tableRefs();
+    check(await node(originalRef), 'Product');
+    await commitEdit({kind:'insertBlock',nodeId:originalRef,position:'before',markdown:table.replace('Product','Inserted')});
+    const [insertedRef, followingRef] = await tableRefs();
+    check(await node(insertedRef), 'Inserted');
+    await commitEdit({kind:'replaceBlock',nodeId:followingRef,markdown:table.replace('Product','Updated')});
+    check(await node(followingRef), 'Updated');
+    check(await node(insertedRef), 'Inserted');
   });
 }

@@ -39,10 +39,10 @@ deploy a moving branch or the `latest` tag.
 ## 0. Publish the release image
 
 The normal publication path is a GitHub Release. The checked-in
-`.github/workflows/docker.yml` runs on `release: published`, executes the required
-reusable CI gates, and only then logs in to Docker Hub with the repository secrets
-`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. A local Docker Hub push credential is
-not required for this path.
+`.github/workflows/docker.yml` runs on `release: published`. It builds a
+candidate in parallel with the required CI gates, using the repository's
+Docker Hub credentials. The candidate job records the immutable digest in
+its summary. The publish job promotes that same digest after CI succeeds.
 
 1. Align the root, client and server package versions, prepare release notes,
    and complete the required release verification.
@@ -55,6 +55,12 @@ not required for this path.
    `shererpro/docmost:${package.version}` first and then updates `latest`.
 5. Resolve the versioned registry digest and check the OCI version/revision
    against the release tag before selecting it for production.
+
+For an operator-approved early deployment, use the completed candidate job's
+digest for `shererpro/docmost:candidate-<version>-<full-commit-sha>`. Verify both
+OCI labels, local release acceptance and the production-copy rehearsal before
+cutover. Record the outstanding CI run and check its final result. A failed
+gate blocks promotion to the version and latest tags and requires operator review.
 
 Publishing a GitHub Release alone does not prove that an image exists. The release
 workflow checks out the tag; later commits on `main` are not included when that

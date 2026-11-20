@@ -576,6 +576,7 @@ export function validateReleaseGateContract({
   const productionSmoke = jobBlock(ciSource, "production-smoke");
   const gates = jobBlock(dockerSource, "gates");
   const publish = jobBlock(dockerSource, "publish");
+  const candidate = jobBlock(dockerSource, "candidate");
 
   if (!/^  workflow_call:\s*$/mu.test(ciSource)) {
     errors.push("ci.yml must expose workflow_call");
@@ -592,6 +593,9 @@ export function validateReleaseGateContract({
   if (!hasNeed(publish, "gates")) {
     errors.push("publish must need gates");
   }
+  if (!hasNeed(publish, "candidate")) {
+    errors.push("publish must use the staged candidate");
+  }
   if (/^    if:\s*.*always\(\)/mu.test(publish)) {
     errors.push("publish must not bypass failed gates with always()");
   }
@@ -600,8 +604,14 @@ export function validateReleaseGateContract({
     'test "$tag" = "$expected_tag"',
     '--build-arg "BUILD_VERSION=${VERSION}"',
     '--build-arg "BUILD_REVISION=${GITHUB_SHA}"',
-    'docker push "shererpro/docmost:${VERSION}"',
-    "docker push shererpro/docmost:latest",
+    'docker push "$candidate"',
+    'shererpro/docmost:candidate-${VERSION}-${GITHUB_SHA}',
+  ]) {
+    requireWorkflowCommand(errors, candidate, "candidate", command);
+  }
+  for (const command of [
+    'docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"',
+    'docker buildx imagetools create --prefer-index=false --tag shererpro/docmost:latest "$IMAGE"',
   ]) {
     requireWorkflowCommand(errors, publish, "publish", command);
   }

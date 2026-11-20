@@ -1726,7 +1726,8 @@
             "step8": "比较较大的已保存版本时，precise=false 表示更改和字符数是按块生成的近似摘要。如需精确比较文本，请通过 getPageVersion 和 getPage 读取完整文本。",
             "step9": "如果 metadataSizeMismatch=true，请使用 fileSize 重组原始文件，并保留 declaredFileSize 用于诊断。读取不会修复元数据。遇到 MCP_SOURCE_CHANGED 时仍需重新开始读取。",
             "step10": "调用 inspect，然后用 expectedRevision 和 operationId 调用 preview。核对更改后，使用 previewHash 调用 commit。若响应丢失，请调用 status。",
-            "step11": "在 createPage 的 settings 中可指定 assigneeId、status 和 aiRole。在 Markdown 中可插入 ::tag[TODO] 等原生标签。使用 replaceDrawio 时，在预览中核对当前附件版本和模型校验和，提交后分块读取新附件。"
+            "step11": "在 createPage 的 settings 中可指定 assigneeId、status 和 aiRole。在 Markdown 中可插入 ::tag[TODO] 等原生标签。使用 replaceDrawio 时，在预览中核对当前附件版本和模型校验和，提交后分块读取新附件。",
+            "step12": "使用 appendDrawio 可在页面末尾添加另一张可编辑的图。对于包含表头和链接的 Markdown 表格，请使用 appendBlock、insertBlock 或 replaceBlock。"
           },
           "success": "获准的数据可通过后续请求完整读取；被拒绝的能力和其他空间仍不可访问。",
           "rollback": "撤销密钥或 OAuth 连接。退出登录也会终止绑定到该会话的 OAuth 访问。",

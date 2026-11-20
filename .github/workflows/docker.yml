@@ -17,11 +17,13 @@ jobs:
     name: Required release gates
     uses: ./.github/workflows/ci.yml
 
-  publish:
-    name: Publish verified image
-    needs: gates
+  candidate:
+    name: Build deployment candidate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      version: ${{ steps.image.outputs.version }}
 
     steps:
       - name: Checkout
@@ -50,13 +52,41 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Build the release image
-        run: docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${VERSION}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t "shererpro/docmost:${VERSION}" .
+        run: docker build --build-arg PNPM_OFFLINE=0 --build-arg "BUILD_VERSION=${VERSION}" --build-arg "BUILD_REVISION=${GITHUB_SHA}" -t "shererpro/docmost:candidate-${VERSION}-${GITHUB_SHA}" .
+
+      - name: Record the candidate digest
+        id: image
+        shell: bash
+        run: |
+          candidate="shererpro/docmost:candidate-${VERSION}-${GITHUB_SHA}"
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$candidate")" = "$VERSION"
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$candidate")" = "$GITHUB_SHA"
+          docker push "$candidate"
+          image="$(docker image inspect --format '{{index .RepoDigests 0}}' "$candidate")"
+          [[ "$image" =~ ^shererpro/docmost@sha256:[0-9a-f]{64}$ ]]
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Candidate for \`$GITHUB_SHA\`: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish verified image
+    needs: [gates, candidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: ${{ needs.candidate.outputs.image }}
+      VERSION: ${{ needs.candidate.outputs.version }}
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push the immutable version first
-        run: docker push "shererpro/docmost:${VERSION}"
+        run: |
+          docker buildx imagetools create --prefer-index=false --tag "shererpro/docmost:${VERSION}" "$IMAGE"
 
       - name: Publish latest after the versioned push succeeds
         if: github.event_name == 'release'
-        run: |
-          docker tag "shererpro/docmost:${VERSION}" shererpro/docmost:latest
-          docker push shererpro/docmost:latest
+        run: docker buildx imagetools create --prefer-index=false --tag shererpro/docmost:latest "$IMAGE"

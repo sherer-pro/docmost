@@ -11,7 +11,7 @@ export type CollaborationActor = Pick<User, 'id'>;
 
 export type McpContentCommand = {
   diagram?: {
-    source: DrawioSource;
+    source?: DrawioSource;
     attachmentId: string;
     filePath: string;
     size: number;

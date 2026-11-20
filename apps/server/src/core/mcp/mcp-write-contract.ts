@@ -15,6 +15,11 @@ import {
 const uuid = { type: 'string', format: 'uuid' } as const;
 const hash = { type: 'string', pattern: '^[0-9a-f]{64}$' } as const;
 const string = (maxLength: number) => ({ type: 'string', maxLength }) as const;
+const drawioPayload = {
+  modelBase64: string(MCP_MODEL_MAX_BASE64),
+  modelSha256: hash,
+  pngBase64: string(MCP_IMAGE_MAX_BASE64),
+};
 
 const definitions = {
   createPage: {
@@ -41,7 +46,7 @@ const definitions = {
   },
   editPageContent: {
     description:
-      'Edit a text run or Markdown block with native inline tags, append an attached image, or replace an active Draw.io block. For replaceDrawio, supply the uncompressed UTF-8 mxfile and its SHA-256, a matching first-sheet PNG, and the active attachment ID and version from getAttachmentFileChunk. Image upload permission is required. Node IDs come from getOutline.',
+      'Edit a text run or Markdown block, including native inline tags and pipe tables, or append an attached image. appendDrawio adds an independent editable diagram at the end of the page. Both Draw.io edits require image upload permission, an uncompressed UTF-8 mxfile, its SHA-256 and a matching first-sheet PNG. replaceDrawio also requires the active node ID, attachment ID and attachment version.',
     target: { pageId: uuid },
     payload: {
       edit: {
@@ -64,13 +69,12 @@ const definitions = {
           editSchema('deleteBlock', { nodeId: string(128) }),
           editSchema('appendBlock', { markdown: string(4096) }),
           editSchema('appendImage', { attachmentId: uuid, alt: string(250) }),
+          editSchema('appendDrawio', drawioPayload),
           editSchema('replaceDrawio', {
             nodeId: string(128),
             attachmentId: uuid,
             attachmentVersion: hash,
-            modelBase64: string(MCP_MODEL_MAX_BASE64),
-            modelSha256: hash,
-            pngBase64: string(MCP_IMAGE_MAX_BASE64),
+            ...drawioPayload,
           }),
         ],
       },
@@ -243,15 +247,19 @@ type Edit =
     }
   | { kind: 'deleteBlock'; nodeId: string }
   | { kind: 'appendBlock'; markdown: string }
-  | {
-      kind: 'replaceDrawio';
-      nodeId: string;
-      attachmentId: string;
-      attachmentVersion: string;
+  | ((
+      | { kind: 'appendDrawio' }
+      | {
+          kind: 'replaceDrawio';
+          nodeId: string;
+          attachmentId: string;
+          attachmentVersion: string;
+        }
+    ) & {
       modelBase64: string;
       modelSha256: string;
       pngBase64: string;
-    }
+    })
   | { kind: 'appendImage'; attachmentId: string; alt: string };
 
 export type McpWriteInput = {

@@ -103,11 +103,10 @@ export class McpController {
         await this.toolPolicy.assertMcpToolAllowed(principal, call.params.name);
         const name = call.params.name;
         const args = call.params.arguments ?? {};
-        const replacesDrawio =
-          name === 'editPageContent' &&
-          (args.edit as { kind?: unknown } | undefined)?.kind ===
-            'replaceDrawio';
-        if (replacesDrawio)
+        const editKind = (args.edit as { kind?: unknown } | undefined)?.kind;
+        const writesDrawio = name === 'editPageContent' &&
+          (editKind === 'replaceDrawio' || editKind === 'appendDrawio');
+        if (writesDrawio)
           await this.toolPolicy.assertMcpToolAllowed(
             principal,
             'uploadPageImage',
@@ -146,7 +145,7 @@ export class McpController {
                 );
               }
               await this.toolPolicy.assertMcpToolAllowed(live.mcpScope, name);
-              if (replacesDrawio)
+              if (writesDrawio)
                 await this.toolPolicy.assertMcpToolAllowed(
                   live.mcpScope,
                   'uploadPageImage',
