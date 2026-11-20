@@ -381,12 +381,22 @@ export class PersistenceExtension implements Extension {
           );
 
           if (mcpIntent) {
+            const diagram = mcpIntent.diagram;
+            if (diagram) {
+              await trx.insertInto('attachments').values({
+                id: diagram.attachmentId, pageId, spaceId: lockedPage.spaceId,
+                workspaceId: lockedPage.workspaceId, creatorId: mcpIntent.user.id,
+                type: 'file', fileName: 'diagram.drawio.svg', fileExt: '.svg',
+                mimeType: 'image/svg+xml', fileSize: diagram.size, filePath: diagram.filePath,
+              }).onConflict(oc => oc.column('id').doNothing()).execute();
+            }
             const receipt = await trx.updateTable('mcpWriteOperations')
               .set({
                 result: {
                   pageId,
                   beforeHash: mcpIntent.baseHash,
                   afterHash: mcpIntent.afterHash,
+                  ...(diagram && { attachmentId: diagram.attachmentId, modelSha256: diagram.modelSha256, svgSha256: diagram.svgSha256 }),
                 },
               })
               .where('keyId', '=', mcpIntent.keyId)

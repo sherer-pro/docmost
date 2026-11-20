@@ -275,6 +275,7 @@ describe('AttachmentService uploadFile attachment overwrite validation', () => {
         fileExt: '.drawio',
       }),
       'attachment-id',
+      undefined,
     );
     expect(storageService.delete).toHaveBeenCalledWith(
       'workspace-id/files/attachment-id/old.drawio',

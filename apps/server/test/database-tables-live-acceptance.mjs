@@ -156,7 +156,7 @@ export async function runLiveAcceptance({
       return;
     }
     if (process.argv.includes('--mcp-write-only')) {
-      await runMcpWriteAcceptance({ api, actors, space, parent, sql, test, baseURL, exactSecrets });
+      await runMcpWriteAcceptance({ api, actors, space, parent, sql, test, baseURL, exactSecrets, output });
       await writeFile(path.join(output, 'api-results.json'), JSON.stringify(report.tests, null, 2));
       return;
     }
@@ -699,7 +699,7 @@ export async function runLiveAcceptance({
     });
     await runMcpOAuthAcceptance({ api, fetchApi, actors, space, parent, fixture, test, baseURL, sql, exactSecrets });
     await runMcpReadAcceptance({ api, actors, space, parent, workspaceId, sql, test, baseURL, output, exactSecrets });
-    await runMcpWriteAcceptance({ api, actors, space, parent, sql, test, baseURL, exactSecrets });
+    await runMcpWriteAcceptance({ api, actors, space, parent, sql, test, baseURL, exactSecrets, output });
 
     await runIntegrationPreviewAcceptance({ api, fetchApi, actors, parent, space, sql, test, exactSecrets, output, fixture });
 

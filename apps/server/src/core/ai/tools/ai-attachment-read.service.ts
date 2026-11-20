@@ -9,6 +9,10 @@ import {
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { StorageService } from '../../../integrations/storage/storage.service';
+import {
+  attachmentFileVersion,
+  attachmentMetadataVersion,
+} from '../../../common/helpers/attachment-file-version';
 import { StorageObjectChangedError } from '../../../integrations/storage/interfaces/storage-driver.interface';
 import { PageService } from '../../page/services/page.service';
 import { PageAccessService } from '../../page-access/page-access.service';
@@ -68,24 +72,6 @@ export class AiAttachmentReadService {
     return attachment;
   }
 
-  private revision(
-    attachment: Awaited<ReturnType<AiAttachmentReadService['readable']>>,
-  ) {
-    return hashReadVersion([
-      attachment.id,
-      attachment.pageId,
-      attachment.spaceId,
-      attachment.filePath,
-      attachment.fileName,
-      attachment.mimeType,
-      String(attachment.fileSize),
-      attachment.updatedAt,
-      attachment.contentIndexStatus,
-      attachment.contentIndexVersion,
-      attachment.contentIndexedAt,
-    ]);
-  }
-
   private metadata(
     attachment: Awaited<ReturnType<AiAttachmentReadService['readable']>>,
   ) {
@@ -122,7 +108,10 @@ export class AiAttachmentReadService {
       status === 'ready' && typeof attachment.textContent === 'string'
         ? attachment.textContent
         : '';
-    const version = hashReadVersion([this.revision(attachment), text]);
+    const version = hashReadVersion([
+      attachmentMetadataVersion(attachment),
+      text,
+    ]);
     const content = paginateReadText(
       text,
       {
@@ -141,7 +130,7 @@ export class AiAttachmentReadService {
     const current = await this.readable(attachmentId, context);
     if (
       hashReadVersion([
-        this.revision(current),
+        attachmentMetadataVersion(current),
         supported && current.contentIndexStatus === 'ready'
           ? (current.textContent ?? '')
           : '',
@@ -157,13 +146,13 @@ export class AiAttachmentReadService {
     context: AiToolExecutionContext,
   ): Promise<AiToolExecutionResult> {
     const attachment = await this.readable(attachmentId, context);
-    const metadataVersion = this.revision(attachment);
+    const metadataVersion = attachmentMetadataVersion(attachment);
     // The first bounded read discovers the current storage version without a separate public handle.
     let range;
     let offset = 0;
     try {
       range = await this.storage.readVersionedRange(attachment.filePath, 0, 1);
-      const version = hashReadVersion([metadataVersion, range.version]);
+      const version = attachmentFileVersion(metadataVersion, range.version);
       offset = decodeReadCursor(
         cursor,
         'getAttachmentFileChunk',
@@ -177,7 +166,8 @@ export class AiAttachmentReadService {
         range.version,
       );
       const current = await this.readable(attachmentId, context);
-      if (this.revision(current) !== metadataVersion) this.changed();
+      if (attachmentMetadataVersion(current) !== metadataVersion)
+        this.changed();
       const nextOffset = offset + range.data.length;
       const declaredFileSize =
         attachment.fileSize === null ? null : String(attachment.fileSize);

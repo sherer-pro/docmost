@@ -152,6 +152,7 @@ export class AttachmentFileAccessService {
         });
       }
       this.logger.error({ event: 'attachment_upload_processing_failed' });
+      if (err instanceof ConflictException) throw err;
       throw new BadRequestException('Error processing file upload.');
     }
   }

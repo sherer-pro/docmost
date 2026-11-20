@@ -22,6 +22,7 @@ import { hashPageTemplateInstanceContent } from '../common/helpers/prosemirror/p
 import { strictJsonToNode } from './collaboration.util';
 import { applyMcpContentEdit } from '../common/helpers/prosemirror/mcp-content-edit';
 import { mcpContentIntents } from './mcp-content-intent';
+import { DrawioSourceService } from './services/drawio-source.service';
 import type {
   CollaborationActor,
   CollaborationCommandHandlers,
@@ -31,13 +32,14 @@ export type CollabEventHandlers = CollaborationCommandHandlers;
 
 @Injectable()
 export class CollaborationHandler {
+  constructor(private readonly drawioSource?: DrawioSourceService) {}
   private readonly logger = new Logger(CollaborationHandler.name);
 
   getHandlers(hocuspocus: Hocuspocus): CollaborationCommandHandlers {
     return {
       applyMcpContentEdit: async (documentName, payload) => {
         const { edit, ...intent } = payload;
-        await this.withYdocConnection(
+        const mutate = () => this.withYdocConnection(
           hocuspocus,
           documentName,
           { user: intent.user },
@@ -80,6 +82,10 @@ export class CollaborationHandler {
             });
           },
         );
+        if (intent.diagram) {
+          if (!this.drawioSource) throw new Error('Draw.io source verification unavailable');
+          await this.drawioSource.withCurrentSource(intent.diagram.source, mutate);
+        } else await mutate();
       },
       updatePageContent: async (
         documentName: string,

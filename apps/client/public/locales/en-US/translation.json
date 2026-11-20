@@ -1725,7 +1725,8 @@
             "step7": "Use getAttachmentText for already-extracted text. To obtain an original file, explicitly allow getAttachmentFileChunk and reassemble its Base64 chunks of at most 16 KiB.",
             "step8": "For a large saved-version comparison, precise=false means changes and character counts are approximate block summaries. For an exact text comparison, read the complete text with getPageVersion and getPage.",
             "step9": "If metadataSizeMismatch is true, use fileSize to assemble the original and keep declaredFileSize for diagnostics. Reads do not repair metadata. MCP_SOURCE_CHANGED still requires restarting the read.",
-            "step10": "Run inspect, then preview with expectedRevision and operationId. Review the changes before calling commit with previewHash. If the response is lost, call status."
+            "step10": "Run inspect, then preview with expectedRevision and operationId. Review the changes before calling commit with previewHash. If the response is lost, call status.",
+            "step11": "createPage accepts assigneeId, status and aiRole in settings. Insert native ::tag[TODO] tags in Markdown. For replaceDrawio, preview the active attachment version and model checksum, then read the new attachment in chunks."
           },
           "success": "Allowed reads return complete data through continuation; forbidden capabilities and other spaces remain inaccessible.",
           "rollback": "Revoke the key or OAuth connection. Logging out also invalidates session-bound OAuth access.",

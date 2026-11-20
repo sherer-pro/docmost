@@ -16,6 +16,7 @@ import { TokenModule } from '../core/auth/token.module';
 import { HistoryProcessor } from './processors/history.processor';
 import { LoggerExtension } from './extensions/logger.extension';
 import { CollaborationHandler } from './collaboration.handler';
+import { DrawioSourceService } from './services/drawio-source.service';
 import { WatcherModule } from '../core/watcher/watcher.module';
 import { TransclusionPersistenceModule } from '../core/page/transclusion/transclusion.module';
 import { PageAccessModule } from '../core/page-access/page-access.module';
@@ -34,6 +35,7 @@ import { EmptyPageTemplatePersistenceService } from './services/empty-page-templ
     LoggerExtension,
     HistoryProcessor,
     CollaborationHandler,
+    DrawioSourceService,
     CollabPageUpdatePublisherService,
   ],
   exports: [CollaborationGateway],

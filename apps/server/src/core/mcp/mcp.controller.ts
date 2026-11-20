@@ -103,6 +103,15 @@ export class McpController {
         await this.toolPolicy.assertMcpToolAllowed(principal, call.params.name);
         const name = call.params.name;
         const args = call.params.arguments ?? {};
+        const replacesDrawio =
+          name === 'editPageContent' &&
+          (args.edit as { kind?: unknown } | undefined)?.kind ===
+            'replaceDrawio';
+        if (replacesDrawio)
+          await this.toolPolicy.assertMcpToolAllowed(
+            principal,
+            'uploadPageImage',
+          );
         let content: unknown;
         if (isMcpWriteTool(name)) {
           if (
@@ -137,6 +146,11 @@ export class McpController {
                 );
               }
               await this.toolPolicy.assertMcpToolAllowed(live.mcpScope, name);
+              if (replacesDrawio)
+                await this.toolPolicy.assertMcpToolAllowed(
+                  live.mcpScope,
+                  'uploadPageImage',
+                );
               return live.user;
             },
           });

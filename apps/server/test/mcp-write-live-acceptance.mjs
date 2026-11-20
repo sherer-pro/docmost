@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { runMcpPublicationAcceptance } from './mcp-publication-live-acceptance.mjs';
 
 const WRITE_TOOLS = [
   'createPage',
@@ -20,6 +21,7 @@ export async function runMcpWriteAcceptance({
   test,
   baseURL,
   exactSecrets,
+  output,
 }) {
   const { admin, editor } = actors;
   const keys = [];
@@ -41,7 +43,7 @@ export async function runMcpWriteAcceptance({
         await sql`update users set role = 'member' where id = ${editor.id}`;
     }
   };
-  const rpc = async (key, method, params) => {
+  const rpc = async (key, method, params, retries = 2) => {
     const response = await fetch(`${baseURL}/mcp`, {
       method: 'POST',
       headers: {
@@ -52,6 +54,12 @@ export async function runMcpWriteAcceptance({
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     });
     const body = await response.text();
+    if (response.status === 429 && retries > 0) {
+      const seconds = Number(response.headers.get('retry-after'));
+      assert(Number.isFinite(seconds) && seconds > 0 && seconds <= 60);
+      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+      return rpc(key, method, params, retries - 1);
+    }
     const data = body.split('\n').find((line) => line.startsWith('data:'));
     const payload = data ? JSON.parse(data.slice(5)) : JSON.parse(body);
     return {
@@ -61,7 +69,12 @@ export async function runMcpWriteAcceptance({
     };
   };
   const call = (key, name, args) =>
-    rpc(key, 'tools/call', { name, arguments: { spaceId: space.id, ...args } });
+    rpc(key, 'tools/call', {
+      name,
+      arguments: WRITE_TOOLS.includes(name)
+        ? { spaceId: space.id, ...args }
+        : args,
+    });
   const success = async (key, name, args) => {
     const response = await call(key, name, args);
     assert.equal(response.status, 200, name);
@@ -87,11 +100,19 @@ export async function runMcpWriteAcceptance({
   const recover = (key, name, target, operationId) =>
     success(key, name, { ...target, operationId, mode: 'status' });
   const policy = await api(admin, '/ai/tool-policy');
+  const readCapabilities = [
+    'page.metadata.read',
+    'page.node.read',
+    'page.attachments.file.read',
+  ];
+  const [originalSpace] =
+    await sql`select settings from spaces where id=${space.id}`;
   const writeCapabilities = policy.catalog
     .filter((tool) => WRITE_TOOLS.includes(tool.name))
     .map((tool) => tool.capability);
   const spacePolicy = await api(admin, `/spaces/${space.id}/ai/tool-policy`);
   try {
+    await sql`update spaces set settings=coalesce(settings,'{}'::jsonb) || ${sql.json({ documentFields: { status: true, assignee: true, aiRole: true } })} where id=${space.id}`;
     await api(admin, '/ai/tool-policy', 'PATCH', {
       enabled: true,
       readOnly: false,
@@ -100,6 +121,7 @@ export async function runMcpWriteAcceptance({
         ...new Set([
           ...policy.allowedCapabilities,
           ...writeCapabilities,
+          ...readCapabilities,
           'page.content.read',
         ]),
       ],
@@ -110,7 +132,10 @@ export async function runMcpWriteAcceptance({
       knowledgeOnly: false,
     });
     const reader = await createKey(admin);
-    const writer = await createKey(editor, writeCapabilities);
+    const writer = await createKey(editor, [
+      ...writeCapabilities,
+      ...readCapabilities,
+    ]);
     let pageId;
     await test('MCP default key denies writes, scoped writer creates exactly once and status recovers a lost response', async () => {
       assert(
@@ -426,6 +451,22 @@ export async function runMcpWriteAcceptance({
         'committed',
       );
     });
+    await runMcpPublicationAcceptance({
+      api,
+      editor,
+      writer,
+      reader,
+      space,
+      parent,
+      call,
+      success,
+      prepare,
+      recover,
+      sql,
+      test,
+      output,
+      createKey,
+    });
     await test('MCP checks current page ACL, administrator policy and revocation on writes', async () => {
       const edit = await prepare(writer, 'updatePageTitle', target, {
         title: 'Must not be written',
@@ -450,6 +491,7 @@ export async function runMcpWriteAcceptance({
       assert.notEqual(title, 'Must not be written');
     });
   } finally {
+    await sql`update spaces set settings=${originalSpace.settings === null ? null : sql.json(originalSpace.settings)} where id=${space.id}`;
     for (const key of keys)
       await api(admin, '/api-keys/revoke', 'POST', { apiKeyId: key.id }).catch(
         () => {},

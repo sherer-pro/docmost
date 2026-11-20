@@ -1725,7 +1725,8 @@
             "step7": "Use getAttachmentText para texto ya extraído. Autorice getAttachmentFileChunk por separado y reconstruya el original con bloques Base64 de hasta 16 KiB.",
             "step8": "Al comparar una versión guardada grande, precise=false indica que los cambios y los recuentos de caracteres son resúmenes aproximados por bloques. Para comparar el texto con exactitud, lea el texto completo con getPageVersion y getPage.",
             "step9": "Si metadataSizeMismatch=true, use fileSize para reconstruir el original y conserve declaredFileSize para el diagnóstico. La lectura no corrige los metadatos. MCP_SOURCE_CHANGED sigue requiriendo reiniciar la lectura.",
-            "step10": "Ejecute inspect y luego preview con expectedRevision y operationId. Revise los cambios antes de usar commit con previewHash. Si se pierde la respuesta, consulte status."
+            "step10": "Ejecute inspect y luego preview con expectedRevision y operationId. Revise los cambios antes de usar commit con previewHash. Si se pierde la respuesta, consulte status.",
+            "step11": "createPage admite assigneeId, status y aiRole en settings. En Markdown puede insertar etiquetas como ::tag[TODO]. Con replaceDrawio, compruebe la versión del adjunto activo y la suma de verificación del modelo en la vista previa. Lea el nuevo adjunto por partes."
           },
           "success": "Los datos autorizados se leen completos mediante continuaciones; las capacidades denegadas y otros espacios siguen inaccesibles.",
           "rollback": "Revoque la clave o conexión OAuth. Cerrar sesión también termina el acceso OAuth vinculado a ella.",

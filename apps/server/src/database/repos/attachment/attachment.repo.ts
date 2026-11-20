@@ -128,11 +128,15 @@ export class AttachmentRepo {
   async updateAttachment(
     updatableAttachment: UpdatableAttachment,
     attachmentId: string,
+    expected?: Pick<Attachment, 'filePath' | 'pageId' | 'spaceId' | 'workspaceId'>,
   ): Promise<Attachment> {
     return await this.db
       .updateTable('attachments')
       .set(updatableAttachment)
       .where('id', '=', attachmentId)
+      .$if(Boolean(expected), q => q.where('filePath', '=', expected.filePath)
+        .where('pageId', '=', expected.pageId).where('spaceId', '=', expected.spaceId)
+        .where('workspaceId', '=', expected.workspaceId).where('deletedAt', 'is', null))
       .returning(this.baseFields)
       .executeTakeFirst();
   }

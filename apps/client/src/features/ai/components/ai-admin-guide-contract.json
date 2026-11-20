@@ -1,5 +1,5 @@
 {
-  "version": 48,
+  "version": 49,
   "anchors": [
     "assistant",
     "retrieval",
@@ -11,6 +11,11 @@
     "troubleshooting"
   ],
   "requiredFacts": [
+    {
+      "id": "inbound-mcp-page-publication",
+      "key": "scenario.inboundMcp.steps.step11",
+      "needles": ["createPage", "assigneeId", "aiRole", "::tag[TODO]", "replaceDrawio"]
+    },
     {
       "id": "inbound-mcp-write-preview",
       "key": "scenario.inboundMcp.steps.step10",
@@ -502,6 +507,7 @@
     "scenario.inboundMcp.steps.step7",
     "scenario.inboundMcp.steps.step8",
     "scenario.inboundMcp.steps.step9",
-    "scenario.inboundMcp.steps.step10"
+    "scenario.inboundMcp.steps.step10",
+    "scenario.inboundMcp.steps.step11"
   ]
 }

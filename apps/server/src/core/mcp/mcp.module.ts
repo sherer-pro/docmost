@@ -16,6 +16,7 @@ import { AttachmentModule } from '../attachment/attachment.module';
 import { AiContentPolicyModule } from '../ai-content-policy/ai-content-policy.module';
 import { CollaborationClientModule } from '../../collaboration/client/collaboration-client.module';
 import { McpWriteService } from './mcp-write.service';
+import { DrawioSourceService } from '../../collaboration/services/drawio-source.service';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { McpWriteService } from './mcp-write.service';
     McpOAuthService,
     McpOAuthRateLimitGuard,
     McpWriteService,
+    DrawioSourceService,
   ],
 })
 export class McpModule {}

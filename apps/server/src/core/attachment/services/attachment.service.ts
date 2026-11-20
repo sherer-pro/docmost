@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -119,7 +120,11 @@ export class AttachmentService {
       attachmentId = uuid7();
     }
 
-    const filePath = `${getAttachmentFolderPath(AttachmentType.File, workspaceId)}/${attachmentId}/${preparedFile.fileName}`;
+    // Publish Draw.io overwrites by changing the row's object pointer. Readers
+    // holding a shared row lock keep a stable source until their edit commits.
+    const versioned = isUpdate && preparedFile.fileExtension === '.svg';
+    const versionFolder = versioned ? `${uuid4()}/` : '';
+    const filePath = `${getAttachmentFolderPath(AttachmentType.File, workspaceId)}/${attachmentId}/${versionFolder}${preparedFile.fileName}`;
 
     const { stream, getBytesRead } = createByteCountingStream(
       preparedFile.multiPartFile.file,
@@ -151,7 +156,10 @@ export class AttachmentService {
             updatedAt: new Date(),
           },
           attachmentId,
+          versioned ? existingAttachment : undefined,
         );
+        if (!attachment && versioned)
+          throw new ConflictException('The diagram changed during upload');
         if (!attachment)
           throw new NotFoundException('Attachment was removed during upload');
       } else {
@@ -166,7 +174,7 @@ export class AttachmentService {
           pageId,
         });
       }
-    } catch {
+    } catch (error) {
       this.logger.error({ event: 'attachment_metadata_persist_failed' });
 
       if (
@@ -177,6 +185,7 @@ export class AttachmentService {
         await this.deleteRedundantFile(filePath);
       }
 
+      if (error instanceof ConflictException) throw error;
       throw new BadRequestException('Failed to upload file');
     }
 

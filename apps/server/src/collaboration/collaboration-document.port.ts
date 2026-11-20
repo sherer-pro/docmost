@@ -1,6 +1,7 @@
 import type { User } from '@docmost/db/types/entity.types';
 import type { AiPageOperation } from '../common/helpers/prosemirror/ai-page-operation';
 import type { McpContentEdit } from '../common/helpers/prosemirror/mcp-content-edit';
+import type { DrawioSource } from './services/drawio-source.service';
 
 export const COLLABORATION_DOCUMENT_PORT = Symbol(
   'COLLABORATION_DOCUMENT_PORT',
@@ -9,6 +10,14 @@ export const COLLABORATION_DOCUMENT_PORT = Symbol(
 export type CollaborationActor = Pick<User, 'id'>;
 
 export type McpContentCommand = {
+  diagram?: {
+    source: DrawioSource;
+    attachmentId: string;
+    filePath: string;
+    size: number;
+    modelSha256: string;
+    svgSha256: string;
+  };
   edit: McpContentEdit;
   baseHash: string;
   afterHash: string;

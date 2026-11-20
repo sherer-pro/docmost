@@ -1,9 +1,16 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   MCP_WRITE_CAPABILITIES,
+  PAGE_AI_ROLE_VALUES,
+  PAGE_CUSTOM_FIELD_STATUS_VALUES,
+  type PageAiRole,
+  type PageCustomFieldStatus,
   type AiBuiltinToolCatalogEntry,
 } from '@docmost/api-contract';
-import { MCP_IMAGE_MAX_BASE64 } from '../../common/config/mcp-body-limit';
+import {
+  MCP_IMAGE_MAX_BASE64,
+  MCP_MODEL_MAX_BASE64,
+} from '../../common/config/mcp-body-limit';
 
 const uuid = { type: 'string', format: 'uuid' } as const;
 const hash = { type: 'string', pattern: '^[0-9a-f]{64}$' } as const;
@@ -12,9 +19,20 @@ const string = (maxLength: number) => ({ type: 'string', maxLength }) as const;
 const definitions = {
   createPage: {
     description:
-      'Create a page under an explicit parent, or at the space root.',
+      'Create a page under an explicit parent or at the space root. Optional settings set the active space assignee, document status and AI role.',
     target: { parentPageId: { anyOf: [uuid, { type: 'null' }] } },
-    payload: { title: string(250) },
+    payload: {
+      title: string(250),
+      settings: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          assigneeId: uuid,
+          status: { enum: PAGE_CUSTOM_FIELD_STATUS_VALUES },
+          aiRole: { enum: PAGE_AI_ROLE_VALUES },
+        },
+      },
+    },
   },
   updatePageTitle: {
     description: 'Rename an existing page.',
@@ -23,7 +41,7 @@ const definitions = {
   },
   editPageContent: {
     description:
-      'Edit an identified text run, insert, replace or remove a text block, or append one Markdown block or attached image. Node IDs come from getOutline.',
+      'Edit a text run or Markdown block with native inline tags, append an attached image, or replace an active Draw.io block. For replaceDrawio, supply the uncompressed UTF-8 mxfile and its SHA-256, a matching first-sheet PNG, and the active attachment ID and version from getAttachmentFileChunk. Image upload permission is required. Node IDs come from getOutline.',
     target: { pageId: uuid },
     payload: {
       edit: {
@@ -46,6 +64,14 @@ const definitions = {
           editSchema('deleteBlock', { nodeId: string(128) }),
           editSchema('appendBlock', { markdown: string(4096) }),
           editSchema('appendImage', { attachmentId: uuid, alt: string(250) }),
+          editSchema('replaceDrawio', {
+            nodeId: string(128),
+            attachmentId: uuid,
+            attachmentVersion: hash,
+            modelBase64: string(MCP_MODEL_MAX_BASE64),
+            modelSha256: hash,
+            pngBase64: string(MCP_IMAGE_MAX_BASE64),
+          }),
         ],
       },
     },
@@ -90,12 +116,12 @@ export function isMcpWriteTool(name: string): name is McpWriteToolName {
   return hasOwn(definitions, name);
 }
 
-export const MCP_WRITE_TOOLS: Array<AiBuiltinToolCatalogEntry & {
-  description: string;
-  inputSchema: Record<string, unknown>;
-}> = Object.entries(
-  definitions,
-).map(([name, tool], index) => ({
+export const MCP_WRITE_TOOLS: Array<
+  AiBuiltinToolCatalogEntry & {
+    description: string;
+    inputSchema: Record<string, unknown>;
+  }
+> = Object.entries(definitions).map(([name, tool], index) => ({
   name,
   description: `${tool.description} Inspect the target revision first. Preview the exact payload with expectedRevision and operationId. Commit with the same input and previewHash. Use status to recover a lost response.`,
   writeClass: 'write',
@@ -131,7 +157,7 @@ export const MCP_WRITE_TOOLS: Array<AiBuiltinToolCatalogEntry & {
         required: [
           'expectedRevision',
           'operationId',
-          ...Object.keys(tool.payload),
+          ...(name === 'createPage' ? ['title'] : Object.keys(tool.payload)),
         ],
       },
       {
@@ -140,7 +166,7 @@ export const MCP_WRITE_TOOLS: Array<AiBuiltinToolCatalogEntry & {
           'expectedRevision',
           'operationId',
           'previewHash',
-          ...Object.keys(tool.payload),
+          ...(name === 'createPage' ? ['title'] : Object.keys(tool.payload)),
         ],
       },
     ],
@@ -217,6 +243,15 @@ type Edit =
     }
   | { kind: 'deleteBlock'; nodeId: string }
   | { kind: 'appendBlock'; markdown: string }
+  | {
+      kind: 'replaceDrawio';
+      nodeId: string;
+      attachmentId: string;
+      attachmentVersion: string;
+      modelBase64: string;
+      modelSha256: string;
+      pngBase64: string;
+    }
   | { kind: 'appendImage'; attachmentId: string; alt: string };
 
 export type McpWriteInput = {
@@ -229,6 +264,11 @@ export type McpWriteInput = {
   operationId?: string;
   previewHash?: string;
   title?: string;
+  settings?: {
+    assigneeId?: string;
+    status?: PageCustomFieldStatus;
+    aiRole?: PageAiRole;
+  };
   edit?: Edit;
   fileName?: string;
   sha256?: string;

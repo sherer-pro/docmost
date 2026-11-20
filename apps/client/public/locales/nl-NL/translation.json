@@ -1725,7 +1725,8 @@
             "step7": "Gebruik getAttachmentText voor al geëxtraheerde tekst. Sta getAttachmentFileChunk apart toe en stel het origineel samen uit Base64-blokken van maximaal 16 KiB.",
             "step8": "Bij het vergelijken van een grote opgeslagen versie betekent precise=false dat wijzigingen en aantallen tekens benaderende samenvattingen per blok zijn. Lees voor een exacte tekstvergelijking de volledige tekst met getPageVersion en getPage.",
             "step9": "Gebruik bij metadataSizeMismatch=true fileSize om het origineel samen te stellen en bewaar declaredFileSize voor diagnose. Lezen herstelt geen metadata. Bij MCP_SOURCE_CHANGED moet u het lezen nog steeds opnieuw starten.",
-            "step10": "Roep inspect aan en daarna preview met expectedRevision en operationId. Bekijk de wijzigingen vóór commit met previewHash. Vraag bij een verloren antwoord status op."
+            "step10": "Roep inspect aan en daarna preview met expectedRevision en operationId. Bekijk de wijzigingen vóór commit met previewHash. Vraag bij een verloren antwoord status op.",
+            "step11": "createPage accepteert assigneeId, status en aiRole in settings. Voeg in Markdown tags in zoals ::tag[TODO]. Controleer bij replaceDrawio de versie van de actieve bijlage en de controlesom van het model in het voorbeeld. Lees daarna de nieuwe bijlage in delen."
           },
           "success": "Toegestane gegevens zijn volledig leesbaar via vervolgverzoeken; geweigerde functies en andere ruimtes blijven ontoegankelijk.",
           "rollback": "Trek de sleutel of OAuth-verbinding in. Uitloggen beëindigt ook de sessiegebonden OAuth-toegang.",

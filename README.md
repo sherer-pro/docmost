@@ -227,6 +227,12 @@ exact preview, a target revision and an operation ID. After an interrupted
 request, the client can recover the original result without duplicating the
 write. [Inbound MCP write contract](docs/AI_ASSISTANT_AND_RAG.md#inbound-mcp-writes)
 
+A publishing client can set the assignee, status and AI role when it creates
+a page, and keep native inline tags in paragraphs and lists. It can also replace
+one editable Draw.io block with a reviewed model and its PNG preview. The client
+checks the selected attachment version and can read the resulting SVG back in
+chunks to verify both checksums.
+
 For built-in synchronization, the Open WebUI URL, Knowledge Base ID, and a
 separate writer API key are configured in each space's UI; the writer key is
 stored encrypted in PostgreSQL. Deployment configuration supplies only
@@ -1058,8 +1064,8 @@ the English/Russian fork descriptions to retain the same numbered capability
 structure, paired images, stable AI-guide anchors, and critical semantic
 coverage. `verify:release` also opens the administrator guide in both languages
 through the production-like AI browser acceptance suite.
-For the current candidate the only accepted release tag is `v1.4.0`. Follow the
-[v1.4.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.4.0.md)
+For the current candidate the only accepted release tag is `v1.5.0`. Follow the
+[v1.5.0 upgrade and rollback notes](./apps/server/docs/release-notes/v1.5.0.md)
 before deployment.
 
 For backend changes:

@@ -53,6 +53,9 @@ import {
 } from '../../common/helpers/prosemirror/mcp-content-edit';
 import { PAGE_TREE_LOCK_NAMESPACE } from '../../common/config/page-tree.constants';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { DrawioSourceService } from '../../collaboration/services/drawio-source.service';
+import type { McpContentCommand } from '../../collaboration/collaboration-document.port';
+import { DRAWIO_FILE_NAME, makeDrawioSvg } from './mcp-drawio';
 import { QueueOutboxService } from '../../integrations/queue/outbox/queue-outbox.service';
 import { AiContentPolicyService } from '../ai-content-policy/ai-content-policy.service';
 import { postgresJsonb } from '../ai/utils/postgres-jsonb.util';
@@ -90,6 +93,7 @@ type ImagePlan = {
   buffer: Buffer;
 };
 type Plan = {
+  diagram?: { command: NonNullable<McpContentCommand['diagram']>; svg: Buffer };
   preview: Record<string, unknown>;
   content?: ContentPlan;
   image?: ImagePlan;
@@ -116,6 +120,7 @@ export class McpWriteService {
     private readonly attachments: AttachmentService,
     private readonly environment: EnvironmentService,
     private readonly outbox: QueueOutboxService,
+    private readonly drawioSource: DrawioSourceService,
   ) {}
 
   async execute(
@@ -422,7 +427,24 @@ export class McpWriteService {
     if (input.title !== undefined) {
       if (!input.title.trim() || /[\r\n]/u.test(input.title))
         throw new BadRequestException('Expected a nonempty single-line title');
-      return { preview: { target: target.state, title: input.title } };
+      if (input.settings?.assigneeId) {
+        const members = await this.access.getAssignableSpaceUserIds(
+          [input.settings.assigneeId],
+          context.space.id,
+          context.space.workspaceId,
+        );
+        if (!members.has(input.settings.assigneeId))
+          throw new BadRequestException(
+            'Assignee must be an active space member',
+          );
+      }
+      return {
+        preview: {
+          target: target.state,
+          title: input.title,
+          ...(input.settings && { settings: input.settings }),
+        },
+      };
     }
     if (tool === 'uploadPageImage') {
       const buffer = this.assertImageBytes(input);
@@ -476,7 +498,55 @@ export class McpWriteService {
     this.assertRevision(input, revision);
     const rawEdit = input.edit!;
     let edit: McpContentEdit;
-    if (rawEdit.kind === 'appendImage') {
+    let diagram: Plan['diagram'];
+    let previewEdit: Record<string, unknown> = rawEdit;
+    if (rawEdit.kind === 'replaceDrawio') {
+      const source = {
+        pageId: page.id,
+        spaceId: page.spaceId,
+        workspaceId: page.workspaceId,
+        attachmentId: rawEdit.attachmentId,
+        attachmentVersion: rawEdit.attachmentVersion,
+      };
+      await this.drawioSource.check(source);
+      const { svg, modelBytes, sheets, svgSha256 } = makeDrawioSvg(rawEdit);
+      if (svg.length > bytes(this.environment.getFileUploadSizeLimit()))
+        throw new BadRequestException(
+          'The diagram exceeds the file upload limit',
+        );
+      const id = uuid5(input.operationId!, context.keyId);
+      const filePath = `${getAttachmentFolderPath(AttachmentType.File, page.workspaceId)}/${id}/${DRAWIO_FILE_NAME}`;
+      diagram = {
+        command: {
+          source,
+          attachmentId: id,
+          filePath,
+          size: svg.length,
+          modelSha256: rawEdit.modelSha256,
+          svgSha256,
+        },
+        svg,
+      };
+      edit = {
+        kind: 'replaceDrawio',
+        nodeId: rawEdit.nodeId,
+        attachmentId: rawEdit.attachmentId,
+        replacementId: id,
+        src: this.attachmentUrl(id, DRAWIO_FILE_NAME),
+        size: svg.length,
+      };
+      previewEdit = {
+        kind: rawEdit.kind,
+        nodeId: rawEdit.nodeId,
+        attachmentId: rawEdit.attachmentId,
+        attachmentVersion: rawEdit.attachmentVersion,
+        modelSha256: rawEdit.modelSha256,
+        modelBytes,
+        sheets,
+        svgBytes: svg.length,
+        svgSha256,
+      };
+    } else if (rawEdit.kind === 'appendImage') {
       const attachment = await this.attachmentRepo.findById(
         rawEdit.attachmentId,
       );
@@ -533,12 +603,13 @@ export class McpWriteService {
     return {
       preview: {
         target: target.state,
-        edit: rawEdit,
+        edit: previewEdit,
         before,
         after,
         afterHash,
       },
       content: { edit, afterHash },
+      diagram,
     };
   }
 
@@ -559,14 +630,14 @@ export class McpWriteService {
       if (!node.type || !MCP_TEXT_NODES.has(node.type))
         throw new BadRequestException('Unsupported Markdown node');
       for (const mark of node.marks ?? []) {
-        const href = mark.attrs?.href;
-        if (
-          !mark.type ||
-          !MARKDOWN_MARKS.has(mark.type) ||
-          (mark.type === 'link' &&
-            (typeof href !== 'string' || sanitizeUrl(href) !== href))
-        ) {
+        if (!mark.type || !MARKDOWN_MARKS.has(mark.type)) {
           throw new BadRequestException('Unsupported Markdown mark or link');
+        }
+        if (mark.type === 'link') {
+          const href = mark.attrs?.href;
+          const safeHref = typeof href === 'string' && sanitizeUrl(href);
+          if (!safeHref) throw new BadRequestException('Unsupported Markdown mark or link');
+          mark.attrs = { ...mark.attrs, href: safeHref };
         }
       }
       if (node.type === 'paragraph' || node.type === 'heading') {
@@ -601,24 +672,39 @@ export class McpWriteService {
       if (current?.result) return this.status(current);
       throw error;
     }
+    await this.db.transaction().execute(async (trx) => {
+      const current = await this.findReceipt(
+        receipt.keyId,
+        receipt.operationId,
+        trx,
+      );
+      if (!current || current.previewHash !== receipt.previewHash)
+        this.operationMismatch();
+      if (current.startedAt || current.result) return;
+      if (plan.diagram)
+        await this.attachments.uploadToDrive(
+          plan.diagram.command.filePath,
+          plan.diagram.svg,
+        );
+      await trx
+        .updateTable('mcpWriteOperations')
+        .set({ startedAt: new Date() })
+        .where('keyId', '=', receipt.keyId)
+        .where('operationId', '=', receipt.operationId)
+        .execute();
+    });
     const user = await context.reauthorize();
     const liveTarget = await this.loadTarget('editPageContent', input, {
       ...context,
       user,
     });
-    await this.db
-      .updateTable('mcpWriteOperations')
-      .set({ startedAt: new Date() })
-      .where('keyId', '=', receipt.keyId)
-      .where('operationId', '=', receipt.operationId)
-      .where('result', 'is', null)
-      .execute();
     const { edit, afterHash } = plan.content!;
     try {
       await this.collaboration.applyMcpContentEdit(
         `page.${liveTarget.page!.id}`,
         {
           edit,
+          diagram: plan.diagram?.command,
           afterHash,
           baseHash: receipt.expectedRevision,
           keyId: receipt.keyId,
@@ -662,6 +748,7 @@ export class McpWriteService {
           {
             spaceId: space.id,
             title: input.title,
+            settings: input.settings,
             parentPageId: input.parentPageId ?? undefined,
           },
           { pageId: id, trx, deferSideEffects: true },

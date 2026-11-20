@@ -15,12 +15,21 @@ export type McpContentEdit =
       node: ProseMirrorJson;
     }
   | { kind: 'deleteBlock'; nodeId: string }
+  | {
+      kind: 'replaceDrawio';
+      nodeId: string;
+      attachmentId: string;
+      replacementId: string;
+      src: string;
+      size: number;
+    }
   | { kind: 'appendBlock' | 'appendImage'; node: ProseMirrorJson };
 
 export const MCP_TEXT_NODES = new Set([
   'paragraph',
   'heading',
   'text',
+  'tag',
   'hardBreak',
   'horizontalRule',
   'blockquote',
@@ -84,6 +93,31 @@ export function applyMcpContentEdit(
   const index = path.at(-1)!;
   const target = parent.content![index];
   const before = structuredClone(target);
+
+  if (edit.kind === 'replaceDrawio') {
+    const src = target.attrs?.src;
+    const referencedId =
+      typeof src === 'string'
+        ? /^\/(?:api\/)?(?:attachments\/files|files)\/([0-9a-f-]{36})\//i.exec(
+            src,
+          )?.[1]
+        : undefined;
+    if (
+      target.type !== 'drawio' ||
+      target.attrs?.attachmentId !== edit.attachmentId ||
+      referencedId !== edit.attachmentId
+    ) {
+      throw new ConflictException('The selected Draw.io attachment changed');
+    }
+    if (target.marks?.some((mark) => mark.type === 'comment')) anchorConflict();
+    target.attrs = {
+      ...target.attrs,
+      attachmentId: edit.replacementId,
+      src: edit.src,
+      size: edit.size,
+    };
+    return { next, before, after: target };
+  }
 
   if (edit.kind === 'insertBlock') {
     parent.content!.splice(

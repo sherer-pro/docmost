@@ -1,6 +1,6 @@
 # AI assistant, smart search (RAG), and MCP (inbound and outbound)
 
-<!-- ai-admin-guide-contract-version: 48 -->
+<!-- ai-admin-guide-contract-version: 49 -->
 
 Local attachment search indexes UTF-8 `.md` and `.txt` content as well as the
 existing PDF and DOCX extraction. The existing 50 MiB file and 1000000-character
@@ -1892,7 +1892,7 @@ Each tool takes `spaceId` and the target in the table for all four modes.
 
 | Tool | Capability | Target and preview/commit payload | Committed result |
 | --- | --- | --- | --- |
-| `createPage` | `page.create` | `parentPageId` (UUID or explicit `null` for space root), `title` | `pageId`, `slugId`, `title` |
+| `createPage` | `page.create` | `parentPageId` (UUID or explicit `null` for space root), `title`, optional `settings` | `pageId`, `slugId`, `title` |
 | `updatePageTitle` | `page.title.write` | `pageId`, `title` | `pageId`, `title` |
 | `editPageContent` | `page.content.write` | `pageId`, `edit` (see below) | `pageId`, `beforeHash`, `afterHash` |
 | `uploadPageImage` | `page.image.upload` | `pageId`, `fileName`, `base64`, lower-case hex `sha256` | `pageId`, `attachmentId`, authenticated app-relative `url`, `sha256` |
@@ -1901,12 +1901,38 @@ Each tool takes `spaceId` and the target in the table for all four modes.
 
 `edit` supports the following operations, one per commit.
 
+For example, create a page with
+`settings: {"assigneeId":"<active-space-member-uuid>","status":"IN_PROGRESS","aiRole":"COAUTHOR"}`.
+Each field is optional. The page and its settings share the creation transaction.
+The MCP schema lists the accepted status and AI role values. Reassemble
+`getPageMetadata.metadataJsonChunk` until `nextCursor` is null and parse the
+JSON. Enabled document fields appear in `customFields` and `assignee.id`.
+
 - `{kind:"editText",nodeId,oldText,newText}` changes one matching text run.
 - `{kind:"insertBlock",nodeId,position,markdown}` inserts one Markdown block
   before or after the anchor. Use `position:"before"` or `position:"after"`.
 - `{kind:"replaceBlock",nodeId,markdown}` replaces one editable text block.
 - `{kind:"deleteBlock",nodeId}` removes one editable text block.
 - `{kind:"appendBlock",markdown}` appends one Markdown block.
+- In block Markdown, `::tag[TBD]`, `::tag[TODO]` and `::tag[DONE]` create inline
+  editor nodes with lowercase values. Code spans and fenced blocks retain literal text.
+- `{kind:"replaceDrawio",nodeId,attachmentId,attachmentVersion,modelBase64,modelSha256,pngBase64}`
+  replaces one active Draw.io node. Read the node ID from `getOutline`, its
+  attachment ID from `getNode`, and the version from `getAttachmentFileChunk`.
+  This edit also requires `page.image.upload`. Supply canonical base64 of the
+  uncompressed UTF-8 mxfile (up to 1 MiB), its lowercase SHA-256 and a PNG
+  export of the same model's first sheet (up to 2 MiB and 32 megapixels).
+  The client is responsible for rendering the matching preview. The server
+  embeds both in an SVG and enforces the configured file upload limit.
+  Preview includes the before/after nodes and `edit.modelSha256`, `modelBytes`,
+  `sheets`, `svgSha256` and `svgBytes`. Model and image bytes stay out of the
+  preview. Commit returns the new `attachmentId`, `modelSha256` and
+  `svgSha256` alongside the page hashes. Existing attachment IDs retain their
+  files. Read the active node again, follow its attachment ID through every
+  `getAttachmentFileChunk.nextCursor`, decode each base64 `data` at its
+  `offset`, and verify the assembled SVG and its decoded XML `content` attribute.
+  For a model with a leading BOM or whitespace, decode the percent-encoded
+  attribute before verifying the original UTF-8 bytes.
 - `{kind:"appendImage",attachmentId,alt}` embeds an existing image from the
   same page, including an image just uploaded through MCP.
 
@@ -1918,8 +1944,9 @@ synced block descendants and managed template content retain their existing
 protection. The server rejects changes that would touch an inline comment
 anchor with `MCP_COMMENT_ANCHOR_CONFLICT`. Untouched blocks keep their IDs.
 Images are PNG, JPEG, GIF or WebP, up to 2 MiB decoded or the configured upload
-limit if lower. Base64 must be canonical. The route accepts the encoded image
-and 16 KiB of JSON overhead. Configure ingress to admit that size on `/mcp`.
+limit if lower. Base64 must be canonical. The route accepts a 2 MiB PNG and
+a 1 MiB model in base64 plus 16 KiB of JSON overhead (4,210,692 bytes).
+Configure ingress to admit that size on `/mcp`.
 The tool never fetches a URL.
 
 The relational writes and their result receipts commit together. Indexing,
