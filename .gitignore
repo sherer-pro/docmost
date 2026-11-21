@@ -90,3 +90,5 @@ Desktop.ini
 /artifacts/
 /docs/audits/
 /docs/reports/
+
+/graphify-out/
