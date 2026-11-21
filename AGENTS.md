@@ -487,65 +487,6 @@ If a change is not reflected in `AGENTS.md`, the automation task is considered i
 - When the user confirms the update, keep both language versions equivalent in structure and factual coverage.
 - This confirmation is not required for small fixes, internal refactoring, or technical changes without a material user-facing effect.
 
-## Graphify and AgentMemory
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-The development-only setup, shared-machine impact, safe profile, MCP registration, diagnostics, import limits, update, and rollback runbook is [`docs/agentmemory-graphify.md`](docs/agentmemory-graphify.md). Its secret-free profile template is [`docs/development/agentmemory.env.example`](docs/development/agentmemory.env.example).
-
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
-
-Rules:
-
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
-Use Graphify for:
-
-- the current repository structure;
-- current symbol definitions and relationships;
-- code, documentation, PDF and other repository artifacts;
-- call paths and change-impact analysis;
-- verification of current implementation details.
-
-Use AgentMemory for:
-
-- decisions made in previous sessions;
-- previously attempted and rejected approaches;
-- recurring errors and their fixes;
-- user preferences and project conventions;
-- session history and unfinished work.
-
-For tasks involving both:
-
-1. Recall relevant history through AgentMemory.
-2. Verify current-state claims through Graphify or the source code.
-3. Prefer the current Graphify graph and source code when memory conflicts with them.
-4. After rebuilding or updating Graphify, re-import `graphify-out/graph.json` into AgentMemory.
-5. Treat the Graphify graph imported into AgentMemory as a retrieval cache, not as the canonical current graph.
-
-Use memory selectively:
-
-- query AgentMemory when prior decisions or prior work are relevant;
-- do not call memory tools repeatedly without a concrete reason;
-- save durable decisions, constraints and verified lessons;
-- do not save secrets, temporary logs or large raw tool outputs.
-
-Local commands:
-
-- `pnpm context:memory:start` / `pnpm context:memory:stop` manage the loopback-only AgentMemory service.
-- `pnpm context:memory:status` and `pnpm context:memory:doctor` inspect it without changing application runtime dependencies.
-- `pnpm context:memory:smoke` checks the authenticated shared proxy's live MCP tools without opening a fallback store.
-- `pnpm context:memory:selftest` round-trips one uniquely marked memory and removes it.
-- `pnpm context:graph-import` requires the strict Graphify gate, imports the complete v2 snapshot and checks canonical full readback and same-generation idempotency.
-- `pnpm context:refresh` runs the existing `graphify update .` workflow and imports only after a successful, valid update.
-- `pnpm context:verify` performs the read-only health, profile, listener, MCP, hook, smoke, and graph contract checks.
-
-AgentMemory is a shared machine service: one data store, one port set, one `~/.agentmemory/.env`, and one `~/.codex/hooks.json` serve all repositories for the user. Stopping it affects every repository; coordinate service ownership and keep test records in an isolated store. Preserve unrelated entries when merging configuration. The installed CLI is `0.9.32`, qualified runtime `0.9.32-my-context.2`, and iii-engine `0.25.0`. A single user-level MCP registration uses `~/.agentmemory/bin/codex-mcp.mjs`; the project config does not override it. Preserve the existing `AgentMemory Startup` task, qualified launcher, project Graphify hook and hook trust. Full Graphify v2 imports require canonical full readback and generation idempotency; zero-new-object legacy imports are insufficient.
-
 ## RAG evidence quality verification
 
 The database quality runner defaults to the operator-selected LM Studio at
@@ -571,7 +512,7 @@ retrieval and missing human refusal annotations must remain failed/unmeasured.
 
 ## Local results and graphs
 
-Generated `graphify-out/` graphs, reports, captures, and run results stay in
+Reports, captures, and run results stay in
 local ignored directories. Do not add them to Git, including with `git add -f`.
 Source files, required test fixtures, and reference data remain in Git.
 After cloning, generate the graph with the standard project command before

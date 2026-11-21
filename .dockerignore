@@ -46,7 +46,6 @@ rag-sync.config.json
 **/DOCMOST_RAG_KEY
 **/OPEN_WEBUI_KEY
 secrets/
-/graphify-out
 /output
 /artifacts
 /tmp
