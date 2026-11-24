@@ -9,6 +9,7 @@ import {
   useComputedColorScheme,
 } from "@mantine/core";
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { uploadFile } from "@/features/page/services/page-service.ts";
 import { useDisclosure } from "@mantine/hooks";
 import { getDrawioUrl, getFileUrl } from "@/lib/config.ts";
@@ -32,6 +33,8 @@ import {
 } from "@/features/editor/components/diagram/diagram-attachment";
 import { ImagePreviewModal } from "@/features/editor/components/common/image-preview-modal";
 import { normalizeBlockWidthMode } from "@docmost/editor-ext";
+import { isDrawioRasterPreview } from "./drawio-raster-preview";
+import classes from "./drawio-view.module.css";
 
 export default function DrawioView(props: NodeViewProps) {
   const { t } = useTranslation();
@@ -45,6 +48,17 @@ export default function DrawioView(props: NodeViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const computedColorScheme = useComputedColorScheme();
   const imageUrl = src ? getFileUrl(src) : null;
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const rasterPreview = useQuery({
+    queryKey: ["drawio-raster-preview", imageUrl],
+    queryFn: ({ signal }) => isDrawioRasterPreview(imageUrl!, signal),
+    enabled:
+      !!imageUrl && loadedUrl === imageUrl && computedColorScheme === "dark",
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
+  const previewClass = rasterPreview.data ? classes.rasterPreview : undefined;
 
   const handleOpen = async () => {
     if (!editor.isEditable) {
@@ -190,8 +204,10 @@ export default function DrawioView(props: NodeViewProps) {
             fit="contain"
             w={width}
             src={imageUrl ?? undefined}
+            onLoad={() => setLoadedUrl(imageUrl)}
             alt={title}
             className={clsx(
+              previewClass,
               selected ? "ProseMirror-selectednode" : "",
               "alignCenter",
             )}
@@ -207,6 +223,7 @@ export default function DrawioView(props: NodeViewProps) {
               radius="md"
               fit="contain"
               src={imageUrl ?? undefined}
+              className={previewClass}
               alt={title}
             />
           </ImagePreviewModal>

@@ -1,0 +1,5 @@
+@media screen {
+  :global([data-mantine-color-scheme="dark"]) .rasterPreview {
+    filter: invert(91%) hue-rotate(180deg);
+  }
+}

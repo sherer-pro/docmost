@@ -1,4 +1,5 @@
 import "@mantine/core/styles.css";
+import "@/styles/theme-color-scheme.css";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
@@ -90,12 +91,16 @@ export function Preview() {
   );
 }
 
+const drawio = params.has("drawio");
+const Fixture = drawio ? (await import("./drawio-preview")).default : Preview;
+const theme = params.get("theme") === "dark" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
   <MantineProvider
-    forceColorScheme={params.get("theme") === "dark" ? "dark" : "light"}
+    forceColorScheme={drawio ? undefined : theme}
+    defaultColorScheme={theme}
   >
     <I18nextProvider i18n={i18n}>
-      <Preview />
+      <Fixture />
     </I18nextProvider>
   </MantineProvider>,
 );

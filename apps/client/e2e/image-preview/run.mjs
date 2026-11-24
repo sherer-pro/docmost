@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createServer } from "vite";
 import { chromium, expect } from "@playwright/test";
+import { checkDrawioTheme } from "./drawio-theme.mjs";
 
 const clientRoot = fileURLToPath(new URL("../..", import.meta.url));
 const output = path.resolve(clientRoot, "../../artifacts/image-preview");
@@ -16,10 +17,18 @@ const server = await createServer({
 let browser;
 let activePage;
 const results = [];
-try {
+async function run() {
   await mkdir(output, { recursive: true });
   await server.listen();
   browser = await chromium.launch({ headless: true });
+  if (!process.argv.includes("--pdf-only")) {
+    activePage = await browser.newPage({ colorScheme: "light" });
+    await checkDrawioTheme(activePage);
+    await activePage.close();
+    results.push({ kind: "Draw.io theme switching", passed: true });
+    console.log("Passed: Draw.io theme switching");
+    if (process.argv.includes("--drawio-only")) return;
+  }
   const recorder = await browser.newPage();
   const video = Buffer.from(
     await recorder.evaluate(async () => {
@@ -367,10 +376,12 @@ try {
     console.log(`Passed: ${width}px ${theme} PDF gallery`);
     await page.close();
   }
-  await writeFile(
-    path.join(output, "results.json"),
-    JSON.stringify(results, null, 2),
-  );
+}
+
+try {
+  await run();
+  const report = process.argv.includes("--drawio-only") ? "drawio-results.json" : "results.json";
+  await writeFile(path.join(output, report), JSON.stringify(results, null, 2));
   console.log(
     `Image preview browser acceptance: ${results.length} scenarios passed`,
   );
