@@ -67,36 +67,29 @@ export const TableOfContents: FC<TableOfContentsProps> = (props) => {
     });
   };
 
-  const handleUpdate = () => {
-    if (!props.editor || props.editor.isDestroyed) {
-      setLinks([]);
-      setHeadingDOMNodes([]);
-      return;
-    }
-
-    const result = recalculateLinks(
-      props.editor.$nodes("heading"),
-      isHeadingNumberingEnabled(props.editor.state),
-    );
-
-    setLinks(result.links);
-    setHeadingDOMNodes(result.nodes);
-  };
-
   useEffect(() => {
-    props.editor?.on("transaction", handleUpdate);
+    const { editor } = props;
+    const updateLinks = () => {
+      if (!editor || editor.isDestroyed) {
+        setLinks([]);
+        setHeadingDOMNodes([]);
+        return;
+      }
 
+      const result = recalculateLinks(
+        editor.$nodes("heading"),
+        isHeadingNumberingEnabled(editor.state),
+      );
+      setLinks(result.links);
+      setHeadingDOMNodes(result.nodes);
+    };
+
+    updateLinks();
+    editor?.on("transaction", updateLinks);
     return () => {
-      props.editor?.off("transaction", handleUpdate);
+      editor?.off("transaction", updateLinks);
     };
   }, [props.editor]);
-
-  useEffect(
-    () => {
-      handleUpdate();
-    },
-    props.isShare ? [props.editor] : [],
-  );
 
   useEffect(() => {
     try {

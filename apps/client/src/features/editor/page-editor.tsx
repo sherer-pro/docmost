@@ -35,6 +35,7 @@ import {
   activePageUsersAtom,
   pageEditorAtom,
   pageEditorUnsyncedChangesAtom,
+  pagePreviewEditorAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
 import CommentDialog from "@/features/comment/components/comment-dialog";
@@ -146,6 +147,7 @@ export default function PageEditor({
 
   const [currentUser] = useAtom(currentUserAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
+  const setPagePreviewEditor = useSetAtom(pagePreviewEditorAtom);
   const [, setActivePageUsers] = useAtom(activePageUsersAtom);
   const [, setUnsyncedChanges] = useAtom(pageEditorUnsyncedChangesAtom);
   const setSearchSpotlightIntent = useSetAtom(searchSpotlightIntentAtom);
@@ -755,6 +757,12 @@ export default function PageEditor({
                   staticEditor.commands.setHeadingNumberingEnabled(
                     headingNumberingEnabled,
                   );
+                  staticEditor.on("destroy", () => {
+                    setPagePreviewEditor((current) =>
+                      current === staticEditor ? null : current,
+                    );
+                  });
+                  setPagePreviewEditor(staticEditor);
                 }}
               >
                 <Footnotes />

@@ -6,7 +6,10 @@ import React, { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { TableOfContents } from "@/features/editor/components/table-of-contents/table-of-contents.tsx";
 import { useAtomValue } from "jotai";
-import { pageEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import {
+  pageEditorAtom,
+  pagePreviewEditorAtom,
+} from "@/features/editor/atoms/editor-atoms.ts";
 import { AiPanel } from "@/features/ai/components/ai-panel.tsx";
 import { useAiAssistantIdentity } from "@/features/ai/hooks/use-ai-assistant-identity.ts";
 import classes from "./app-shell.module.css";
@@ -21,6 +24,7 @@ export default function Aside() {
   const { t } = useTranslation();
   const assistantIdentity = useAiAssistantIdentity();
   const pageEditor = useAtomValue(pageEditorAtom);
+  const pagePreviewEditor = useAtomValue(pagePreviewEditorAtom);
   const isMobileViewport = useMediaQuery("(max-width: 48em)");
 
   let title: string;
@@ -32,7 +36,7 @@ export default function Aside() {
       title = t("Comments");
       break;
     case "toc":
-      component = <TableOfContents editor={pageEditor} />;
+      component = <TableOfContents editor={pageEditor ?? pagePreviewEditor} />;
       title = t("Table of contents");
       break;
     case "ai":

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
 import { MantineProvider } from "@mantine/core";
+import { Editor } from "@tiptap/core";
+import { StarterKit } from "@tiptap/starter-kit";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +50,57 @@ afterEach(() => {
 });
 
 describe("TableOfContents", () => {
+  it("reads the current editor immediately and follows document changes", async () => {
+    const createEditor = (content: string) =>
+      new Editor({ editable: false, extensions: [StarterKit], content });
+    const preview = createEditor("<h2>Preview heading</h2>");
+    const live = createEditor("<h2>Live heading</h2>");
+    const nextPage = createEditor("<p>Page without headings</p>");
+    const render = (editor: Editor | null) =>
+      act(async () => {
+        root.render(
+          <MantineProvider>
+            <TableOfContents editor={editor} />
+          </MantineProvider>,
+        );
+      });
+    const headingLabels = () =>
+      Array.from(
+        container.querySelectorAll("button"),
+        (item) => item.textContent,
+      );
+
+    try {
+      await render(null);
+      expect(headingLabels()).toEqual([]);
+
+      await render(preview);
+      expect(headingLabels()).toEqual(["Preview heading"]);
+
+      await render(live);
+      expect(headingLabels()).toEqual(["Live heading"]);
+
+      act(() => {
+        preview.commands.setContent("<h2>Stale heading</h2>");
+      });
+      expect(headingLabels()).toEqual(["Live heading"]);
+
+      act(() => {
+        live.commands.setContent(
+          "<h2>Updated heading</h2><h3>New heading</h3>",
+        );
+      });
+      expect(headingLabels()).toEqual(["Updated heading", "New heading"]);
+
+      await render(nextPage);
+      expect(headingLabels()).toEqual([]);
+      expect(container.textContent).toContain("Add headings (H1, H2, H3)");
+    } finally {
+      await render(null);
+      [preview, live, nextPage].forEach((editor) => editor.destroy());
+    }
+  });
+
   it("does not read headings from an unmounted shared editor", async () => {
     const editor = {
       isDestroyed: true,

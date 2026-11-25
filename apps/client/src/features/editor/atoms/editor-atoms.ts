@@ -11,6 +11,10 @@ export const pageEditorAtom = atom<Editor | null>(
   null,
 ) as PrimitiveAtom<Editor | null>;
 
+export const pagePreviewEditorAtom = atom<Editor | null>(
+  null,
+) as PrimitiveAtom<Editor | null>;
+
 export const titleEditorAtom = atom<Editor | null>(
   null,
 ) as PrimitiveAtom<Editor | null>;

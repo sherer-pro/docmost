@@ -4,6 +4,7 @@ import {
   activePageUsersAtom,
   pageEditorAtom,
   pageEditorUnsyncedChangesAtom,
+  pagePreviewEditorAtom,
   readOnlyEditorAtom,
   titleEditorAtom,
   yjsConnectionStatusAtom,
@@ -28,6 +29,7 @@ import { EditorIsolationContext } from "./editor-isolation-context";
 
 const editorAtoms = [
   pageEditorAtom,
+  pagePreviewEditorAtom,
   titleEditorAtom,
   readOnlyEditorAtom,
   yjsConnectionStatusAtom,
