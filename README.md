@@ -840,7 +840,6 @@ The fork includes its own maintenance and development infrastructure:
 
 - coordinated, secret-free PostgreSQL and local-storage backup verification and restore tooling;
 
-- Graphify support.
 
 ![Repository verification and recovery toolchain](./docs/images/fork-specific-enhancements/en/operations-development.svg)
 
@@ -1110,7 +1109,7 @@ Special thanks to;
 
 ## Local results and graphs
 
-Generated `graphify-out/` graphs, reports, captures, and run results stay in
+Reports, captures, and run results stay in
 local ignored directories. Do not add them to Git, including with `git add -f`.
 Source files, required test fixtures, and reference data remain in Git.
 After cloning, generate the graph with the standard project command before

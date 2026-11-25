@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/run-graphify-lmstudio.mjs hook-check"
+            "command": "graphify hook-check"
           }
         ]
       }

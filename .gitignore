@@ -68,15 +68,12 @@ lerna-debug.log*
 .nx/cache
 
 # Local tool state and agent worktrees
-/.graphify/
-/.graphify-cache/
 /.claude/worktrees/
 /.codex/worktrees/
 /.agents/worktrees/
 /.worktrees/
 /.junie/
 
-# Graphify
 .claude/settings.local.json
 
 # TypeScript incremental build metadata
@@ -90,8 +87,8 @@ Thumbs.db
 Desktop.ini
 
 # Generated graphs remain local, including nested corpus roots.
-graphify-out/
-graphify-out.next/
 /artifacts/
 /docs/audits/
 /docs/reports/
+
+/graphify-out/

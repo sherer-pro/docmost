@@ -1,2 +1,2 @@
-# AgentMemory uses the shared user registration in ~/.codex/config.toml.
-# See docs/agentmemory-graphify.md for manual service lifecycle and diagnostics.
+[plugins."agentmemory@agentmemory"]
+enabled = true
